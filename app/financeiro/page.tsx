@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const cashflow = [
@@ -44,7 +43,7 @@ export default function FinanceiroPage() {
         <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"><FileCheck2 className="size-[18px]" />Aprovacoes</button>
         <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"><ReceiptText className="size-[18px]" />Relatorios</button>
       </nav>
-      <div className="mt-8 rounded-xl border border-primary/20 bg-primary/8 p-4"><div className="flex items-center gap-2 text-xs font-bold text-primary"><BadgeDollarSign className="size-4" />Fechamento mensal</div><p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">Setembro fecha em 29 dias. Existem 12 atendimentos aguardando validacao.</p><Progress value={64} className="mt-3" /></div>
+      <div className="mt-8 rounded-xl border border-primary/20 bg-primary/8 p-4"><div className="flex items-center gap-2 text-xs font-bold text-primary"><BadgeDollarSign className="size-4" />Fechamento mensal</div><p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">Setembro fecha em 29 dias. Existem 12 atendimentos aguardando validacao.</p><div className="mt-3 h-1 overflow-hidden rounded-full bg-muted"><div className="h-full w-[64%] rounded-full bg-primary" /></div></div>
       <div className="absolute inset-x-4 bottom-5 border-t border-sidebar-border pt-4"><button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"><Settings className="size-[18px]" />Configuracoes</button><div className="mt-3 flex items-center gap-3 rounded-xl border border-sidebar-border bg-background/40 p-3"><div className="grid size-9 place-items-center rounded-full bg-[#28344a] text-xs font-bold text-[#9fb4d5]">LD</div><div><p className="text-xs font-semibold">Lohan Dias</p><p className="text-[10px] text-muted-foreground">Administrador</p></div></div></div>
     </aside>
     {menu && <button aria-label="Fechar menu" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMenu(false)} />}
