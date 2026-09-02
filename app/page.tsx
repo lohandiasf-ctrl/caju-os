@@ -67,7 +67,7 @@ export default function Home() {
       <nav className="mt-8 space-y-1" aria-label="Navegacao principal">
         <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Operacao</p>
         {nav.map(([label, Icon], i) => ['Financeiro', 'Central N1', 'Spares', 'Mapa operacional'].includes(label)
-          ? <a href={label === 'Financeiro' ? '/financeiro' : label === 'Central N1' ? '/central-n1' : label === 'Spares' ? '/spares' : '/mapa'} key={label} className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground transition hover:bg-sidebar-accent hover:text-foreground"><Icon className="size-[18px]" />{label}</a>
+          ? <a href={label === 'Financeiro' ? '/financeiro' : label === 'Central N1' ? '/central-n1' : label === 'Spares' ? '/spares' : 'https://caju-websys.web.app/mapa/?v=5'} target={label === 'Mapa operacional' ? '_top' : undefined} key={label} className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground transition hover:bg-sidebar-accent hover:text-foreground"><Icon className="size-[18px]" />{label}</a>
           : <button key={label} className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition ${i === 0 ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Icon className={`size-[18px] ${i === 0 ? 'text-primary' : ''}`} />{label}</button>)}
       </nav>
       <div className="absolute inset-x-4 bottom-5 border-t border-sidebar-border pt-4">
