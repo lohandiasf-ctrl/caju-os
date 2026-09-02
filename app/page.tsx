@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, Filter, Headphones, LayoutDashboard, List, Map, MapPin, Menu, Plus, Search, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
+import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, Filter, Headphones, LayoutDashboard, List, Map, MapPin, Menu, PackageOpen, Plus, Search, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,7 @@ const tickets: Ticket[] = [
 const columns: Status[] = ['Triagem', 'Agendar', 'Agendado', 'Em atendimento'];
 const nav = [
   ['Visao geral', LayoutDashboard], ['Chamados', ClipboardList], ['Mapa operacional', Map], ['Agenda', CalendarClock],
-  ['Central N1', Headphones], ['Tecnicos', Users], ['Projetos e lojas', Building2], ['Financeiro', CircleDollarSign],
+  ['Central N1', Headphones], ['Tecnicos', Users], ['Projetos e lojas', Building2], ['Spares', PackageOpen], ['Financeiro', CircleDollarSign],
 ] as const;
 const dots: Record<Status, string> = { Triagem: 'bg-amber-400', Agendar: 'bg-violet-400', Agendado: 'bg-blue-400', 'Em atendimento': 'bg-emerald-400' };
 
@@ -66,8 +66,8 @@ export default function Home() {
       </div>
       <nav className="mt-8 space-y-1" aria-label="Navegacao principal">
         <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Operacao</p>
-        {nav.map(([label, Icon], i) => label === 'Financeiro' || label === 'Central N1'
-          ? <a href={label === 'Financeiro' ? '/financeiro' : '/central-n1'} key={label} className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground transition hover:bg-sidebar-accent hover:text-foreground"><Icon className="size-[18px]" />{label}</a>
+        {nav.map(([label, Icon], i) => ['Financeiro', 'Central N1', 'Spares'].includes(label)
+          ? <a href={label === 'Financeiro' ? '/financeiro' : label === 'Central N1' ? '/central-n1' : '/spares'} key={label} className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground transition hover:bg-sidebar-accent hover:text-foreground"><Icon className="size-[18px]" />{label}</a>
           : <button key={label} className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-sm font-medium transition ${i === 0 ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Icon className={`size-[18px] ${i === 0 ? 'text-primary' : ''}`} />{label}</button>)}
       </nav>
       <div className="absolute inset-x-4 bottom-5 border-t border-sidebar-border pt-4">
