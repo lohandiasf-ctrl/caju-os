@@ -16,7 +16,7 @@ const cashflow = [
 ];
 
 const payments = [
-  { ticket: 'FSA-129617', technician: 'Demostenes Pedrosa', project: 'Americanas', city: 'Maracanau, CE', amount: 380, due: 'Hoje', status: 'Pendente' },
+  { ticket: 'FSA-129617', technician: 'Rafael Monteiro', project: 'Americanas', city: 'Maracanau, CE', amount: 380, due: 'Hoje', status: 'Pendente' },
   { ticket: 'FSA-129461', technician: 'Lucas Andrade', project: 'Americanas', city: 'Sao Jose de Mipibu, RN', amount: 295, due: 'Hoje', status: 'Pendente' },
   { ticket: 'FSA-129426', technician: 'Marcos Souza', project: 'Americanas', city: 'Itabira, MG', amount: 420, due: 'Amanha', status: 'Aprovado' },
   { ticket: 'FSA-129311', technician: 'Rafael Santos', project: 'Americanas', city: 'Juazeiro do Norte, CE', amount: 260, due: '03 set', status: 'Pendente' },

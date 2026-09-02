@@ -14,7 +14,7 @@ const tickets: Ticket[] = [
   { id: 'FSA-129615', title: 'Instalacao do sistema Hydra', store: 'L1322 · Santa Maria da Vitoria', city: 'Santa Maria da Vitoria, BA', status: 'Triagem', priority: 'Media' },
   { id: 'FSA-129609', title: 'Manutencao em impressora Zebra', store: 'L1495 · Teotonio Vilela', city: 'Teotonio Vilela, AL', status: 'Agendar', priority: 'Alta' },
   { id: 'FSA-129610', title: 'Impressora termica nao imprime', store: 'L454 · Patos', city: 'Patos, PB', status: 'Agendar', priority: 'Media' },
-  { id: 'FSA-129430', title: 'CPU com lentidao durante vendas', store: 'L1001 · Timbauba', city: 'Timbauba, PE', status: 'Agendado', priority: 'Alta', technician: 'Demostenes Pedrosa', schedule: 'Hoje, 14:30' },
+  { id: 'FSA-129430', title: 'CPU com lentidao durante vendas', store: 'L1001 · Timbauba', city: 'Timbauba, PE', status: 'Agendado', priority: 'Alta', technician: 'Rafael Monteiro', schedule: 'Hoje, 14:30' },
   { id: 'FSA-129389', title: 'Impressora falha ao finalizar venda', store: 'L353 · Center Shopping', city: 'Uberlandia, MG', status: 'Em atendimento', priority: 'Baixa', technician: 'Lucas Andrade', schedule: 'Em campo ha 42 min' },
 ];
 const columns: Status[] = ['Triagem', 'Agendar', 'Agendado', 'Em atendimento'];
