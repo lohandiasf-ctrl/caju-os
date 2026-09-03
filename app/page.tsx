@@ -9,16 +9,8 @@ import { UserMenu } from '@/components/user-menu';
 import { useAuth } from '@/components/auth-provider';
 
 type Status = 'Triagem' | 'Agendar' | 'Agendado' | 'Em atendimento';
-type Ticket = { id: string; title: string; store: string; city: string; status: Status; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string };
-
-const tickets: Ticket[] = [
-  { id: 'FSA-129623', title: 'Instalacao de nova CPU no PDV', store: 'L1077 · River Shopping', city: 'Petrolina, PE', status: 'Triagem', priority: 'Alta' },
-  { id: 'FSA-129615', title: 'Instalacao do sistema Hydra', store: 'L1322 · Santa Maria da Vitoria', city: 'Santa Maria da Vitoria, BA', status: 'Triagem', priority: 'Media' },
-  { id: 'FSA-129609', title: 'Manutencao em impressora Zebra', store: 'L1495 · Teotonio Vilela', city: 'Teotonio Vilela, AL', status: 'Agendar', priority: 'Alta' },
-  { id: 'FSA-129610', title: 'Impressora termica nao imprime', store: 'L454 · Patos', city: 'Patos, PB', status: 'Agendar', priority: 'Media' },
-  { id: 'FSA-129430', title: 'CPU com lentidao durante vendas', store: 'L1001 · Timbauba', city: 'Timbauba, PE', status: 'Agendado', priority: 'Alta', technician: 'Rafael Monteiro', schedule: 'Hoje, 14:30' },
-  { id: 'FSA-129389', title: 'Impressora falha ao finalizar venda', store: 'L353 · Center Shopping', city: 'Uberlandia, MG', status: 'Em atendimento', priority: 'Baixa', technician: 'Lucas Andrade', schedule: 'Em campo ha 42 min' },
-];
+type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string };
+type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string };
 const columns: Status[] = ['Triagem', 'Agendar', 'Agendado', 'Em atendimento'];
 const nav = [
   ['Visao geral', LayoutDashboard], ['Chamados', ClipboardList], ['Mapa operacional', Map], ['Agenda', CalendarClock],
@@ -27,7 +19,10 @@ const nav = [
 const dots: Record<Status, string> = { Triagem: 'bg-amber-400', Agendar: 'bg-violet-400', Agendado: 'bg-blue-400', 'Em atendimento': 'bg-emerald-400' };
 
 export default function Home() {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [jiraLoading, setJiraLoading] = useState(true);
+  const [jiraError, setJiraError] = useState('');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [menu, setMenu] = useState(false);
@@ -35,6 +30,22 @@ export default function Home() {
     const q = query.trim().toLowerCase();
     return q ? tickets.filter((t) => [t.id, t.title, t.store, t.city, t.technician].filter(Boolean).some((v) => v!.toLowerCase().includes(q))) : tickets;
   }, [query]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    setJiraLoading(true);
+    setJiraError('');
+    void user.getIdToken().then((token) => fetch('/api/jira/issues?limit=100', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }))
+      .then(async (response) => {
+        const payload = await response.json() as { issues?: JiraTicket[]; error?: string };
+        if (!response.ok) throw new Error(payload.error || 'Não foi possível consultar o Jira.');
+        if (active) setTickets((payload.issues ?? []).map(toTicket));
+      })
+      .catch((error: unknown) => { if (active) setJiraError(error instanceof Error ? error.message : 'Falha ao consultar o Jira.'); })
+      .finally(() => { if (active) setJiraLoading(false); });
+    return () => { active = false; };
+  }, [user]);
 
   useEffect(() => {
     const context = (document as Document & { modelContext?: { registerTool: (tool: object, options?: { signal?: AbortSignal }) => void | Promise<void> } }).modelContext;
@@ -83,18 +94,19 @@ export default function Home() {
       <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menu" onClick={() => setMenu(true)}><Menu /></Button>
         <div className="relative max-w-[440px] flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar chamado, loja ou tecnico..." className="h-10 bg-card pl-9" /></div>
-        <div className="ml-auto hidden items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 sm:flex"><span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#39d6a2]" /> Sistemas online</div>
+        <div className={`ml-auto hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold sm:flex ${jiraError ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'}`}><span className={`size-1.5 rounded-full ${jiraError ? 'bg-amber-400' : 'bg-emerald-400'}`} />{jiraLoading ? 'Sincronizando Jira...' : jiraError ? 'Jira indisponível' : 'Jira conectado'}</div>
         <Button variant="ghost" size="icon" aria-label="Notificacoes" className="relative"><Bell /><span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" /></Button>
       </header>
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Terca-feira, 1 de setembro</p><h1 className="text-2xl font-extrabold tracking-[-.03em] sm:text-3xl">Central de operacoes</h1><p className="mt-1 text-sm text-muted-foreground">Acompanhe a fila, a equipe e os atendimentos em andamento.</p></div><Button size="lg" className="h-10 px-4 font-bold shadow-[0_8px_24px_rgba(229,98,35,.2)]"><Plus /> Novo chamado</Button></div>
         <div className="mt-7 grid grid-cols-2 gap-3 xl:grid-cols-4">
           {[
-            ['Chamados abertos', '126', '+8 desde ontem', ClipboardList, 'text-blue-300'], ['Em campo agora', '18', '94% dentro do SLA', Headphones, 'text-emerald-300'],
-            ['Aguardando agenda', '27', '6 com prioridade alta', CalendarClock, 'text-violet-300'], ['SLA em risco', '7', 'Requer atencao', ShieldCheck, 'text-amber-300'],
+            ['Chamados carregados', String(tickets.length), 'Projeto FSA · dados do Jira', ClipboardList, 'text-blue-300'], ['Em atendimento', String(tickets.filter((item) => item.status === 'Em atendimento').length), 'Fila atual', Headphones, 'text-emerald-300'],
+            ['Aguardando agenda', String(tickets.filter((item) => item.status === 'Agendar').length), 'Fila atual', CalendarClock, 'text-violet-300'], ['Prioridade alta', String(tickets.filter((item) => item.priority === 'Alta').length), 'Requer atenção', ShieldCheck, 'text-amber-300'],
           ].map(([label, value, note, Icon, color]) => <article key={label as string} className="rounded-xl border border-border bg-card p-4 shadow-[0_12px_40px_rgba(0,0,0,.08)] sm:p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="mt-2 text-2xl font-extrabold sm:text-3xl">{value as string}</p></div><div className={`grid size-9 place-items-center rounded-lg bg-muted ${color}`}><Icon className="size-[18px]" /></div></div><p className="mt-3 text-[11px] text-muted-foreground">{note as string}</p></article>)}
         </div>
-        <div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{filtered.length} chamados exibidos</p></div><Button variant="outline" className="h-9"><Filter /> Filtros <Badge variant="secondary">2</Badge></Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
+        {jiraError && <div role="alert" className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-200">{jiraError}</div>}
+        <div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos`}</p></div><Button variant="outline" className="h-9"><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
         {view === 'kanban' ? <div className="mt-4 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">{columns.map((column) => {
           const items = filtered.filter((ticket) => ticket.status === column);
           return <section key={column} className="min-h-[280px] rounded-xl border border-border bg-muted/25 p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-md bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)}{!items.length && <div className="grid h-32 place-items-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
@@ -105,5 +117,14 @@ export default function Home() {
 }
 
 function TicketCard({ ticket }: { ticket: Ticket }) {
-  return <article className="rounded-xl border border-border bg-card p-4 shadow-[0_10px_30px_rgba(0,0,0,.08)] transition hover:-translate-y-0.5 hover:border-primary/35"><div className="flex justify-between gap-3"><span className="font-mono text-[11px] font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-bold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p></div>{ticket.technician && <div className="mt-3 border-t border-border pt-3"><p className="text-[11px] font-semibold">{ticket.technician}</p><p className="text-[10px] text-muted-foreground">{ticket.schedule}</p></div>}</article>;
+  return <article className="rounded-xl border border-border bg-card p-4 shadow-[0_10px_30px_rgba(0,0,0,.08)] transition hover:-translate-y-0.5 hover:border-primary/35"><div className="flex justify-between gap-3"><span className="font-mono text-[11px] font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-bold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p></div><div className="mt-3 flex items-center justify-between border-t border-border pt-3"><span className="text-[10px] text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-[11px] font-semibold">{ticket.technician}</span>}</div></article>;
+}
+
+function toTicket(issue: JiraTicket): Ticket {
+  const statusText = issue.status.toLowerCase();
+  const status: Status = statusText.includes('agendado') ? 'Agendado' : statusText.includes('agendar') ? 'Agendar' : issue.statusCategory === 'indeterminate' || statusText.includes('atendimento') ? 'Em atendimento' : 'Triagem';
+  const priorityText = issue.priority.toLowerCase();
+  const priority: Ticket['priority'] = priorityText.includes('highest') || priorityText.includes('high') || priorityText.includes('alta') ? 'Alta' : priorityText.includes('low') || priorityText.includes('baixa') ? 'Baixa' : 'Media';
+  const updated = issue.updatedAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(issue.updatedAt)) : 'sem data';
+  return { id: issue.key, title: issue.summary, store: 'Projeto FSA', city: `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined };
 }

@@ -40,7 +40,7 @@ type JiraSearchResponse = {
 
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
-  const clauses = [`project = "${jqlString(projectKey)}"`];
+  const clauses = [`project = "${jqlString(projectKey)}"`, 'resolution = Unresolved'];
   const query = options.query?.trim();
   if (query) {
     if (/^[A-Z][A-Z0-9_]+-\d+$/i.test(query)) clauses.push(`key = "${jqlString(query.toUpperCase())}"`);
