@@ -5,9 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { auth } from '@/lib/firebase';
+import { canAccess, resolveUserRole, type UserRole } from '@/lib/permissions';
 
-type AuthContextValue = { user: User | null; loading: boolean };
-const AuthContext = createContext<AuthContextValue>({ user: null, loading: true });
+type AuthContextValue = { user: User | null; role: UserRole | null; loading: boolean };
+const AuthContext = createContext<AuthContextValue>({ user: null, role: null, loading: true });
 
 export function useAuth() {
   return useContext(AuthContext);
@@ -15,12 +16,19 @@ export function useAuth() {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
-  useEffect(() => onAuthStateChanged(auth, (nextUser) => {
+  useEffect(() => onAuthStateChanged(auth, async (nextUser) => {
     setUser(nextUser);
+    if (nextUser) {
+      const token = await nextUser.getIdTokenResult(true);
+      setRole(resolveUserRole(nextUser.uid, token.claims.role));
+    } else {
+      setRole(null);
+    }
     setLoading(false);
   }), []);
 
@@ -28,10 +36,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading) return;
     if (!user && pathname !== '/login') router.replace('/login');
     if (user && pathname === '/login') router.replace('/');
-  }, [loading, pathname, router, user]);
+    if (user && pathname !== '/login' && pathname !== '/acesso-negado' && !canAccess(role, pathname)) router.replace('/acesso-negado');
+  }, [loading, pathname, role, router, user]);
 
-  const value = useMemo(() => ({ user, loading }), [user, loading]);
-  const canRender = !loading && ((pathname === '/login' && !user) || (pathname !== '/login' && user));
+  const value = useMemo(() => ({ user, role, loading }), [user, role, loading]);
+  const authorized = user && (pathname === '/acesso-negado' || canAccess(role, pathname));
+  const canRender = !loading && ((pathname === '/login' && !user) || (pathname !== '/login' && authorized));
 
   return (
     <AuthContext.Provider value={value}>
