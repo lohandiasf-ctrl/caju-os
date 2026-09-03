@@ -29,7 +29,7 @@ export default function Home() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? tickets.filter((t) => [t.id, t.title, t.store, t.city, t.technician].filter(Boolean).some((v) => v!.toLowerCase().includes(q))) : tickets;
-  }, [query]);
+  }, [query, tickets]);
 
   useEffect(() => {
     if (!user) return;
