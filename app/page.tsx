@@ -5,6 +5,7 @@ import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, Filter
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { UserMenu } from '@/components/user-menu';
 
 type Status = 'Triagem' | 'Agendar' | 'Agendado' | 'Em atendimento';
 type Ticket = { id: string; title: string; store: string; city: string; status: Status; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string };
@@ -72,7 +73,7 @@ export default function Home() {
       </nav>
       <div className="absolute inset-x-4 bottom-5 border-t border-sidebar-border pt-4">
         <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"><Settings className="size-[18px]" /> Configuracoes</button>
-        <div className="mt-3 flex items-center gap-3 rounded-xl border border-sidebar-border bg-background/40 p-3"><div className="grid size-9 place-items-center rounded-full bg-[#28344a] text-xs font-bold text-[#9fb4d5]">LD</div><div><p className="text-xs font-semibold">Lohan Dias</p><p className="text-[10px] text-muted-foreground">Administrador</p></div></div>
+        <UserMenu />
       </div>
     </aside>
     {menu && <button aria-label="Fechar menu" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMenu(false)} />}
