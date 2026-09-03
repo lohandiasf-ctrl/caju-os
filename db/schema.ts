@@ -87,3 +87,10 @@ export const ticketHistory = sqliteTable('ticket_history', {
   note: text('note'),
   createdAt: text('created_at').notNull(),
 }, (table) => [index('idx_ticket_history_ticket_id').on(table.ticketId)]);
+
+export const jiraIssueLinks = sqliteTable('jira_issue_links', {
+  issueKey: text('issue_key').primaryKey(),
+  whatsappUrl: text('whatsapp_url').notNull(),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});

@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, Filter, Headphones, LayoutDashboard, List, Map, MapPin, Menu, PackageOpen, Plus, Search, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
+import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { UserMenu } from '@/components/user-menu';
 import { useAuth } from '@/components/auth-provider';
 
 type Status = 'Triagem' | 'Agendar' | 'Agendado' | 'Em atendimento';
 type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string };
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string };
+type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
 const columns: Status[] = ['Triagem', 'Agendar', 'Agendado', 'Em atendimento'];
 const nav = [
   ['Visao geral', LayoutDashboard], ['Chamados', ClipboardList], ['Mapa operacional', Map], ['Agenda', CalendarClock],
@@ -26,6 +28,13 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
   const [menu, setMenu] = useState(false);
+  const [selected, setSelected] = useState<Ticket | null>(null);
+  const [details, setDetails] = useState<JiraDetails | null>(null);
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [dialogLoading, setDialogLoading] = useState(false);
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [dialogError, setDialogError] = useState('');
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? tickets.filter((t) => [t.id, t.title, t.store, t.city, t.technician].filter(Boolean).some((v) => v!.toLowerCase().includes(q))) : tickets;
@@ -46,6 +55,55 @@ export default function Home() {
       .finally(() => { if (active) setJiraLoading(false); });
     return () => { active = false; };
   }, [user]);
+
+  async function openTicket(ticket: Ticket) {
+    if (!user) return;
+    setSelected(ticket);
+    setDetails(null);
+    setDetailsVisible(false);
+    setWhatsappUrl('');
+    setDialogError('');
+    setDialogLoading(true);
+    try {
+      const token = await user.getIdToken();
+      const headers = { Authorization: `Bearer ${token}` };
+      const [detailsResponse, linkResponse] = await Promise.all([
+        fetch(`/api/jira/issues/${ticket.id}`, { headers, cache: 'no-store' }),
+        fetch(`/api/jira/issues/${ticket.id}/whatsapp`, { headers, cache: 'no-store' }),
+      ]);
+      const detailsPayload = await detailsResponse.json() as JiraDetails & { error?: string };
+      const linkPayload = await linkResponse.json() as { whatsappUrl?: string | null; error?: string };
+      if (!detailsResponse.ok) throw new Error(detailsPayload.error || 'Não foi possível carregar os detalhes.');
+      if (!linkResponse.ok) throw new Error(linkPayload.error || 'Não foi possível carregar o grupo.');
+      setDetails(detailsPayload);
+      setWhatsappUrl(linkPayload.whatsappUrl ?? '');
+    } catch (error) {
+      setDialogError(error instanceof Error ? error.message : 'Não foi possível carregar o chamado.');
+    } finally {
+      setDialogLoading(false);
+    }
+  }
+
+  async function saveWhatsappLink() {
+    if (!user || !selected) return;
+    setLinkSaving(true);
+    setDialogError('');
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/jira/issues/${selected.id}/whatsapp`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ whatsappUrl }),
+      });
+      const payload = await response.json() as { whatsappUrl?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o link.');
+      setWhatsappUrl(payload.whatsappUrl ?? '');
+    } catch (error) {
+      setDialogError(error instanceof Error ? error.message : 'Não foi possível salvar o link.');
+    } finally {
+      setLinkSaving(false);
+    }
+  }
 
   useEffect(() => {
     const context = (document as Document & { modelContext?: { registerTool: (tool: object, options?: { signal?: AbortSignal }) => void | Promise<void> } }).modelContext;
@@ -109,16 +167,39 @@ export default function Home() {
         <div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos`}</p></div><Button variant="outline" className="h-9"><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
         {view === 'kanban' ? <div className="mt-4 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">{columns.map((column) => {
           const items = filtered.filter((ticket) => ticket.status === column);
-          return <section key={column} className="min-h-[280px] rounded-xl border border-border bg-muted/25 p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-md bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} />)}{!items.length && <div className="grid h-32 place-items-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
-        })}</div> : <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">{filtered.map((ticket) => <div key={ticket.id} className="grid gap-3 border-b border-border p-4 last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge><span className="text-xs text-muted-foreground">{ticket.technician || 'Nao atribuido'}</span></div>)}</div>}
+          return <section key={column} className="min-h-[280px] rounded-xl border border-border bg-muted/25 p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-md bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} onOpen={() => void openTicket(ticket)} />)}{!items.length && <div className="grid h-32 place-items-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
+        })}</div> : <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">{filtered.map((ticket) => <button type="button" onClick={() => void openTicket(ticket)} key={ticket.id} className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-muted/50 last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge><span className="text-xs text-muted-foreground">{ticket.technician || 'Nao atribuido'}</span></button>)}</div>}
       </div>
     </section>
+    <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <div className="flex items-center gap-2"><Badge variant="outline" className="font-mono text-primary">{selected?.id}</Badge><Badge variant="outline">{selected?.rawStatus}</Badge></div>
+          <DialogTitle className="pr-8 text-lg leading-snug">{selected?.title}</DialogTitle>
+          <DialogDescription>Escolha para onde deseja seguir.</DialogDescription>
+        </DialogHeader>
+        {dialogLoading ? <div className="grid min-h-40 place-items-center text-muted-foreground"><Loader2 className="size-6 animate-spin" /><span className="sr-only">Carregando chamado</span></div> : <div className="space-y-4">
+          {dialogError && <div role="alert" className="rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{dialogError}</div>}
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => setDetailsVisible((value) => !value)} disabled={!details}><Eye className="size-5 text-blue-300" /><span><span className="block font-bold">Ver detalhes</span><span className="block text-xs font-normal text-muted-foreground">Dados completos</span></span></Button>
+            <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" render={<a href={details?.jiraUrl ?? '#'} target="_blank" rel="noreferrer" aria-disabled={!details} />} disabled={!details}><ExternalLink className="size-5 text-primary" /><span><span className="block font-bold">Abrir no Jira</span><span className="block text-xs font-normal text-muted-foreground">Chamado original</span></span></Button>
+            <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" render={<a href={whatsappUrl || '#'} target="_blank" rel="noreferrer" aria-disabled={!whatsappUrl} />} disabled={!whatsappUrl}><MessageCircle className="size-5 text-emerald-400" /><span><span className="block font-bold">Abrir WhatsApp</span><span className="block text-xs font-normal text-muted-foreground">{whatsappUrl ? 'Ir para o grupo' : 'Link não cadastrado'}</span></span></Button>
+          </div>
+          {detailsVisible && details && <section className="rounded-xl border border-border bg-muted/30 p-4"><div className="grid gap-3 text-sm sm:grid-cols-2"><Detail label="Status" value={details.status} /><Detail label="Prioridade" value={details.priority} /><Detail label="Responsável" value={details.assignee || 'Não atribuído'} /><Detail label="Solicitante" value={details.reporter || 'Não informado'} /><Detail label="Tipo" value={details.issueType || 'Não informado'} /><Detail label="Criado em" value={formatDate(details.createdAt)} /></div>{details.description && <div className="mt-4 border-t border-border pt-4"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descrição</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{details.description}</p></div>}</section>}
+          {(role === 'analista' || role === 'gerencia') && <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4"><div className="flex items-center gap-2"><MessageCircle className="size-5 text-emerald-400" /><div><h3 className="text-sm font-bold">Grupo do WhatsApp</h3><p className="text-xs text-muted-foreground">Cole o link de convite deste chamado.</p></div></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input type="url" value={whatsappUrl} onChange={(event) => setWhatsappUrl(event.target.value)} placeholder="https://chat.whatsapp.com/..." className="flex-1" /><Button onClick={() => void saveWhatsappLink()} disabled={linkSaving || !whatsappUrl.trim()}>{linkSaving ? <Loader2 className="animate-spin" /> : <Save />} Salvar link</Button></div></section>}
+        </div>}
+      </DialogContent>
+    </Dialog>
   </main>;
 }
 
-function TicketCard({ ticket }: { ticket: Ticket }) {
-  return <article className="rounded-xl border border-border bg-card p-4 shadow-[0_10px_30px_rgba(0,0,0,.08)] transition hover:-translate-y-0.5 hover:border-primary/35"><div className="flex justify-between gap-3"><span className="font-mono text-[11px] font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-bold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p></div><div className="mt-3 flex items-center justify-between border-t border-border pt-3"><span className="text-[10px] text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-[11px] font-semibold">{ticket.technician}</span>}</div></article>;
+function TicketCard({ ticket, onOpen }: { ticket: Ticket; onOpen: () => void }) {
+  return <button type="button" onClick={onOpen} className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-[0_10px_30px_rgba(0,0,0,.08)] transition hover:-translate-y-0.5 hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex justify-between gap-3"><span className="font-mono text-[11px] font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-bold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p></div><div className="mt-3 flex items-center justify-between border-t border-border pt-3"><span className="text-[10px] text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-[11px] font-semibold">{ticket.technician}</span>}</div></button>;
 }
+
+function Detail({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>; }
+
+function formatDate(value: string) { return value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : 'Não informado'; }
 
 function toTicket(issue: JiraTicket): Ticket {
   const statusText = issue.status.toLowerCase();

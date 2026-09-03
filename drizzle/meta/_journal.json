@@ -15,6 +15,13 @@
       "when": 1788453437393,
       "tag": "0001_gifted_freak",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788456505884,
+      "tag": "0002_dear_the_fallen",
+      "breakpoints": true
     }
   ]
 }
