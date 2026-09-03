@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
 import { auth } from '@/lib/firebase';
-import { canAccess, resolveUserRole, type UserRole } from '@/lib/permissions';
+import { canAccess, isUserRole, type UserRole } from '@/lib/permissions';
 
 type AuthContextValue = { user: User | null; role: UserRole | null; loading: boolean };
 const AuthContext = createContext<AuthContextValue>({ user: null, role: null, loading: true });
@@ -24,8 +24,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => onAuthStateChanged(auth, async (nextUser) => {
     setUser(nextUser);
     if (nextUser) {
-      const token = await nextUser.getIdTokenResult(true);
-      setRole(resolveUserRole(nextUser.uid, token.claims.role));
+      try {
+        const token = await nextUser.getIdToken();
+        const response = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+        const profile = await response.json() as { role?: unknown };
+        setRole(response.ok && isUserRole(profile.role) ? profile.role : null);
+      } catch {
+        setRole(null);
+      }
     } else {
       setRole(null);
     }

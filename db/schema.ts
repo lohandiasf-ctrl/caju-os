@@ -1,5 +1,19 @@
 import { integer, real, sqliteTable, text, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 
+export const appUsers = sqliteTable('app_users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  firebaseUid: text('firebase_uid').notNull(),
+  email: text('email').notNull(),
+  role: text('role', { enum: ['gerencia', 'n1', 'analista'] }).notNull(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_app_users_firebase_uid').on(table.firebaseUid),
+  uniqueIndex('idx_app_users_email').on(table.email),
+  index('idx_app_users_role_active').on(table.role, table.active),
+]);
+
 export const projects = sqliteTable('projects', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),

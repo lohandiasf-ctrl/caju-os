@@ -14,21 +14,6 @@ export const roleLabels: Record<UserRole, string> = {
   analista: 'Analista',
 };
 
-// Bootstrap do primeiro gestor. Novos usuários devem receber o perfil
-// administrativamente; o UID vem da identidade assinada pelo Firebase.
-const bootstrapRolesByUid: Record<string, UserRole> = {
-  '3L6ykGm3qKcygnvcxpg4VtdCUOc2': 'gerencia',
-  'fP5iQG3mKlfQ8PQ1HFiTsgrOWnF2': 'n1',
-  'CkLWwa3dIeNZHscP1BAWmNAfRRG2': 'n1',
-  'PNpE0eZRTEYxJ7GSBegSEeGBVpM2': 'analista',
-  '3wodjMrlLkb2zDDvzw8f7Z6F31j2': 'analista',
-};
-
-export function resolveUserRole(uid: string, claim: unknown): UserRole | null {
-  if (isUserRole(claim)) return claim;
-  return bootstrapRolesByUid[uid] ?? null;
-}
-
 export function isUserRole(value: unknown): value is UserRole {
   return value === 'gerencia' || value === 'n1' || value === 'analista';
 }
