@@ -10,8 +10,8 @@ import { UserMenu } from '@/components/user-menu';
 import { useAuth } from '@/components/auth-provider';
 
 type Status = 'Triagem' | 'Agendar' | 'Agendado' | 'Em atendimento';
-type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string };
-type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string };
+type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string };
+type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
 type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
 const columns: Status[] = ['Triagem', 'Agendar', 'Agendado', 'Em atendimento'];
 const nav = [
@@ -194,7 +194,7 @@ export default function Home() {
 }
 
 function TicketCard({ ticket, onOpen }: { ticket: Ticket; onOpen: () => void }) {
-  return <button type="button" onClick={onOpen} className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-[0_10px_30px_rgba(0,0,0,.08)] transition hover:-translate-y-0.5 hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex justify-between gap-3"><span className="font-mono text-[11px] font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-bold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p></div><div className="mt-3 flex items-center justify-between border-t border-border pt-3"><span className="text-[10px] text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-[11px] font-semibold">{ticket.technician}</span>}</div></button>;
+  return <button type="button" onClick={onOpen} className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-[0_10px_30px_rgba(0,0,0,.08)] transition hover:-translate-y-0.5 hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex justify-between gap-3"><span className="font-mono text-[11px] font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-bold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p>{ticket.schedule && <p className="flex items-center gap-1.5 text-blue-300"><CalendarClock className="size-3.5" />Agendamento: {ticket.schedule}</p>}{ticket.partnerTriggeredAt && <p className="flex items-center gap-1.5 text-amber-300"><CalendarClock className="size-3.5" />Acionamento: {ticket.partnerTriggeredAt}</p>}</div><div className="mt-3 flex items-center justify-between border-t border-border pt-3"><span className="text-[10px] text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-[11px] font-semibold">{ticket.technician}</span>}</div></button>;
 }
 
 function Detail({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>; }
@@ -202,10 +202,18 @@ function Detail({ label, value }: { label: string; value: string }) { return <di
 function formatDate(value: string) { return value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : 'Não informado'; }
 
 function toTicket(issue: JiraTicket): Ticket {
-  const statusText = issue.status.toLowerCase();
-  const status: Status = statusText.includes('agendado') ? 'Agendado' : statusText.includes('agendar') ? 'Agendar' : issue.statusCategory === 'indeterminate' || statusText.includes('atendimento') ? 'Em atendimento' : 'Triagem';
+  const statusText = issue.status.trim().toLowerCase();
+  const status: Status = statusText === 'agendado' ? 'Agendado' : statusText === 'agendamento' ? 'Agendar' : statusText === 'tec-campo' || issue.statusCategory === 'indeterminate' || statusText.includes('atendimento') ? 'Em atendimento' : 'Triagem';
   const priorityText = issue.priority.toLowerCase();
   const priority: Ticket['priority'] = priorityText.includes('highest') || priorityText.includes('high') || priorityText.includes('alta') ? 'Alta' : priorityText.includes('low') || priorityText.includes('baixa') ? 'Baixa' : 'Media';
   const updated = issue.updatedAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(issue.updatedAt)) : 'sem data';
-  return { id: issue.key, title: issue.summary, store: 'Projeto FSA', city: `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined };
+  const storeFromTitle = issue.summary.match(/^Loja\s+([^|]+)/i)?.[0]?.trim();
+  return { id: issue.key, title: issue.summary, store: issue.store || storeFromTitle || 'Loja não informada', city: issue.city || `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined, schedule: formatJiraDate(issue.scheduledAt), partnerTriggeredAt: formatJiraDate(issue.partnerTriggeredAt) };
+}
+
+function formatJiraDate(value: string | null) {
+  if (!value) return undefined;
+  const brazilian = value.match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  const date = brazilian ? new Date(Number(brazilian[3]), Number(brazilian[2]) - 1, Number(brazilian[1]), Number(brazilian[4]), Number(brazilian[5]), Number(brazilian[6] ?? 0)) : new Date(value);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
 }

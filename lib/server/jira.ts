@@ -11,6 +11,10 @@ export type JiraIssueSummary = {
   updatedAt: string;
   dueDate: string | null;
   labels: string[];
+  store: string | null;
+  city: string | null;
+  scheduledAt: string | null;
+  partnerTriggeredAt: string | null;
 };
 
 type JiraIssue = {
@@ -29,6 +33,10 @@ type JiraIssue = {
     labels?: string[];
     issuetype?: { name?: string };
     project?: { key?: string; name?: string };
+    customfield_14827?: unknown;
+    customfield_11994?: unknown;
+    customfield_12036?: unknown;
+    customfield_12278?: unknown;
   };
 };
 
@@ -52,7 +60,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
     method: 'POST',
     body: JSON.stringify({
       jql: `${clauses.join(' AND ')} ORDER BY updated DESC`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels'],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14827', 'customfield_11994', 'customfield_12036', 'customfield_12278'],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
     }),
@@ -71,7 +79,7 @@ export async function getJiraIssue(key: string) {
   if (!new RegExp(`^${projectKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+$`).test(normalizedKey)) {
     throw new JiraError('Chamado inválido.', 400);
   }
-  const issue = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=summary,description,status,priority,assignee,reporter,created,updated,duedate,labels,issuetype,project`);
+  const issue = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=summary,description,status,priority,assignee,reporter,created,updated,duedate,labels,issuetype,project,customfield_14827,customfield_11994,customfield_12036,customfield_12278`);
   return { ...toSummary(issue), description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}` };
 }
 
@@ -116,7 +124,21 @@ function toSummary(issue: JiraIssue): JiraIssueSummary {
     updatedAt: issue.fields.updated ?? '',
     dueDate: issue.fields.duedate ?? null,
     labels: issue.fields.labels ?? [],
+    store: customFieldText(issue.fields.customfield_14827),
+    city: customFieldText(issue.fields.customfield_11994),
+    scheduledAt: customFieldText(issue.fields.customfield_12036),
+    partnerTriggeredAt: customFieldText(issue.fields.customfield_12278),
   };
+}
+
+function customFieldText(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'number') return String(value);
+  if (value && typeof value === 'object') {
+    const field = value as { value?: unknown; name?: unknown; displayName?: unknown };
+    for (const candidate of [field.value, field.name, field.displayName]) if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return null;
 }
 
 function adfToText(value: unknown): string {
