@@ -287,7 +287,7 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
       billed: matchingIds((name) => name.includes('faturad') || name.includes('cobrad')),
     };
     console.info('FINANCE_DIAGNOSTIC_FIELDS', JSON.stringify(customFields
-      .filter((field) => /valor|total|ticket|spare|equip|custo|fatur/i.test(normalizeText(field.name)))
+      .slice(0, 500)
       .map((field) => ({ id: field.id, name: field.name }))));
     const ids = {
       total: uniquePreferred(discovered.total, defaults.total),
