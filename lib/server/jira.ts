@@ -90,6 +90,11 @@ const OPERATIONAL_STATUSES = [
 
 let operationalStatusesCache: { expiresAt: number; names: string[] } | null = null;
 let financialFieldsCache: { expiresAt: number; ids: FinancialFieldIds } | null = null;
+let financialDiagnostics: unknown = null;
+
+export function getFinancialDiagnostics() {
+  return financialDiagnostics;
+}
 
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
@@ -295,6 +300,7 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
       technician: uniquePreferred(discovered.technician, defaults.technician),
       billed: uniquePreferred(discovered.billed, defaults.billed),
     };
+    financialDiagnostics = { fields: customFields, ids };
     financialFieldsCache = { ids, expiresAt: Date.now() + 5 * 60_000 };
     return ids;
   } catch {

@@ -1,12 +1,13 @@
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { getFinancialIssues, JiraError } from '@/lib/server/jira';
+import { getFinancialDiagnostics, getFinancialIssues, JiraError } from '@/lib/server/jira';
 
 export async function GET(request: Request) {
   try {
     await requireApiUser(request, ['gerencia']);
     const days = Number(new URL(request.url).searchParams.get('days') ?? 180);
-    return Response.json({ issues: await getFinancialIssues(days) }, {
-      headers: { 'Cache-Control': 'private, max-age=60' },
+    const issues = await getFinancialIssues(days);
+    return Response.json({ issues, diagnostics: getFinancialDiagnostics() }, {
+      headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
     if (error instanceof Response) return error;
