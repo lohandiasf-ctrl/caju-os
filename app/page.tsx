@@ -11,17 +11,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { UserMenu } from '@/components/user-menu';
 import { useAuth } from '@/components/auth-provider';
 
-type Status = 'Triagem' | 'Agendar' | 'Agendado' | 'Em atendimento';
+type Status = 'Pendente de agendamento' | 'Agendado' | 'Aguardando spare' | 'Direcionado' | 'Técnico em campo';
 type DashboardView = 'overview' | 'tickets' | 'agenda' | 'technicians' | 'projects' | 'settings';
 type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string };
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
 type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
-const columns: Status[] = ['Triagem', 'Agendar', 'Agendado', 'Em atendimento'];
+const columns: Status[] = ['Pendente de agendamento', 'Agendado', 'Aguardando spare', 'Direcionado', 'Técnico em campo'];
 const nav = [
   ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'], ['Chamados', ClipboardList, '/?view=tickets', 'tickets'], ['Mapa operacional', Map, '/mapa', 'map'], ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
   ['Central N1', Headphones, '/central-n1', 'central'], ['Técnicos', Users, '/?view=technicians', 'technicians'], ['Projetos e lojas', Building2, '/?view=projects', 'projects'], ['Spares', PackageOpen, '/spares', 'spares'], ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
 ] as const;
-const dots: Record<Status, string> = { Triagem: 'bg-amber-400', Agendar: 'bg-violet-400', Agendado: 'bg-blue-400', 'Em atendimento': 'bg-emerald-400' };
+const dots: Record<Status, string> = { 'Pendente de agendamento': 'bg-violet-400', Agendado: 'bg-blue-400', 'Aguardando spare': 'bg-amber-400', Direcionado: 'bg-cyan-400', 'Técnico em campo': 'bg-emerald-400' };
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   overview: ['Operação em tempo real', 'Visão geral dos chamados', 'Fila, prioridade e execução em uma única visão.'],
   tickets: ['Central de atendimento', 'Chamados operacionais', 'Consulte, filtre e abra cada chamado sem perder contexto.'],
@@ -61,7 +61,7 @@ export default function Home() {
   }, [query, statusFilter, tickets]);
   const technicians = useMemo(() => Array.from(new Set(tickets.map((ticket) => ticket.technician).filter(Boolean) as string[])).map((name) => ({
     name,
-    active: tickets.filter((ticket) => ticket.technician === name && ticket.status === 'Em atendimento').length,
+    active: tickets.filter((ticket) => ticket.technician === name && ticket.status === 'Técnico em campo').length,
     total: tickets.filter((ticket) => ticket.technician === name).length,
   })).sort((a, b) => b.active - a.active || b.total - a.total), [tickets]);
   const stores = useMemo(() => Array.from(new Set(tickets.map((ticket) => `${ticket.store}|||${ticket.city}`))).map((value) => {
@@ -172,19 +172,19 @@ export default function Home() {
   }, []);
 
   return <main className="min-h-screen text-foreground">
-    <aside className={`fixed inset-y-0 left-0 z-40 w-[252px] border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
+    <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex h-12 items-center gap-3 px-2">
         <div className="grid size-10 place-items-center rounded-xl border border-primary/30 bg-primary/12 text-lg font-black text-primary shadow-[0_10px_30px_rgba(240,122,63,.18)]">C</div>
         <div><div className="text-[15px] font-extrabold tracking-tight">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando operacional</div></div>
       </div>
-      <nav className="mt-8 space-y-1" aria-label="Navegacao principal">
+      <nav className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-4 pr-1" aria-label="Navegacao principal">
         <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Operacao</p>
         {nav.filter(([label]) => role === 'gerencia' || (role === 'n1' ? !['Financeiro', 'Spares', 'Projetos e lojas'].includes(label) : !['Financeiro', 'Spares', 'Central N1', 'Projetos e lojas', 'Técnicos'].includes(label))).map(([label, Icon, href, key]) => {
           const isActive = key === activeView;
           return <Link href={href} scroll={false} onClick={() => setMenu(false)} key={label} aria-current={isActive ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition ${isActive ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary),0_8px_24px_rgba(0,0,0,.12)]' : 'text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground'}`}><Icon aria-hidden="true" className={`size-[18px] ${isActive ? 'text-primary' : ''}`} />{label}</Link>;
         })}
       </nav>
-      <div className="absolute inset-x-4 bottom-5 border-t border-sidebar-border pt-4">
+      <div className="shrink-0 border-t border-sidebar-border pt-3">
         {role === 'gerencia' && <Link href="/?view=settings" scroll={false} aria-current={activeView === 'settings' ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm transition ${activeView === 'settings' ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Settings aria-hidden="true" className="size-[18px]" /> Configurações</Link>}
         <UserMenu />
       </div>
@@ -202,14 +202,14 @@ export default function Home() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-primary">{viewCopy[activeView][0]}</p><h1 className="text-2xl font-semibold tracking-[-.04em] sm:text-[2rem]">{viewCopy[activeView][1]}</h1><p className="mt-2 text-sm text-muted-foreground">{viewCopy[activeView][2]}</p></div>{activeView !== 'settings' && <Button size="lg" className="h-11 px-4 font-bold shadow-[0_10px_28px_color-mix(in_oklab,var(--primary)_20%,transparent)]" render={<a href="https://delfia.atlassian.net/secure/CreateIssue!default.jspa" target="_blank" rel="noreferrer" />}><Plus /> Novo chamado</Button>}</div>
         {activeView === 'overview' && <div className="mt-7 grid grid-cols-2 gap-3 xl:grid-cols-4">
           {[
-            ['Chamados carregados', String(tickets.length), 'Projeto FSA · dados do Jira', ClipboardList, 'text-blue-300'], ['Em atendimento', String(tickets.filter((item) => item.status === 'Em atendimento').length), 'Fila atual', Headphones, 'text-emerald-300'],
-            ['Aguardando agenda', String(tickets.filter((item) => item.status === 'Agendar').length), 'Fila atual', CalendarClock, 'text-violet-300'], ['Prioridade alta', String(tickets.filter((item) => item.priority === 'Alta').length), 'Requer atenção', ShieldCheck, 'text-amber-300'],
+            ['Chamados relevantes', String(tickets.length), 'Fluxo operacional ativo', ClipboardList, 'text-blue-300'], ['Técnico em campo', String(tickets.filter((item) => item.status === 'Técnico em campo').length), 'Atendimentos atuais', Headphones, 'text-emerald-300'],
+            ['Pendente de agenda', String(tickets.filter((item) => item.status === 'Pendente de agendamento').length), 'Requer agendamento', CalendarClock, 'text-violet-300'], ['Aguardando spare', String(tickets.filter((item) => item.status === 'Aguardando spare').length), 'Material pendente', ShieldCheck, 'text-amber-300'],
           ].map(([label, value, note, Icon, color]) => <article key={label as string} className="surface-panel metric-glow rounded-2xl p-4 sm:p-5"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-muted-foreground">{label as string}</p><p className="mt-3 text-2xl font-semibold tracking-[-.04em] sm:text-3xl">{value as string}</p></div><div className={`grid size-10 place-items-center rounded-xl border border-white/5 bg-black/15 ${color}`}><Icon className="size-[18px]" /></div></div><p className="mt-4 text-xs text-muted-foreground">{note as string}</p></article>)}
         </div>}
         {jiraError && <div role="alert" className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-200">{jiraError}</div>}
         {(activeView === 'overview' || activeView === 'tickets') && <><div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos`}</p></div><Button variant={showFilters ? 'secondary' : 'outline'} className="h-9" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
         {showFilters && <div className="surface-panel mt-3 flex flex-wrap gap-2 rounded-xl p-3" aria-label="Filtrar por status">{(['Todos', ...columns] as const).map((status) => <Button key={status} size="sm" variant={statusFilter === status ? 'default' : 'ghost'} onClick={() => setStatusFilter(status)}>{status}</Button>)}</div>}
-        {view === 'kanban' ? <div className="mt-4 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">{columns.map((column) => {
+        {view === 'kanban' ? <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">{columns.map((column) => {
           const items = filtered.filter((ticket) => ticket.status === column);
           return <section key={column} className="surface-panel min-h-[280px] rounded-2xl p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-lg border border-white/5 bg-black/15 px-2 py-1 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} onOpen={() => void openTicket(ticket)} />)}{!items.length && <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
         })}</div> : <div className="surface-panel mt-4 overflow-hidden rounded-2xl">{filtered.map((ticket) => <button type="button" onClick={() => void openTicket(ticket)} key={ticket.id} className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge><span className="text-xs text-muted-foreground">{ticket.technician || 'Não atribuído'}</span></button>)}{!filtered.length && <EmptyState label="Nenhum chamado encontrado" />}</div>}</>}
@@ -246,7 +246,7 @@ function TicketCard({ ticket, onOpen }: { ticket: Ticket; onOpen: () => void }) 
 }
 
 function AgendaView({ tickets, loading, onOpen }: { tickets: Ticket[]; loading: boolean; onOpen: (ticket: Ticket) => void }) {
-  const scheduled = tickets.filter((ticket) => ticket.schedule || ticket.status === 'Agendar' || ticket.status === 'Agendado');
+  const scheduled = tickets.filter((ticket) => ticket.schedule || ticket.status === 'Pendente de agendamento' || ticket.status === 'Agendado');
   if (loading) return <LoadingPanel label="Carregando agenda..." />;
   if (!scheduled.length) return <EmptyState label="Nenhum atendimento aguardando agenda." />;
   return <div className="surface-panel mt-6 overflow-hidden rounded-2xl"><div className="grid border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[130px_1fr_160px_140px]"><span>Data</span><span>Chamado</span><span>Responsável</span><span>Status</span></div>{scheduled.map((ticket) => <button type="button" key={ticket.id} onClick={() => onOpen(ticket)} className="grid w-full gap-2 border-b border-border px-4 py-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[130px_1fr_160px_140px] sm:items-center"><span className="text-sm font-semibold text-blue-200">{ticket.schedule || 'A definir'}</span><span><strong className="block text-sm">{ticket.id} · {ticket.store}</strong><small className="text-muted-foreground">{ticket.title}</small></span><span className="text-sm text-muted-foreground">{ticket.technician || 'Não atribuído'}</span><Badge variant="outline" className="w-fit">{ticket.status}</Badge></button>)}</div>;
@@ -282,10 +282,12 @@ function toTicket(issue: JiraTicket): Ticket {
   const status: Status = statusText === 'agendado'
     ? 'Agendado'
     : statusText.includes('agendamento')
-      ? 'Agendar'
-      : statusText === 'tec-campo' || statusText.includes('atendimento') || statusText.includes('em campo')
-        ? 'Em atendimento'
-        : 'Triagem';
+      ? 'Pendente de agendamento'
+      : statusText.includes('spare')
+        ? 'Aguardando spare'
+        : statusText === 'direcionado'
+          ? 'Direcionado'
+          : 'Técnico em campo';
   const priorityText = issue.priority.toLowerCase();
   const priority: Ticket['priority'] = priorityText.includes('highest') || priorityText.includes('high') || priorityText.includes('alta') ? 'Alta' : priorityText.includes('low') || priorityText.includes('baixa') ? 'Baixa' : 'Media';
   const updated = issue.updatedAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(issue.updatedAt)) : 'sem data';

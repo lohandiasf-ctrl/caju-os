@@ -48,6 +48,15 @@ type JiraSearchResponse = {
   isLast?: boolean;
 };
 
+const OPERATIONAL_STATUSES = [
+  'AGENDAMENTO',
+  'AGENDAMENTO PEDIDO PELO CLIENTE',
+  'Agendado',
+  'Aguardando Spare',
+  'DIRECIONADO',
+  'TEC-CAMPO',
+] as const;
+
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
   const clauses = [`project = "${jqlString(projectKey)}"`, 'resolution = Unresolved'];
@@ -56,7 +65,11 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
     if (/^[A-Z][A-Z0-9_]+-\d+$/i.test(query)) clauses.push(`key = "${jqlString(query.toUpperCase())}"`);
     else clauses.push(`text ~ "${jqlString(query)}"`);
   }
-  if (options.status?.trim()) clauses.push(`status = "${jqlString(options.status.trim())}"`);
+  if (options.status?.trim()) {
+    clauses.push(`status = "${jqlString(options.status.trim())}"`);
+  } else {
+    clauses.push(`status IN (${OPERATIONAL_STATUSES.map((status) => `"${jqlString(status)}"`).join(', ')})`);
+  }
 
   const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
     method: 'POST',
