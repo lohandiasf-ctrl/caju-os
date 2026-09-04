@@ -45,12 +45,24 @@ export default function Home() {
     let active = true;
     setJiraLoading(true);
     setJiraError('');
-    void user.getIdToken().then((token) => fetch('/api/jira/issues?limit=100', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }))
-      .then(async (response) => {
-        const payload = await response.json() as { issues?: JiraTicket[]; error?: string };
+    void user.getIdToken().then(async (token) => {
+      const issues: JiraTicket[] = [];
+      let cursor: string | null = null;
+      let isLast = false;
+
+      while (!isLast) {
+        const params = new URLSearchParams({ limit: '100' });
+        if (cursor) params.set('cursor', cursor);
+        const response = await fetch(`/api/jira/issues?${params}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+        const payload = await response.json() as { issues?: JiraTicket[]; nextPageToken?: string | null; isLast?: boolean; error?: string };
         if (!response.ok) throw new Error(payload.error || 'Não foi possível consultar o Jira.');
-        if (active) setTickets((payload.issues ?? []).map(toTicket));
-      })
+        issues.push(...(payload.issues ?? []));
+        if (active) setTickets(issues.map(toTicket));
+        cursor = payload.nextPageToken ?? null;
+        isLast = payload.isLast ?? !cursor;
+        if (!cursor) isLast = true;
+      }
+    })
       .catch((error: unknown) => { if (active) setJiraError(error instanceof Error ? error.message : 'Falha ao consultar o Jira.'); })
       .finally(() => { if (active) setJiraLoading(false); });
     return () => { active = false; };
@@ -130,11 +142,11 @@ export default function Home() {
     return () => lifecycle.abort();
   }, []);
 
-  return <main className="min-h-screen bg-background text-foreground">
+  return <main className="min-h-screen text-foreground">
     <aside className={`fixed inset-y-0 left-0 z-40 w-[252px] border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex h-12 items-center gap-3 px-2">
-        <div className="grid size-10 place-items-center rounded-xl bg-primary text-lg font-black text-primary-foreground shadow-[0_8px_28px_rgba(229,98,35,.25)]">C</div>
-        <div><div className="text-[15px] font-extrabold tracking-tight">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Central de operacoes</div></div>
+        <div className="grid size-10 place-items-center rounded-xl border border-primary/30 bg-primary/12 text-lg font-black text-primary shadow-[0_10px_30px_rgba(240,122,63,.18)]">C</div>
+        <div><div className="text-[15px] font-extrabold tracking-tight">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando operacional</div></div>
       </div>
       <nav className="mt-8 space-y-1" aria-label="Navegacao principal">
         <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Operacao</p>
@@ -149,26 +161,26 @@ export default function Home() {
     </aside>
     {menu && <button aria-label="Fechar menu" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMenu(false)} />}
     <section className="min-h-screen lg:pl-[252px]">
-      <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-5">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menu" onClick={() => setMenu(true)}><Menu /></Button>
         <div className="relative max-w-[440px] flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar chamado, loja ou tecnico..." className="h-10 bg-card pl-9" /></div>
         <div className={`ml-auto hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold sm:flex ${jiraError ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'}`}><span className={`size-1.5 rounded-full ${jiraError ? 'bg-amber-400' : 'bg-emerald-400'}`} />{jiraLoading ? 'Sincronizando Jira...' : jiraError ? 'Jira indisponível' : 'Jira conectado'}</div>
         <Button variant="ghost" size="icon" aria-label="Notificacoes" className="relative"><Bell /><span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" /></Button>
       </header>
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Terca-feira, 1 de setembro</p><h1 className="text-2xl font-extrabold tracking-[-.03em] sm:text-3xl">Central de operacoes</h1><p className="mt-1 text-sm text-muted-foreground">Acompanhe a fila, a equipe e os atendimentos em andamento.</p></div><Button size="lg" className="h-10 px-4 font-bold shadow-[0_8px_24px_rgba(229,98,35,.2)]"><Plus /> Novo chamado</Button></div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-primary">Operação em tempo real</p><h1 className="text-2xl font-semibold tracking-[-.04em] sm:text-[2rem]">Visão geral dos chamados.</h1><p className="mt-2 text-sm text-muted-foreground">Fila, prioridade e execução em uma única visão.</p></div><Button size="lg" className="h-10 px-4 font-bold shadow-[0_10px_28px_rgba(240,122,63,.22)]"><Plus /> Novo chamado</Button></div>
         <div className="mt-7 grid grid-cols-2 gap-3 xl:grid-cols-4">
           {[
             ['Chamados carregados', String(tickets.length), 'Projeto FSA · dados do Jira', ClipboardList, 'text-blue-300'], ['Em atendimento', String(tickets.filter((item) => item.status === 'Em atendimento').length), 'Fila atual', Headphones, 'text-emerald-300'],
             ['Aguardando agenda', String(tickets.filter((item) => item.status === 'Agendar').length), 'Fila atual', CalendarClock, 'text-violet-300'], ['Prioridade alta', String(tickets.filter((item) => item.priority === 'Alta').length), 'Requer atenção', ShieldCheck, 'text-amber-300'],
-          ].map(([label, value, note, Icon, color]) => <article key={label as string} className="rounded-xl border border-border bg-card p-4 shadow-[0_12px_40px_rgba(0,0,0,.08)] sm:p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-muted-foreground">{label as string}</p><p className="mt-2 text-2xl font-extrabold sm:text-3xl">{value as string}</p></div><div className={`grid size-9 place-items-center rounded-lg bg-muted ${color}`}><Icon className="size-[18px]" /></div></div><p className="mt-3 text-[11px] text-muted-foreground">{note as string}</p></article>)}
+          ].map(([label, value, note, Icon, color]) => <article key={label as string} className="surface-panel metric-glow rounded-2xl p-4 sm:p-5"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-muted-foreground">{label as string}</p><p className="mt-3 text-2xl font-semibold tracking-[-.04em] sm:text-3xl">{value as string}</p></div><div className={`grid size-10 place-items-center rounded-xl border border-white/5 bg-black/15 ${color}`}><Icon className="size-[18px]" /></div></div><p className="mt-4 text-xs text-muted-foreground">{note as string}</p></article>)}
         </div>
         {jiraError && <div role="alert" className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-200">{jiraError}</div>}
         <div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos`}</p></div><Button variant="outline" className="h-9"><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
         {view === 'kanban' ? <div className="mt-4 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">{columns.map((column) => {
           const items = filtered.filter((ticket) => ticket.status === column);
-          return <section key={column} className="min-h-[280px] rounded-xl border border-border bg-muted/25 p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-md bg-background px-2 py-0.5 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} onOpen={() => void openTicket(ticket)} />)}{!items.length && <div className="grid h-32 place-items-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
-        })}</div> : <div className="mt-4 overflow-hidden rounded-xl border border-border bg-card">{filtered.map((ticket) => <button type="button" onClick={() => void openTicket(ticket)} key={ticket.id} className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-muted/50 last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge><span className="text-xs text-muted-foreground">{ticket.technician || 'Nao atribuido'}</span></button>)}</div>}
+          return <section key={column} className="surface-panel min-h-[280px] rounded-2xl p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-lg border border-white/5 bg-black/15 px-2 py-1 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} onOpen={() => void openTicket(ticket)} />)}{!items.length && <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
+        })}</div> : <div className="surface-panel mt-4 overflow-hidden rounded-2xl">{filtered.map((ticket) => <button type="button" onClick={() => void openTicket(ticket)} key={ticket.id} className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge><span className="text-xs text-muted-foreground">{ticket.technician || 'Nao atribuido'}</span></button>)}</div>}
       </div>
     </section>
     <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }}>
@@ -194,7 +206,7 @@ export default function Home() {
 }
 
 function TicketCard({ ticket, onOpen }: { ticket: Ticket; onOpen: () => void }) {
-  return <button type="button" onClick={onOpen} className="w-full rounded-xl border border-border bg-card p-4 text-left shadow-[0_10px_30px_rgba(0,0,0,.08)] transition hover:-translate-y-0.5 hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex justify-between gap-3"><span className="font-mono text-[11px] font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-bold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-1.5 text-[11px] text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p>{ticket.schedule && <p className="flex items-center gap-1.5 text-blue-300"><CalendarClock className="size-3.5" />Agendamento: {ticket.schedule}</p>}{ticket.partnerTriggeredAt && <p className="flex items-center gap-1.5 text-amber-300"><CalendarClock className="size-3.5" />Acionamento: {ticket.partnerTriggeredAt}</p>}</div><div className="mt-3 flex items-center justify-between border-t border-border pt-3"><span className="text-[10px] text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-[11px] font-semibold">{ticket.technician}</span>}</div></button>;
+  return <button type="button" onClick={onOpen} className="w-full rounded-xl border border-white/[.07] bg-black/15 p-4 text-left shadow-[0_14px_32px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 hover:border-primary/40 hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex justify-between gap-3"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-semibold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-2 text-xs text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p>{ticket.schedule && <p className="flex items-center gap-1.5 text-blue-300"><CalendarClock className="size-3.5" />Agendamento: {ticket.schedule}</p>}{ticket.partnerTriggeredAt && <p className="flex items-center gap-1.5 text-amber-300"><CalendarClock className="size-3.5" />Acionamento: {ticket.partnerTriggeredAt}</p>}</div><div className="mt-4 flex items-center justify-between border-t border-border pt-3"><span className="text-xs text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-xs font-semibold">{ticket.technician}</span>}</div></button>;
 }
 
 function Detail({ label, value }: { label: string; value: string }) { return <div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 font-medium">{value}</p></div>; }
@@ -202,13 +214,23 @@ function Detail({ label, value }: { label: string; value: string }) { return <di
 function formatDate(value: string) { return value ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : 'Não informado'; }
 
 function toTicket(issue: JiraTicket): Ticket {
-  const statusText = issue.status.trim().toLowerCase();
-  const status: Status = statusText === 'agendado' ? 'Agendado' : statusText === 'agendamento' ? 'Agendar' : statusText === 'tec-campo' || issue.statusCategory === 'indeterminate' || statusText.includes('atendimento') ? 'Em atendimento' : 'Triagem';
+  const statusText = normalizeText(issue.status);
+  const status: Status = statusText === 'agendado'
+    ? 'Agendado'
+    : statusText.includes('agendamento')
+      ? 'Agendar'
+      : statusText === 'tec-campo' || statusText.includes('atendimento') || statusText.includes('em campo')
+        ? 'Em atendimento'
+        : 'Triagem';
   const priorityText = issue.priority.toLowerCase();
   const priority: Ticket['priority'] = priorityText.includes('highest') || priorityText.includes('high') || priorityText.includes('alta') ? 'Alta' : priorityText.includes('low') || priorityText.includes('baixa') ? 'Baixa' : 'Media';
   const updated = issue.updatedAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(issue.updatedAt)) : 'sem data';
   const storeFromTitle = issue.summary.match(/^Loja\s+([^|]+)/i)?.[0]?.trim();
   return { id: issue.key, title: issue.summary, store: issue.store || storeFromTitle || 'Loja não informada', city: issue.city || `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined, schedule: formatJiraDate(issue.scheduledAt), partnerTriggeredAt: formatJiraDate(issue.partnerTriggeredAt) };
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 function formatJiraDate(value: string | null) {
