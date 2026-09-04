@@ -46,33 +46,25 @@ export default function FinanceiroPage() {
   const [message, setMessage] = useState('');
   const [page, setPage] = useState(1);
   const [showAllTechnicians, setShowAllTechnicians] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const [diagnostics, setDiagnostics] = useState<unknown>(null);
-
-  useEffect(() => {
-    setShowDiagnostics(new URLSearchParams(window.location.search).has('diag'));
-  }, []);
 
   useEffect(() => {
     if (!user) return;
     let active = true;
-    const diagnosticMode = new URLSearchParams(window.location.search).has('diag');
     setLoading(true);
     setError('');
     void user.getIdToken().then(async (token) => {
       const headers = { Authorization: `Bearer ${token}` };
       const [financeResponse, ruleResponse] = await Promise.all([
-        fetch(`/api/jira/finance?days=365${diagnosticMode ? '&diag=1' : ''}`, { headers, cache: 'no-store' }),
+        fetch('/api/jira/finance?days=365', { headers, cache: 'no-store' }),
         fetch('/api/finance/rules', { headers, cache: 'no-store' }),
       ]);
-      const financePayload = await financeResponse.json() as { issues?: FinancialIssue[]; diagnostics?: unknown; error?: string };
+      const financePayload = await financeResponse.json() as { issues?: FinancialIssue[]; error?: string };
       const rulePayload = await ruleResponse.json() as PayoutRule & { error?: string };
       if (!financeResponse.ok) throw new Error(financePayload.error || 'Falha ao carregar financeiro.');
       if (!ruleResponse.ok) throw new Error(rulePayload.error || 'Falha ao carregar regra de repasse.');
       if (!active) return;
       const nextRule = { firstTicketCents: rulePayload.firstTicketCents, additionalTicketCents: rulePayload.additionalTicketCents };
       setIssues(financePayload.issues ?? []);
-      setDiagnostics(financePayload.diagnostics ?? null);
       setRule(nextRule);
       setFirstRate(formatRate(nextRule.firstTicketCents));
       setAdditionalRate(formatRate(nextRule.additionalTicketCents));
@@ -167,7 +159,6 @@ export default function FinanceiroPage() {
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Gestão financeira</p><h1 className="text-2xl font-extrabold tracking-[-.03em] sm:text-3xl">Financeiro</h1><p className="mt-1 text-sm text-muted-foreground">Valores do ticket, spare, repasses e margem em uma visão.</p></div><div className="flex flex-wrap gap-2">{([7, 30, 90] as const).map((days) => <Button key={days} size="sm" variant={period === days ? 'secondary' : 'outline'} onClick={() => { setPeriod(days); setPage(1); }}>{days} dias</Button>)}<Button size="sm" onClick={exportCsv} disabled={!rows.length}><Download />Exportar</Button></div></div>
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">{error}</div>}
-        {showDiagnostics && <pre className="mt-6 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-amber-400/30 bg-black/60 p-4 text-xs text-amber-100">{JSON.stringify(diagnostics, null, 2)}</pre>}
         {loading ? <div className="surface-panel mt-7 flex min-h-48 items-center justify-center gap-3 rounded-2xl text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin" />Carregando dados reais do Jira...</div> : <>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             <Metric label="Faturamento previsto" value={money(revenue)} note={`${periodIssues.length} tickets movimentados`} icon={TrendingUp} tone="green" />

@@ -90,55 +90,6 @@ const OPERATIONAL_STATUSES = [
 
 let operationalStatusesCache: { expiresAt: number; names: string[] } | null = null;
 let financialFieldsCache: { expiresAt: number; ids: FinancialFieldIds } | null = null;
-let financialDiagnostics: unknown = null;
-
-export function getFinancialDiagnostics() {
-  return financialDiagnostics;
-}
-
-export async function getJiraFinancialValueDiagnostics(days = 365) {
-  const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
-  const safeDays = Math.min(Math.max(Math.trunc(days), 7), 365);
-  const response = await jiraSearch({
-    jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d ORDER BY updated DESC`,
-    fields: ['summary'],
-    maxResults: 20,
-  });
-  const detailedIssues = await Promise.all((response.issues ?? []).slice(0, 20).map((issue) =>
-    jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(issue.key)}?fields=*all`),
-  ));
-  const values = new Map<string, { count: number; samples: Set<number> }>();
-  for (const issue of detailedIssues) {
-    for (const [id, rawValue] of Object.entries(issue.fields)) {
-      if (!id.startsWith('customfield_') || rawValue == null) continue;
-      const value = numberField(rawValue);
-      if (!Number.isFinite(value) || value <= 0) continue;
-      const current = values.get(id) ?? { count: 0, samples: new Set<number>() };
-      current.count += 1;
-      if (current.samples.size < 8) current.samples.add(value);
-      values.set(id, current);
-    }
-  }
-  let knownIssue: JiraIssue | null = null;
-  try {
-    knownIssue = await jiraFetch<JiraIssue>('/rest/api/3/issue/FSA-130785?fields=summary,status,updated,customfield_12413,customfield_14880');
-  } catch {
-    // Diagnostic only; the regular search remains the source of truth.
-  }
-  return {
-    inspectedIssues: detailedIssues.length,
-    keys: detailedIssues.map((issue) => issue.key),
-    knownIssue: knownIssue ? {
-      key: knownIssue.key,
-      status: knownIssue.fields.status?.name,
-      updated: knownIssue.fields.updated,
-      total: numberField(knownIssue.fields.customfield_12413),
-      spare: numberField(knownIssue.fields.customfield_14880),
-    } : null,
-    numericFields: Array.from(values, ([id, value]) => ({ id, count: value.count, samples: [...value.samples] }))
-      .sort((left, right) => right.count - left.count),
-  };
-}
 
 async function jiraSearch(body: { jql: string; fields: string[]; maxResults: number; nextPageToken?: string }) {
   const enhanced = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
@@ -177,6 +128,9 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
+  if (!(response.issues?.length) && !options.query?.trim() && !options.status?.trim()) {
+    throw new JiraError('A integração do Jira está autenticada, mas sem acesso aos chamados do projeto. Atualize a credencial ou a permissão da conta de integração.', 502);
+  }
 
   return {
     issues: (response.issues ?? []).map(toSummary),
@@ -221,7 +175,9 @@ export async function getFinancialIssues(days = 180) {
     nextPageToken = response.nextPageToken;
   } while (nextPageToken && issues.length < 1000);
 
-  console.info('FINANCE_DIAGNOSTIC_QUERY', JSON.stringify({ requestedFields, issueCount: issues.length }));
+  if (!issues.length) {
+    throw new JiraError('A integração do Jira não consegue ler os tickets financeiros. Atualize a credencial ou a permissão da conta de integração.', 502);
+  }
 
   return issues.map((issue) => {
     const total = firstPositiveField(issue.fields, financialFields.total);
@@ -322,14 +278,6 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
       if (key) {
         const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(key)}?expand=names&fields=*all`);
         fields = Object.entries(issue.names ?? {}).map(([id, name]) => ({ id, name }));
-        console.info('FINANCE_DIAGNOSTIC_ISSUE', JSON.stringify({
-          key,
-          names: Object.keys(issue.names ?? {}).length,
-          values: Object.entries(issue.fields)
-            .filter(([id, value]) => id.startsWith('customfield_') && value != null)
-            .map(([id, value]) => ({ id, value: diagnosticFieldValue(value) }))
-            .filter((entry) => entry.value != null),
-        }));
         customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
       }
     }
@@ -342,16 +290,12 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
       technician: matchingIds((name) => name.includes('tecnic') && (name.includes('respons') || name.includes('campo') || name.includes('atendimento'))),
       billed: matchingIds((name) => name.includes('faturad') || name.includes('cobrad')),
     };
-    console.info('FINANCE_DIAGNOSTIC_FIELDS', JSON.stringify(customFields
-      .slice(0, 500)
-      .map((field) => ({ id: field.id, name: field.name }))));
     const ids = {
       total: uniquePreferred(discovered.total, defaults.total),
       spare: uniquePreferred(discovered.spare, defaults.spare),
       technician: uniquePreferred(discovered.technician, defaults.technician),
       billed: uniquePreferred(discovered.billed, defaults.billed),
     };
-    financialDiagnostics = { fields: customFields, ids };
     financialFieldsCache = { ids, expiresAt: Date.now() + 5 * 60_000 };
     return ids;
   } catch {
@@ -448,16 +392,6 @@ function firstTextField(fields: Record<string, unknown>, ids: string[]) {
 
 function uniquePreferred(preferred: string[], fallback: string[]) {
   return Array.from(new Set([...preferred, ...fallback]));
-}
-
-function diagnosticFieldValue(value: unknown): string | number | boolean | null {
-  if (typeof value === 'number' || typeof value === 'boolean') return value;
-  if (typeof value === 'string') return value.slice(0, 80);
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    const field = value as { value?: unknown; amount?: unknown; name?: unknown };
-    return diagnosticFieldValue(field.value ?? field.amount ?? field.name);
-  }
-  return null;
 }
 
 function adfToText(value: unknown): string {

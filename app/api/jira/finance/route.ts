@@ -1,16 +1,12 @@
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { getFinancialDiagnostics, getFinancialIssues, getJiraFinancialValueDiagnostics, JiraError } from '@/lib/server/jira';
+import { getFinancialIssues, JiraError } from '@/lib/server/jira';
 
 export async function GET(request: Request) {
   try {
     await requireApiUser(request, ['gerencia']);
-    const url = new URL(request.url);
-    const days = Number(url.searchParams.get('days') ?? 180);
+    const days = Number(new URL(request.url).searchParams.get('days') ?? 180);
     const issues = await getFinancialIssues(days);
-    const diagnostics = url.searchParams.has('diag')
-      ? { discovery: getFinancialDiagnostics(), values: await getJiraFinancialValueDiagnostics(days) }
-      : undefined;
-    return Response.json({ issues, ...(diagnostics ? { diagnostics } : {}) }, {
+    return Response.json({ issues }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
