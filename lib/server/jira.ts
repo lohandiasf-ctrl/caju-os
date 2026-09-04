@@ -78,6 +78,7 @@ type FinancialFieldIds = {
   technician: string[];
   billed: string[];
 };
+type FinancialIssue = { key: string; title: string; status: string; technician: string; store: string; city: string; updatedAt: string; serviceValue: number; spareValue: number; totalValue: number; billed: boolean };
 
 const OPERATIONAL_STATUSES = [
   'AGENDAMENTO',
@@ -90,6 +91,9 @@ const OPERATIONAL_STATUSES = [
 
 let operationalStatusesCache: { expiresAt: number; names: string[] } | null = null;
 let financialFieldsCache: { expiresAt: number; ids: FinancialFieldIds } | null = null;
+const issuesCache = new Map<string, { expiresAt: number; value: { issues: JiraIssueSummary[]; nextPageToken: string | null; isLast: boolean } }>();
+let financialIssuesCache: { expiresAt: number; value: FinancialIssue[] } | null = null;
+const CACHE_TTL_MS = 45_000;
 
 async function jiraSearch(body: { jql: string; fields: string[]; maxResults: number; nextPageToken?: string }) {
   const enhanced = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
@@ -108,6 +112,9 @@ async function jiraSearch(body: { jql: string; fields: string[]; maxResults: num
 }
 
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
+  const cacheKey = JSON.stringify({ q: options.query?.trim() ?? '', s: options.status?.trim() ?? '', c: options.nextPageToken ?? '', m: options.maxResults ?? 50 });
+  const cached = issuesCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
   const clauses = [`project = "${jqlString(projectKey)}"`];
   const query = options.query?.trim();
@@ -132,11 +139,13 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
     throw new JiraError('A integração do Jira está autenticada, mas sem acesso aos chamados do projeto. Atualize a credencial ou a permissão da conta de integração.', 502);
   }
 
-  return {
+  const value = {
     issues: (response.issues ?? []).map(toSummary),
     nextPageToken: response.nextPageToken ?? null,
     isLast: response.isLast ?? !response.nextPageToken,
   };
+  issuesCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  return value;
 }
 
 export async function getJiraIssue(key: string) {
@@ -149,7 +158,8 @@ export async function getJiraIssue(key: string) {
   return { ...toSummary(issue), description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}` };
 }
 
-export async function getFinancialIssues(days = 180) {
+export async function getFinancialIssues(days = 180): Promise<FinancialIssue[]> {
+  if (financialIssuesCache && financialIssuesCache.expiresAt > Date.now()) return financialIssuesCache.value;
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
   const safeDays = Math.min(Math.max(Math.trunc(days), 7), 365);
   const financialFields = await getFinancialFieldIds(projectKey);
@@ -179,7 +189,7 @@ export async function getFinancialIssues(days = 180) {
     throw new JiraError('A integração do Jira não consegue ler os tickets financeiros. Atualize a credencial ou a permissão da conta de integração.', 502);
   }
 
-  return issues.map((issue) => {
+  const value = issues.map((issue) => {
     const total = firstPositiveField(issue.fields, financialFields.total);
     const rawSpare = firstPositiveField(issue.fields, financialFields.spare);
     const spare = total > 0 ? Math.min(total, rawSpare) : rawSpare;
@@ -200,6 +210,8 @@ export async function getFinancialIssues(days = 180) {
       billed: normalizeText(firstTextField(issue.fields, financialFields.billed) ?? '') === 'sim',
     };
   }).filter((issue) => issue.totalValue > 0 || issue.spareValue > 0);
+  financialIssuesCache = { value, expiresAt: Date.now() + CACHE_TTL_MS };
+  return value;
 }
 
 export class JiraError extends Error {
