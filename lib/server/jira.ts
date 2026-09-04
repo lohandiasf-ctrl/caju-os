@@ -70,7 +70,7 @@ let operationalStatusesCache: { expiresAt: number; names: string[] } | null = nu
 
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
-  const clauses = [`project = "${jqlString(projectKey)}"`, 'resolution = Unresolved'];
+  const clauses = [`project = "${jqlString(projectKey)}"`];
   const query = options.query?.trim();
   if (query) {
     if (/^[A-Z][A-Z0-9_]+-\d+$/i.test(query)) clauses.push(`key = "${jqlString(query.toUpperCase())}"`);
