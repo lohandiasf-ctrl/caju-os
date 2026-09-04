@@ -96,6 +96,36 @@ export function getFinancialDiagnostics() {
   return financialDiagnostics;
 }
 
+export async function getJiraFinancialValueDiagnostics(days = 365) {
+  const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
+  const safeDays = Math.min(Math.max(Math.trunc(days), 7), 365);
+  const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
+    method: 'POST',
+    body: JSON.stringify({
+      jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d ORDER BY updated DESC`,
+      fields: ['*all'],
+      maxResults: 100,
+    }),
+  });
+  const values = new Map<string, { count: number; samples: Set<number> }>();
+  for (const issue of response.issues ?? []) {
+    for (const [id, rawValue] of Object.entries(issue.fields)) {
+      if (!id.startsWith('customfield_') || rawValue == null) continue;
+      const value = numberField(rawValue);
+      if (!Number.isFinite(value) || value <= 0) continue;
+      const current = values.get(id) ?? { count: 0, samples: new Set<number>() };
+      current.count += 1;
+      if (current.samples.size < 8) current.samples.add(value);
+      values.set(id, current);
+    }
+  }
+  return {
+    inspectedIssues: response.issues?.length ?? 0,
+    numericFields: Array.from(values, ([id, value]) => ({ id, count: value.count, samples: [...value.samples] }))
+      .sort((left, right) => right.count - left.count),
+  };
+}
+
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
   const clauses = [`project = "${jqlString(projectKey)}"`];

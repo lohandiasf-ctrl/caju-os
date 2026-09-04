@@ -56,12 +56,13 @@ export default function FinanceiroPage() {
   useEffect(() => {
     if (!user) return;
     let active = true;
+    const diagnosticMode = new URLSearchParams(window.location.search).has('diag');
     setLoading(true);
     setError('');
     void user.getIdToken().then(async (token) => {
       const headers = { Authorization: `Bearer ${token}` };
       const [financeResponse, ruleResponse] = await Promise.all([
-        fetch('/api/jira/finance?days=365', { headers, cache: 'no-store' }),
+        fetch(`/api/jira/finance?days=365${diagnosticMode ? '&diag=1' : ''}`, { headers, cache: 'no-store' }),
         fetch('/api/finance/rules', { headers, cache: 'no-store' }),
       ]);
       const financePayload = await financeResponse.json() as { issues?: FinancialIssue[]; diagnostics?: unknown; error?: string };
