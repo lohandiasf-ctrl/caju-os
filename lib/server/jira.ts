@@ -251,7 +251,8 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
     } catch {
       fields = [];
     }
-    if (!fields.length) {
+    let customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
+    if (!customFields.length) {
       const recent = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
         method: 'POST',
         body: JSON.stringify({
@@ -264,9 +265,9 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
       if (key) {
         const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(key)}?expand=names&fields=*all`);
         fields = Object.entries(issue.names ?? {}).map(([id, name]) => ({ id, name }));
+        customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
       }
     }
-    const customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
     const matchingIds = (matcher: (name: string) => boolean) => customFields
       .filter((field) => matcher(normalizeText(field.name)))
       .map((field) => field.id);
