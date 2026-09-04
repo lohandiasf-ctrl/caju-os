@@ -99,16 +99,16 @@ export function getFinancialDiagnostics() {
 export async function getJiraFinancialValueDiagnostics(days = 365) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
   const safeDays = Math.min(Math.max(Math.trunc(days), 7), 365);
-  const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
-    method: 'POST',
-    body: JSON.stringify({
-      jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d ORDER BY updated DESC`,
-      fields: ['*all'],
-      maxResults: 100,
-    }),
+  const response = await jiraSearch({
+    jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d ORDER BY updated DESC`,
+    fields: ['summary'],
+    maxResults: 20,
   });
+  const detailedIssues = await Promise.all((response.issues ?? []).slice(0, 20).map((issue) =>
+    jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(issue.key)}?fields=*all`),
+  ));
   const values = new Map<string, { count: number; samples: Set<number> }>();
-  for (const issue of response.issues ?? []) {
+  for (const issue of detailedIssues) {
     for (const [id, rawValue] of Object.entries(issue.fields)) {
       if (!id.startsWith('customfield_') || rawValue == null) continue;
       const value = numberField(rawValue);
@@ -119,11 +119,41 @@ export async function getJiraFinancialValueDiagnostics(days = 365) {
       values.set(id, current);
     }
   }
+  let knownIssue: JiraIssue | null = null;
+  try {
+    knownIssue = await jiraFetch<JiraIssue>('/rest/api/3/issue/FSA-130785?fields=summary,status,updated,customfield_12413,customfield_14880');
+  } catch {
+    // Diagnostic only; the regular search remains the source of truth.
+  }
   return {
-    inspectedIssues: response.issues?.length ?? 0,
+    inspectedIssues: detailedIssues.length,
+    keys: detailedIssues.map((issue) => issue.key),
+    knownIssue: knownIssue ? {
+      key: knownIssue.key,
+      status: knownIssue.fields.status?.name,
+      updated: knownIssue.fields.updated,
+      total: numberField(knownIssue.fields.customfield_12413),
+      spare: numberField(knownIssue.fields.customfield_14880),
+    } : null,
     numericFields: Array.from(values, ([id, value]) => ({ id, count: value.count, samples: [...value.samples] }))
       .sort((left, right) => right.count - left.count),
   };
+}
+
+async function jiraSearch(body: { jql: string; fields: string[]; maxResults: number; nextPageToken?: string }) {
+  const enhanced = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  if ((enhanced.issues?.length ?? 0) > 0 || body.nextPageToken) return enhanced;
+  try {
+    return await jiraFetch<JiraSearchResponse>('/rest/api/3/search', {
+      method: 'POST',
+      body: JSON.stringify({ jql: body.jql, fields: body.fields, maxResults: body.maxResults, startAt: 0 }),
+    });
+  } catch {
+    return enhanced;
+  }
 }
 
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
@@ -141,14 +171,11 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
     clauses.push(`status IN (${operationalStatuses.map((status) => `"${jqlString(status)}"`).join(', ')})`);
   }
 
-  const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
-    method: 'POST',
-    body: JSON.stringify({
+  const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ORDER BY updated DESC`,
       fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12036', 'customfield_12278'],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
-    }),
   });
 
   return {
@@ -184,14 +211,11 @@ export async function getFinancialIssues(days = 180) {
   let nextPageToken: string | undefined;
 
   do {
-    const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
-      method: 'POST',
-      body: JSON.stringify({
+    const response = await jiraSearch({
         jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d AND status NOT IN (Cancelado, REJEITADO, INATIVO) AND (${valueClause}) ORDER BY updated DESC`,
         fields: requestedFields,
         maxResults: 100,
         ...(nextPageToken ? { nextPageToken } : {}),
-      }),
     });
     issues.push(...(response.issues ?? []));
     nextPageToken = response.nextPageToken;
@@ -289,13 +313,10 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
     }
     let customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
     if (!customFields.length) {
-      const recent = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
-        method: 'POST',
-        body: JSON.stringify({
+      const recent = await jiraSearch({
           jql: `project = "${jqlString(projectKey)}" ORDER BY updated DESC`,
           fields: ['summary'],
           maxResults: 1,
-        }),
       });
       const key = recent.issues?.[0]?.key;
       if (key) {
