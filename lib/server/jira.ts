@@ -152,6 +152,8 @@ export async function getFinancialIssues(days = 180) {
     nextPageToken = response.nextPageToken;
   } while (nextPageToken && issues.length < 1000);
 
+  console.info('FINANCE_DIAGNOSTIC_QUERY', JSON.stringify({ requestedFields, issueCount: issues.length }));
+
   return issues.map((issue) => {
     const total = firstPositiveField(issue.fields, financialFields.total);
     const rawSpare = firstPositiveField(issue.fields, financialFields.spare);
@@ -238,6 +240,9 @@ async function getFinancialFieldIds(): Promise<FinancialFieldIds> {
       technician: matchingIds((name) => name.includes('tecnic') && (name.includes('respons') || name.includes('campo') || name.includes('atendimento'))),
       billed: matchingIds((name) => name.includes('faturad') || name.includes('cobrad')),
     };
+    console.info('FINANCE_DIAGNOSTIC_FIELDS', JSON.stringify(customFields
+      .filter((field) => /valor|total|ticket|spare|equip|custo|fatur/i.test(normalizeText(field.name)))
+      .map((field) => ({ id: field.id, name: field.name }))));
     const ids = {
       total: uniquePreferred(discovered.total, defaults.total),
       spare: uniquePreferred(discovered.spare, defaults.spare),
