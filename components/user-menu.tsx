@@ -1,27 +1,16 @@
 'use client';
-
-import { LogOut } from 'lucide-react';
+import { LogOut, ChevronUp, Camera, Check } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
 import { roleLabels } from '@/lib/permissions';
-
+import { useEffect, useState } from 'react';
+const statuses = ['Online', 'Ocupado', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] as const;
 export function UserMenu() {
-  const { user, role } = useAuth();
-  const label = user?.email?.slice(0, 2).toUpperCase() || 'US';
-
-  return (
-    <div className="cockpit-inset mt-3 rounded-xl p-3">
-      <div className="flex items-center gap-3">
-        <div className="grid size-9 shrink-0 place-items-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">{label}</div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold">{user?.email}</p>
-          <p className="text-xs text-muted-foreground">{role ? roleLabels[role] : 'Sem perfil definido'}</p>
-        </div>
-        <button type="button" onClick={() => void signOut(auth)} className="grid size-10 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Sair da conta" title="Sair">
-          <LogOut className="size-4" />
-        </button>
-      </div>
-    </div>
-  );
+  const { user, role } = useAuth(); const [open, setOpen] = useState(false); const [status, setStatus] = useState<typeof statuses[number]>('Online'); const [photo, setPhoto] = useState<string | null>(null); const [name, setName] = useState(''); const [phone, setPhone] = useState('');
+  useEffect(() => { setStatus((localStorage.getItem('caju-status') as typeof status) || 'Online'); setPhoto(localStorage.getItem('caju-os-profile-photo')); setName(localStorage.getItem('caju-profile-name') || ''); setPhone(localStorage.getItem('caju-profile-phone') || ''); }, []);
+  function updateStatus(value: typeof status) { setStatus(value); localStorage.setItem('caju-status', value); }
+  function saveProfile() { localStorage.setItem('caju-profile-name', name); localStorage.setItem('caju-profile-phone', phone); setOpen(false); }
+  const label = name || user?.email?.slice(0, 2).toUpperCase() || 'US';
+  return <div className="relative cockpit-inset mt-3 rounded-xl p-3"><button type="button" className="flex w-full items-center gap-3 text-left" onClick={() => setOpen((value) => !value)} aria-expanded={open}><div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">{photo ? <img src={photo} alt="Foto do perfil" className="size-full object-cover" /> : label.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{name || user?.email}</p><p className="text-xs text-muted-foreground">{role ? roleLabels[role] : 'Sem perfil definido'} · {status}</p></div><ChevronUp className={`size-4 transition ${open ? '' : 'rotate-180'}`} /></button>{open && <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-2xl border border-border bg-card p-4 shadow-2xl"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Meu status</p><div className="mt-2 grid gap-1">{statuses.map((item) => <button key={item} type="button" onClick={() => updateStatus(item)} className="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-muted">{item}{status === item && <Check className="size-4 text-emerald-300" />}</button>)}</div><div className="my-3 border-t border-border" /><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Meu perfil</p><label className="mt-2 flex cursor-pointer items-center gap-2 text-sm text-primary"><Camera className="size-4" />Alterar foto<input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const value = String(reader.result); setPhoto(value); localStorage.setItem('caju-os-profile-photo', value); }; reader.readAsDataURL(file); }} /></label><input className="mt-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" placeholder="Nome de exibição" value={name} onChange={(event) => setName(event.target.value)} /><input className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm" placeholder="Telefone" value={phone} onChange={(event) => setPhone(event.target.value)} /><button type="button" onClick={saveProfile} className="mt-3 h-9 w-full rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground">Salvar perfil</button><button type="button" onClick={() => void signOut(auth)} className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted"><LogOut className="size-4" />Sair da conta</button></div>}</div>;
 }
