@@ -257,19 +257,23 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
       const recent = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
         method: 'POST',
         body: JSON.stringify({
-          jql: `project = "${jqlString(projectKey)}" ORDER BY updated DESC`,
-          fields: ['*all'],
-          expand: ['names'],
+          jql: `project = "${jqlString(projectKey)}" AND statusCategory = Done AND updated >= -365d ORDER BY updated DESC`,
+          fields: ['summary'],
           maxResults: 1,
         }),
       });
       const key = recent.issues?.[0]?.key;
-      fields = Object.entries(recent.names ?? {}).map(([id, name]) => ({ id, name }));
       if (key) {
-        if (!fields.length) {
-          const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(key)}?expand=names&fields=*all`);
-          fields = Object.entries(issue.names ?? {}).map(([id, name]) => ({ id, name }));
-        }
+        const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(key)}?expand=names&fields=*all`);
+        fields = Object.entries(issue.names ?? {}).map(([id, name]) => ({ id, name }));
+        console.info('FINANCE_DIAGNOSTIC_ISSUE', JSON.stringify({
+          key,
+          names: Object.keys(issue.names ?? {}).length,
+          values: Object.entries(issue.fields)
+            .filter(([id, value]) => id.startsWith('customfield_') && value != null)
+            .map(([id, value]) => ({ id, value: diagnosticFieldValue(value) }))
+            .filter((entry) => entry.value != null),
+        }));
         customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
       }
     }
@@ -387,6 +391,16 @@ function firstTextField(fields: Record<string, unknown>, ids: string[]) {
 
 function uniquePreferred(preferred: string[], fallback: string[]) {
   return Array.from(new Set([...preferred, ...fallback]));
+}
+
+function diagnosticFieldValue(value: unknown): string | number | boolean | null {
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.slice(0, 80);
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const field = value as { value?: unknown; amount?: unknown; name?: unknown };
+    return diagnosticFieldValue(field.value ?? field.amount ?? field.name);
+  }
+  return null;
 }
 
 function adfToText(value: unknown): string {
