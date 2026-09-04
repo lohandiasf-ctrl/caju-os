@@ -62,6 +62,11 @@ type JiraField = {
   name?: string;
 };
 
+type JiraFieldSearchResponse = {
+  isLast?: boolean;
+  values?: JiraField[];
+};
+
 type FinancialFieldIds = {
   total: string[];
   spare: string[];
@@ -229,7 +234,15 @@ async function getFinancialFieldIds(): Promise<FinancialFieldIds> {
   };
 
   try {
-    const fields = await jiraFetch<JiraField[]>('/rest/api/3/field');
+    const fields: JiraField[] = [];
+    let startAt = 0;
+    let isLast = false;
+    while (!isLast && startAt < 1000) {
+      const page = await jiraFetch<JiraFieldSearchResponse>(`/rest/api/3/field/search?type=custom&startAt=${startAt}&maxResults=100`);
+      fields.push(...(page.values ?? []));
+      isLast = page.isLast ?? (page.values?.length ?? 0) < 100;
+      startAt += 100;
+    }
     const customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
     const matchingIds = (matcher: (name: string) => boolean) => customFields
       .filter((field) => matcher(normalizeText(field.name)))
