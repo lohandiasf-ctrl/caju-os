@@ -49,6 +49,7 @@ type JiraIssue = {
 
 type JiraSearchResponse = {
   issues?: JiraIssue[];
+  names?: Record<string, string>;
   nextPageToken?: string;
   isLast?: boolean;
 };
@@ -257,14 +258,18 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
         method: 'POST',
         body: JSON.stringify({
           jql: `project = "${jqlString(projectKey)}" ORDER BY updated DESC`,
-          fields: ['summary'],
+          fields: ['*all'],
+          expand: ['names'],
           maxResults: 1,
         }),
       });
       const key = recent.issues?.[0]?.key;
+      fields = Object.entries(recent.names ?? {}).map(([id, name]) => ({ id, name }));
       if (key) {
-        const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(key)}?expand=names&fields=*all`);
-        fields = Object.entries(issue.names ?? {}).map(([id, name]) => ({ id, name }));
+        if (!fields.length) {
+          const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(key)}?expand=names&fields=*all`);
+          fields = Object.entries(issue.names ?? {}).map(([id, name]) => ({ id, name }));
+        }
         customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
       }
     }
