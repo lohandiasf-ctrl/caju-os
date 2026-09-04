@@ -44,7 +44,7 @@ type JiraIssue = {
     customfield_11955?: unknown;
     customfield_12316?: unknown;
     customfield_19825?: unknown;
-  };
+  } & Record<string, unknown>;
 };
 
 type JiraSearchResponse = {
@@ -57,6 +57,18 @@ type JiraProjectIssueType = {
   statuses?: Array<{ name?: string }>;
 };
 
+type JiraField = {
+  id?: string;
+  name?: string;
+};
+
+type FinancialFieldIds = {
+  total: string[];
+  spare: string[];
+  technician: string[];
+  billed: string[];
+};
+
 const OPERATIONAL_STATUSES = [
   'AGENDAMENTO',
   'AGENDAMENTO PEDIDO PELO CLIENTE',
@@ -67,6 +79,7 @@ const OPERATIONAL_STATUSES = [
 ] as const;
 
 let operationalStatusesCache: { expiresAt: number; names: string[] } | null = null;
+let financialFieldsCache: { expiresAt: number; ids: FinancialFieldIds } | null = null;
 
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
@@ -113,6 +126,15 @@ export async function getJiraIssue(key: string) {
 export async function getFinancialIssues(days = 180) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
   const safeDays = Math.min(Math.max(Math.trunc(days), 7), 365);
+  const financialFields = await getFinancialFieldIds();
+  const requestedFields = Array.from(new Set([
+    'summary', 'status', 'assignee', 'updated', 'project', 'customfield_14954', 'customfield_11994',
+    ...financialFields.total, ...financialFields.spare, ...financialFields.technician, ...financialFields.billed,
+  ]));
+  const valueFieldIds = Array.from(new Set([...financialFields.total, ...financialFields.spare]));
+  const valueClause = valueFieldIds
+    .map((id) => `cf[${id.replace('customfield_', '')}] IS NOT EMPTY`)
+    .join(' OR ');
   const issues: JiraIssue[] = [];
   let nextPageToken: string | undefined;
 
@@ -120,8 +142,8 @@ export async function getFinancialIssues(days = 180) {
     const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
       method: 'POST',
       body: JSON.stringify({
-        jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d AND status NOT IN (Cancelado, REJEITADO, INATIVO) ORDER BY updated DESC`,
-        fields: ['summary', 'status', 'assignee', 'updated', 'project', 'customfield_14954', 'customfield_11994', 'customfield_12413', 'customfield_14880', 'customfield_11955', 'customfield_12316', 'customfield_19825'],
+        jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d AND status NOT IN (Cancelado, REJEITADO, INATIVO) AND (${valueClause}) ORDER BY updated DESC`,
+        fields: requestedFields,
         maxResults: 100,
         ...(nextPageToken ? { nextPageToken } : {}),
       }),
@@ -131,23 +153,24 @@ export async function getFinancialIssues(days = 180) {
   } while (nextPageToken && issues.length < 1000);
 
   return issues.map((issue) => {
-    const total = numberField(issue.fields.customfield_12413);
-    const spare = Math.min(total, numberField(issue.fields.customfield_14880));
+    const total = firstPositiveField(issue.fields, financialFields.total);
+    const rawSpare = firstPositiveField(issue.fields, financialFields.spare);
+    const spare = total > 0 ? Math.min(total, rawSpare) : rawSpare;
+    const finalTotal = total > 0 ? total : rawSpare;
     return {
       key: issue.key,
       title: issue.fields.summary ?? 'Sem título',
       status: issue.fields.status?.name ?? 'Sem status',
-      technician: customFieldText(issue.fields.customfield_11955)
-        ?? customFieldText(issue.fields.customfield_12316)
+      technician: firstTextField(issue.fields, financialFields.technician)
         ?? issue.fields.assignee?.displayName
         ?? 'Não atribuído',
       store: customFieldText(issue.fields.customfield_14954) ?? 'Loja não informada',
       city: customFieldText(issue.fields.customfield_11994) ?? 'Cidade não informada',
       updatedAt: issue.fields.updated ?? '',
-      serviceValue: Math.max(0, total - spare),
+      serviceValue: Math.max(0, finalTotal - spare),
       spareValue: spare,
-      totalValue: total,
-      billed: customFieldText(issue.fields.customfield_19825)?.toLowerCase() === 'sim',
+      totalValue: finalTotal,
+      billed: normalizeText(firstTextField(issue.fields, financialFields.billed) ?? '') === 'sim',
     };
   }).filter((issue) => issue.totalValue > 0 || issue.spareValue > 0);
 }
@@ -191,6 +214,41 @@ async function getOperationalStatusNames(projectKey: string) {
   }
 
   return [...OPERATIONAL_STATUSES];
+}
+
+async function getFinancialFieldIds(): Promise<FinancialFieldIds> {
+  if (financialFieldsCache && financialFieldsCache.expiresAt > Date.now()) return financialFieldsCache.ids;
+
+  const defaults: FinancialFieldIds = {
+    total: ['customfield_12413'],
+    spare: ['customfield_14880'],
+    technician: ['customfield_11955', 'customfield_12316'],
+    billed: ['customfield_19825'],
+  };
+
+  try {
+    const fields = await jiraFetch<JiraField[]>('/rest/api/3/field');
+    const customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
+    const matchingIds = (matcher: (name: string) => boolean) => customFields
+      .filter((field) => matcher(normalizeText(field.name)))
+      .map((field) => field.id);
+    const discovered: FinancialFieldIds = {
+      total: matchingIds((name) => (name.includes('ticket') || name.includes('chamado')) && (name.includes('total') || name.includes('valor'))),
+      spare: matchingIds((name) => (name.includes('spare') || name.includes('equipamento')) && (name.includes('total') || name.includes('valor') || name.includes('custo'))),
+      technician: matchingIds((name) => name.includes('tecnic') && (name.includes('respons') || name.includes('campo') || name.includes('atendimento'))),
+      billed: matchingIds((name) => name.includes('faturad') || name.includes('cobrad')),
+    };
+    const ids = {
+      total: uniquePreferred(discovered.total, defaults.total),
+      spare: uniquePreferred(discovered.spare, defaults.spare),
+      technician: uniquePreferred(discovered.technician, defaults.technician),
+      billed: uniquePreferred(discovered.billed, defaults.billed),
+    };
+    financialFieldsCache = { ids, expiresAt: Date.now() + 5 * 60_000 };
+    return ids;
+  } catch {
+    return defaults;
+  }
 }
 
 function isOperationalStatus(value: string) {
@@ -250,10 +308,38 @@ function customFieldText(value: unknown): string | null {
 function numberField(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string') {
-    const parsed = Number(value.replace(/\./g, '').replace(',', '.'));
+    const normalized = value.trim().replace(/[^\d,.-]/g, '');
+    const decimalComma = normalized.lastIndexOf(',') > normalized.lastIndexOf('.');
+    const parsed = Number(decimalComma
+      ? normalized.replace(/\./g, '').replace(',', '.')
+      : normalized.replace(/,/g, ''));
     return Number.isFinite(parsed) ? parsed : 0;
   }
+  if (value && typeof value === 'object') {
+    const field = value as { value?: unknown; amount?: unknown };
+    return numberField(field.value ?? field.amount);
+  }
   return 0;
+}
+
+function firstPositiveField(fields: Record<string, unknown>, ids: string[]) {
+  for (const id of ids) {
+    const value = numberField(fields[id]);
+    if (value > 0) return value;
+  }
+  return 0;
+}
+
+function firstTextField(fields: Record<string, unknown>, ids: string[]) {
+  for (const id of ids) {
+    const value = customFieldText(fields[id]);
+    if (value) return value;
+  }
+  return null;
+}
+
+function uniquePreferred(preferred: string[], fallback: string[]) {
+  return Array.from(new Set([...preferred, ...fallback]));
 }
 
 function adfToText(value: unknown): string {
