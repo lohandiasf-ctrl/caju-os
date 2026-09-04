@@ -93,6 +93,7 @@ let operationalStatusesCache: { expiresAt: number; names: string[] } | null = nu
 let financialFieldsCache: { expiresAt: number; ids: FinancialFieldIds } | null = null;
 const issuesCache = new Map<string, { expiresAt: number; value: { issues: JiraIssueSummary[]; nextPageToken: string | null; isLast: boolean } }>();
 let financialIssuesCache: { expiresAt: number; value: FinancialIssue[] } | null = null;
+// Short-lived edge cache keeps dashboards responsive while webhook sync is added.
 const CACHE_TTL_MS = 45_000;
 
 async function jiraSearch(body: { jql: string; fields: string[]; maxResults: number; nextPageToken?: string }) {
