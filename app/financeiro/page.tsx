@@ -1,574 +1,214 @@
-"use client";
+'use client';
 
-import { useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  ArrowDownRight,
-  ArrowLeft,
-  ArrowUpRight,
-  BadgeDollarSign,
-  Bell,
-  Building2,
-  CalendarDays,
-  Check,
-  CircleDollarSign,
-  Clock3,
-  Download,
-  FileCheck2,
-  Filter,
-  LayoutDashboard,
-  Menu,
-  MoreHorizontal,
-  ReceiptText,
-  Search,
-  Settings,
-  TrendingUp,
-  Users,
-  WalletCards,
-  X,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { ArrowLeft, BadgeDollarSign, Bell, Building2, CalendarDays, CircleDollarSign, Download, LayoutDashboard, Loader2, Menu, Save, Search, Settings, TrendingUp, Users, WalletCards } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { UserMenu } from '@/components/user-menu';
+import { useAuth } from '@/components/auth-provider';
 
-const cashflow = [
-  { month: "Abr", revenue: 182, payout: 121 },
-  { month: "Mai", revenue: 208, payout: 138 },
-  { month: "Jun", revenue: 196, payout: 129 },
-  { month: "Jul", revenue: 238, payout: 151 },
-  { month: "Ago", revenue: 264, payout: 168 },
-  { month: "Set", revenue: 286, payout: 179 },
-];
+type FinancialIssue = {
+  key: string;
+  title: string;
+  status: string;
+  technician: string;
+  store: string;
+  city: string;
+  updatedAt: string;
+  serviceValue: number;
+  spareValue: number;
+  totalValue: number;
+  billed: boolean;
+};
 
-const payments = [
-  {
-    ticket: "FSA-129617",
-    technician: "Rafael Monteiro",
-    project: "Americanas",
-    city: "Maracanau, CE",
-    amount: 380,
-    due: "Hoje",
-    status: "Pendente",
-  },
-  {
-    ticket: "FSA-129461",
-    technician: "Lucas Andrade",
-    project: "Americanas",
-    city: "Sao Jose de Mipibu, RN",
-    amount: 295,
-    due: "Hoje",
-    status: "Pendente",
-  },
-  {
-    ticket: "FSA-129426",
-    technician: "Marcos Souza",
-    project: "Americanas",
-    city: "Itabira, MG",
-    amount: 420,
-    due: "Amanha",
-    status: "Aprovado",
-  },
-  {
-    ticket: "FSA-129311",
-    technician: "Rafael Santos",
-    project: "Americanas",
-    city: "Juazeiro do Norte, CE",
-    amount: 260,
-    due: "03 set",
-    status: "Pendente",
-  },
-  {
-    ticket: "FSA-129173",
-    technician: "Bruno Oliveira",
-    project: "Americanas",
-    city: "Juiz de Fora, MG",
-    amount: 345,
-    due: "04 set",
-    status: "Em analise",
-  },
-];
+type PayoutRule = { firstTicketCents: number; additionalTicketCents: number };
+type TechnicianRevenue = { name: string; tickets: number; revenue: number; payout: number; margin: number };
 
-const money = (value: number) =>
-  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const compactMoney = (value: number) => new Intl.NumberFormat('pt-BR', { notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(value);
 
 export default function FinanceiroPage() {
-  const [query, setQuery] = useState("");
-  const [period, setPeriod] = useState("30 dias");
+  const { user } = useAuth();
+  const [issues, setIssues] = useState<FinancialIssue[]>([]);
+  const [rule, setRule] = useState<PayoutRule>({ firstTicketCents: 7000, additionalTicketCents: 7000 });
+  const [firstRate, setFirstRate] = useState('70,00');
+  const [additionalRate, setAdditionalRate] = useState('70,00');
+  const [period, setPeriod] = useState<7 | 30 | 90>(30);
+  const [query, setQuery] = useState('');
   const [menu, setMenu] = useState(false);
-  const [paid, setPaid] = useState<string[]>([]);
-  const rows = useMemo(
-    () =>
-      payments.filter((p) =>
-        [p.ticket, p.technician, p.project, p.city].some((v) =>
-          v.toLowerCase().includes(query.toLowerCase()),
-        ),
-      ),
-    [query],
-  );
-  const pendingTotal = rows
-    .filter((p) => !paid.includes(p.ticket))
-    .reduce((sum, p) => sum + p.amount, 0);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
-  return (
-    <main className="min-h-screen text-foreground">
-      <aside
-        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 w-[252px] border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
-      >
-        <a href="/" className="flex h-12 items-center gap-3 px-2">
-          <div className="grid size-10 place-items-center rounded-xl bg-primary text-lg font-black text-primary-foreground shadow-[0_8px_28px_rgba(229,98,35,.25)]">
-            C
-          </div>
-          <div>
-            <div className="text-[15px] font-extrabold tracking-tight">
-              Caju OS
-            </div>
-            <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">
-              Central de operacoes
-            </div>
-          </div>
-        </a>
-        <nav className="mt-8 space-y-1" aria-label="Navegacao financeira">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">
-            Gestao
-          </p>
-          <a
-            href="/"
-            className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-          >
-            <LayoutDashboard className="size-[18px]" />
-            Visao geral
-          </a>
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 text-sm font-medium text-foreground shadow-[inset_3px_0_0_var(--primary)]">
-            <CircleDollarSign className="size-[18px] text-primary" />
-            Financeiro
-          </button>
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
-            <FileCheck2 className="size-[18px]" />
-            Aprovacoes
-          </button>
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
-            <ReceiptText className="size-[18px]" />
-            Relatorios
-          </button>
-        </nav>
-        <div className="mt-8 rounded-xl border border-primary/20 bg-primary/8 p-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-primary">
-            <BadgeDollarSign className="size-4" />
-            Fechamento mensal
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Setembro fecha em 29 dias. Existem 12 atendimentos aguardando
-            validacao.
-          </p>
-          <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">
-            <div className="h-full w-[64%] rounded-full bg-primary" />
-          </div>
-        </div>
-        <div className="absolute inset-x-4 bottom-5 border-t border-sidebar-border pt-4">
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
-            <Settings className="size-[18px]" />
-            Configuracoes
-          </button>
-          <div className="mt-3 flex items-center gap-3 rounded-xl border border-sidebar-border bg-background/40 p-3">
-            <div className="grid size-9 place-items-center rounded-full bg-[#28344a] text-xs font-bold text-[#9fb4d5]">
-              LD
-            </div>
-            <div>
-              <p className="text-xs font-semibold">Lohan Dias</p>
-              <p className="text-[10px] text-muted-foreground">Administrador</p>
-            </div>
-          </div>
-        </div>
-      </aside>
-      {menu && (
-        <button
-          aria-label="Fechar menu"
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
-          onClick={() => setMenu(false)}
-        />
-      )}
-      <section className="min-h-screen lg:pl-[252px]">
-        <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden"
-            onClick={() => setMenu(true)}
-            aria-label="Abrir menu"
-          >
-            <Menu />
-          </Button>
-          <a
-            href="/"
-            className="hidden items-center gap-2 text-xs text-muted-foreground hover:text-foreground sm:flex"
-          >
-            <ArrowLeft className="size-4" />
-            Operacao
-          </a>
-          <div className="ml-auto flex items-center gap-2">
-            <Badge
-              variant="outline"
-              className="hidden border-amber-400/25 bg-amber-400/10 text-amber-300 sm:flex"
-            >
-              Dados demonstrativos
-            </Badge>
-            <Button variant="ghost" size="icon" aria-label="Notificacoes">
-              <Bell />
-            </Button>
-          </div>
-        </header>
-        <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">
-                Gestao financeira
-              </p>
-              <h1 className="text-2xl font-extrabold tracking-[-.03em] sm:text-3xl">
-                Financeiro
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Faturamento, repasses e margem dos atendimentos em uma unica
-                visao.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {["7 dias", "30 dias", "90 dias"].map((item) => (
-                <Button
-                  key={item}
-                  size="sm"
-                  variant={period === item ? "secondary" : "outline"}
-                  onClick={() => setPeriod(item)}
-                >
-                  {item}
-                </Button>
-              ))}
-              <Button variant="outline" size="sm">
-                <Building2 />
-                Todos os projetos
-              </Button>
-              <Button size="sm">
-                <Download />
-                Exportar
-              </Button>
-            </div>
-          </div>
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    setLoading(true);
+    setError('');
+    void user.getIdToken().then(async (token) => {
+      const headers = { Authorization: `Bearer ${token}` };
+      const [financeResponse, ruleResponse] = await Promise.all([
+        fetch('/api/jira/finance?days=180', { headers, cache: 'no-store' }),
+        fetch('/api/finance/rules', { headers, cache: 'no-store' }),
+      ]);
+      const financePayload = await financeResponse.json() as { issues?: FinancialIssue[]; error?: string };
+      const rulePayload = await ruleResponse.json() as PayoutRule & { error?: string };
+      if (!financeResponse.ok) throw new Error(financePayload.error || 'Falha ao carregar financeiro.');
+      if (!ruleResponse.ok) throw new Error(rulePayload.error || 'Falha ao carregar regra de repasse.');
+      if (!active) return;
+      const nextRule = { firstTicketCents: rulePayload.firstTicketCents, additionalTicketCents: rulePayload.additionalTicketCents };
+      setIssues(financePayload.issues ?? []);
+      setRule(nextRule);
+      setFirstRate(formatRate(nextRule.firstTicketCents));
+      setAdditionalRate(formatRate(nextRule.additionalTicketCents));
+    }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Falha ao carregar financeiro.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [user]);
+
+  const periodIssues = useMemo(() => {
+    const cutoff = Date.now() - period * 86_400_000;
+    return issues.filter((issue) => new Date(issue.updatedAt).getTime() >= cutoff);
+  }, [issues, period]);
+
+  const rows = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return periodIssues;
+    return periodIssues.filter((issue) => [issue.key, issue.title, issue.technician, issue.store, issue.city, issue.status].some((value) => value.toLowerCase().includes(normalized)));
+  }, [periodIssues, query]);
+
+  const technicians = useMemo(() => groupTechnicians(periodIssues, rule), [periodIssues, rule]);
+  const revenue = periodIssues.reduce((sum, issue) => sum + issue.totalValue, 0);
+  const serviceRevenue = periodIssues.reduce((sum, issue) => sum + issue.serviceValue, 0);
+  const spareRevenue = periodIssues.reduce((sum, issue) => sum + issue.spareValue, 0);
+  const payout = technicians.reduce((sum, technician) => sum + technician.payout, 0);
+  const margin = revenue - payout;
+  const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0;
+  const monthly = useMemo(() => buildMonthly(issues, rule), [issues, rule]);
+
+  async function saveRule() {
+    if (!user) return;
+    const firstTicketCents = parseRate(firstRate);
+    const additionalTicketCents = parseRate(additionalRate);
+    if (firstTicketCents === null || additionalTicketCents === null) {
+      setMessage('Informe valores válidos.');
+      return;
+    }
+    setSaving(true);
+    setMessage('');
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/finance/rules', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstTicketCents, additionalTicketCents }),
+      });
+      const payload = await response.json() as PayoutRule & { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Falha ao salvar regra.');
+      setRule({ firstTicketCents: payload.firstTicketCents, additionalTicketCents: payload.additionalTicketCents });
+      setMessage('Regra salva. Cálculos atualizados.');
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Falha ao salvar regra.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function exportCsv() {
+    const header = ['Chamado', 'Técnico', 'Loja', 'Cidade', 'Status', 'Serviço', 'Spare', 'Total'];
+    const body = rows.map((issue) => [issue.key, issue.technician, issue.store, issue.city, issue.status, issue.serviceValue, issue.spareValue, issue.totalValue]);
+    const csv = [header, ...body].map((line) => line.map(csvCell).join(';')).join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
+    link.download = `financeiro-caju-${period}-dias.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  return <main className="min-h-screen text-foreground">
+    <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
+      <Link href="/" className="flex h-12 shrink-0 items-center gap-3 px-2"><div className="grid size-10 place-items-center rounded-xl border border-primary/30 bg-primary/12 text-lg font-black text-primary">C</div><div><div className="text-[15px] font-extrabold">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando financeiro</div></div></Link>
+      <nav className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4 pr-1" aria-label="Navegação financeira">
+        <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Gestão</p>
+        <SideLink href="/" icon={LayoutDashboard}>Visão geral</SideLink>
+        <SideLink href="/financeiro" icon={CircleDollarSign} active>Financeiro</SideLink>
+        <SideLink href="#receita-tecnicos" icon={Users}>Receita por técnico</SideLink>
+        <SideLink href="#repasses" icon={BadgeDollarSign}>Regra de repasse</SideLink>
+      </nav>
+      <div className="shrink-0 border-t border-sidebar-border pt-3"><SideLink href="/?view=settings" icon={Settings}>Configurações</SideLink><UserMenu /></div>
+    </aside>
+    {menu && <button aria-label="Fechar menu" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMenu(false)} />}
+    <section className="min-h-screen lg:pl-[252px]">
+      <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+        <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenu(true)} aria-label="Abrir menu"><Menu /></Button>
+        <Link href="/" className="hidden items-center gap-2 text-xs text-muted-foreground hover:text-foreground sm:flex"><ArrowLeft className="size-4" />Operação</Link>
+        <div className="ml-auto flex items-center gap-2"><Badge variant="outline" className="hidden border-emerald-400/25 bg-emerald-400/10 text-emerald-300 sm:flex">Dados reais do Jira</Badge><Button variant="ghost" size="icon" aria-label="Notificações"><Bell /></Button></div>
+      </header>
+      <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Gestão financeira</p><h1 className="text-2xl font-extrabold tracking-[-.03em] sm:text-3xl">Financeiro</h1><p className="mt-1 text-sm text-muted-foreground">Valores do ticket, spare, repasses e margem em uma visão.</p></div><div className="flex flex-wrap gap-2">{([7, 30, 90] as const).map((days) => <Button key={days} size="sm" variant={period === days ? 'secondary' : 'outline'} onClick={() => setPeriod(days)}>{days} dias</Button>)}<Button size="sm" onClick={exportCsv} disabled={!rows.length}><Download />Exportar</Button></div></div>
+        {error && <div role="alert" className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">{error}</div>}
+        {loading ? <div className="surface-panel mt-7 flex min-h-48 items-center justify-center gap-3 rounded-2xl text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin" />Carregando dados reais do Jira...</div> : <>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-            <Metric
-              label="Faturamento previsto"
-              value="R$ 286.420"
-              trend="+12,4%"
-              note="vs. periodo anterior"
-              icon={TrendingUp}
-              positive
-            />
-            <Metric
-              label="Repasses a tecnicos"
-              value="R$ 179.860"
-              trend="+8,1%"
-              note="63% do faturamento"
-              icon={Users}
-            />
-            <Metric
-              label="Margem operacional"
-              value="R$ 106.560"
-              trend="37,2%"
-              note="meta mensal: 35%"
-              icon={WalletCards}
-              positive
-            />
-            <Metric
-              label="Pagamentos pendentes"
-              value={money(pendingTotal)}
-              trend="45 itens"
-              note="8 vencem hoje"
-              icon={Clock3}
-              alert
-            />
+            <Metric label="Faturamento previsto" value={money(revenue)} note={`${periodIssues.length} tickets movimentados`} icon={TrendingUp} tone="green" />
+            <Metric label="Serviços" value={money(serviceRevenue)} note="Total do ticket menos spare" icon={Building2} tone="blue" />
+            <Metric label="Spares" value={money(spareRevenue)} note="Valor total de equipamentos" icon={BadgeDollarSign} tone="amber" />
+            <Metric label="Margem após repasses" value={money(margin)} note={`${marginPercent.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% do faturamento`} icon={WalletCards} tone="violet" />
           </div>
-          <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(300px,.7fr)]">
-            <article className="rounded-xl border border-border bg-card p-5 shadow-[0_12px_40px_rgba(0,0,0,.08)]">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-sm font-bold">Faturamento e repasses</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Valores mensais em milhares de reais
-                  </p>
-                </div>
-                <Badge variant="outline">
-                  <CalendarDays />
-                  Ultimos 6 meses
-                </Badge>
-              </div>
-              <ChartContainer
-                className="mt-5 h-[250px] w-full"
-                config={{
-                  revenue: { label: "Faturamento", color: "#ea7a38" },
-                  payout: { label: "Repasses", color: "#65748e" },
-                }}
-              >
-                <BarChart data={cashflow} barGap={6}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} width={28} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="revenue"
-                    fill="var(--color-revenue)"
-                    radius={[5, 5, 0, 0]}
-                  />
-                  <Bar
-                    dataKey="payout"
-                    fill="var(--color-payout)"
-                    radius={[5, 5, 0, 0]}
-                  />
-                </BarChart>
-              </ChartContainer>
-            </article>
-            <article className="rounded-xl border border-border bg-card p-5 shadow-[0_12px_40px_rgba(0,0,0,.08)]">
-              <div>
-                <h2 className="text-sm font-bold">Composicao do mes</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Distribuicao do faturamento previsto
-                </p>
-              </div>
-              <div
-                className="relative mx-auto mt-6 grid size-40 place-items-center rounded-full"
-                style={{
-                  background:
-                    "conic-gradient(#ea7a38 0 37.2%, #687895 37.2% 100%)",
-                }}
-              >
-                <div className="grid size-28 place-items-center rounded-full bg-card text-center">
-                  <div>
-                    <p className="text-2xl font-extrabold">37,2%</p>
-                    <p className="text-[10px] text-muted-foreground">margem</p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-6 space-y-3">
-                <Legend
-                  color="bg-primary"
-                  label="Margem operacional"
-                  value="R$ 106.560"
-                />
-                <Legend
-                  color="bg-[#687895]"
-                  label="Repasses tecnicos"
-                  value="R$ 179.860"
-                />
-              </div>
-              <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/8 p-3 text-xs text-emerald-300">
-                <div className="flex items-center gap-2 font-bold">
-                  <ArrowUpRight className="size-4" />
-                  2,2 p.p. acima da meta
-                </div>
-              </div>
-            </article>
+          <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,.7fr)]">
+            <article className="surface-panel rounded-2xl p-5"><div className="flex items-start justify-between"><div><h2 className="text-sm font-bold">Faturamento e repasses</h2><p className="mt-1 text-xs text-muted-foreground">Últimos 6 meses, em reais</p></div><Badge variant="outline"><CalendarDays />6 meses</Badge></div><ChartContainer className="mt-5 h-[260px] w-full" config={{ revenue: { label: 'Faturamento', color: '#f07a3f' }, payout: { label: 'Repasses', color: '#8b7cf6' } }}><BarChart data={monthly} barGap={5}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="month" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} tickFormatter={(value) => compactMoney(Number(value))} width={70} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => money(Number(value))} />} /><Bar dataKey="revenue" fill="var(--color-revenue)" radius={[5, 5, 0, 0]} /><Bar dataKey="payout" fill="var(--color-payout)" radius={[5, 5, 0, 0]} /></BarChart></ChartContainer></article>
+            <article id="repasses" className="surface-panel scroll-mt-24 rounded-2xl p-5"><h2 className="text-sm font-bold">Regra de repasse</h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Valor pago ao mesmo técnico no período. Primeiro chamado usa primeira faixa; demais usam segunda.</p><div className="mt-5 grid gap-4"><RateInput label="1º chamado" value={firstRate} onChange={setFirstRate} /><RateInput label="2º chamado em diante" value={additionalRate} onChange={setAdditionalRate} /></div><Button className="mt-5 w-full" onClick={() => void saveRule()} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Save />}Salvar regra</Button>{message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}<div className="mt-5 rounded-xl border border-violet-400/20 bg-violet-400/8 p-4"><p className="text-xs text-muted-foreground">Repasse calculado no período</p><p className="mt-1 text-xl font-bold">{money(payout)}</p></div></article>
           </div>
-          <div className="mt-6 rounded-xl border border-border bg-card shadow-[0_12px_40px_rgba(0,0,0,.08)]">
-            <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center">
-              <div className="mr-auto">
-                <h2 className="text-sm font-bold">Pagamentos a tecnicos</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Fila de repasses dos atendimentos validados
-                </p>
-              </div>
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Buscar tecnico ou chamado..."
-                  className="pl-9"
-                />
-              </div>
-              <Button variant="outline" size="sm">
-                <Filter />
-                Filtrar
-              </Button>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Chamado</TableHead>
-                  <TableHead>Tecnico / local</TableHead>
-                  <TableHead>Projeto</TableHead>
-                  <TableHead>Vencimento</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="w-36"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const isPaid = paid.includes(row.ticket);
-                  return (
-                    <TableRow
-                      key={row.ticket}
-                      className={isPaid ? "opacity-50" : ""}
-                    >
-                      <TableCell className="font-mono text-xs font-bold text-primary">
-                        {row.ticket}
-                      </TableCell>
-                      <TableCell>
-                        <p className="font-semibold">{row.technician}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {row.city}
-                        </p>
-                      </TableCell>
-                      <TableCell>{row.project}</TableCell>
-                      <TableCell
-                        className={
-                          row.due === "Hoje" ? "font-bold text-amber-300" : ""
-                        }
-                      >
-                        {row.due}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={isPaid ? "Pago" : row.status} />
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold">
-                        {money(row.amount)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isPaid ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-emerald-300">
-                            <Check className="size-4" />
-                            Pago
-                          </span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              setPaid((current) => [...current, row.ticket])
-                            }
-                          >
-                            Marcar pago
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-            {!rows.length && (
-              <div className="grid h-40 place-items-center text-sm text-muted-foreground">
-                Nenhum pagamento encontrado.
-              </div>
-            )}
-            <div className="flex items-center justify-between border-t border-border px-5 py-4 text-xs text-muted-foreground">
-              <span>{rows.length} pagamentos exibidos</span>
-              <span>
-                Pendente:{" "}
-                <strong className="ml-1 text-foreground">
-                  {money(pendingTotal)}
-                </strong>
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
+          <article id="receita-tecnicos" className="surface-panel mt-6 scroll-mt-24 overflow-hidden rounded-2xl"><div className="border-b border-border p-5"><h2 className="text-sm font-bold">Receita gerada por técnico</h2><p className="mt-1 text-xs text-muted-foreground">Total dos tickets, repasse calculado e margem para Caju.</p></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Técnico</TableHead><TableHead className="text-right">Chamados</TableHead><TableHead className="text-right">Receita</TableHead><TableHead className="text-right">Repasse</TableHead><TableHead className="text-right">Margem Caju</TableHead></TableRow></TableHeader><TableBody>{technicians.map((technician) => <TableRow key={technician.name}><TableCell className="font-semibold">{technician.name}</TableCell><TableCell className="text-right tabular-nums">{technician.tickets}</TableCell><TableCell className="text-right font-mono">{money(technician.revenue)}</TableCell><TableCell className="text-right font-mono">{money(technician.payout)}</TableCell><TableCell className={`text-right font-mono font-bold ${technician.margin >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{money(technician.margin)}</TableCell></TableRow>)}</TableBody></Table></div>{!technicians.length && <Empty label="Nenhuma receita encontrada no período." />}</article>
+          <article className="surface-panel mt-6 overflow-hidden rounded-2xl"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center"><div className="mr-auto"><h2 className="text-sm font-bold">Composição dos tickets</h2><p className="mt-1 text-xs text-muted-foreground">Serviço e spare sem dupla contagem.</p></div><div className="relative w-full sm:w-80"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar chamado, técnico ou loja..." className="pl-9" /></div></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Chamado</TableHead><TableHead>Técnico / local</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Serviço</TableHead><TableHead className="text-right">Spare</TableHead><TableHead className="text-right">Total ticket</TableHead></TableRow></TableHeader><TableBody>{rows.map((issue) => <TableRow key={issue.key}><TableCell><p className="font-mono text-xs font-bold text-primary">{issue.key}</p><p className="mt-1 max-w-72 truncate text-xs text-muted-foreground">{issue.title}</p></TableCell><TableCell><p className="font-semibold">{issue.technician}</p><p className="text-[11px] text-muted-foreground">{issue.store} · {issue.city}</p></TableCell><TableCell><Badge variant="outline">{issue.status}</Badge></TableCell><TableCell className="text-right font-mono">{money(issue.serviceValue)}</TableCell><TableCell className="text-right font-mono">{money(issue.spareValue)}</TableCell><TableCell className="text-right font-mono font-bold">{money(issue.totalValue)}</TableCell></TableRow>)}</TableBody></Table></div>{!rows.length && <Empty label="Nenhum ticket financeiro encontrado." />}<div className="border-t border-border px-5 py-4 text-xs text-muted-foreground">{rows.length} tickets exibidos</div></article>
+        </>}
+      </div>
+    </section>
+  </main>;
 }
 
-function Metric({
-  label,
-  value,
-  trend,
-  note,
-  icon: Icon,
-  positive,
-  alert,
-}: {
-  label: string;
-  value: string;
-  trend: string;
-  note: string;
-  icon: typeof TrendingUp;
-  positive?: boolean;
-  alert?: boolean;
-}) {
-  return (
-    <article className="cockpit-stat metric-glow rounded-2xl p-5">
-      <div className="flex justify-between">
-        <p className="text-sm text-muted-foreground">{label}</p>
-        <div
-          className={`grid size-9 place-items-center rounded-lg bg-black/15 ${alert ? "text-amber-300" : positive ? "text-emerald-300" : "text-blue-300"}`}
-        >
-          <Icon className="size-[18px]" />
-        </div>
-      </div>
-      <p className="mt-2 text-2xl font-extrabold tracking-tight">{value}</p>
-      <div className="mt-3 flex items-center gap-2 text-xs">
-        <span
-          className={
-            positive
-              ? "font-bold text-emerald-300"
-              : alert
-                ? "font-bold text-amber-300"
-                : "font-bold text-blue-300"
-          }
-        >
-          {trend}
-        </span>
-        <span className="text-muted-foreground">{note}</span>
-      </div>
-    </article>
-  );
+function groupTechnicians(issues: FinancialIssue[], rule: PayoutRule): TechnicianRevenue[] {
+  const grouped = new Map<string, { tickets: number; revenue: number }>();
+  for (const issue of issues) {
+    const current = grouped.get(issue.technician) ?? { tickets: 0, revenue: 0 };
+    current.tickets += 1;
+    current.revenue += issue.totalValue;
+    grouped.set(issue.technician, current);
+  }
+  return Array.from(grouped, ([name, data]) => {
+    const payout = (data.tickets ? rule.firstTicketCents : 0) / 100 + Math.max(0, data.tickets - 1) * rule.additionalTicketCents / 100;
+    return { name, ...data, payout, margin: data.revenue - payout };
+  }).sort((a, b) => b.revenue - a.revenue);
 }
-function Legend({
-  color,
-  label,
-  value,
-}: {
-  color: string;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className={`size-2 rounded-full ${color}`} />
-      <span className="flex-1 text-muted-foreground">{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
+
+function buildMonthly(issues: FinancialIssue[], rule: PayoutRule) {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
+    const monthIssues = issues.filter((issue) => { const item = new Date(issue.updatedAt); return item.getFullYear() === date.getFullYear() && item.getMonth() === date.getMonth(); });
+    return { month: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', ''), revenue: monthIssues.reduce((sum, issue) => sum + issue.totalValue, 0), payout: groupTechnicians(monthIssues, rule).reduce((sum, technician) => sum + technician.payout, 0) };
+  });
 }
-function StatusBadge({ status }: { status: string }) {
-  const style =
-    status === "Pago"
-      ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
-      : status === "Aprovado"
-        ? "border-blue-400/25 bg-blue-400/10 text-blue-300"
-        : status === "Em analise"
-          ? "border-violet-400/25 bg-violet-400/10 text-violet-300"
-          : "border-amber-400/25 bg-amber-400/10 text-amber-300";
-  return (
-    <Badge variant="outline" className={style}>
-      {status}
-    </Badge>
-  );
+
+function SideLink({ href, icon: Icon, active, children }: { href: string; icon: typeof Settings; active?: boolean; children: React.ReactNode }) {
+  return <Link href={href} className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${active ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Icon className={`size-[18px] ${active ? 'text-primary' : ''}`} />{children}</Link>;
 }
+
+function Metric({ label, value, note, icon: Icon, tone }: { label: string; value: string; note: string; icon: typeof TrendingUp; tone: 'green' | 'blue' | 'amber' | 'violet' }) {
+  const colors = { green: 'text-emerald-300', blue: 'text-blue-300', amber: 'text-amber-300', violet: 'text-violet-300' };
+  return <article className="cockpit-stat metric-glow rounded-2xl p-5"><div className="flex justify-between"><p className="text-sm text-muted-foreground">{label}</p><div className={`grid size-9 place-items-center rounded-lg bg-black/15 ${colors[tone]}`}><Icon className="size-[18px]" /></div></div><p className="mt-2 text-2xl font-extrabold tracking-tight">{value}</p><p className="mt-3 text-xs text-muted-foreground">{note}</p></article>;
+}
+
+function RateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{label}</span><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span><Input inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} className="pl-10" /></div></label>;
+}
+
+function Empty({ label }: { label: string }) { return <div className="grid min-h-32 place-items-center p-6 text-sm text-muted-foreground">{label}</div>; }
+function formatRate(cents: number) { return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function parseRate(value: string) { const normalized = value.replace(/\s/g, '').replace(/\./g, '').replace(',', '.'); const amount = Number(normalized); return Number.isFinite(amount) && amount >= 0 && amount <= 10_000 ? Math.round(amount * 100) : null; }
+function csvCell(value: string | number) { return `"${String(value).replace(/"/g, '""')}"`; }

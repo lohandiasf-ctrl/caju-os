@@ -39,6 +39,11 @@ type JiraIssue = {
     customfield_11994?: unknown;
     customfield_12036?: unknown;
     customfield_12278?: unknown;
+    customfield_12413?: unknown;
+    customfield_14880?: unknown;
+    customfield_11955?: unknown;
+    customfield_12316?: unknown;
+    customfield_19825?: unknown;
   };
 };
 
@@ -96,6 +101,48 @@ export async function getJiraIssue(key: string) {
   }
   const issue = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=summary,description,status,priority,assignee,reporter,created,updated,duedate,labels,issuetype,project,customfield_14954,customfield_14809,customfield_14827,customfield_11994,customfield_12036,customfield_12278`);
   return { ...toSummary(issue), description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}` };
+}
+
+export async function getFinancialIssues(days = 180) {
+  const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
+  const safeDays = Math.min(Math.max(Math.trunc(days), 7), 365);
+  const issues: JiraIssue[] = [];
+  let nextPageToken: string | undefined;
+
+  do {
+    const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
+      method: 'POST',
+      body: JSON.stringify({
+        jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d AND status NOT IN (Cancelado, REJEITADO, INATIVO) AND cf[12413] > 0 ORDER BY updated DESC`,
+        fields: ['summary', 'status', 'assignee', 'updated', 'project', 'customfield_14954', 'customfield_11994', 'customfield_12413', 'customfield_14880', 'customfield_11955', 'customfield_12316', 'customfield_19825'],
+        maxResults: 100,
+        ...(nextPageToken ? { nextPageToken } : {}),
+      }),
+    });
+    issues.push(...(response.issues ?? []));
+    nextPageToken = response.nextPageToken;
+  } while (nextPageToken && issues.length < 1000);
+
+  return issues.map((issue) => {
+    const total = numberField(issue.fields.customfield_12413);
+    const spare = Math.min(total, numberField(issue.fields.customfield_14880));
+    return {
+      key: issue.key,
+      title: issue.fields.summary ?? 'Sem título',
+      status: issue.fields.status?.name ?? 'Sem status',
+      technician: customFieldText(issue.fields.customfield_11955)
+        ?? customFieldText(issue.fields.customfield_12316)
+        ?? issue.fields.assignee?.displayName
+        ?? 'Não atribuído',
+      store: customFieldText(issue.fields.customfield_14954) ?? 'Loja não informada',
+      city: customFieldText(issue.fields.customfield_11994) ?? 'Cidade não informada',
+      updatedAt: issue.fields.updated ?? '',
+      serviceValue: Math.max(0, total - spare),
+      spareValue: spare,
+      totalValue: total,
+      billed: customFieldText(issue.fields.customfield_19825)?.toLowerCase() === 'sim',
+    };
+  });
 }
 
 export class JiraError extends Error {
@@ -156,6 +203,15 @@ function customFieldText(value: unknown): string | null {
     for (const candidate of [field.value, field.name, field.displayName]) if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
   }
   return null;
+}
+
+function numberField(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value.replace(/\./g, '').replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function adfToText(value: unknown): string {

@@ -16,17 +16,18 @@ type DashboardView = 'overview' | 'tickets' | 'agenda' | 'technicians' | 'projec
 type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string };
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
 type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
+type N1User = { email: string; role: 'n1' };
 const columns: Status[] = ['Pendente de agendamento', 'Agendado', 'Aguardando spare', 'Direcionado', 'Técnico em campo'];
 const nav = [
   ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'], ['Chamados', ClipboardList, '/?view=tickets', 'tickets'], ['Mapa operacional', Map, '/mapa', 'map'], ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
-  ['Central N1', Headphones, '/central-n1', 'central'], ['Técnicos', Users, '/?view=technicians', 'technicians'], ['Projetos e lojas', Building2, '/?view=projects', 'projects'], ['Spares', PackageOpen, '/spares', 'spares'], ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
+  ['Central N1', Headphones, '/central-n1', 'central'], ['Equipe N1', Users, '/?view=technicians', 'technicians'], ['Projetos e lojas', Building2, '/?view=projects', 'projects'], ['Spares', PackageOpen, '/spares', 'spares'], ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
 ] as const;
 const dots: Record<Status, string> = { 'Pendente de agendamento': 'bg-violet-400', Agendado: 'bg-blue-400', 'Aguardando spare': 'bg-amber-400', Direcionado: 'bg-cyan-400', 'Técnico em campo': 'bg-emerald-400' };
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   overview: ['Operação em tempo real', 'Visão geral dos chamados', 'Fila, prioridade e execução em uma única visão.'],
   tickets: ['Central de atendimento', 'Chamados operacionais', 'Consulte, filtre e abra cada chamado sem perder contexto.'],
   agenda: ['Planejamento de campo', 'Agenda de atendimentos', 'Agendamentos e itens que ainda precisam de data.'],
-  technicians: ['Equipe de campo', 'Técnicos em operação', 'Carga atual e distribuição de chamados por responsável.'],
+  technicians: ['Atendimento interno', 'Equipe N1', 'Contas N1 ativas e autorizadas no sistema.'],
   projects: ['Cobertura operacional', 'Projetos e lojas', 'Locais com chamados ativos e volume por unidade.'],
   settings: ['Administração', 'Configurações do sistema', 'Perfil, integrações e estado dos serviços.'],
 };
@@ -52,6 +53,8 @@ export default function Home() {
   const [dialogLoading, setDialogLoading] = useState(false);
   const [linkSaving, setLinkSaving] = useState(false);
   const [dialogError, setDialogError] = useState('');
+  const [n1Users, setN1Users] = useState<N1User[]>([]);
+  const [n1Loading, setN1Loading] = useState(true);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((ticket) => {
@@ -59,11 +62,6 @@ export default function Home() {
       return matchesQuery && (statusFilter === 'Todos' || ticket.status === statusFilter);
     });
   }, [query, statusFilter, tickets]);
-  const technicians = useMemo(() => Array.from(new Set(tickets.map((ticket) => ticket.technician).filter(Boolean) as string[])).map((name) => ({
-    name,
-    active: tickets.filter((ticket) => ticket.technician === name && ticket.status === 'Técnico em campo').length,
-    total: tickets.filter((ticket) => ticket.technician === name).length,
-  })).sort((a, b) => b.active - a.active || b.total - a.total), [tickets]);
   const stores = useMemo(() => Array.from(new Set(tickets.map((ticket) => `${ticket.store}|||${ticket.city}`))).map((value) => {
     const [store, city] = value.split('|||');
     return { store, city, tickets: tickets.filter((ticket) => ticket.store === store).length };
@@ -94,6 +92,19 @@ export default function Home() {
     })
       .catch((error: unknown) => { if (active) setJiraError(error instanceof Error ? error.message : 'Falha ao consultar o Jira.'); })
       .finally(() => { if (active) setJiraLoading(false); });
+    return () => { active = false; };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    setN1Loading(true);
+    void user.getIdToken().then(async (token) => {
+      const response = await fetch('/api/users/n1', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const payload = await response.json() as { users?: N1User[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar equipe N1.');
+      if (active) setN1Users(payload.users ?? []);
+    }).catch(() => { if (active) setN1Users([]); }).finally(() => { if (active) setN1Loading(false); });
     return () => { active = false; };
   }, [user]);
 
@@ -214,7 +225,7 @@ export default function Home() {
           return <section key={column} className="surface-panel min-h-[280px] rounded-2xl p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-lg border border-white/5 bg-black/15 px-2 py-1 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} onOpen={() => void openTicket(ticket)} />)}{!items.length && <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
         })}</div> : <div className="surface-panel mt-4 overflow-hidden rounded-2xl">{filtered.map((ticket) => <button type="button" onClick={() => void openTicket(ticket)} key={ticket.id} className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge><span className="text-xs text-muted-foreground">{ticket.technician || 'Não atribuído'}</span></button>)}{!filtered.length && <EmptyState label="Nenhum chamado encontrado" />}</div>}</>}
         {activeView === 'agenda' && <AgendaView tickets={tickets} loading={jiraLoading} onOpen={openTicket} />}
-        {activeView === 'technicians' && <TechniciansView technicians={technicians} loading={jiraLoading} />}
+        {activeView === 'technicians' && <TechniciansView users={n1Users} loading={n1Loading} />}
         {activeView === 'projects' && <ProjectsView stores={stores} loading={jiraLoading} />}
         {activeView === 'settings' && <SettingsView email={user?.email ?? ''} role={role} jiraError={jiraError} />}
       </div>
@@ -252,10 +263,10 @@ function AgendaView({ tickets, loading, onOpen }: { tickets: Ticket[]; loading: 
   return <div className="surface-panel mt-6 overflow-hidden rounded-2xl"><div className="grid border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[130px_1fr_160px_140px]"><span>Data</span><span>Chamado</span><span>Responsável</span><span>Status</span></div>{scheduled.map((ticket) => <button type="button" key={ticket.id} onClick={() => onOpen(ticket)} className="grid w-full gap-2 border-b border-border px-4 py-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[130px_1fr_160px_140px] sm:items-center"><span className="text-sm font-semibold text-blue-200">{ticket.schedule || 'A definir'}</span><span><strong className="block text-sm">{ticket.id} · {ticket.store}</strong><small className="text-muted-foreground">{ticket.title}</small></span><span className="text-sm text-muted-foreground">{ticket.technician || 'Não atribuído'}</span><Badge variant="outline" className="w-fit">{ticket.status}</Badge></button>)}</div>;
 }
 
-function TechniciansView({ technicians, loading }: { technicians: { name: string; active: number; total: number }[]; loading: boolean }) {
+function TechniciansView({ users, loading }: { users: N1User[]; loading: boolean }) {
   if (loading) return <LoadingPanel label="Carregando equipe..." />;
-  if (!technicians.length) return <EmptyState label="Nenhum técnico atribuído aos chamados atuais." />;
-  return <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{technicians.map((technician) => <article key={technician.name} className="surface-panel rounded-2xl p-5"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-sm font-bold text-cyan-200">{initials(technician.name)}</div><div className="min-w-0"><h2 className="truncate font-semibold">{technician.name}</h2><p className="text-xs text-muted-foreground">{technician.active ? 'Em atendimento' : 'Sem atendimento ativo'}</p></div></div><div className="mt-5 grid grid-cols-2 gap-2"><Metric label="Ativos" value={technician.active} /><Metric label="Total" value={technician.total} /></div></article>)}</div>;
+  if (!users.length) return <EmptyState label="Nenhuma conta N1 ativa." />;
+  return <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{users.map((member) => <article key={member.email} className="surface-panel rounded-2xl p-5"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-xl border border-violet-300/20 bg-violet-300/10 text-sm font-bold text-violet-200">{member.email.slice(0, 2).toUpperCase()}</div><div className="min-w-0"><h2 className="truncate font-semibold">{member.email}</h2><p className="text-xs text-muted-foreground">Analista N1</p></div><Badge variant="outline" className="ml-auto border-emerald-400/25 bg-emerald-400/10 text-emerald-300">Ativo</Badge></div></article>)}</div>;
 }
 
 function ProjectsView({ stores, loading }: { stores: { store: string; city: string; tickets: number }[]; loading: boolean }) {

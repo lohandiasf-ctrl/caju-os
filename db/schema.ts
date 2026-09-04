@@ -94,3 +94,11 @@ export const jiraIssueLinks = sqliteTable('jira_issue_links', {
   updatedBy: text('updated_by').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+export const financeSettings = sqliteTable('finance_settings', {
+  key: text('key').primaryKey(),
+  firstTicketCents: integer('first_ticket_cents').notNull().default(7000),
+  additionalTicketCents: integer('additional_ticket_cents').notNull().default(7000),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
