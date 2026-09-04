@@ -11,7 +11,7 @@ import { UserMenu } from '@/components/user-menu';
 import { useAuth } from '@/components/auth-provider';
 
 type Status = 'Pendente de agendamento' | 'Agendado' | 'Aguardando spare' | 'Direcionado' | 'Técnico em campo';
-type DashboardView = 'overview' | 'tickets' | 'agenda' | 'technicians' | 'projects' | 'settings';
+type DashboardView = 'overview' | 'tickets' | 'central' | 'agenda' | 'technicians' | 'projects' | 'settings';
 type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string };
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
 type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
@@ -19,12 +19,13 @@ type N1User = { email: string; role: 'n1' };
 const columns: Status[] = ['Pendente de agendamento', 'Agendado', 'Aguardando spare', 'Direcionado', 'Técnico em campo'];
 const nav = [
   ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'], ['Chamados', ClipboardList, '/?view=tickets', 'tickets'], ['Mapa operacional', Map, '/mapa', 'map'], ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
-  ['Central N1', Headphones, '/central-n1', 'central'], ['Equipe N1', Users, '/?view=technicians', 'technicians'], ['Projetos e lojas', Building2, '/?view=projects', 'projects'], ['Spares', PackageOpen, '/spares', 'spares'], ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
+  ['Central N1', Headphones, '/?view=central', 'central'], ['Equipe N1', Users, '/?view=technicians', 'technicians'], ['Projetos e lojas', Building2, '/?view=projects', 'projects'], ['Spares', PackageOpen, '/spares', 'spares'], ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
 ] as const;
 const dots: Record<Status, string> = { 'Pendente de agendamento': 'bg-violet-400', Agendado: 'bg-blue-400', 'Aguardando spare': 'bg-amber-400', Direcionado: 'bg-cyan-400', 'Técnico em campo': 'bg-emerald-400' };
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   overview: ['Operação em tempo real', 'Visão geral dos chamados', 'Fila, prioridade e execução em uma única visão.'],
   tickets: ['Central de atendimento', 'Chamados operacionais', 'Consulte, filtre e abra cada chamado sem perder contexto.'],
+  central: ['Atendimento N1', 'Central N1', 'Fila real de chamados que exige acompanhamento da equipe N1.'],
   agenda: ['Planejamento de campo', 'Agenda de atendimentos', 'Agendamentos e itens que ainda precisam de data.'],
   technicians: ['Atendimento interno', 'Equipe N1', 'Contas N1 ativas e autorizadas no sistema.'],
   projects: ['Cobertura operacional', 'Projetos e lojas', 'Locais com chamados ativos e volume por unidade.'],
@@ -35,7 +36,7 @@ export default function Home() {
   const { role, user } = useAuth();
   const searchParams = useSearchParams();
   const requestedView = searchParams.get('view');
-  const activeView: DashboardView = ['overview', 'tickets', 'agenda', 'technicians', 'projects', 'settings'].includes(requestedView ?? '') ? requestedView as DashboardView : 'overview';
+  const activeView: DashboardView = ['overview', 'tickets', 'central', 'agenda', 'technicians', 'projects', 'settings'].includes(requestedView ?? '') ? requestedView as DashboardView : 'overview';
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [jiraLoading, setJiraLoading] = useState(true);
   const [jiraError, setJiraError] = useState('');
@@ -217,7 +218,7 @@ export default function Home() {
           ].map(([label, value, note, Icon, color]) => <article key={label as string} className="surface-panel metric-glow rounded-2xl p-4 sm:p-5"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-muted-foreground">{label as string}</p><p className="mt-3 text-2xl font-semibold tracking-[-.04em] sm:text-3xl">{value as string}</p></div><div className={`grid size-10 place-items-center rounded-xl border border-white/5 bg-black/15 ${color}`}><Icon className="size-[18px]" /></div></div><p className="mt-4 text-xs text-muted-foreground">{note as string}</p></article>)}
         </div>}
         {jiraError && <div role="alert" className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-200">{jiraError}</div>}
-        {(activeView === 'overview' || activeView === 'tickets') && <><div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos`}</p></div><Button variant={showFilters ? 'secondary' : 'outline'} className="h-9" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
+        {(activeView === 'overview' || activeView === 'tickets' || activeView === 'central') && <><div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos`}</p></div><Button variant={showFilters ? 'secondary' : 'outline'} className="h-9" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
         {showFilters && <div className="surface-panel mt-3 flex flex-wrap gap-2 rounded-xl p-3" aria-label="Filtrar por status">{(['Todos', ...columns] as const).map((status) => <Button key={status} size="sm" variant={statusFilter === status ? 'default' : 'ghost'} onClick={() => setStatusFilter(status)}>{status}</Button>)}</div>}
         {view === 'kanban' ? <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">{columns.map((column) => {
           const items = filtered.filter((ticket) => ticket.status === column);
