@@ -257,7 +257,7 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
       const recent = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
         method: 'POST',
         body: JSON.stringify({
-          jql: `project = "${jqlString(projectKey)}" AND statusCategory = Done AND updated >= -365d ORDER BY updated DESC`,
+          jql: `project = "${jqlString(projectKey)}" ORDER BY updated DESC`,
           fields: ['summary'],
           maxResults: 1,
         }),
