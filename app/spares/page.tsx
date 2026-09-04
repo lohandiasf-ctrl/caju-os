@@ -13,7 +13,6 @@ import {
   Settings,
   Truck,
   UserRound,
-  Warehouse,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,9 +107,9 @@ export default function Page() {
   return (
     <main className="min-h-screen text-foreground">
       <aside
-        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 w-[252px] border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
+        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <a href="/" className="flex h-12 items-center gap-3 px-2">
+        <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2">
           <b className="cockpit-brand grid size-10 place-items-center rounded-xl text-lg">
             C
           </b>
@@ -121,7 +120,7 @@ export default function Page() {
             </p>
           </div>
         </a>
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-8 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4">
           <p className="px-3 text-[10px] font-bold uppercase text-muted-foreground">
             Logística
           </p>
@@ -136,19 +135,15 @@ export default function Page() {
             <PackageOpen className="size-4 text-primary" />
             Spares
           </div>
-          <div className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground">
-            <Warehouse className="size-4" />
-            Estoque
-          </div>
-          <div className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground">
+          <a href="/?view=tickets" className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
             <Truck className="size-4" />
-            Expedições
-          </div>
+            Chamados
+          </a>
         </nav>
-        <div className="absolute bottom-6 flex items-center gap-3 px-3 text-sm text-muted-foreground">
+        <a href="/?view=settings" className="flex shrink-0 items-center gap-3 border-t border-sidebar-border px-3 pt-4 text-sm text-muted-foreground hover:text-foreground">
           <Settings className="size-4" />
           Configurações
-        </div>
+        </a>
       </aside>
       {menu && (
         <button

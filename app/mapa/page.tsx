@@ -44,6 +44,7 @@ export default function Page() {
     [menu, setMenu] = useState(false),
     [error, setError] = useState("");
   useEffect(() => {
+    let mounted = true;
     Promise.all([
       fetch("/data/technician-map.json").then((r) => r.json() as Promise<C[]>),
       fetch("/api/maps-config").then(
@@ -51,18 +52,28 @@ export default function Page() {
       ),
     ])
       .then(([d, c]) => {
+        if (!mounted) return;
         setData(d);
         if (!c.key) throw Error("Chave do mapa não configurada");
+        if (typeof window.google?.maps?.Map === "function") {
+          setReady(true);
+          return;
+        }
         const s = document.createElement("script");
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(c.key)}&loading=async`;
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(c.key)}&v=weekly`;
         s.async = true;
-        s.onload = () => setReady(true);
-        s.onerror = () => setError("Falha ao carregar o Google Maps");
+        s.onload = () => {
+          if (!mounted) return;
+          if (typeof window.google?.maps?.Map === "function") setReady(true);
+          else setError("Google Maps carregou sem a biblioteca de mapas");
+        };
+        s.onerror = () => { if (mounted) setError("Falha ao carregar o Google Maps"); };
         document.head.appendChild(s);
       })
       .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : "Falha ao carregar o mapa"),
+        mounted && setError(e instanceof Error ? e.message : "Falha ao carregar o mapa"),
       );
+    return () => { mounted = false; };
   }, []);
   const ufs = useMemo(
     () => [
@@ -85,40 +96,45 @@ export default function Page() {
   );
   useEffect(() => {
     if (!ready || !el.current) return;
-    if (!gm.current)
-      gm.current = new window.google.maps.Map(el.current, {
-        center: { lat: -14.5, lng: -44 },
-        zoom: 5,
-        mapId: "DEMO_MAP_ID",
-        disableDefaultUI: true,
-        zoomControl: true,
+    try {
+      if (typeof window.google?.maps?.Map !== "function") throw Error("Biblioteca do Google Maps indisponível");
+      if (!gm.current)
+        gm.current = new window.google.maps.Map(el.current, {
+          center: { lat: -14.5, lng: -44 },
+          zoom: 5,
+          mapId: "DEMO_MAP_ID",
+          disableDefaultUI: true,
+          zoomControl: true,
+        });
+      marks.current.forEach((x) => x.setMap(null));
+      marks.current = show.map((c) => {
+        const m = new window.google.maps.Marker({
+          map: gm.current,
+          position: { lat: c.lat, lng: c.lng },
+          title: `${c.city}/${c.uf}`,
+          label: c.technicians
+            ? {
+                text: String(c.technicians),
+                color: "#fff",
+                fontSize: "10px",
+                fontWeight: "700",
+              }
+            : undefined,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: c.technicians ? 10 : 5,
+            fillColor: c.technicians ? "#e56223" : "#64748b",
+            fillOpacity: 0.9,
+            strokeColor: "#fff",
+            strokeWeight: 1,
+          },
+        });
+        m.addListener("click", () => setSel(c));
+        return m;
       });
-    marks.current.forEach((x) => x.setMap(null));
-    marks.current = show.map((c) => {
-      const m = new window.google.maps.Marker({
-        map: gm.current,
-        position: { lat: c.lat, lng: c.lng },
-        title: `${c.city}/${c.uf}`,
-        label: c.technicians
-          ? {
-              text: String(c.technicians),
-              color: "#fff",
-              fontSize: "10px",
-              fontWeight: "700",
-            }
-          : undefined,
-        icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: c.technicians ? 10 : 5,
-          fillColor: c.technicians ? "#e56223" : "#64748b",
-          fillOpacity: 0.9,
-          strokeColor: "#fff",
-          strokeWeight: 1,
-        },
-      });
-      m.addListener("click", () => setSel(c));
-      return m;
-    });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Falha ao iniciar o mapa");
+    }
   }, [ready, show]);
   const total = show.reduce((s, x) => s + x.technicians, 0),
     onboard = show.reduce((s, x) => s + x.onboarded, 0),
@@ -126,9 +142,9 @@ export default function Page() {
   return (
     <main className="min-h-screen text-foreground">
       <aside
-        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 w-[252px] border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
+        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <a href="/" className="flex h-12 items-center gap-3 px-2">
+        <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2">
           <b className="cockpit-brand grid size-10 place-items-center rounded-xl text-lg">
             C
           </b>
@@ -139,7 +155,7 @@ export default function Page() {
             </p>
           </div>
         </a>
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-8 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4">
           <p className="px-3 text-[10px] font-bold uppercase text-muted-foreground">
             Cobertura técnica
           </p>
@@ -154,19 +170,15 @@ export default function Page() {
             <Map className="size-4 text-primary" />
             Mapa operacional
           </div>
-          <div className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground">
+          <a href="/?view=technicians" className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
             <Users className="size-4" />
             Técnicos
-          </div>
-          <div className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground">
-            <ShieldCheck className="size-4" />
-            Qualificações
-          </div>
+          </a>
         </nav>
-        <div className="absolute bottom-6 flex items-center gap-3 px-3 text-sm text-muted-foreground">
+        <a href="/?view=settings" className="flex shrink-0 items-center gap-3 border-t border-sidebar-border px-3 pt-4 text-sm text-muted-foreground hover:text-foreground">
           <Settings className="size-4" />
           Configurações
-        </div>
+        </a>
       </aside>
       {menu && (
         <button

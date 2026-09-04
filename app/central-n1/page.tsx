@@ -26,7 +26,6 @@ import {
   Phone,
   Search,
   Send,
-  Settings,
   ShieldAlert,
   TimerReset,
   UserRound,
@@ -37,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UserMenu } from "@/components/user-menu";
 
 type Requirement = { name: string; done: boolean; detail: string };
 type Ticket = {
@@ -263,9 +263,9 @@ export default function CentralN1Page() {
   return (
     <main className="min-h-screen text-foreground">
       <aside
-        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 w-[252px] border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
+        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <a href="/" className="flex h-12 items-center gap-3 px-2">
+        <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2">
           <div className="grid size-10 place-items-center rounded-xl bg-primary text-lg font-black text-primary-foreground shadow-[0_8px_28px_rgba(229,98,35,.25)]">
             C
           </div>
@@ -278,7 +278,7 @@ export default function CentralN1Page() {
             </div>
           </div>
         </a>
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-8 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">
             Atendimento N1
           </p>
@@ -289,46 +289,35 @@ export default function CentralN1Page() {
             <LayoutDashboard className="size-[18px]" />
             Visao geral
           </a>
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 text-sm font-medium shadow-[inset_3px_0_0_var(--primary)]">
+          <div className="flex h-10 w-full items-center gap-3 rounded-lg bg-sidebar-accent px-3 text-sm font-medium shadow-[inset_3px_0_0_var(--primary)]">
             <Headphones className="size-[18px] text-primary" />
             Minha fila
-          </button>
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
+          </div>
+          <a href="/?view=technicians" className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
             <Users className="size-[18px]" />
             Grupos N1
-          </button>
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
+          </a>
+          <a href="/?view=tickets" className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
             <ClipboardCheck className="size-[18px]" />
             Validacoes
-          </button>
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
+          </a>
+          <a href="/?view=agenda" className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
             <History className="size-[18px]" />
-            Historico
-          </button>
+            Agenda
+          </a>
+          <div className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+              <ShieldAlert className="size-4" />
+              Atencao da equipe
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              Revise a documentacao antes de validar o chamado.
+            </p>
+          </div>
         </nav>
-        <div className="mt-8 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
-            <ShieldAlert className="size-4" />
-            Atencao da equipe
-          </div>
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            7 chamados estao com documentacao incompleta e 3 proximos do SLA.
-          </p>
-        </div>
-        <div className="absolute inset-x-4 bottom-5 border-t border-sidebar-border pt-4">
-          <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
-            <Settings className="size-[18px]" />
-            Configuracoes
-          </button>
-          <div className="mt-3 flex items-center gap-3 rounded-xl border border-sidebar-border bg-background/40 p-3">
-            <div className="grid size-9 place-items-center rounded-full bg-[#28344a] text-xs font-bold text-[#9fb4d5]">
-              CN
-            </div>
-            <div>
-              <p className="text-xs font-semibold">Camila Nogueira</p>
-              <p className="text-[10px] text-muted-foreground">Analista N1</p>
-            </div>
-          </div>
+        <div className="shrink-0 border-t border-sidebar-border pt-3">
+          <a href="/?view=settings" className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">Configuracoes</a>
+          <UserMenu />
         </div>
       </aside>
       {menu && (
