@@ -67,6 +67,10 @@ type JiraFieldSearchResponse = {
   values?: JiraField[];
 };
 
+type JiraNamedIssue = JiraIssue & {
+  names?: Record<string, string>;
+};
+
 type FinancialFieldIds = {
   total: string[];
   spare: string[];
@@ -131,7 +135,7 @@ export async function getJiraIssue(key: string) {
 export async function getFinancialIssues(days = 180) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
   const safeDays = Math.min(Math.max(Math.trunc(days), 7), 365);
-  const financialFields = await getFinancialFieldIds();
+  const financialFields = await getFinancialFieldIds(projectKey);
   const requestedFields = Array.from(new Set([
     'summary', 'status', 'assignee', 'updated', 'project', 'customfield_14954', 'customfield_11994',
     ...financialFields.total, ...financialFields.spare, ...financialFields.technician, ...financialFields.billed,
@@ -223,7 +227,7 @@ async function getOperationalStatusNames(projectKey: string) {
   return [...OPERATIONAL_STATUSES];
 }
 
-async function getFinancialFieldIds(): Promise<FinancialFieldIds> {
+async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldIds> {
   if (financialFieldsCache && financialFieldsCache.expiresAt > Date.now()) return financialFieldsCache.ids;
 
   const defaults: FinancialFieldIds = {
@@ -234,14 +238,33 @@ async function getFinancialFieldIds(): Promise<FinancialFieldIds> {
   };
 
   try {
-    const fields: JiraField[] = [];
+    let fields: JiraField[] = [];
     let startAt = 0;
     let isLast = false;
-    while (!isLast && startAt < 1000) {
-      const page = await jiraFetch<JiraFieldSearchResponse>(`/rest/api/3/field/search?type=custom&startAt=${startAt}&maxResults=100`);
-      fields.push(...(page.values ?? []));
-      isLast = page.isLast ?? (page.values?.length ?? 0) < 100;
-      startAt += 100;
+    try {
+      while (!isLast && startAt < 1000) {
+        const page = await jiraFetch<JiraFieldSearchResponse>(`/rest/api/3/field/search?type=custom&startAt=${startAt}&maxResults=100`);
+        fields.push(...(page.values ?? []));
+        isLast = page.isLast ?? (page.values?.length ?? 0) < 100;
+        startAt += 100;
+      }
+    } catch {
+      fields = [];
+    }
+    if (!fields.length) {
+      const recent = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
+        method: 'POST',
+        body: JSON.stringify({
+          jql: `project = "${jqlString(projectKey)}" ORDER BY updated DESC`,
+          fields: ['summary'],
+          maxResults: 1,
+        }),
+      });
+      const key = recent.issues?.[0]?.key;
+      if (key) {
+        const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(key)}?expand=names&fields=*all`);
+        fields = Object.entries(issue.names ?? {}).map(([id, name]) => ({ id, name }));
+      }
     }
     const customFields = fields.filter((field): field is Required<JiraField> => Boolean(field.id?.startsWith('customfield_') && field.name));
     const matchingIds = (matcher: (name: string) => boolean) => customFields
