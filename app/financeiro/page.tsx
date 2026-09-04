@@ -55,7 +55,7 @@ export default function FinanceiroPage() {
     void user.getIdToken().then(async (token) => {
       const headers = { Authorization: `Bearer ${token}` };
       const [financeResponse, ruleResponse] = await Promise.all([
-        fetch('/api/jira/finance?days=180', { headers, cache: 'no-store' }),
+        fetch('/api/jira/finance?days=365', { headers, cache: 'no-store' }),
         fetch('/api/finance/rules', { headers, cache: 'no-store' }),
       ]);
       const financePayload = await financeResponse.json() as { issues?: FinancialIssue[]; error?: string };

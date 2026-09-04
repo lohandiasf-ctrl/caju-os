@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,9 +33,7 @@ const viewCopy: Record<DashboardView, [string, string, string]> = {
 
 export default function Home() {
   const { role, user } = useAuth();
-  const searchParams = useSearchParams();
-  const requestedView = searchParams.get('view');
-  const activeView: DashboardView = ['overview', 'tickets', 'central', 'agenda', 'technicians', 'projects', 'settings'].includes(requestedView ?? '') ? requestedView as DashboardView : 'overview';
+  const [activeView, setActiveView] = useState<DashboardView>('overview');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [jiraLoading, setJiraLoading] = useState(true);
   const [jiraError, setJiraError] = useState('');
@@ -55,6 +52,13 @@ export default function Home() {
   const [dialogError, setDialogError] = useState('');
   const [n1Users, setN1Users] = useState<N1User[]>([]);
   const [n1Loading, setN1Loading] = useState(true);
+
+  useEffect(() => {
+    const syncView = () => setActiveView(dashboardViewFromLocation());
+    syncView();
+    window.addEventListener('popstate', syncView);
+    return () => window.removeEventListener('popstate', syncView);
+  }, []);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((ticket) => {
@@ -157,6 +161,16 @@ export default function Home() {
     }
   }
 
+  function navigate(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (!href.startsWith('/?view=') || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    window.history.pushState(null, '', href);
+    setActiveView(dashboardViewFromLocation());
+    setMenu(false);
+    setNotificationsOpen(false);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
   useEffect(() => {
     const context = (document as Document & { modelContext?: { registerTool: (tool: object, options?: { signal?: AbortSignal }) => void | Promise<void> } }).modelContext;
     if (!context?.registerTool) return;
@@ -192,11 +206,11 @@ export default function Home() {
         <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Operacao</p>
         {nav.filter(([label]) => role === 'gerencia' || (role === 'n1' ? !['Financeiro', 'Spares', 'Projetos e lojas'].includes(label) : !['Financeiro', 'Spares', 'Central N1', 'Projetos e lojas', 'Técnicos'].includes(label))).map(([label, Icon, href, key]) => {
           const isActive = key === activeView;
-          return <a href={href} onClick={() => setMenu(false)} key={label} aria-current={isActive ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition ${isActive ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary),0_8px_24px_rgba(0,0,0,.12)]' : 'text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground'}`}><Icon aria-hidden="true" className={`size-[18px] ${isActive ? 'text-primary' : ''}`} />{label}</a>;
+          return <a href={href} onClick={(event) => navigate(event, href)} key={label} aria-current={isActive ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition ${isActive ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary),0_8px_24px_rgba(0,0,0,.12)]' : 'text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground'}`}><Icon aria-hidden="true" className={`size-[18px] ${isActive ? 'text-primary' : ''}`} />{label}</a>;
         })}
       </nav>
       <div className="shrink-0 border-t border-sidebar-border pt-3">
-        {role === 'gerencia' && <a href="/?view=settings" aria-current={activeView === 'settings' ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm transition ${activeView === 'settings' ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Settings aria-hidden="true" className="size-[18px]" /> Configurações</a>}
+        {role === 'gerencia' && <a href="/?view=settings" onClick={(event) => navigate(event, '/?view=settings')} aria-current={activeView === 'settings' ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm transition ${activeView === 'settings' ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Settings aria-hidden="true" className="size-[18px]" /> Configurações</a>}
         <UserMenu />
       </div>
     </aside>
@@ -207,7 +221,7 @@ export default function Home() {
         <div className="relative max-w-[440px] flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar chamado, loja ou tecnico..." className="h-10 bg-card pl-9" /></div>
         <div className={`ml-auto hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold sm:flex ${jiraError ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'}`}><span className={`size-1.5 rounded-full ${jiraError ? 'bg-amber-400' : 'bg-emerald-400'}`} />{jiraLoading ? 'Sincronizando Jira...' : jiraError ? 'Jira indisponível' : 'Jira conectado'}</div>
         <Button variant="ghost" size="icon" aria-label="Notificações" aria-expanded={notificationsOpen} className="relative" onClick={() => setNotificationsOpen((value) => !value)}><Bell /><span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" /></Button>
-        {notificationsOpen && <div className="surface-panel absolute right-4 top-[60px] z-50 w-[min(360px,calc(100vw-2rem))] rounded-2xl p-4 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Central de alertas</h2><Badge variant="outline">{tickets.filter((ticket) => ticket.priority === 'Alta').length}</Badge></div><p className="mt-3 text-sm text-muted-foreground">{tickets.some((ticket) => ticket.priority === 'Alta') ? 'Há chamados de prioridade alta que precisam de atenção.' : 'Nenhum alerta crítico no momento.'}</p><a href="/?view=tickets" onClick={() => setNotificationsOpen(false)} className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline">Ver chamados</a></div>}
+        {notificationsOpen && <div className="surface-panel absolute right-4 top-[60px] z-50 w-[min(360px,calc(100vw-2rem))] rounded-2xl p-4 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold">Central de alertas</h2><Badge variant="outline">{tickets.filter((ticket) => ticket.priority === 'Alta').length}</Badge></div><p className="mt-3 text-sm text-muted-foreground">{tickets.some((ticket) => ticket.priority === 'Alta') ? 'Há chamados de prioridade alta que precisam de atenção.' : 'Nenhum alerta crítico no momento.'}</p><a href="/?view=tickets" onClick={(event) => navigate(event, '/?view=tickets')} className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline">Ver chamados</a></div>}
       </header>
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-primary">{viewCopy[activeView][0]}</p><h1 className="text-2xl font-semibold tracking-[-.04em] sm:text-[2rem]">{viewCopy[activeView][1]}</h1><p className="mt-2 text-sm text-muted-foreground">{viewCopy[activeView][2]}</p></div>{activeView !== 'settings' && <Button size="lg" className="h-11 px-4 font-bold shadow-[0_10px_28px_color-mix(in_oklab,var(--primary)_20%,transparent)]" render={<a href="https://delfia.atlassian.net/secure/CreateIssue!default.jspa" target="_blank" rel="noreferrer" />}><Plus /> Novo chamado</Button>}</div>
@@ -315,4 +329,9 @@ function formatJiraDate(value: string | null) {
   const brazilian = value.match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
   const date = brazilian ? new Date(Number(brazilian[3]), Number(brazilian[2]) - 1, Number(brazilian[1]), Number(brazilian[4]), Number(brazilian[5]), Number(brazilian[6] ?? 0)) : new Date(value);
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+}
+
+function dashboardViewFromLocation(): DashboardView {
+  const requestedView = new URLSearchParams(window.location.search).get('view');
+  return ['overview', 'tickets', 'central', 'agenda', 'technicians', 'projects', 'settings'].includes(requestedView ?? '') ? requestedView as DashboardView : 'overview';
 }

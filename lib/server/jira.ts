@@ -53,6 +53,10 @@ type JiraSearchResponse = {
   isLast?: boolean;
 };
 
+type JiraProjectIssueType = {
+  statuses?: Array<{ name?: string }>;
+};
+
 const OPERATIONAL_STATUSES = [
   'AGENDAMENTO',
   'AGENDAMENTO PEDIDO PELO CLIENTE',
@@ -61,6 +65,8 @@ const OPERATIONAL_STATUSES = [
   'DIRECIONADO',
   'TEC-CAMPO',
 ] as const;
+
+let operationalStatusesCache: { expiresAt: number; names: string[] } | null = null;
 
 export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
@@ -73,7 +79,8 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
   if (options.status?.trim()) {
     clauses.push(`status = "${jqlString(options.status.trim())}"`);
   } else {
-    clauses.push(`status IN (${OPERATIONAL_STATUSES.map((status) => `"${jqlString(status)}"`).join(', ')})`);
+    const operationalStatuses = await getOperationalStatusNames(projectKey);
+    clauses.push(`status IN (${operationalStatuses.map((status) => `"${jqlString(status)}"`).join(', ')})`);
   }
 
   const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
@@ -113,7 +120,7 @@ export async function getFinancialIssues(days = 180) {
     const response = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
       method: 'POST',
       body: JSON.stringify({
-        jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d AND status NOT IN (Cancelado, REJEITADO, INATIVO) AND cf[12413] > 0 ORDER BY updated DESC`,
+        jql: `project = "${jqlString(projectKey)}" AND updated >= -${safeDays}d AND status NOT IN (Cancelado, REJEITADO, INATIVO) ORDER BY updated DESC`,
         fields: ['summary', 'status', 'assignee', 'updated', 'project', 'customfield_14954', 'customfield_11994', 'customfield_12413', 'customfield_14880', 'customfield_11955', 'customfield_12316', 'customfield_19825'],
         maxResults: 100,
         ...(nextPageToken ? { nextPageToken } : {}),
@@ -142,7 +149,7 @@ export async function getFinancialIssues(days = 180) {
       totalValue: total,
       billed: customFieldText(issue.fields.customfield_19825)?.toLowerCase() === 'sim',
     };
-  });
+  }).filter((issue) => issue.totalValue > 0 || issue.spareValue > 0);
 }
 
 export class JiraError extends Error {
@@ -166,6 +173,37 @@ async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function getOperationalStatusNames(projectKey: string) {
+  if (operationalStatusesCache && operationalStatusesCache.expiresAt > Date.now()) return operationalStatusesCache.names;
+
+  try {
+    const issueTypes = await jiraFetch<JiraProjectIssueType[]>(`/rest/api/3/project/${encodeURIComponent(projectKey)}/statuses`);
+    const names = Array.from(new Set(issueTypes.flatMap((issueType) => issueType.statuses ?? [])
+      .map((status) => status.name?.trim())
+      .filter((name): name is string => Boolean(name))
+      .filter(isOperationalStatus)));
+    if (names.length) {
+      operationalStatusesCache = { names, expiresAt: Date.now() + 5 * 60_000 };
+      return names;
+    }
+  } catch {
+    // Keep dashboard available if status discovery lacks permission.
+  }
+
+  return [...OPERATIONAL_STATUSES];
+}
+
+function isOperationalStatus(value: string) {
+  const normalized = normalizeText(value);
+  return normalized.includes('agend')
+    || normalized.includes('spare')
+    || normalized.includes('direcion')
+    || normalized.includes('campo')
+    || normalized.includes('deslocamento')
+    || normalized.includes('em rota')
+    || (normalized.includes('tecnic') && (normalized.includes('acion') || normalized.includes('atend')));
+}
+
 function requiredEnv(name: 'JIRA_BASE_URL' | 'JIRA_EMAIL' | 'JIRA_API_TOKEN' | 'JIRA_PROJECT_KEY') {
   const value = env[name]?.trim();
   if (!value) throw new JiraError('Integração com o Jira ainda não configurada.', 503);
@@ -173,6 +211,10 @@ function requiredEnv(name: 'JIRA_BASE_URL' | 'JIRA_EMAIL' | 'JIRA_API_TOKEN' | '
 }
 
 function jqlString(value: string) { return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
 function toSummary(issue: JiraIssue): JiraIssueSummary {
   return {
