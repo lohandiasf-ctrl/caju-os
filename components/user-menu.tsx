@@ -18,7 +18,7 @@ export function UserMenu() {
           <p className="truncate text-xs font-semibold">{user?.email}</p>
           <p className="text-xs text-muted-foreground">{role ? roleLabels[role] : 'Sem perfil definido'}</p>
         </div>
-        <button type="button" onClick={() => void signOut(auth)} className="grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Sair da conta" title="Sair">
+        <button type="button" onClick={() => void signOut(auth)} className="grid size-10 place-items-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Sair da conta" title="Sair">
           <LogOut className="size-4" />
         </button>
       </div>

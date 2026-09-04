@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { appUsers } from '@/db/schema';
 import { getDb } from '@/db';
 import type { UserRole } from '@/lib/permissions';
@@ -33,15 +33,25 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
 
   const claims = await verifyFirebaseToken(token);
   const db = getDb();
+  const normalizedEmail = claims.email?.trim().toLowerCase();
+  if (!normalizedEmail || claims.email_verified !== true) {
+    throw jsonError('Confirme o e-mail da conta antes de entrar.', 403);
+  }
+
+  // A recreated Firebase account receives a new UID. The verified e-mail is
+  // also an administrator-managed identity, so it safely recovers stale UIDs.
   const record = await db.select({
     uid: appUsers.firebaseUid,
     email: appUsers.email,
     role: appUsers.role,
     active: appUsers.active,
-  }).from(appUsers).where(eq(appUsers.firebaseUid, claims.sub)).get();
+  }).from(appUsers).where(or(
+    eq(appUsers.firebaseUid, claims.sub),
+    eq(appUsers.email, normalizedEmail),
+  )).get();
 
   if (!record || !record.active) throw jsonError('Usuário sem acesso ao sistema.', 403);
-  if (claims.email && claims.email.toLowerCase() !== record.email.toLowerCase()) throw jsonError('Identidade do usuário não confere.', 403);
+  if (normalizedEmail !== record.email.toLowerCase()) throw jsonError('Identidade do usuário não confere.', 403);
   if (allowedRoles && !allowedRoles.includes(record.role)) throw jsonError('Perfil sem permissão para esta ação.', 403);
 
   return { uid: record.uid, email: record.email, role: record.role };

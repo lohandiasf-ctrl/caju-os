@@ -7,8 +7,8 @@ import { LoaderCircle } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 import { canAccess, isUserRole, type UserRole } from '@/lib/permissions';
 
-type AuthContextValue = { user: User | null; role: UserRole | null; loading: boolean };
-const AuthContext = createContext<AuthContextValue>({ user: null, role: null, loading: true });
+type AuthContextValue = { user: User | null; role: UserRole | null; loading: boolean; accessError: string };
+const AuthContext = createContext<AuthContextValue>({ user: null, role: null, loading: true, accessError: '' });
 
 export function useAuth() {
   return useContext(AuthContext);
@@ -18,6 +18,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState('');
   const pathname = usePathname();
   const router = useRouter();
 
@@ -27,12 +28,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const token = await nextUser.getIdToken();
         const response = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
-        const profile = await response.json() as { role?: unknown };
-        setRole(response.ok && isUserRole(profile.role) ? profile.role : null);
+        const profile = await response.json() as { role?: unknown; error?: string };
+        if (!response.ok || !isUserRole(profile.role)) {
+          setAccessError(profile.error || 'Seu perfil não possui acesso ativo.');
+          setRole(null);
+        } else {
+          setAccessError('');
+          setRole(profile.role);
+        }
       } catch {
+        setAccessError('Não foi possível validar seu perfil. Tente novamente.');
         setRole(null);
       }
     } else {
+      setAccessError('');
       setRole(null);
     }
     setLoading(false);
@@ -45,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (user && pathname !== '/login' && pathname !== '/acesso-negado' && !canAccess(role, pathname)) router.replace('/acesso-negado');
   }, [loading, pathname, role, router, user]);
 
-  const value = useMemo(() => ({ user, role, loading }), [user, role, loading]);
+  const value = useMemo(() => ({ user, role, loading, accessError }), [user, role, loading, accessError]);
   const authorized = user && (pathname === '/acesso-negado' || canAccess(role, pathname));
   const canRender = !loading && ((pathname === '/login' && !user) || (pathname !== '/login' && authorized));
 

@@ -53,72 +53,42 @@ body {
 }
 
 :root {
-  --background: #0a1418;
-  --foreground: #f3f7f7;
-  --card: #1a2d35;
-  --card-foreground: #f3f7f7;
-  --popover: #172830;
-  --popover-foreground: #f3f7f7;
-  --primary: #f07a3f;
-  --primary-foreground: #fff9f5;
-  --secondary: #243b44;
-  --secondary-foreground: #eef5f6;
-  --muted: #14252c;
-  --muted-foreground: #9eb0b6;
-  --accent: #294650;
-  --accent-foreground: #f3f7f7;
-  --destructive: #f06464;
-  --border: rgb(180 218 224 / 14%);
-  --input: rgb(180 218 224 / 20%);
-  --ring: #f07a3f;
-  --chart-1: #f07a3f;
-  --chart-2: #56c7b7;
-  --chart-3: #79a9ff;
-  --chart-4: #b796ff;
-  --chart-5: #f3c26b;
-  --radius: 0.9rem;
-  --sidebar: #101d22;
-  --sidebar-foreground: #f3f7f7;
-  --sidebar-primary: #f07a3f;
-  --sidebar-primary-foreground: #fff9f5;
-  --sidebar-accent: #1a2d35;
+  --background: #090a0f;
+  --foreground: #f4f5f8;
+  --card: #15161d;
+  --card-foreground: #f4f5f8;
+  --popover: #191a22;
+  --popover-foreground: #f4f5f8;
+  --primary: #9b8cff;
+  --primary-foreground: #0b0915;
+  --secondary: #20212b;
+  --secondary-foreground: #f0f1f5;
+  --muted: #1c1d25;
+  --muted-foreground: #a8a9b4;
+  --accent: #282936;
+  --accent-foreground: #f8f8fb;
+  --destructive: #ff6b7a;
+  --border: rgb(216 218 255 / 12%);
+  --input: rgb(216 218 255 / 18%);
+  --ring: #a99cff;
+  --chart-1: #a99cff;
+  --chart-2: #5eead4;
+  --chart-3: #7dd3fc;
+  --chart-4: #c084fc;
+  --chart-5: #fbbf74;
+  --radius: 1rem;
+  --sidebar: #111218;
+  --sidebar-foreground: #f4f5f8;
+  --sidebar-primary: #9b8cff;
+  --sidebar-primary-foreground: #0b0915;
+  --sidebar-accent: #20212a;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(180 218 224 / 12%);
-  --sidebar-ring: #f07a3f;
+  --sidebar-border: rgb(216 218 255 / 10%);
+  --sidebar-ring: #a99cff;
 }
 
 .dark {
-  --background: #0a1418;
-  --foreground: #f3f7f7;
-  --card: #1a2d35;
-  --card-foreground: #f3f7f7;
-  --popover: #172830;
-  --popover-foreground: #f3f7f7;
-  --primary: #f07a3f;
-  --primary-foreground: #fff9f5;
-  --secondary: #243b44;
-  --secondary-foreground: #eef5f6;
-  --muted: #14252c;
-  --muted-foreground: #9eb0b6;
-  --accent: #294650;
-  --accent-foreground: #f3f7f7;
-  --destructive: #f06464;
-  --border: rgb(180 218 224 / 14%);
-  --input: rgb(180 218 224 / 20%);
-  --ring: #f07a3f;
-  --chart-1: #f07a3f;
-  --chart-2: #56c7b7;
-  --chart-3: #79a9ff;
-  --chart-4: #b796ff;
-  --chart-5: #f3c26b;
-  --sidebar: #101d22;
-  --sidebar-foreground: #f3f7f7;
-  --sidebar-primary: #f07a3f;
-  --sidebar-primary-foreground: #fff9f5;
-  --sidebar-accent: #1a2d35;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(180 218 224 / 12%);
-  --sidebar-ring: #f07a3f;
+  color-scheme: dark;
 }
 
 @layer base {
@@ -129,9 +99,9 @@ body {
     @apply bg-background text-foreground;
     min-width: 320px;
     background-image:
-      radial-gradient(circle at 82% 2%, rgb(65 122 132 / 16%), transparent 28rem),
-      radial-gradient(circle at 16% 92%, rgb(240 122 63 / 8%), transparent 24rem),
-      linear-gradient(145deg, #091317, #0d1a1f 55%, #091317);
+      radial-gradient(circle at 82% 2%, rgb(113 92 255 / 15%), transparent 30rem),
+      radial-gradient(circle at 10% 92%, rgb(79 209 197 / 7%), transparent 28rem),
+      linear-gradient(145deg, #08090d, #0e0f15 55%, #08090d);
     background-attachment: fixed;
   }
   html {
@@ -142,16 +112,17 @@ body {
   }
 
   ::selection {
-    background: rgb(240 122 63 / 34%);
+    background: rgb(155 140 255 / 35%);
     color: white;
   }
 }
 
 @layer components {
   .surface-panel {
-    background: linear-gradient(150deg, rgb(32 55 64 / 96%), rgb(20 38 45 / 98%));
-    border: 1px solid rgb(190 225 230 / 12%);
-    box-shadow: 0 22px 60px rgb(0 0 0 / 24%), inset 0 1px 0 rgb(255 255 255 / 3%);
+    background: linear-gradient(150deg, rgb(27 28 37 / 94%), rgb(17 18 24 / 98%));
+    border: 1px solid rgb(218 220 255 / 11%);
+    box-shadow: 0 22px 60px rgb(0 0 0 / 30%), inset 0 1px 0 rgb(255 255 255 / 4%);
+    backdrop-filter: blur(16px);
   }
 
   .metric-glow {
@@ -166,7 +137,7 @@ body {
     width: 8rem;
     height: 8rem;
     border-radius: 999px;
-    background: rgb(240 122 63 / 10%);
+    background: rgb(155 140 255 / 14%);
     filter: blur(18px);
     pointer-events: none;
   }
@@ -189,14 +160,14 @@ body {
 .cockpit-stat {
   border: 1px solid var(--border);
   background:
-    radial-gradient(circle at 92% 8%, rgba(95, 219, 184, 0.08), transparent 32%),
-    linear-gradient(145deg, rgba(35, 61, 70, 0.92), rgba(18, 34, 41, 0.96));
+    radial-gradient(circle at 92% 8%, rgba(155, 140, 255, 0.1), transparent 32%),
+    linear-gradient(145deg, rgba(28, 29, 39, 0.94), rgba(16, 17, 23, 0.98));
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
 }
 
 .cockpit-inset {
-  border: 1px solid rgba(166, 205, 213, 0.1);
-  background: rgba(4, 13, 17, 0.24);
+  border: 1px solid rgba(216, 218, 255, 0.1);
+  background: rgba(3, 4, 8, 0.3);
 }
 
 ::selection {
@@ -226,8 +197,8 @@ main > aside.fixed > a > b.bg-primary {
 main .rounded-xl.border-border.bg-card {
   border-color: var(--border);
   background:
-    radial-gradient(circle at 100% 0%, rgba(95, 219, 184, 0.055), transparent 28%),
-    linear-gradient(145deg, rgba(35, 61, 70, 0.92), rgba(18, 34, 41, 0.96));
+    radial-gradient(circle at 100% 0%, rgba(155, 140, 255, 0.07), transparent 28%),
+    linear-gradient(145deg, rgba(28, 29, 39, 0.94), rgba(16, 17, 23, 0.98));
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
 }
 
@@ -251,7 +222,7 @@ textarea:focus-visible {
     margin: 1rem 1rem 0;
     border: 1px solid var(--border);
     border-radius: 1.25rem;
-    background: rgb(16 29 34 / 88%);
+    background: rgb(17 18 24 / 88%);
     box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
   }
 }
