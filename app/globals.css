@@ -180,6 +180,15 @@ body {
   scrollbar-width: thin;
 }
 
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 main > aside.fixed {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
