@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Users, Wrench } from 'lucide-react';
+import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Star, Users, Wrench } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,8 @@ type Ticket = { id: string; title: string; store: string; city: string; status: 
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
 type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
 type N1User = { email: string; role: 'n1' };
+type FieldTechnician = { id: number; name: string; email: string | null; phone: string | null; city: string; state: string; status: string; approved: boolean };
+type TechnicianReview = { id: number; technicianId: number; authorEmail: string; rating: number; comment: string; createdAt: string };
 const columns: Status[] = ['Pendente de agendamento', 'Agendado', 'Aguardando spare', 'Direcionado', 'Técnico em campo'];
 const nav = [
   ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'], ['Chamados', ClipboardList, '/?view=tickets', 'tickets'], ['Mapa operacional', Map, '/mapa', 'map'], ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
@@ -26,7 +28,7 @@ const viewCopy: Record<DashboardView, [string, string, string]> = {
   tickets: ['Central de atendimento', 'Chamados operacionais', 'Consulte, filtre e abra cada chamado sem perder contexto.'],
   central: ['Atendimento N1', 'Central N1', 'Fila real de chamados que exige acompanhamento da equipe N1.'],
   agenda: ['Planejamento de campo', 'Agenda de atendimentos', 'Agendamentos e itens que ainda precisam de data.'],
-  technicians: ['Atendimento interno', 'Equipe N1', 'Contas N1 ativas e autorizadas no sistema.'],
+  technicians: ['Equipe de atendimento', 'Equipe', 'N1 e técnicos de campo cadastrados na operação.'],
   projects: ['Cobertura operacional', 'Projetos e lojas', 'Locais com chamados ativos e volume por unidade.'],
   settings: ['Administração', 'Configurações do sistema', 'Perfil, integrações e estado dos serviços.'],
 };
@@ -250,7 +252,7 @@ export default function Home() {
           return <section key={column} className="surface-panel min-h-[280px] rounded-2xl p-3"><div className="mb-3 flex items-center justify-between px-1"><div className="flex items-center gap-2"><span className={`size-2 rounded-full ${dots[column]}`} /><h3 className="text-xs font-bold uppercase tracking-[.08em]">{column}</h3></div><span className="rounded-lg border border-white/5 bg-black/15 px-2 py-1 text-[10px] font-bold text-muted-foreground">{items.length}</span></div><div className="space-y-3">{items.map((ticket) => <TicketCard key={ticket.id} ticket={ticket} onOpen={() => void openTicket(ticket)} />)}{!items.length && <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-xs text-muted-foreground">Nenhum chamado encontrado</div>}</div></section>;
         })}</div> : <div className="surface-panel mt-4 overflow-hidden rounded-2xl">{filtered.map((ticket) => <button type="button" onClick={() => void openTicket(ticket)} key={ticket.id} className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge><span className="text-xs text-muted-foreground">{ticket.technician || 'Não atribuído'}</span></button>)}{!filtered.length && <EmptyState label="Nenhum chamado encontrado" />}</div>}</>}
         {activeView === 'agenda' && <AgendaView tickets={tickets} loading={jiraLoading} onOpen={openTicket} />}
-        {activeView === 'technicians' && <TechniciansView users={n1Users} loading={n1Loading} />}
+        {activeView === 'technicians' && <TechniciansView users={n1Users} loading={n1Loading} tickets={tickets} />}
         {activeView === 'projects' && <ProjectsView stores={stores} loading={jiraLoading} />}
         {activeView === 'settings' && <><SettingsView email={user?.email ?? ''} role={role} jiraError={jiraError} user={user} /><EmployeeInvitePanel user={user} /></>}
       </div>
@@ -289,10 +291,47 @@ function AgendaView({ tickets, loading, onOpen }: { tickets: Ticket[]; loading: 
   return <div className="surface-panel mt-6 overflow-hidden rounded-2xl"><div className="grid border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[130px_1fr_160px_140px]"><span>Data</span><span>Chamado</span><span>Responsável</span><span>Status</span></div>{scheduled.map((ticket) => <button type="button" key={ticket.id} onClick={() => onOpen(ticket)} className="grid w-full gap-2 border-b border-border px-4 py-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[130px_1fr_160px_140px] sm:items-center"><span className="text-sm font-semibold text-blue-200">{ticket.schedule || 'A definir'}</span><span><strong className="block text-sm">{ticket.id} · {ticket.store}</strong><small className="text-muted-foreground">{ticket.title}</small></span><span className="text-sm text-muted-foreground">{ticket.technician || 'Não atribuído'}</span><Badge variant="outline" className="w-fit">{ticket.status}</Badge></button>)}</div>;
 }
 
-function TechniciansView({ users, loading }: { users: N1User[]; loading: boolean }) {
-  if (loading) return <LoadingPanel label="Carregando equipe..." />;
-  if (!users.length) return <EmptyState label="Nenhuma conta N1 ativa." />;
-  return <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{users.map((member) => <article key={member.email} className="surface-panel rounded-2xl p-5"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-xl border border-violet-300/20 bg-violet-300/10 text-sm font-bold text-violet-200">{member.email.slice(0, 2).toUpperCase()}</div><div className="min-w-0"><h2 className="truncate font-semibold">{member.email}</h2><p className="text-xs text-muted-foreground">Analista N1</p></div><Badge variant="outline" className="ml-auto border-emerald-400/25 bg-emerald-400/10 text-emerald-300">Ativo</Badge></div></article>)}</div>;
+function TechniciansView({ users, loading, tickets }: { users: N1User[]; loading: boolean; tickets: Ticket[] }) {
+  const { user } = useAuth();
+  const [tab, setTab] = useState<'n1' | 'field'>('n1');
+  const [fieldTechnicians, setFieldTechnicians] = useState<FieldTechnician[]>([]);
+  const [fieldLoading, setFieldLoading] = useState(false);
+  const [fieldError, setFieldError] = useState('');
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<FieldTechnician | null>(null);
+  useEffect(() => {
+    if (tab !== 'field' || !user || fieldTechnicians.length) return;
+    let active = true;
+    setFieldLoading(true); setFieldError('');
+    void user.getIdToken().then((token) => fetch('/api/technicians', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })).then(async (response) => {
+      const payload = await response.json() as { technicians?: FieldTechnician[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os técnicos.');
+      if (active) setFieldTechnicians(payload.technicians ?? []);
+    }).catch((error) => { if (active) setFieldError(error instanceof Error ? error.message : 'Falha ao carregar técnicos.'); }).finally(() => { if (active) setFieldLoading(false); });
+    return () => { active = false; };
+  }, [tab, user, fieldTechnicians.length]);
+  const filtered = fieldTechnicians.filter((tech) => normalizeText(`${tech.name} ${tech.city} ${tech.state}`).includes(normalizeText(query)));
+  return <div className="mt-6 space-y-5">
+    <div role="tablist" aria-label="Equipe" className="inline-flex rounded-xl border border-border bg-card p-1">
+      <button type="button" role="tab" aria-selected={tab === 'n1'} onClick={() => setTab('n1')} className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition ${tab === 'n1' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Equipe N1</button>
+      <button type="button" role="tab" aria-selected={tab === 'field'} onClick={() => setTab('field')} className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition ${tab === 'field' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>Técnicos de campo</button>
+    </div>
+    {tab === 'n1' ? (loading ? <LoadingPanel label="Carregando equipe..." /> : users.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{users.map((member) => <article key={member.email} className="surface-panel rounded-2xl p-5"><div className="flex items-center gap-3"><div className="grid size-11 place-items-center rounded-xl border border-violet-300/20 bg-violet-300/10 text-sm font-bold text-violet-200">{member.email.slice(0, 2).toUpperCase()}</div><div className="min-w-0"><h2 className="truncate font-semibold">{member.email}</h2><p className="text-xs text-muted-foreground">Analista N1</p></div><Badge variant="outline" className="ml-auto border-emerald-400/25 bg-emerald-400/10 text-emerald-300">Ativo</Badge></div></article>)}</div> : <EmptyState label="Nenhuma conta N1 ativa." />) : <>
+      <div className="max-w-md"><label htmlFor="field-tech-search" className="sr-only">Buscar técnico de campo</label><Input id="field-tech-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nome, cidade ou UF..." /></div>
+      {fieldError && <div role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{fieldError}</div>}
+      {fieldLoading ? <LoadingPanel label="Carregando técnicos de campo..." /> : filtered.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{filtered.map((tech) => <button type="button" key={tech.id} onClick={() => setSelected(tech)} className="surface-panel rounded-2xl p-5 text-left transition hover:-translate-y-0.5 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex items-start gap-3"><div className="grid size-11 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 font-bold text-primary">{initials(tech.name)}</div><div className="min-w-0"><h2 className="truncate font-semibold">{tech.name}</h2><p className="text-xs text-muted-foreground">{tech.city} · {tech.state}</p><p className="mt-2 truncate text-xs text-muted-foreground">{tech.email || tech.phone || 'Contato não informado'}</p></div><Badge variant="outline" className="ml-auto shrink-0">{tech.status || (tech.approved ? 'Ativo' : 'Pendente')}</Badge></div></button>)}</div> : <EmptyState label={fieldTechnicians.length ? 'Nenhum técnico encontrado para essa busca.' : 'Nenhum técnico cadastrado na planilha.'} />}
+      <TechnicianDetailsDialog technician={selected} tickets={tickets} user={user} onClose={() => setSelected(null)} />
+    </>}
+  </div>;
+}
+
+function TechnicianDetailsDialog({ technician, tickets, user, onClose }: { technician: FieldTechnician | null; tickets: Ticket[]; user: { getIdToken: () => Promise<string>; email?: string | null } | null; onClose: () => void }) {
+  const [reviews, setReviews] = useState<TechnicianReview[]>([]); const [rating, setRating] = useState(0); const [comment, setComment] = useState(''); const [loading, setLoading] = useState(false); const [submitting, setSubmitting] = useState(false); const [message, setMessage] = useState('');
+  useEffect(() => { if (!technician || !user) return; let active = true; setLoading(true); setMessage(''); void user.getIdToken().then((token) => fetch(`/api/technicians/${technician.id}/reviews`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })).then(async (response) => { const payload = await response.json() as { reviews?: TechnicianReview[]; error?: string }; if (!response.ok) throw new Error(payload.error || 'Falha ao carregar avaliações.'); if (active) setReviews(payload.reviews ?? []); }).catch((error) => { if (active) setMessage(error instanceof Error ? error.message : 'Falha ao carregar avaliações.'); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [technician, user]);
+  const attendance = technician ? tickets.filter((ticket) => { const candidate = normalizePerson(ticket.technician ?? ''); const target = normalizePerson(technician.name); return Boolean(candidate) && (candidate === target || candidate.includes(target) || target.includes(candidate)); }) : [];
+  async function submitReview(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); if (!technician || !user || !comment.trim()) return; setSubmitting(true); setMessage(''); try { const response = await fetch(`/api/technicians/${technician.id}/reviews`, { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ rating, comment: comment.trim() }) }); const payload = await response.json() as { review?: TechnicianReview; error?: string }; if (!response.ok || !payload.review) throw new Error(payload.error || 'Não foi possível salvar a avaliação.'); setReviews((current) => [payload.review!, ...current]); setComment(''); setRating(0); setMessage('Avaliação salva e visível para toda a equipe.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Falha ao salvar avaliação.'); } finally { setSubmitting(false); } }
+  const average = reviews.length ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0;
+  return <Dialog open={Boolean(technician)} onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">{technician && <><DialogHeader><DialogTitle>{technician.name}</DialogTitle><DialogDescription>{technician.city} · {technician.state}{technician.email ? ` · ${technician.email}` : ''}</DialogDescription></DialogHeader><div className="space-y-5"><section><h3 className="text-sm font-semibold">Atendimentos realizados ({attendance.length})</h3><div className="mt-3 space-y-2">{attendance.length ? attendance.map((ticket) => <div key={ticket.id} className="rounded-xl border border-border bg-card/50 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs font-bold text-primary">{ticket.id}</p><p className="mt-1 text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div><Badge variant="outline">{ticket.status}</Badge></div></div>) : <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhum atendimento encontrado nos chamados carregados.</p>}</div></section><section className="border-t border-border pt-5"><div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Avaliações da equipe</h3><span className="flex items-center gap-1 text-sm text-amber-300"><Star className="size-4 fill-current" /> {average.toFixed(1)} ({reviews.length})</span></div>{loading ? <p className="mt-3 text-sm text-muted-foreground">Carregando avaliações...</p> : <div className="mt-3 space-y-2">{reviews.map((review) => <article key={review.id} className="rounded-xl border border-border bg-card/50 p-3"><div className="flex items-center justify-between gap-3"><span className="flex items-center gap-0.5 text-amber-300" aria-label={`${review.rating} estrelas`}>{[1,2,3,4,5].map((star) => <Star key={star} className={`size-3.5 ${star <= review.rating ? 'fill-current' : ''}`} />)}</span><time className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</time></div><p className="mt-2 text-sm">{review.comment}</p><p className="mt-1 text-xs text-muted-foreground">{review.authorEmail}</p></article>)}{!reviews.length && <p className="text-sm text-muted-foreground">Ainda não há avaliações.</p>}</div>}<form className="mt-4 space-y-3" onSubmit={(event) => void submitReview(event)}><div><p className="text-xs font-semibold text-muted-foreground">Sua nota</p><div className="mt-2 flex items-center gap-1">{[1,2,3,4,5].map((value) => <button type="button" key={value} aria-label={`Avaliar com ${value} estrelas`} aria-pressed={rating === value} onClick={() => setRating(value)} className="rounded-md p-1 text-amber-300 transition hover:bg-amber-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Star className={`size-5 ${value <= rating ? 'fill-current' : ''}`} /></button>)}<button type="button" className="ml-2 text-xs text-muted-foreground underline" onClick={() => setRating(0)}>Sem nota</button></div></div><div><label htmlFor="technician-review" className="text-xs font-semibold text-muted-foreground">Comentário visível para todos</label><textarea id="technician-review" value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1000} rows={3} className="mt-2 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" placeholder="Compartilhe um feedback sobre este técnico..." /></div><Button type="submit" disabled={submitting || !comment.trim()}>{submitting ? <Loader2 className="animate-spin" /> : <Save />} Salvar comentário</Button>{message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}</form></section></div></>}</DialogContent></Dialog>;
 }
 
 function ProjectsView({ stores, loading }: { stores: { store: string; city: string; tickets: number }[]; loading: boolean }) {
@@ -349,6 +388,10 @@ function toTicket(issue: JiraTicket): Ticket {
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizePerson(value: string) {
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
 }
 
 function formatJiraDate(value: string | null) {

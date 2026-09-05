@@ -123,3 +123,14 @@ export const employeeMessages = sqliteTable('employee_messages', {
   index('idx_employee_messages_sender_recipient').on(table.senderEmail, table.recipientEmail, table.createdAt),
   index('idx_employee_messages_recipient_read').on(table.recipientEmail, table.readAt),
 ]);
+
+export const technicianReviews = sqliteTable('technician_reviews', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  technicianId: integer('technician_id').notNull().references(() => technicians.id),
+  authorEmail: text('author_email').notNull(),
+  rating: integer('rating').notNull(),
+  comment: text('comment').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_technician_reviews_technician').on(table.technicianId, table.createdAt),
+]);
