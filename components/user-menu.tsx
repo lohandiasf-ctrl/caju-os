@@ -66,7 +66,7 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
   }, [user]);
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), 20_000);
+    const timer = window.setInterval(() => void load(), 7_500);
     const refresh = () => void load();
     window.addEventListener('caju-presence-updated', refresh);
     return () => { window.clearInterval(timer); window.removeEventListener('caju-presence-updated', refresh); };
@@ -293,6 +293,8 @@ export function UserMenu() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [feedback, setFeedback] = useState('');
+  const statusRef = useRef<Status>('Online');
+  const lastActivityRef = useRef(0);
   const syncPresence = useCallback(async (changes: Partial<{ status: Status; displayName: string; phone: string; photoUrl: string | null }> = {}) => {
     if (!user) return;
     const response = await fetch('/api/colleagues', { method: 'PATCH', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status, ...changes }) });
@@ -311,13 +313,32 @@ export function UserMenu() {
         if (active && profile) { setName(profile.displayName || ''); setPhone(profile.phone || ''); setPhoto(profile.photoUrl); }
       } finally { if (active) void syncPresence({ status: localStatus }); }
     })();
-    const timer = window.setInterval(() => void syncPresence(), 45_000);
+    const timer = window.setInterval(() => void syncPresence(), 15_000);
     return () => { active = false; window.clearInterval(timer); };
   }, [syncPresence, user]);
+  useEffect(() => { statusRef.current = status; }, [status]);
   async function updateStatus(value: Status) {
     setStatus(value); localStorage.setItem('caju-status', value); setFeedback(`Status alterado para ${value}.`);
     try { await syncPresence({ status: value }); } catch (reason) { setFeedback(reason instanceof Error ? reason.message : 'Falha ao atualizar o status.'); }
   }
+  useEffect(() => {
+    const markActive = () => {
+      if (!user || statusRef.current !== 'Offline' || Date.now() - lastActivityRef.current < 5_000) return;
+      lastActivityRef.current = Date.now();
+      void updateStatus('Online');
+    };
+    const visible = () => { if (document.visibilityState === 'visible') markActive(); };
+    window.addEventListener('pointerdown', markActive, { capture: true });
+    window.addEventListener('keydown', markActive, { capture: true });
+    window.addEventListener('focus', markActive);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      window.removeEventListener('pointerdown', markActive, { capture: true });
+      window.removeEventListener('keydown', markActive, { capture: true });
+      window.removeEventListener('focus', markActive);
+      document.removeEventListener('visibilitychange', visible);
+    };
+  }, [user]);
   async function saveProfile() {
     setFeedback('Salvando perfil...');
     try { await syncPresence({ displayName: name, phone, photoUrl: photo }); localStorage.setItem('caju-profile-name', name); localStorage.setItem('caju-profile-phone', phone); setFeedback('Perfil atualizado.'); }
