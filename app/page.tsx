@@ -210,7 +210,7 @@ export default function Home() {
   return <main className="min-h-screen text-foreground">
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex h-12 items-center gap-3 px-2">
-        <div className="grid size-10 place-items-center rounded-xl border border-primary/30 bg-primary/12 text-lg font-black text-primary shadow-[0_10px_30px_rgba(240,122,63,.18)]">C</div>
+        <div className="grid size-10 place-items-center overflow-hidden rounded-xl border border-primary/30 bg-black shadow-[0_10px_30px_rgba(240,122,63,.18)]"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></div>
         <div><div className="text-[15px] font-extrabold tracking-tight">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando operacional</div></div>
       </div>
       <nav className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-4 pr-1" aria-label="Navegacao principal">

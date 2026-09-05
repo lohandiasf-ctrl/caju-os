@@ -49,7 +49,7 @@ export default function LoginPage() {
       <section className="relative hidden border-r border-border bg-sidebar lg:m-4 lg:flex lg:flex-col lg:justify-between lg:rounded-[28px] lg:border lg:p-14 lg:shadow-2xl">
         <div className="absolute inset-0 rounded-[inherit] bg-[radial-gradient(circle_at_22%_20%,rgba(240,122,63,.2),transparent_34%),radial-gradient(circle_at_78%_78%,rgba(95,219,184,.13),transparent_32%)]" />
         <div className="relative flex items-center gap-3">
-          <div className="cockpit-brand grid size-11 place-items-center rounded-xl text-xl font-black">C</div>
+          <div className="cockpit-brand grid size-11 place-items-center overflow-hidden rounded-xl"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-10 object-contain" /></div>
           <div><p className="font-extrabold">Caju OS</p><p className="text-xs font-semibold uppercase tracking-[.18em] text-muted-foreground">Comando operacional</p></div>
         </div>
         <div className="relative max-w-xl">
@@ -63,7 +63,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center px-5 py-10 sm:px-10">
         <div className="surface-panel w-full max-w-[440px] rounded-[28px] p-6 sm:p-9">
           <div className="mb-9 flex items-center gap-3 lg:hidden">
-            <div className="cockpit-brand grid size-10 place-items-center rounded-xl text-lg font-black">C</div>
+            <div className="cockpit-brand grid size-10 place-items-center overflow-hidden rounded-xl"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></div>
             <div><p className="font-extrabold">Caju OS</p><p className="text-xs uppercase tracking-[.16em] text-muted-foreground">Comando operacional</p></div>
           </div>
           <p className="text-xs font-bold uppercase tracking-[.14em] text-primary">Acesso interno</p>

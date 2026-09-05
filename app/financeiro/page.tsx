@@ -150,7 +150,7 @@ export default function FinanceiroPage() {
 
   return <main className="min-h-screen text-foreground">
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
-      <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2"><div className="grid size-10 place-items-center rounded-xl border border-primary/30 bg-primary/12 text-lg font-black text-primary">C</div><div><div className="text-[15px] font-extrabold">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando financeiro</div></div></a>
+      <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2"><div className="grid size-10 place-items-center overflow-hidden rounded-xl border border-primary/30 bg-black"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></div><div><div className="text-[15px] font-extrabold">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando financeiro</div></div></a>
       <nav className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4 pr-1" aria-label="Navegação financeira">
         <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Gestão</p>
         <SideLink href="/" icon={LayoutDashboard}>Visão geral</SideLink>

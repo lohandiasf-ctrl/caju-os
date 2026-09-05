@@ -193,9 +193,7 @@ export default function Page() {
         className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
       >
         <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2">
-          <b className="cockpit-brand grid size-10 place-items-center rounded-xl text-lg">
-            C
-          </b>
+          <span className="cockpit-brand grid size-10 place-items-center overflow-hidden rounded-xl"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></span>
           <div>
             <b>Caju OS</b>
             <p className="text-xs uppercase tracking-wider text-muted-foreground">
