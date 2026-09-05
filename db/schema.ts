@@ -158,3 +158,23 @@ export const operationalVisits = sqliteTable('operational_visits', {
   id: integer('id').primaryKey({ autoIncrement: true }), workflowId: integer('workflow_id').notNull().references(() => operationalWorkflows.id), visitNumber: integer('visit_number').notNull(), technicianId: integer('technician_id').references(() => technicians.id),
   scheduledAt: text('scheduled_at'), expectedReturnAt: text('expected_return_at'), completedAt: text('completed_at'), clientValueCents: integer('client_value_cents'), payoutCents: integer('payout_cents'), status: text('status').notNull().default('planned'), note: text('note'), createdBy: text('created_by').notNull(), createdAt: text('created_at').notNull(),
 }, (table) => [uniqueIndex('idx_operational_visits_order').on(table.workflowId, table.visitNumber), index('idx_operational_visits_workflow').on(table.workflowId)]);
+
+export const n1TicketAssignments = sqliteTable('n1_ticket_assignments', {
+  ticketKey: text('ticket_key').primaryKey(),
+  n1Email: text('n1_email').notNull(),
+  status: text('status', { enum: ['claimed', 'validated'] }).notNull().default('claimed'),
+  claimedAt: text('claimed_at').notNull(),
+  validatedAt: text('validated_at'),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const ticketEvidence = sqliteTable('ticket_evidence', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketKey: text('ticket_key').notNull(),
+  kind: text('kind', { enum: ['photo', 'video', 'rat'] }).notNull(),
+  name: text('name').notNull(),
+  mimeType: text('mime_type').notNull(),
+  data: text('data').notNull(),
+  uploadedBy: text('uploaded_by').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [index('idx_ticket_evidence_ticket').on(table.ticketKey, table.createdAt)]);

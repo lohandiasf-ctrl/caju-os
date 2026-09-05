@@ -57,6 +57,13 @@
       "when": 1788642980117,
       "tag": "0007_fixed_marrow",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788644848194,
+      "tag": "0008_goofy_tattoo",
+      "breakpoints": true
     }
   ]
 }
