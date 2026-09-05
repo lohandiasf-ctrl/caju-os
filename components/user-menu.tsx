@@ -97,7 +97,12 @@ function ChatDialog({ colleague, tickets, onClose }: { colleague: Colleague | nu
     const timer = window.setInterval(() => void loadMessages(true), 5_000);
     return () => window.clearInterval(timer);
   }, [colleague, loadMessages]);
-  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
+  useEffect(() => {
+    // Keep the effect cleanup contract explicit. Some browsers return a value
+    // from scrollIntoView; returning it from the effect makes React treat it
+    // as a cleanup function and crashes the chat on message updates.
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
   async function sendMessage(event: React.FormEvent) {
     event.preventDefault();
     if (!user || !colleague || (!draft.trim() && !attachment && !ticketRef) || sending) return;
