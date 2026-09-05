@@ -53,38 +53,38 @@ body {
 }
 
 :root {
-  --background: #080d14;
+  --background: #0b0d0f;
   --foreground: #f4f5f8;
-  --card: #161e29;
+  --card: #191c1f;
   --card-foreground: #f4f5f8;
-  --popover: #161e29;
+  --popover: #191c1f;
   --popover-foreground: #f4f5f8;
-  --primary: #8b7cff;
+  --primary: #2f7dff;
   --primary-foreground: #0b0915;
-  --secondary: #202d3d;
+  --secondary: #292d31;
   --secondary-foreground: #f0f1f5;
-  --muted: #1d2938;
+  --muted: #23272b;
   --muted-foreground: #a8a9b4;
-  --accent: #26364a;
+  --accent: #2b3035;
   --accent-foreground: #f8f8fb;
   --destructive: #ff6b7a;
   --border: rgb(216 218 255 / 12%);
   --input: rgb(216 218 255 / 18%);
-  --ring: #a99cff;
+  --ring: #5c9bff;
   --chart-1: #a99cff;
   --chart-2: #5eead4;
   --chart-3: #7dd3fc;
   --chart-4: #c084fc;
   --chart-5: #fbbf74;
   --radius: 1rem;
-  --sidebar: #101923;
+  --sidebar: #171a1d;
   --sidebar-foreground: #f4f5f8;
-  --sidebar-primary: #8b7cff;
+  --sidebar-primary: #2f7dff;
   --sidebar-primary-foreground: #0b0915;
-  --sidebar-accent: #20212a;
+  --sidebar-accent: #252b31;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgb(216 218 255 / 10%);
-  --sidebar-ring: #a99cff;
+  --sidebar-ring: #5c9bff;
 }
 
 .dark {
@@ -99,9 +99,9 @@ body {
     @apply bg-background text-foreground;
     min-width: 320px;
     background-image:
-      radial-gradient(circle at 30% 20%, rgb(28 43 58 / 48%), transparent 30rem),
-      radial-gradient(circle at 85% 4%, rgb(113 92 255 / 13%), transparent 30rem),
-      linear-gradient(145deg, #070a0f, #0d1520 58%, #070a0f);
+      radial-gradient(circle at 70% 15%, rgb(32 43 57 / 22%), transparent 32rem),
+      radial-gradient(circle at 20% 90%, rgb(21 38 58 / 18%), transparent 28rem),
+      linear-gradient(145deg, #0b0d0f, #111417 58%, #080a0c);
     background-attachment: fixed;
   }
   html {
@@ -119,8 +119,8 @@ body {
 
 @layer components {
   .surface-panel {
-    background: linear-gradient(150deg, rgb(22 30 41 / 96%), rgb(13 20 29 / 98%));
-    border: 1px solid rgb(255 255 255 / 6%);
+    background: linear-gradient(145deg, rgb(28 31 34 / 97%), rgb(18 20 22 / 99%));
+    border: 1px solid rgb(255 255 255 / 8%);
     border-radius: 1rem;
     box-shadow: 0 20px 60px -20px rgb(0 0 0 / 70%), 0 0 0 1px rgb(255 255 255 / 2%), inset 0 1px 0 rgb(255 255 255 / 3%);
     backdrop-filter: blur(18px);
@@ -138,7 +138,7 @@ body {
     width: 8rem;
     height: 8rem;
     border-radius: 999px;
-    background: rgb(155 140 255 / 14%);
+    background: rgb(47 125 255 / 12%);
     filter: blur(18px);
     pointer-events: none;
   }
@@ -149,6 +149,70 @@ body {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
     var(--sidebar);
+}
+
+/* Reference navigation: a floating graphite dock that expands over the canvas. */
+.caju-sidebar {
+  border-color: rgb(255 255 255 / 9%);
+  border-radius: 1.4rem;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 4%), transparent 22%),
+    linear-gradient(145deg, #202326 0%, #17191b 52%, #111315 100%);
+  box-shadow:
+    0 28px 80px rgb(0 0 0 / 62%),
+    0 0 0 1px rgb(255 255 255 / 2%),
+    inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.caju-sidebar > div:first-child {
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
+  padding-bottom: 1rem;
+}
+
+.caju-sidebar nav a,
+.caju-sidebar nav button,
+.caju-sidebar [href*='settings'] {
+  border-radius: 0.7rem;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.caju-sidebar nav a:hover,
+.caju-sidebar nav button:hover,
+.caju-sidebar [href*='settings']:hover {
+  background: rgb(255 255 255 / 7%);
+  color: #f5f7fa;
+}
+
+.caju-sidebar nav a[aria-current='page'],
+.caju-sidebar [href*='settings'][aria-current='page'] {
+  background: linear-gradient(100deg, rgb(47 125 255 / 24%), rgb(47 125 255 / 9%));
+  color: #f6f9ff;
+  box-shadow: inset 3px 0 0 #2f7dff, 0 8px 24px rgb(0 0 0 / 16%);
+}
+
+.caju-sidebar .sidebar-label {
+  transition: opacity 170ms ease;
+}
+
+@media (min-width: 640px) {
+  .caju-sidebar {
+    top: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+    height: calc(100vh - 1.5rem);
+  }
+
+  .caju-sidebar:hover {
+    box-shadow: 0 30px 90px rgb(0 0 0 / 68%), 0 0 0 1px rgb(255 255 255 / 3%), inset 0 1px 0 rgb(255 255 255 / 5%);
+  }
+
+  .caju-sidebar nav {
+    margin-top: 1.25rem;
+  }
+
+  .caju-sidebar nav a[aria-current='page'] {
+    box-shadow: inset 3px 0 0 #2f7dff, 0 8px 24px rgb(0 0 0 / 18%);
+  }
 }
 
 /* Flow UI: floating slate surfaces, compact rhythm, one blue-violet active state. */
@@ -203,8 +267,8 @@ button[data-slot='button'] {
 
 button[data-slot='button'][data-variant='default'],
 button.bg-primary {
-  background: linear-gradient(135deg, #8b7cff, #6f83ff);
-  box-shadow: 0 8px 22px rgb(91 140 255 / 18%);
+  background: linear-gradient(135deg, #2f7dff, #1769e8);
+  box-shadow: 0 8px 22px rgb(24 105 232 / 24%);
 }
 
 [data-slot='dialog-content'] {
