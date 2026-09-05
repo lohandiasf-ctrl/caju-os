@@ -218,6 +218,16 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 16%, transparent);
 }
 
+.field {
+  width: 100%;
+  border: 1px solid var(--input);
+  border-radius: 0.75rem;
+  background: var(--background);
+  padding: 0.5rem 0.75rem;
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
 @media (min-width: 1024px) {
   main > aside.fixed {
     top: 1rem;

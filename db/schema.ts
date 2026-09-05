@@ -137,3 +137,24 @@ export const technicianReviews = sqliteTable('technician_reviews', {
 }, (table) => [
   index('idx_technician_reviews_technician').on(table.technicianId, table.createdAt),
 ]);
+
+// Jira holds original request. Local workflow holds Caju operational process.
+export const operationalStores = sqliteTable('operational_stores', {
+  code: text('code').primaryKey(), name: text('name').notNull(), address: text('address').notNull(), city: text('city').notNull(), state: text('state').notNull(),
+  requesterName: text('requester_name'), requesterPhone: text('requester_phone'), requesterRole: text('requester_role'),
+  secondaryName: text('secondary_name'), secondaryPhone: text('secondary_phone'), secondaryRole: text('secondary_role'), updatedAt: text('updated_at').notNull(),
+});
+
+export const operationalWorkflows = sqliteTable('operational_workflows', {
+  id: integer('id').primaryKey({ autoIncrement: true }), ticketKey: text('ticket_key').notNull(), storeCode: text('store_code'), storeName: text('store_name'), address: text('address'), city: text('city'), state: text('state'),
+  openedAt: text('opened_at'), category: text('category'), pdvNumber: text('pdv_number'), description: text('description'), clientValueCents: integer('client_value_cents'), payoutCents: integer('payout_cents'),
+  status: text('status').notNull().default('triage'), technicianId: integer('technician_id').references(() => technicians.id), scheduledAt: text('scheduled_at'), expectedReturnAt: text('expected_return_at'), validationStatus: text('validation_status'),
+  spareSource: text('spare_source'), spareStatus: text('spare_status'), purchaseStatus: text('purchase_status'), partsValueCents: integer('parts_value_cents'), partsSaleCents: integer('parts_sale_cents'),
+  paymentDate: text('payment_date'), paidValueCents: integer('paid_value_cents'), pixKey: text('pix_key'), bank: text('bank'), accountHolder: text('account_holder'), pixKeyType: text('pix_key_type'), archivedAt: text('archived_at'),
+  createdBy: text('created_by').notNull(), createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull(),
+}, (table) => [uniqueIndex('idx_operational_workflows_ticket').on(table.ticketKey), index('idx_operational_workflows_status').on(table.status, table.scheduledAt)]);
+
+export const operationalVisits = sqliteTable('operational_visits', {
+  id: integer('id').primaryKey({ autoIncrement: true }), workflowId: integer('workflow_id').notNull().references(() => operationalWorkflows.id), visitNumber: integer('visit_number').notNull(), technicianId: integer('technician_id').references(() => technicians.id),
+  scheduledAt: text('scheduled_at'), expectedReturnAt: text('expected_return_at'), completedAt: text('completed_at'), clientValueCents: integer('client_value_cents'), payoutCents: integer('payout_cents'), status: text('status').notNull().default('planned'), note: text('note'), createdBy: text('created_by').notNull(), createdAt: text('created_at').notNull(),
+}, (table) => [uniqueIndex('idx_operational_visits_order').on(table.workflowId, table.visitNumber), index('idx_operational_visits_workflow').on(table.workflowId)]);
