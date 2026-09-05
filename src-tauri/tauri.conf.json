@@ -21,6 +21,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "icon": ["icons/icon.ico"],
     "windows": { "webviewInstallMode": { "type": "downloadBootstrapper" } }
   }
 }
