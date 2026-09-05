@@ -295,6 +295,7 @@ export function UserMenu() {
   const [feedback, setFeedback] = useState('');
   const statusRef = useRef<Status>('Online');
   const lastActivityRef = useRef(0);
+  const offlineDismissUntilRef = useRef(0);
   const syncPresence = useCallback(async (changes: Partial<{ status: Status; displayName: string; phone: string; photoUrl: string | null }> = {}) => {
     if (!user) return;
     const response = await fetch('/api/colleagues', { method: 'PATCH', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status, ...changes }) });
@@ -318,12 +319,13 @@ export function UserMenu() {
   }, [syncPresence, user]);
   useEffect(() => { statusRef.current = status; }, [status]);
   async function updateStatus(value: Status) {
+    if (value === 'Offline') offlineDismissUntilRef.current = Date.now() + 4_000;
     setStatus(value); localStorage.setItem('caju-status', value); setFeedback(`Status alterado para ${value}.`);
     try { await syncPresence({ status: value }); } catch (reason) { setFeedback(reason instanceof Error ? reason.message : 'Falha ao atualizar o status.'); }
   }
   useEffect(() => {
     const markActive = () => {
-      if (!user || statusRef.current !== 'Offline' || Date.now() - lastActivityRef.current < 5_000) return;
+      if (!user || statusRef.current !== 'Offline' || Date.now() < offlineDismissUntilRef.current || Date.now() - lastActivityRef.current < 5_000) return;
       lastActivityRef.current = Date.now();
       void updateStatus('Online');
     };
@@ -339,21 +341,41 @@ export function UserMenu() {
       document.removeEventListener('visibilitychange', visible);
     };
   }, [user]);
-  async function saveProfile() {
-    setFeedback('Salvando perfil...');
-    try { await syncPresence({ displayName: name, phone, photoUrl: photo }); localStorage.setItem('caju-profile-name', name); localStorage.setItem('caju-profile-phone', phone); setFeedback('Perfil atualizado.'); }
-    catch (reason) { setFeedback(reason instanceof Error ? reason.message : 'Falha ao salvar o perfil.'); }
-  }
-  function choosePhoto(file?: File) {
-    if (!file) return;
-    if (file.size > 650_000) { setFeedback('Escolha uma imagem de até 650 KB.'); return; }
-    const reader = new FileReader(); reader.onload = () => setPhoto(String(reader.result)); reader.readAsDataURL(file);
-  }
   const label = name || user?.email?.slice(0, 2).toUpperCase() || 'US';
   return <div className="relative mt-2 rounded-xl border border-border/70 bg-card/40 p-2 group-hover/sidebar:p-3">
     <button type="button" className="flex min-h-10 w-full items-center gap-3 text-left" onClick={() => setOpen((value) => !value)} aria-expanded={open}><div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">{photo ? <img src={photo} alt="Foto do perfil" className="size-full object-cover" /> : label.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1 opacity-0 transition-opacity group-hover/sidebar:opacity-100"><p className="truncate text-xs font-semibold">{name || user?.email}</p><p className="truncate text-xs text-muted-foreground">{role ? roleLabels[role] : 'Sem perfil'} · <span className="font-semibold text-emerald-300">{status}</span></p></div><ChevronUp className={`size-4 shrink-0 opacity-0 transition group-hover/sidebar:opacity-100 ${open ? '' : 'rotate-180'}`} /></button>
-    {open && <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 max-h-[min(72vh,34rem)] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-border bg-card p-4 shadow-2xl"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Meu status</p><div className="mt-2 grid gap-1">{statuses.map((item) => <button key={item} type="button" onClick={() => void updateStatus(item)} className={`flex min-h-11 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${status === item ? 'border-primary/50 bg-primary/15 font-bold text-primary' : 'border-transparent hover:bg-muted'}`}>{item}{status === item && <Check className="size-4 text-primary" />}</button>)}</div><div className="my-3 border-t border-border" /><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Meu perfil</p><label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 text-sm text-primary"><Camera className="size-4" />Alterar foto<input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label><label className="mt-2 block text-xs text-muted-foreground" htmlFor="profile-name">Nome de exibição</label><input id="profile-name" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={name} onChange={(event) => setName(event.target.value)} /><label className="mt-2 block text-xs text-muted-foreground" htmlFor="profile-phone">Telefone</label><input id="profile-phone" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={phone} onChange={(event) => setPhone(event.target.value)} /><button type="button" onClick={() => void saveProfile()} className="mt-3 h-10 w-full rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground">Salvar perfil</button>{feedback && <p role="status" aria-live="polite" className="mt-2 text-xs text-muted-foreground">{feedback}</p>}<button type="button" onClick={() => void signOut(auth)} className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted"><LogOut className="size-4" />Sair da conta</button></div>}
+    {open && <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-4 shadow-2xl"><p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Meu status</p><div className="mt-2 grid gap-1">{statuses.map((item) => <button key={item} type="button" onClick={() => void updateStatus(item)} className={`flex min-h-11 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${status === item ? 'border-primary/50 bg-primary/15 font-bold text-primary' : 'border-transparent hover:bg-muted'}`}>{item}{status === item && <Check className="size-4 text-primary" />}</button>)}</div><a href="/?view=settings" className="mt-3 flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-semibold text-primary transition hover:bg-muted">Editar perfil em Configurações</a>{feedback && <p role="status" aria-live="polite" className="mt-2 text-xs text-muted-foreground">{feedback}</p>}<button type="button" onClick={() => void signOut(auth)} className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted"><LogOut className="size-4" />Sair da conta</button></div>}
   </div>;
+}
+
+export function ProfileSettings() {
+  const { user } = useAuth();
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void user.getIdToken().then(async (token) => {
+      const response = await fetch('/api/colleagues', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const payload = await response.json() as { colleagues?: Colleague[] };
+      const profile = payload.colleagues?.find((item) => item.email.toLowerCase() === user.email?.toLowerCase());
+      if (active && profile) { setName(profile.displayName || ''); setPhone(profile.phone || ''); setPhoto(profile.photoUrl); }
+    }).catch(() => { if (active) setMessage('Não foi possível carregar perfil.'); });
+    return () => { active = false; };
+  }, [user]);
+  function choosePhoto(file?: File) {
+    if (!file) return;
+    if (file.size > 650_000) { setMessage('Escolha uma imagem de até 650 KB.'); return; }
+    const reader = new FileReader(); reader.onload = () => setPhoto(String(reader.result)); reader.readAsDataURL(file);
+  }
+  async function save() {
+    if (!user) return; setSaving(true); setMessage('');
+    try { const response = await fetch('/api/colleagues', { method: 'PATCH', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: name, phone, photoUrl: photo }) }); const payload = await response.json() as { error?: string }; if (!response.ok) throw new Error(payload.error || 'Falha ao salvar perfil.'); window.dispatchEvent(new Event('caju-presence-updated')); setMessage('Perfil atualizado.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Falha ao salvar perfil.'); } finally { setSaving(false); }
+  }
+  return <section className="surface-panel rounded-2xl p-5"><h2 className="font-semibold">Meu perfil</h2><p className="mt-1 text-sm text-muted-foreground">Foto, nome e telefone visíveis para colegas.</p><div className="mt-4 flex items-center gap-4"><div className="grid size-16 place-items-center overflow-hidden rounded-full border border-primary/30 bg-primary/10 text-sm font-bold text-primary">{photo ? <img src={photo} alt="Foto do perfil" className="size-full object-cover" /> : initials(name || user?.email || 'US')}</div><label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-primary"><Camera className="size-4" />Alterar foto<input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label></div><div className="mt-4 grid gap-3"><label className="text-xs font-semibold text-muted-foreground" htmlFor="settings-profile-name">Nome de exibição<input id="settings-profile-name" className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={name} onChange={(event) => setName(event.target.value)} /></label><label className="text-xs font-semibold text-muted-foreground" htmlFor="settings-profile-phone">Telefone<input id="settings-profile-phone" className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={phone} onChange={(event) => setPhone(event.target.value)} /></label><button type="button" disabled={saving} onClick={() => void save()} className="h-10 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar perfil'}</button>{message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}</div></section>;
 }
 
 function TicketShareCard({ ticketId, label, mine, onOpen }: { ticketId: string; label: string; mine: boolean; onOpen: () => void }) {
