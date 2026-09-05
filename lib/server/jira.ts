@@ -300,7 +300,10 @@ async function getFinancialFieldIds(projectKey: string): Promise<FinancialFieldI
     const discovered: FinancialFieldIds = {
       total: matchingIds((name) => (name.includes('ticket') || name.includes('chamado')) && (name.includes('total') || name.includes('valor'))),
       spare: matchingIds((name) => (name.includes('spare') || name.includes('equipamento')) && (name.includes('total') || name.includes('valor') || name.includes('custo'))),
-      technician: matchingIds((name) => name.includes('tecnic') && (name.includes('respons') || name.includes('campo') || name.includes('atendimento'))),
+      technician: [
+        ...matchingIds((name) => name === 'nomedotecnico' || name.includes('nomedotecnico')),
+        ...matchingIds((name) => name.includes('tecnic') && (name.includes('respons') || name.includes('campo') || name.includes('atendimento'))),
+      ],
       billed: matchingIds((name) => name.includes('faturad') || name.includes('cobrad')),
     };
     const ids = {
@@ -361,6 +364,10 @@ function toSummary(issue: JiraIssue): JiraIssueSummary {
 }
 
 function customFieldText(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const values = value.map(customFieldText).filter((item): item is string => Boolean(item));
+    return values.length ? values.join(', ') : null;
+  }
   if (typeof value === 'string') return value.trim() || null;
   if (typeof value === 'number') return String(value);
   if (value && typeof value === 'object') {
