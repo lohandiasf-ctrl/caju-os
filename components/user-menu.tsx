@@ -19,6 +19,10 @@ const statusColors: Record<Status, string> = {
   Online: 'bg-emerald-400', Ocupado: 'bg-rose-400', Almoçando: 'bg-amber-400',
   'Pausa de 15 minutos': 'bg-sky-400', Offline: 'bg-slate-500',
 };
+const statusTextColors: Record<Status, string> = {
+  Online: 'text-emerald-300', Ocupado: 'text-rose-300', Almoçando: 'text-amber-300',
+  'Pausa de 15 minutos': 'text-sky-300', Offline: 'text-slate-400',
+};
 
 export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketShareConsumed, onOpenTicket }: { tickets?: ChatTicket[]; ticketToShare?: ChatTicket | null; onTicketShareConsumed?: () => void; onOpenTicket?: (ticketId: string) => void }) {
   const { user } = useAuth();
@@ -27,10 +31,31 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
   const [chatTicket, setChatTicket] = useState<ChatTicket | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [colleaguesOpen, setColleaguesOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<NewMessageNotice | null>(null);
+  const [messageDot, setMessageDot] = useState(false);
   const latestIncomingId = useRef<number | null>(null);
   const colleaguesRef = useRef<Colleague[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sentDotTimerRef = useRef<number | null>(null);
+  const prepareNotificationSound = useCallback(() => {
+    try {
+      if (!audioContextRef.current) audioContextRef.current = new AudioContext();
+      if (audioContextRef.current.state === 'suspended') void audioContextRef.current.resume();
+    } catch { /* O indicador visual continua disponível quando o áudio não for suportado. */ }
+  }, []);
+  const playNotificationSound = useCallback((received: boolean) => {
+    const context = audioContextRef.current;
+    if (!context || context.state !== 'running') return;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(received ? 740 : 560, context.currentTime);
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.075, context.currentTime + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + (received ? 0.18 : 0.11));
+    oscillator.connect(gain).connect(context.destination); oscillator.start(); oscillator.stop(context.currentTime + (received ? 0.2 : 0.13));
+  }, []);
   const load = useCallback(async () => {
     if (!user) return;
     try {
@@ -47,6 +72,12 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     return () => { window.clearInterval(timer); window.removeEventListener('caju-presence-updated', refresh); };
   }, [load]);
   useEffect(() => { colleaguesRef.current = colleagues; }, [colleagues]);
+  useEffect(() => {
+    const unlock = () => prepareNotificationSound();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    return () => { window.removeEventListener('pointerdown', unlock); window.removeEventListener('keydown', unlock); };
+  }, [prepareNotificationSound]);
   useEffect(() => {
     if (!user) return;
     latestIncomingId.current = null;
@@ -68,7 +99,7 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
         const incoming = payload.messages ?? [];
         if (!incoming.length) return;
         const newest = incoming[incoming.length - 1];
-        setNotice({ message: newest, count: incoming.length });
+        setNotice({ message: newest, count: incoming.length }); setMessageDot(true); playNotificationSound(true);
         if (dismissTimer) window.clearTimeout(dismissTimer);
         dismissTimer = window.setTimeout(() => setNotice(null), 6_000);
         if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
@@ -80,25 +111,32 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     void poll();
     const timer = window.setInterval(() => void poll(), 5_000);
     return () => { active = false; window.clearInterval(timer); if (dismissTimer) window.clearTimeout(dismissTimer); };
-  }, [user]);
+  }, [playNotificationSound, user]);
   useEffect(() => { if (ticketToShare) setShareOpen(true); }, [ticketToShare]);
-  const openChat = (colleague: Colleague) => { setChatTicket(null); setSelected(colleague); setMobileOpen(false); };
+  const openChat = (colleague: Colleague) => { setChatTicket(null); setSelected(colleague); setMobileOpen(false); setColleaguesOpen(false); };
   const chooseShareRecipient = (colleague: Colleague) => {
     if (!ticketToShare) return;
-    setChatTicket(ticketToShare); setSelected(colleague); setShareOpen(false); setMobileOpen(false); onTicketShareConsumed?.();
+    setChatTicket(ticketToShare); setSelected(colleague); setShareOpen(false); setMobileOpen(false); setColleaguesOpen(false); onTicketShareConsumed?.();
   };
   const list = <ColleagueList colleagues={colleagues} loading={loading} onSelect={openChat} />;
   const shareList = <ColleagueList colleagues={colleagues} loading={loading} onSelect={chooseShareRecipient} />;
   const noticeSender = notice ? colleagues.find((item) => item.email.toLowerCase() === notice.message.senderEmail.toLowerCase()) : null;
+  function indicateSentMessage() {
+    prepareNotificationSound(); playNotificationSound(false); setMessageDot(true);
+    if (sentDotTimerRef.current !== null) window.clearTimeout(sentDotTimerRef.current);
+    sentDotTimerRef.current = window.setTimeout(() => setMessageDot(false), 3_500);
+  }
+  function toggleColleagues() { setColleaguesOpen((open) => { const next = !open; if (next) setMessageDot(false); return next; }); }
   return <>
-    <aside className="colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl xl:flex" aria-label="Colegas">
-      <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-[11px] text-muted-foreground">Equipe e disponibilidade</p></div><div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Users className="size-4" aria-hidden="true" /></div></div>
+    <button type="button" onClick={toggleColleagues} aria-label={colleaguesOpen ? 'Fechar colegas' : messageDot ? 'Abrir colegas, nova atividade no chat' : 'Abrir colegas'} aria-expanded={colleaguesOpen} className="fixed right-4 top-[84px] z-40 hidden size-11 place-items-center rounded-xl border border-primary/30 bg-sidebar text-primary shadow-xl transition hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:grid"><Users className="size-5" aria-hidden="true" />{messageDot && <span className="absolute right-1.5 top-1.5 size-2.5 animate-pulse rounded-full border-2 border-sidebar bg-emerald-400" />}</button>
+    <aside inert={!colleaguesOpen} className={`colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? 'translate-x-0' : 'pointer-events-none translate-x-[calc(100%+1.5rem)]'}`} aria-label="Colegas" aria-hidden={!colleaguesOpen}>
+      <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-[11px] text-muted-foreground">Equipe e disponibilidade</p></div><button type="button" onClick={toggleColleagues} className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary/20" aria-label="Fechar colegas"><Users className="size-4" aria-hidden="true" /></button></div>
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">{list}</div>
     </aside>
-    <button type="button" onClick={() => setMobileOpen(true)} className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden" aria-label="Abrir colegas"><Users className="size-5" /></button>
+    <button type="button" onClick={() => { setMobileOpen(true); setMessageDot(false); }} className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden" aria-label={messageDot ? 'Abrir colegas, nova atividade no chat' : 'Abrir colegas'}><Users className="size-5" />{messageDot && <span className="absolute right-0.5 top-0.5 size-3 animate-pulse rounded-full border-2 border-background bg-emerald-400" />}</button>
     <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader>{list}</DialogContent></Dialog>
     <Dialog open={shareOpen} onOpenChange={setShareOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md"><DialogHeader><DialogTitle>Enviar chamado por chat</DialogTitle><DialogDescription>{ticketToShare ? `Escolha um colega para receber o chamado ${ticketToShare.id}.` : 'Escolha um colega.'}</DialogDescription></DialogHeader>{shareList}</DialogContent></Dialog>
-    <ChatDialog colleague={selected} tickets={tickets} initialTicket={chatTicket} onClose={() => { setSelected(null); setChatTicket(null); }} onOpenTicket={onOpenTicket} />
+    <ChatDialog colleague={selected} tickets={tickets} initialTicket={chatTicket} onClose={() => { setSelected(null); setChatTicket(null); }} onOpenTicket={onOpenTicket} onMessageSent={indicateSentMessage} />
     {notice && <div aria-live="assertive" className="fixed right-4 top-4 z-[80] flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10">
       <button type="button" onClick={() => { if (noticeSender) openChat(noticeSender); setNotice(null); }} className="flex min-w-0 flex-1 items-start gap-3 rounded-l-2xl p-4 text-left transition hover:bg-muted" aria-label="Abrir nova mensagem">
         <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-xs font-bold text-primary">{noticeSender?.photoUrl ? <img src={noticeSender.photoUrl} alt="" className="size-full object-cover" /> : initials(noticeSender?.displayName || notice.message.senderEmail)}</span>
@@ -116,13 +154,13 @@ function ColleagueList({ colleagues, loading, onSelect }: { colleagues: Colleagu
     const name = colleague.displayName || colleague.email.split('@')[0];
     return <button key={colleague.email} type="button" onClick={() => onSelect(colleague)} className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition hover:border-border hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Conversar com ${name}, status ${colleague.status}`}>
       <span className="relative grid size-8 shrink-0 place-items-center overflow-visible rounded-full border border-white/10 bg-muted text-[10px] font-bold text-foreground">{colleague.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full rounded-full object-cover" /> : initials(name)}<span className={`absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-sidebar ${statusColors[colleague.status]}`} /></span>
-      <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{name}</span><span className="block truncate text-[11px] text-muted-foreground">{roleLabels[colleague.role]} · {colleague.status}</span></span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{name}</span><span className="block truncate text-[11px]"><span className="text-muted-foreground">{roleLabels[colleague.role]} · </span><span className={`font-medium ${statusTextColors[colleague.status]}`}>{colleague.status}</span></span></span>
       <MessageCircle className="size-4 shrink-0 text-muted-foreground transition group-hover:text-primary" aria-hidden="true" />
     </button>;
   })}</div>;
 }
 
-function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket }: { colleague: Colleague | null; tickets: ChatTicket[]; initialTicket?: ChatTicket | null; onClose: () => void; onOpenTicket?: (ticketId: string) => void }) {
+function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket, onMessageSent }: { colleague: Colleague | null; tickets: ChatTicket[]; initialTicket?: ChatTicket | null; onClose: () => void; onOpenTicket?: (ticketId: string) => void; onMessageSent?: () => void }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -221,7 +259,7 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket }
       const response = await fetch('/api/messages', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to: colleague.email, body: messageText, attachment }) });
       const payload = await response.json() as { message?: Message; error?: string };
       if (!response.ok || !payload.message) throw new Error(payload.error || 'Falha ao enviar a mensagem.');
-      setMessages((current) => [...current, payload.message!]); setDraft(''); setTicketRef(''); setAttachment(null);
+      setMessages((current) => [...current, payload.message!]); setDraft(''); setTicketRef(''); setAttachment(null); onMessageSent?.();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Falha ao enviar a mensagem.'); }
     finally { setSending(false); }
   }
