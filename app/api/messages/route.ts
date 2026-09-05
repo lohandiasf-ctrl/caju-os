@@ -22,16 +22,19 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const current = await requireApiUser(request);
-    const payload = await request.json() as { to?: string; body?: string };
+    const payload = await request.json() as { to?: string; body?: string; attachment?: { name?: string; type?: string; data?: string } };
     const to = payload.to?.trim().toLowerCase();
     const body = payload.body?.trim();
-    if (!to || !body) return Response.json({ error: 'Escreva uma mensagem.' }, { status: 400 });
+    const attachment = payload.attachment?.data ? { name: payload.attachment.name?.trim() || 'Anexo', type: payload.attachment.type?.trim() || 'application/octet-stream', data: payload.attachment.data } : null;
+    if (!to || (!body && !attachment)) return Response.json({ error: 'Escreva uma mensagem ou anexe um arquivo.' }, { status: 400 });
+    const messageBody = body || '';
     if (to === current.email.toLowerCase()) return Response.json({ error: 'Escolha outro colega.' }, { status: 400 });
-    if (body.length > 2000) return Response.json({ error: 'A mensagem deve ter até 2.000 caracteres.' }, { status: 400 });
+    if (messageBody.length > 2000) return Response.json({ error: 'A mensagem deve ter até 2.000 caracteres.' }, { status: 400 });
+    if (attachment && attachment.data.length > 4_000_000) return Response.json({ error: 'O anexo deve ter até 3 MB.' }, { status: 400 });
     const recipient = await getDb().select({ active: appUsers.active }).from(appUsers).where(eq(appUsers.email, to)).get();
     if (!recipient?.active) return Response.json({ error: 'Colega não encontrado.' }, { status: 404 });
     const now = new Date().toISOString();
-    const inserted = await getDb().insert(employeeMessages).values({ senderEmail: current.email, recipientEmail: to, body, createdAt: now }).returning().get();
+    const inserted = await getDb().insert(employeeMessages).values({ senderEmail: current.email, recipientEmail: to, body: messageBody, attachmentName: attachment?.name, attachmentType: attachment?.type, attachmentData: attachment?.data, createdAt: now }).returning().get();
     return Response.json({ message: inserted }, { status: 201 });
   } catch (error) {
     if (error instanceof Response) return error;

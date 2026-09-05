@@ -117,6 +117,9 @@ export const employeeMessages = sqliteTable('employee_messages', {
   senderEmail: text('sender_email').notNull(),
   recipientEmail: text('recipient_email').notNull(),
   body: text('body').notNull(),
+  attachmentName: text('attachment_name'),
+  attachmentType: text('attachment_type'),
+  attachmentData: text('attachment_data'),
   createdAt: text('created_at').notNull(),
   readAt: text('read_at'),
 }, (table) => [

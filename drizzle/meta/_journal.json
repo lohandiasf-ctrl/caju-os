@@ -43,6 +43,13 @@
       "when": 1788630358556,
       "tag": "0005_new_king_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788631235542,
+      "tag": "0006_loose_hellion",
+      "breakpoints": true
     }
   ]
 }
