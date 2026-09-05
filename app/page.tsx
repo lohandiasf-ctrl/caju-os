@@ -208,26 +208,25 @@ export default function Home() {
   }, []);
 
   return <main className="min-h-screen text-foreground">
-    <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
+    <aside className={`group/sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-visible border-r border-sidebar-border bg-sidebar px-4 py-5 transition-[width,transform] duration-200 lg:w-[76px] lg:translate-x-0 lg:hover:w-[252px] motion-reduce:transition-none ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex h-12 items-center gap-3 px-2">
         <div className="grid size-10 place-items-center overflow-hidden rounded-xl border border-primary/30 bg-black shadow-[0_10px_30px_rgba(240,122,63,.18)]"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></div>
-        <div><div className="text-[15px] font-extrabold tracking-tight">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando operacional</div></div>
+        <div className="whitespace-nowrap opacity-100 transition-opacity lg:opacity-0 lg:group-hover/sidebar:opacity-100"><div className="text-[15px] font-extrabold tracking-tight">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando operacional</div></div>
       </div>
       <nav className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-4 pr-1" aria-label="Navegacao principal">
-        <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Operacao</p>
+        <p className="mb-3 whitespace-nowrap px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover/sidebar:opacity-100">Operação</p>
         {nav.filter(([label]) => role === 'gerencia' || (role === 'n1' ? !['Financeiro', 'Spares', 'Projetos e lojas'].includes(label) : !['Financeiro', 'Spares', 'Central N1', 'Projetos e lojas', 'Técnicos'].includes(label))).map(([label, Icon, href, key]) => {
           const isActive = key === activeView;
-          return <a href={href} onClick={(event) => navigate(event, href)} key={label} aria-current={isActive ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition ${isActive ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary),0_8px_24px_rgba(0,0,0,.12)]' : 'text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground'}`}><Icon aria-hidden="true" className={`size-[18px] ${isActive ? 'text-primary' : ''}`} />{label}</a>;
+          return <a href={href} onClick={(event) => navigate(event, href)} key={label} aria-label={label} aria-current={isActive ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-xl px-3 text-left text-sm font-medium transition ${isActive ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary),0_8px_24px_rgba(0,0,0,.12)]' : 'text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground'}`}><Icon aria-hidden="true" className={`size-[18px] shrink-0 ${isActive ? 'text-primary' : ''}`} /><span className="whitespace-nowrap opacity-100 transition-opacity lg:opacity-0 lg:group-hover/sidebar:opacity-100">{label}</span></a>;
         })}
       </nav>
-      <ColleaguesPanel />
       <div className="shrink-0 border-t border-sidebar-border pt-3">
-        {role === 'gerencia' && <a href="/?view=settings" onClick={(event) => navigate(event, '/?view=settings')} aria-current={activeView === 'settings' ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm transition ${activeView === 'settings' ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Settings aria-hidden="true" className="size-[18px]" /> Configurações</a>}
+        {role === 'gerencia' && <a href="/?view=settings" onClick={(event) => navigate(event, '/?view=settings')} aria-label="Configurações" aria-current={activeView === 'settings' ? 'page' : undefined} className={`flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-xl px-3 text-sm transition ${activeView === 'settings' ? 'bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]' : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'}`}><Settings aria-hidden="true" className="size-[18px] shrink-0" /><span className="whitespace-nowrap opacity-100 transition-opacity lg:opacity-0 lg:group-hover/sidebar:opacity-100">Configurações</span></a>}
         <UserMenu />
       </div>
     </aside>
     {menu && <button aria-label="Fechar menu" className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setMenu(false)} />}
-    <section className="min-h-screen lg:pl-[252px]">
+    <section className="min-h-screen lg:pl-[92px] xl:pr-[280px]">
       <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-5">
         <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menu" onClick={() => setMenu(true)}><Menu /></Button>
         <div className="relative max-w-[440px] flex-1"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar chamado, loja ou tecnico..." className="h-10 bg-card pl-9" /></div>
@@ -256,6 +255,7 @@ export default function Home() {
         {activeView === 'settings' && <><SettingsView email={user?.email ?? ''} role={role} jiraError={jiraError} user={user} /><EmployeeInvitePanel user={user} /></>}
       </div>
     </section>
+    <ColleaguesPanel />
     <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>

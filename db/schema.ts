@@ -102,3 +102,24 @@ export const financeSettings = sqliteTable('finance_settings', {
   updatedBy: text('updated_by').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+export const employeePresence = sqliteTable('employee_presence', {
+  email: text('email').primaryKey(),
+  displayName: text('display_name'),
+  phone: text('phone'),
+  photoUrl: text('photo_url'),
+  status: text('status', { enum: ['Online', 'Ocupado', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] }).notNull().default('Online'),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const employeeMessages = sqliteTable('employee_messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  senderEmail: text('sender_email').notNull(),
+  recipientEmail: text('recipient_email').notNull(),
+  body: text('body').notNull(),
+  createdAt: text('created_at').notNull(),
+  readAt: text('read_at'),
+}, (table) => [
+  index('idx_employee_messages_sender_recipient').on(table.senderEmail, table.recipientEmail, table.createdAt),
+  index('idx_employee_messages_recipient_read').on(table.recipientEmail, table.readAt),
+]);
