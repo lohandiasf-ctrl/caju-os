@@ -1,5 +1,5 @@
 import { asc, eq } from 'drizzle-orm';
-import { operationalStores, operationalVisits, operationalWorkflows } from '@/db/schema';
+import { operationalAudit, operationalStores, operationalVisits, operationalWorkflows } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 
@@ -20,11 +20,12 @@ export async function GET(request: Request) {
     if (!ticket) return Response.json({ workflows: await db.select().from(operationalWorkflows).orderBy(asc(operationalWorkflows.updatedAt)).all() });
     const workflow = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, ticket)).get();
     if (!workflow) return Response.json({ workflow: null, visits: [], store: null });
-    const [visits, store] = await Promise.all([
+    const [visits, store, audit] = await Promise.all([
       db.select().from(operationalVisits).where(eq(operationalVisits.workflowId, workflow.id)).orderBy(asc(operationalVisits.visitNumber)).all(),
       workflow.storeCode ? db.select().from(operationalStores).where(eq(operationalStores.code, workflow.storeCode)).get() : Promise.resolve(null),
+      db.select().from(operationalAudit).where(eq(operationalAudit.ticketKey, ticket)).orderBy(asc(operationalAudit.createdAt)).all(),
     ]);
-    return Response.json({ workflow, visits, store });
+    return Response.json({ workflow, visits, store, audit });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: 'Não foi possível carregar gestão operacional.' }, { status: 500 });
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const user = await requireApiUser(request, ['gerencia', 'n1']);
+    const user = await requireApiUser(request, ['gerencia', 'coordenador', 'n1']);
     const body = await request.json() as Record<string, unknown>;
     const ticketKey = clean(body.ticketKey, 100);
     if (!ticketKey) return bad('Informe chamado.');
@@ -55,6 +56,7 @@ export async function PUT(request: Request) {
       const result = await db.insert(operationalWorkflows).values({ ticketKey, ...fields, createdBy: user.email, createdAt: now, updatedAt: now }).returning({ id: operationalWorkflows.id }).get();
       workflowId = result.id;
     }
+    await db.insert(operationalAudit).values({ ticketKey, action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`, actorEmail: user.email, details: JSON.stringify({ status, technicianId, scheduledAt }), createdAt: now });
     const storeCode = clean(body.storeCode, 80);
     if (storeCode && clean(body.storeName, 180) && clean(body.address, 400) && clean(body.city, 100) && clean(body.state, 10)) {
       await db.insert(operationalStores).values({

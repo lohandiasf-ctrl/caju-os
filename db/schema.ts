@@ -4,7 +4,7 @@ export const appUsers = sqliteTable('app_users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   firebaseUid: text('firebase_uid').notNull(),
   email: text('email').notNull(),
-  role: text('role', { enum: ['gerencia', 'n1', 'analista'] }).notNull(),
+  role: text('role', { enum: ['gerencia', 'coordenador', 'n1', 'analista', 'tecnico'] }).notNull(),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
@@ -178,3 +178,13 @@ export const ticketEvidence = sqliteTable('ticket_evidence', {
   uploadedBy: text('uploaded_by').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [index('idx_ticket_evidence_ticket').on(table.ticketKey, table.createdAt)]);
+
+// Append-only operational trail. Never update or delete these records.
+export const operationalAudit = sqliteTable('operational_audit', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketKey: text('ticket_key').notNull(),
+  action: text('action').notNull(),
+  actorEmail: text('actor_email').notNull(),
+  details: text('details'),
+  createdAt: text('created_at').notNull(),
+}, (table) => [index('idx_operational_audit_ticket').on(table.ticketKey, table.createdAt)]);

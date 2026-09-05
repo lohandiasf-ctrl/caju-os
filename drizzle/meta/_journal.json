@@ -64,6 +64,13 @@
       "when": 1788644848194,
       "tag": "0008_goofy_tattoo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788646978917,
+      "tag": "0009_stale_kree",
+      "breakpoints": true
     }
   ]
 }

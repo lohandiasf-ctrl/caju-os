@@ -8,10 +8,10 @@ const FIREBASE_API_KEY = 'AIzaSyBOiiBRwuN8VKZ-l2MFqaqQJ8sOc8zAXP4';
 export async function POST(request: Request) {
   try {
     const manager = await requireApiUser(request, ['gerencia']);
-    const body = await request.json() as { email?: string; role?: 'gerencia' | 'n1' | 'analista' };
+    const body = await request.json() as { email?: string; role?: 'gerencia' | 'coordenador' | 'n1' | 'analista' | 'tecnico' };
     const email = body.email?.trim().toLowerCase();
     const role = body.role;
-    if (!email || !/^\S+@\S+\.\S+$/.test(email) || !role) return NextResponse.json({ error: 'Informe um e-mail válido e uma hierarquia.' }, { status: 400 });
+    if (!email || !/^\S+@\S+\.\S+$/.test(email) || !role || !['gerencia', 'coordenador', 'n1', 'analista', 'tecnico'].includes(role)) return NextResponse.json({ error: 'Informe um e-mail válido e uma hierarquia.' }, { status: 400 });
     const temporaryPassword = `${crypto.randomUUID()}Aa9!`;
     const signUp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: temporaryPassword, returnSecureToken: true }) });
     const account = await signUp.json() as { localId?: string; error?: { message?: string } };
