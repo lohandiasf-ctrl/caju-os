@@ -1,4 +1,4 @@
-import { and, asc, eq, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, or } from 'drizzle-orm';
 import { appUsers, employeeMessages } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
@@ -6,7 +6,22 @@ import { requireApiUser } from '@/lib/server/firebase-auth';
 export async function GET(request: Request) {
   try {
     const current = await requireApiUser(request);
-    const colleague = new URL(request.url).searchParams.get('with')?.trim().toLowerCase();
+    const searchParams = new URL(request.url).searchParams;
+    if (searchParams.get('latestIncoming') === '1') {
+      const latest = await getDb().select({ id: employeeMessages.id }).from(employeeMessages)
+        .where(eq(employeeMessages.recipientEmail, current.email)).orderBy(desc(employeeMessages.id)).limit(1).get();
+      return Response.json({ latestMessageId: latest?.id ?? 0 }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+    const incomingAfterValue = searchParams.get('incomingAfter');
+    if (incomingAfterValue !== null) {
+      const incomingAfter = Number(incomingAfterValue);
+      if (!Number.isSafeInteger(incomingAfter) || incomingAfter < 0) return Response.json({ error: 'Referência de mensagem inválida.' }, { status: 400 });
+      const messages = await getDb().select().from(employeeMessages)
+        .where(and(eq(employeeMessages.recipientEmail, current.email), gt(employeeMessages.id, incomingAfter)))
+        .orderBy(asc(employeeMessages.id)).limit(20).all();
+      return Response.json({ messages, latestMessageId: messages.at(-1)?.id ?? incomingAfter }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+    const colleague = searchParams.get('with')?.trim().toLowerCase();
     if (!colleague) return Response.json({ error: 'Colega não informado.' }, { status: 400 });
     const messages = await getDb().select().from(employeeMessages).where(or(
       and(eq(employeeMessages.senderEmail, current.email), eq(employeeMessages.recipientEmail, colleague)),
@@ -32,7 +47,8 @@ export async function POST(request: Request) {
     const messageBody = body || '';
     if (to === current.email.toLowerCase()) return Response.json({ error: 'Escolha outro colega.' }, { status: 400 });
     if (messageBody.length > 2000) return Response.json({ error: 'A mensagem deve ter até 2.000 caracteres.' }, { status: 400 });
-    if (attachment && !attachment.type.startsWith('image/') && attachment.type !== 'application/pdf') return Response.json({ error: 'Só é permitido enviar fotos ou PDFs.' }, { status: 400 });
+    if (attachment && !attachment.type.startsWith('image/') && !attachment.type.startsWith('audio/') && attachment.type !== 'application/pdf') return Response.json({ error: 'Só é permitido enviar imagens, áudios ou PDFs.' }, { status: 400 });
+    if (attachment && !attachment.data.startsWith('data:')) return Response.json({ error: 'Formato de anexo inválido.' }, { status: 400 });
     if (attachment && attachment.data.length > 1_000_000) return Response.json({ error: 'O anexo deve ter até 750 KB para manter o chat rápido.' }, { status: 400 });
     const recipient = await getDb().select({ active: appUsers.active }).from(appUsers).where(eq(appUsers.email, to)).get();
     if (!recipient?.active) return Response.json({ error: 'Colega não encontrado.' }, { status: 404 });

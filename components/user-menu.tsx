@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Check, ChevronUp, ClipboardList, ExternalLink, File, Loader2, LogOut, MessageCircle, Paperclip, Send, Users } from 'lucide-react';
+import { Camera, Check, ChevronUp, ClipboardList, ExternalLink, File, FileAudio, Loader2, LogOut, MessageCircle, Mic, Paperclip, Send, Square, Users, X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
@@ -13,6 +13,7 @@ export type Status = typeof statuses[number];
 type Colleague = { email: string; role: 'gerencia' | 'n1' | 'analista'; displayName: string | null; phone: string | null; photoUrl: string | null; status: Status; updatedAt: string | null };
 type Message = { id: number; senderEmail: string; recipientEmail: string; body: string; attachmentName?: string | null; attachmentType?: string | null; attachmentData?: string | null; createdAt: string; readAt: string | null };
 type ChatTicket = { id: string; title: string; store: string; city: string };
+type NewMessageNotice = { message: Message; count: number };
 
 const statusColors: Record<Status, string> = {
   Online: 'bg-emerald-400', Ocupado: 'bg-rose-400', Almoçando: 'bg-amber-400',
@@ -27,6 +28,9 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState<NewMessageNotice | null>(null);
+  const latestIncomingId = useRef<number | null>(null);
+  const colleaguesRef = useRef<Colleague[]>([]);
   const load = useCallback(async () => {
     if (!user) return;
     try {
@@ -42,6 +46,41 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     window.addEventListener('caju-presence-updated', refresh);
     return () => { window.clearInterval(timer); window.removeEventListener('caju-presence-updated', refresh); };
   }, [load]);
+  useEffect(() => { colleaguesRef.current = colleagues; }, [colleagues]);
+  useEffect(() => {
+    if (!user) return;
+    latestIncomingId.current = null;
+    let active = true;
+    let dismissTimer: number | undefined;
+    const poll = async () => {
+      try {
+        const token = await user.getIdToken();
+        if (latestIncomingId.current === null) {
+          const baselineResponse = await fetch('/api/messages?latestIncoming=1', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+          const baseline = await baselineResponse.json() as { latestMessageId?: number };
+          if (active && baselineResponse.ok) latestIncomingId.current = baseline.latestMessageId ?? 0;
+          return;
+        }
+        const response = await fetch(`/api/messages?incomingAfter=${latestIncomingId.current}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+        const payload = await response.json() as { messages?: Message[]; latestMessageId?: number };
+        if (!active || !response.ok) return;
+        latestIncomingId.current = payload.latestMessageId ?? latestIncomingId.current;
+        const incoming = payload.messages ?? [];
+        if (!incoming.length) return;
+        const newest = incoming[incoming.length - 1];
+        setNotice({ message: newest, count: incoming.length });
+        if (dismissTimer) window.clearTimeout(dismissTimer);
+        dismissTimer = window.setTimeout(() => setNotice(null), 6_000);
+        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+          const sender = colleaguesRef.current.find((item) => item.email.toLowerCase() === newest.senderEmail.toLowerCase());
+          new Notification(`Nova mensagem de ${sender?.displayName || newest.senderEmail.split('@')[0]}`, { body: newest.body || newest.attachmentName || 'Novo anexo' });
+        }
+      } catch { /* A próxima atualização tenta novamente sem interromper o painel. */ }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 5_000);
+    return () => { active = false; window.clearInterval(timer); if (dismissTimer) window.clearTimeout(dismissTimer); };
+  }, [user]);
   useEffect(() => { if (ticketToShare) setShareOpen(true); }, [ticketToShare]);
   const openChat = (colleague: Colleague) => { setChatTicket(null); setSelected(colleague); setMobileOpen(false); };
   const chooseShareRecipient = (colleague: Colleague) => {
@@ -50,6 +89,7 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
   };
   const list = <ColleagueList colleagues={colleagues} loading={loading} onSelect={openChat} />;
   const shareList = <ColleagueList colleagues={colleagues} loading={loading} onSelect={chooseShareRecipient} />;
+  const noticeSender = notice ? colleagues.find((item) => item.email.toLowerCase() === notice.message.senderEmail.toLowerCase()) : null;
   return <>
     <aside className="colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl xl:flex" aria-label="Colegas">
       <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-[11px] text-muted-foreground">Equipe e disponibilidade</p></div><div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Users className="size-4" aria-hidden="true" /></div></div>
@@ -59,6 +99,13 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader>{list}</DialogContent></Dialog>
     <Dialog open={shareOpen} onOpenChange={setShareOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md"><DialogHeader><DialogTitle>Enviar chamado por chat</DialogTitle><DialogDescription>{ticketToShare ? `Escolha um colega para receber o chamado ${ticketToShare.id}.` : 'Escolha um colega.'}</DialogDescription></DialogHeader>{shareList}</DialogContent></Dialog>
     <ChatDialog colleague={selected} tickets={tickets} initialTicket={chatTicket} onClose={() => { setSelected(null); setChatTicket(null); }} onOpenTicket={onOpenTicket} />
+    {notice && <div aria-live="assertive" className="fixed right-4 top-4 z-[80] flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10">
+      <button type="button" onClick={() => { if (noticeSender) openChat(noticeSender); setNotice(null); }} className="flex min-w-0 flex-1 items-start gap-3 rounded-l-2xl p-4 text-left transition hover:bg-muted" aria-label="Abrir nova mensagem">
+        <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-xs font-bold text-primary">{noticeSender?.photoUrl ? <img src={noticeSender.photoUrl} alt="" className="size-full object-cover" /> : initials(noticeSender?.displayName || notice.message.senderEmail)}</span>
+        <span className="min-w-0 flex-1"><span className="block text-sm font-bold">{notice.count > 1 ? `${notice.count} novas mensagens` : 'Nova mensagem'} de {noticeSender?.displayName || notice.message.senderEmail.split('@')[0]}</span><span className="mt-0.5 block truncate text-xs text-muted-foreground">{notice.message.body || notice.message.attachmentName || 'Novo anexo'}</span></span>
+      </button>
+      <button type="button" onClick={() => setNotice(null)} className="m-2 grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Fechar aviso"><X className="size-4" /></button>
+    </div>}
   </>;
 }
 
@@ -84,7 +131,11 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket }
   const [error, setError] = useState('');
   const [attachment, setAttachment] = useState<{ name: string; type: string; data: string } | null>(null);
   const [ticketRef, setTicketRef] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<number | null>(null);
   const loadMessages = useCallback(async (quiet = false) => {
     if (!user || !colleague) return;
     if (!quiet) setLoading(true);
@@ -113,6 +164,52 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket }
     // as a cleanup function and crashes the chat on message updates.
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+  useEffect(() => () => {
+    if (recordingIntervalRef.current !== null) window.clearInterval(recordingIntervalRef.current);
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+    recorder?.stream.getTracks().forEach((track) => track.stop());
+  }, []);
+  function readAttachment(file: File) {
+    const valid = file.type.startsWith('image/') || file.type.startsWith('audio/') || file.type === 'application/pdf';
+    if (!valid) { setError('Envie uma imagem, áudio ou PDF.'); return; }
+    if (file.size > 700_000) { setError('O anexo deve ter até 700 KB para manter o chat rápido.'); return; }
+    const reader = new FileReader();
+    reader.onload = () => { if (typeof reader.result === 'string') { setAttachment({ name: file.name, type: file.type, data: reader.result }); setError(''); } };
+    reader.onerror = () => setError('Não foi possível ler este anexo.');
+    reader.readAsDataURL(file);
+  }
+  async function startRecording() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') { setError('A gravação de áudio não é compatível com este dispositivo.'); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const preferredType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((type) => MediaRecorder.isTypeSupported(type));
+      let recorder: MediaRecorder;
+      try { recorder = new MediaRecorder(stream, { ...(preferredType ? { mimeType: preferredType } : {}), audioBitsPerSecond: 32_000 }); }
+      catch { recorder = new MediaRecorder(stream); }
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onerror = () => { setError('A gravação foi interrompida. Tente novamente.'); setRecording(false); stream.getTracks().forEach((track) => track.stop()); };
+      recorder.onstop = () => {
+        if (recordingIntervalRef.current !== null) window.clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null; setRecording(false); stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(chunks, { type: recorder.mimeType || preferredType || 'audio/webm' });
+        if (!blob.size) return;
+        if (blob.size > 700_000) { setError('O áudio ficou muito grande. Grave uma mensagem mais curta.'); return; }
+        const extension = blob.type.includes('mp4') ? 'm4a' : 'webm';
+        readAttachment(new window.File([blob], `audio-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`, { type: blob.type }));
+      };
+      recorderRef.current = recorder; setRecordingSeconds(0); setError(''); setRecording(true); recorder.start(500);
+      recordingIntervalRef.current = window.setInterval(() => setRecordingSeconds((seconds) => {
+        if (seconds >= 89 && recorder.state !== 'inactive') recorder.stop();
+        return seconds + 1;
+      }), 1_000);
+    } catch { setError('Não foi possível acessar o microfone. Verifique a permissão do aplicativo.'); }
+  }
+  function stopRecording() {
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+  }
   async function sendMessage(event: React.FormEvent) {
     event.preventDefault();
     if (!user || !colleague || (!draft.trim() && !attachment && !ticketRef) || sending) return;
@@ -130,11 +227,24 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket }
   }
   const name = colleague?.displayName || colleague?.email.split('@')[0] || '';
   function openSharedTicket(ticketId: string) { onClose(); onOpenTicket?.(ticketId); }
-  return <Dialog open={Boolean(colleague)} onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="grid h-[min(620px,88vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
+  return <Dialog open={Boolean(colleague)} onOpenChange={(open) => { if (!open) { stopRecording(); onClose(); } }}><DialogContent className="grid h-[min(620px,88vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
     <DialogHeader className="border-b border-border p-4 pr-14"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">{colleague?.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full object-cover" /> : initials(name)}</span><div><DialogTitle>{name}</DialogTitle><DialogDescription>{colleague?.status} · {colleague?.email}</DialogDescription></div></div></DialogHeader>
-    <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); const parsed = parseTicketMessage(message.body, tickets); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{parsed.text && <p className="whitespace-pre-wrap break-words text-sm">{parsed.text}</p>}{parsed.ticketId && <TicketShareCard ticketId={parsed.ticketId} label={parsed.ticketLabel} mine={mine} onOpen={() => openSharedTicket(parsed.ticketId!)} />}{message.attachmentData && <a href={message.attachmentData} download={message.attachmentName || 'anexo'} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-2 text-xs font-semibold underline"><File className="size-4" />{message.attachmentName || 'Abrir anexo'}</a>}<p className={`mt-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
-    <form onSubmit={sendMessage} className="border-t border-border bg-card p-3"><div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar foto ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 750_000) { setError('O anexo deve ter até 750 KB.'); return; } const reader = new FileReader(); reader.onload = () => setAttachment({ name: file.name, type: file.type, data: String(reader.result) }); reader.onerror = () => setError('Não foi possível ler este anexo.'); reader.readAsDataURL(file); event.currentTarget.value = ''; }} /></label><select aria-label="Enviar chamado" value={ticketRef} onChange={(event) => setTicketRef(event.target.value)} className="h-11 max-w-36 rounded-xl border border-input bg-background px-2 text-xs"><option value="">Chamado...</option>{tickets.slice(0, 100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select><button type="submit" disabled={(!draft.trim() && !attachment && !ticketRef) || sending} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div>{attachment && <p className="mt-2 truncate text-xs text-muted-foreground">Anexo: {attachment.name}</p>}{ticketRef && <p className="mt-2 truncate text-xs text-muted-foreground">Chamado selecionado: {ticketRef}</p>}</form>
+    <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); const parsed = parseTicketMessage(message.body, tickets); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{parsed.text && <p className="whitespace-pre-wrap break-words text-sm">{parsed.text}</p>}{parsed.ticketId && <TicketShareCard ticketId={parsed.ticketId} label={parsed.ticketLabel} mine={mine} onOpen={() => openSharedTicket(parsed.ticketId!)} />}<MessageAttachment message={message} mine={mine} /><p className={`mt-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
+    <form onSubmit={sendMessage} className="border-t border-border bg-card p-3">{recording && <div role="status" aria-live="polite" className="mb-2 flex min-h-10 items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 text-sm text-rose-200"><span className="size-2 animate-pulse rounded-full bg-rose-400" />Gravando áudio · {formatDuration(recordingSeconds)}<span className="ml-auto text-xs text-rose-200/70">máx. 1:30</span></div>}<div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar imagem, áudio ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,audio/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) readAttachment(file); event.currentTarget.value = ''; }} /></label><button type="button" onClick={() => recording ? stopRecording() : void startRecording()} className={`grid size-11 shrink-0 place-items-center rounded-xl border transition ${recording ? 'border-rose-400/50 bg-rose-400/15 text-rose-300' : 'border-input bg-background hover:bg-muted'}`} aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}>{recording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}</button><button type="submit" disabled={(!draft.trim() && !attachment && !ticketRef) || sending || recording} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div><select aria-label="Enviar chamado" value={ticketRef} onChange={(event) => setTicketRef(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-input bg-background px-3 text-xs"><option value="">Anexar um chamado da lista...</option>{tickets.slice(0, 100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select>{attachment && <AttachmentPreview attachment={attachment} onRemove={() => setAttachment(null)} />}{ticketRef && <p className="mt-2 truncate text-xs text-muted-foreground">Chamado selecionado: {ticketRef}</p>}</form>
   </DialogContent></Dialog>;
+}
+
+function MessageAttachment({ message, mine }: { message: Message; mine: boolean }) {
+  if (!message.attachmentData) return null;
+  const name = message.attachmentName || 'Anexo';
+  const type = message.attachmentType || '';
+  if (type.startsWith('image/')) return <a href={message.attachmentData} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-xl border border-white/15 bg-black/15" aria-label={`Abrir imagem ${name}`}><img src={message.attachmentData} alt={name} className="max-h-72 w-full object-contain" loading="lazy" /><span className={`block truncate px-2 py-1.5 text-[11px] ${mine ? 'text-white/75' : 'text-muted-foreground'}`}>{name}</span></a>;
+  if (type.startsWith('audio/')) return <div className="mt-2 min-w-[230px] rounded-xl border border-white/15 bg-black/10 p-2"><div className="mb-1 flex items-center gap-1.5 text-[11px]"><FileAudio className="size-3.5" />Mensagem de áudio</div><audio controls preload="metadata" src={message.attachmentData} className="h-10 w-full" aria-label={name} /></div>;
+  return <a href={message.attachmentData} download={name} target="_blank" rel="noreferrer" className="mt-2 flex min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-black/10 px-3 text-xs font-semibold underline"><File className="size-4" />{name}</a>;
+}
+
+function AttachmentPreview({ attachment, onRemove }: { attachment: { name: string; type: string; data: string }; onRemove: () => void }) {
+  return <div className="relative mt-2 overflow-hidden rounded-xl border border-border bg-background/70 p-2 pr-10">{attachment.type.startsWith('image/') ? <div className="flex items-center gap-3"><img src={attachment.data} alt={`Prévia de ${attachment.name}`} className="h-20 w-24 rounded-lg object-cover" /><div className="min-w-0"><p className="text-xs font-bold">Imagem pronta para enviar</p><p className="mt-1 truncate text-[11px] text-muted-foreground">{attachment.name}</p></div></div> : attachment.type.startsWith('audio/') ? <div><p className="mb-1 flex items-center gap-1.5 text-xs font-bold"><FileAudio className="size-4" />Áudio pronto para enviar</p><audio controls preload="metadata" src={attachment.data} className="h-10 w-full" /></div> : <div className="flex min-h-10 items-center gap-2 text-xs"><File className="size-4" /><span className="truncate">{attachment.name}</span></div>}<button type="button" onClick={onRemove} className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-muted text-muted-foreground hover:text-foreground" aria-label="Remover anexo"><X className="size-4" /></button></div>;
 }
 
 export function UserMenu() {
@@ -200,6 +310,8 @@ function TicketShareCard({ ticketId, label, mine, onOpen }: { ticketId: string; 
 }
 
 function initials(value: string) { return value.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'US'; }
+
+function formatDuration(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
 
 function parseTicketMessage(body: string, tickets: ChatTicket[]) {
   const lines = body.split('\n');
