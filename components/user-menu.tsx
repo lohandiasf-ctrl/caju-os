@@ -11,14 +11,15 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 export const statuses = ['Online', 'Ocupado', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] as const;
 export type Status = typeof statuses[number];
 type Colleague = { email: string; role: 'gerencia' | 'n1' | 'analista'; displayName: string | null; phone: string | null; photoUrl: string | null; status: Status; updatedAt: string | null };
-type Message = { id: number; senderEmail: string; recipientEmail: string; body: string; attachmentName: string | null; attachmentType: string | null; attachmentData: string | null; createdAt: string; readAt: string | null };
+type Message = { id: number; senderEmail: string; recipientEmail: string; body: string; attachmentName?: string | null; attachmentType?: string | null; attachmentData?: string | null; createdAt: string; readAt: string | null };
+type ChatTicket = { id: string; title: string; store: string; city: string };
 
 const statusColors: Record<Status, string> = {
   Online: 'bg-emerald-400', Ocupado: 'bg-rose-400', Almoçando: 'bg-amber-400',
   'Pausa de 15 minutos': 'bg-sky-400', Offline: 'bg-slate-500',
 };
 
-export function ColleaguesPanel() {
+export function ColleaguesPanel({ tickets = [] }: { tickets?: ChatTicket[] }) {
   const { user } = useAuth();
   const [colleagues, setColleagues] = useState<Colleague[]>([]);
   const [selected, setSelected] = useState<Colleague | null>(null);
@@ -47,7 +48,7 @@ export function ColleaguesPanel() {
     </aside>
     <button type="button" onClick={() => setMobileOpen(true)} className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden" aria-label="Abrir colegas"><Users className="size-5" /></button>
     <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader>{list}</DialogContent></Dialog>
-    <ChatDialog colleague={selected} onClose={() => setSelected(null)} />
+    <ChatDialog colleague={selected} tickets={tickets} onClose={() => setSelected(null)} />
   </>;
 }
 
@@ -64,7 +65,7 @@ function ColleagueList({ colleagues, loading, onSelect }: { colleagues: Colleagu
   })}</div>;
 }
 
-function ChatDialog({ colleague, onClose }: { colleague: Colleague | null; onClose: () => void }) {
+function ChatDialog({ colleague, tickets, onClose }: { colleague: Colleague | null; tickets: ChatTicket[]; onClose: () => void }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -72,6 +73,7 @@ function ChatDialog({ colleague, onClose }: { colleague: Colleague | null; onClo
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [attachment, setAttachment] = useState<{ name: string; type: string; data: string } | null>(null);
+  const [ticketRef, setTicketRef] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const loadMessages = useCallback(async (quiet = false) => {
     if (!user || !colleague) return;
@@ -86,20 +88,23 @@ function ChatDialog({ colleague, onClose }: { colleague: Colleague | null; onClo
   }, [colleague, user]);
   useEffect(() => {
     if (!colleague) return;
-    setMessages([]); setDraft(''); setError(''); void loadMessages();
+    setMessages([]); setDraft(''); setTicketRef(''); setError(''); void loadMessages();
     const timer = window.setInterval(() => void loadMessages(true), 5_000);
     return () => window.clearInterval(timer);
   }, [colleague, loadMessages]);
   useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
   async function sendMessage(event: React.FormEvent) {
     event.preventDefault();
-    if (!user || !colleague || (!draft.trim() && !attachment) || sending) return;
+    if (!user || !colleague || (!draft.trim() && !attachment && !ticketRef) || sending) return;
     setSending(true); setError('');
     try {
-      const response = await fetch('/api/messages', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to: colleague.email, body: draft, attachment }) });
+      const selectedTicket = tickets.find((ticket) => ticket.id === ticketRef);
+      const ticketText = selectedTicket ? `Chamado ${selectedTicket.id}: ${selectedTicket.title} (${selectedTicket.store} · ${selectedTicket.city})` : '';
+      const messageText = [draft.trim(), ticketText].filter(Boolean).join('\n');
+      const response = await fetch('/api/messages', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to: colleague.email, body: messageText, attachment }) });
       const payload = await response.json() as { message?: Message; error?: string };
       if (!response.ok || !payload.message) throw new Error(payload.error || 'Falha ao enviar a mensagem.');
-      setMessages((current) => [...current, payload.message!]); setDraft(''); setAttachment(null);
+      setMessages((current) => [...current, payload.message!]); setDraft(''); setTicketRef(''); setAttachment(null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Falha ao enviar a mensagem.'); }
     finally { setSending(false); }
   }
@@ -107,7 +112,7 @@ function ChatDialog({ colleague, onClose }: { colleague: Colleague | null; onClo
   return <Dialog open={Boolean(colleague)} onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="grid h-[min(620px,88vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
     <DialogHeader className="border-b border-border p-4 pr-14"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">{colleague?.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full object-cover" /> : initials(name)}</span><div><DialogTitle>{name}</DialogTitle><DialogDescription>{colleague?.status} · {colleague?.email}</DialogDescription></div></div></DialogHeader>
     <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{message.body && <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>}{message.attachmentData && <a href={message.attachmentData} download={message.attachmentName || 'anexo'} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-2 text-xs font-semibold underline"><File className="size-4" />{message.attachmentName || 'Abrir anexo'}</a>}<p className={`mt-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
-    <form onSubmit={sendMessage} className="border-t border-border bg-card p-3"><div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar foto ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 3_000_000) { setError('O anexo deve ter até 3 MB.'); return; } const reader = new FileReader(); reader.onload = () => setAttachment({ name: file.name, type: file.type, data: String(reader.result) }); reader.readAsDataURL(file); event.currentTarget.value = ''; }} /></label><button type="submit" disabled={(!draft.trim() && !attachment) || sending} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div>{attachment && <p className="mt-2 truncate text-xs text-muted-foreground">Anexo: {attachment.name}</p>}</form>
+    <form onSubmit={sendMessage} className="border-t border-border bg-card p-3"><div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar foto ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 3_000_000) { setError('O anexo deve ter até 3 MB.'); return; } const reader = new FileReader(); reader.onload = () => setAttachment({ name: file.name, type: file.type, data: String(reader.result) }); reader.readAsDataURL(file); event.currentTarget.value = ''; }} /></label><select aria-label="Enviar chamado" value={ticketRef} onChange={(event) => setTicketRef(event.target.value)} className="h-11 max-w-36 rounded-xl border border-input bg-background px-2 text-xs"><option value="">Chamado...</option>{tickets.slice(0, 100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select><button type="submit" disabled={(!draft.trim() && !attachment && !ticketRef) || sending} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div>{attachment && <p className="mt-2 truncate text-xs text-muted-foreground">Anexo: {attachment.name}</p>}{ticketRef && <p className="mt-2 truncate text-xs text-muted-foreground">Chamado selecionado: {ticketRef}</p>}</form>
   </DialogContent></Dialog>;
 }
 

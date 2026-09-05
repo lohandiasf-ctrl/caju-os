@@ -257,7 +257,7 @@ export default function Home() {
         {activeView === 'settings' && <><SettingsView email={user?.email ?? ''} role={role} jiraError={jiraError} user={user} /><EmployeeInvitePanel user={user} /></>}
       </div>
     </section>
-    <ColleaguesPanel />
+    <ColleaguesPanel tickets={tickets.map((ticket) => ({ id: ticket.id, title: ticket.title, store: ticket.store, city: ticket.city }))} />
     <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
