@@ -50,6 +50,16 @@ export default function FinanceiroPage() {
   useEffect(() => {
     if (!user) return;
     let active = true;
+    const cached = sessionStorage.getItem('caju-finance-cache');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as { at: number; issues: FinancialIssue[]; rule: PayoutRule };
+        if (Date.now() - parsed.at < 60_000) {
+          setIssues(parsed.issues); setRule(parsed.rule); setFirstRate(formatRate(parsed.rule.firstTicketCents)); setAdditionalRate(formatRate(parsed.rule.additionalTicketCents)); setLoading(false);
+          return () => { active = false; };
+        }
+      } catch { sessionStorage.removeItem('caju-finance-cache'); }
+    }
     setLoading(true);
     setError('');
     void user.getIdToken().then(async (token) => {
@@ -68,6 +78,7 @@ export default function FinanceiroPage() {
       setRule(nextRule);
       setFirstRate(formatRate(nextRule.firstTicketCents));
       setAdditionalRate(formatRate(nextRule.additionalTicketCents));
+      sessionStorage.setItem('caju-finance-cache', JSON.stringify({ at: Date.now(), issues: financePayload.issues ?? [], rule: nextRule }));
     }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Falha ao carregar financeiro.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };

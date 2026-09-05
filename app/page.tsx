@@ -74,6 +74,17 @@ export default function Home() {
   useEffect(() => {
     if (!user) return;
     let active = true;
+    const cached = sessionStorage.getItem('caju-jira-issues-cache');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached) as { at: number; issues: JiraTicket[] };
+        if (Date.now() - parsed.at < 60_000 && parsed.issues.length) {
+          setTickets(parsed.issues.map(toTicket));
+          setJiraLoading(false);
+          return () => { active = false; };
+        }
+      } catch { sessionStorage.removeItem('caju-jira-issues-cache'); }
+    }
     setJiraLoading(true);
     setJiraError('');
     void user.getIdToken().then(async (token) => {
@@ -92,7 +103,7 @@ export default function Home() {
         isLast = payload.isLast ?? !cursor;
         if (!cursor) isLast = true;
       }
-      if (active) setTickets(issues.map(toTicket));
+      if (active) { setTickets(issues.map(toTicket)); sessionStorage.setItem('caju-jira-issues-cache', JSON.stringify({ at: Date.now(), issues })); }
     })
       .catch((error: unknown) => { if (active) setJiraError(error instanceof Error ? error.message : 'Falha ao consultar o Jira.'); })
       .finally(() => { if (active) setJiraLoading(false); });
