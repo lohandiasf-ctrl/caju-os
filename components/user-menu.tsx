@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Check, ChevronUp, File, Loader2, LogOut, MessageCircle, Paperclip, Send, Users } from 'lucide-react';
+import { Camera, Check, ChevronUp, ClipboardList, ExternalLink, File, Loader2, LogOut, MessageCircle, Paperclip, Send, Users } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
@@ -19,10 +19,12 @@ const statusColors: Record<Status, string> = {
   'Pausa de 15 minutos': 'bg-sky-400', Offline: 'bg-slate-500',
 };
 
-export function ColleaguesPanel({ tickets = [] }: { tickets?: ChatTicket[] }) {
+export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketShareConsumed, onOpenTicket }: { tickets?: ChatTicket[]; ticketToShare?: ChatTicket | null; onTicketShareConsumed?: () => void; onOpenTicket?: (ticketId: string) => void }) {
   const { user } = useAuth();
   const [colleagues, setColleagues] = useState<Colleague[]>([]);
   const [selected, setSelected] = useState<Colleague | null>(null);
+  const [chatTicket, setChatTicket] = useState<ChatTicket | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
@@ -40,7 +42,14 @@ export function ColleaguesPanel({ tickets = [] }: { tickets?: ChatTicket[] }) {
     window.addEventListener('caju-presence-updated', refresh);
     return () => { window.clearInterval(timer); window.removeEventListener('caju-presence-updated', refresh); };
   }, [load]);
-  const list = <ColleagueList colleagues={colleagues} loading={loading} onSelect={(colleague) => { setSelected(colleague); setMobileOpen(false); }} />;
+  useEffect(() => { if (ticketToShare) setShareOpen(true); }, [ticketToShare]);
+  const openChat = (colleague: Colleague) => { setChatTicket(null); setSelected(colleague); setMobileOpen(false); };
+  const chooseShareRecipient = (colleague: Colleague) => {
+    if (!ticketToShare) return;
+    setChatTicket(ticketToShare); setSelected(colleague); setShareOpen(false); setMobileOpen(false); onTicketShareConsumed?.();
+  };
+  const list = <ColleagueList colleagues={colleagues} loading={loading} onSelect={openChat} />;
+  const shareList = <ColleagueList colleagues={colleagues} loading={loading} onSelect={chooseShareRecipient} />;
   return <>
     <aside className="colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl xl:flex" aria-label="Colegas">
       <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-[11px] text-muted-foreground">Equipe e disponibilidade</p></div><div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Users className="size-4" aria-hidden="true" /></div></div>
@@ -48,7 +57,8 @@ export function ColleaguesPanel({ tickets = [] }: { tickets?: ChatTicket[] }) {
     </aside>
     <button type="button" onClick={() => setMobileOpen(true)} className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden" aria-label="Abrir colegas"><Users className="size-5" /></button>
     <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader>{list}</DialogContent></Dialog>
-    <ChatDialog colleague={selected} tickets={tickets} onClose={() => setSelected(null)} />
+    <Dialog open={shareOpen} onOpenChange={setShareOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md"><DialogHeader><DialogTitle>Enviar chamado por chat</DialogTitle><DialogDescription>{ticketToShare ? `Escolha um colega para receber o chamado ${ticketToShare.id}.` : 'Escolha um colega.'}</DialogDescription></DialogHeader>{shareList}</DialogContent></Dialog>
+    <ChatDialog colleague={selected} tickets={tickets} initialTicket={chatTicket} onClose={() => { setSelected(null); setChatTicket(null); }} onOpenTicket={onOpenTicket} />
   </>;
 }
 
@@ -65,7 +75,7 @@ function ColleagueList({ colleagues, loading, onSelect }: { colleagues: Colleagu
   })}</div>;
 }
 
-function ChatDialog({ colleague, tickets, onClose }: { colleague: Colleague | null; tickets: ChatTicket[]; onClose: () => void }) {
+function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket }: { colleague: Colleague | null; tickets: ChatTicket[]; initialTicket?: ChatTicket | null; onClose: () => void; onOpenTicket?: (ticketId: string) => void }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -93,10 +103,10 @@ function ChatDialog({ colleague, tickets, onClose }: { colleague: Colleague | nu
       setMessages([]); setDraft(''); setTicketRef(''); setAttachment(null); setError(''); setLoading(false);
       return;
     }
-    setMessages([]); setDraft(''); setTicketRef(''); setError(''); void loadMessages();
+    setMessages([]); setDraft(''); setTicketRef(initialTicket?.id ?? ''); setAttachment(null); setError(''); void loadMessages();
     const timer = window.setInterval(() => void loadMessages(true), 5_000);
     return () => window.clearInterval(timer);
-  }, [colleague, loadMessages]);
+  }, [colleague, initialTicket, loadMessages]);
   useEffect(() => {
     // Keep the effect cleanup contract explicit. Some browsers return a value
     // from scrollIntoView; returning it from the effect makes React treat it
@@ -119,9 +129,10 @@ function ChatDialog({ colleague, tickets, onClose }: { colleague: Colleague | nu
     finally { setSending(false); }
   }
   const name = colleague?.displayName || colleague?.email.split('@')[0] || '';
+  function openSharedTicket(ticketId: string) { onClose(); onOpenTicket?.(ticketId); }
   return <Dialog open={Boolean(colleague)} onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="grid h-[min(620px,88vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
     <DialogHeader className="border-b border-border p-4 pr-14"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">{colleague?.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full object-cover" /> : initials(name)}</span><div><DialogTitle>{name}</DialogTitle><DialogDescription>{colleague?.status} · {colleague?.email}</DialogDescription></div></div></DialogHeader>
-    <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{message.body && <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>}{message.attachmentData && <a href={message.attachmentData} download={message.attachmentName || 'anexo'} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-2 text-xs font-semibold underline"><File className="size-4" />{message.attachmentName || 'Abrir anexo'}</a>}<p className={`mt-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
+    <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); const parsed = parseTicketMessage(message.body, tickets); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{parsed.text && <p className="whitespace-pre-wrap break-words text-sm">{parsed.text}</p>}{parsed.ticketId && <button type="button" onClick={() => openSharedTicket(parsed.ticketId!)} className="mt-2 flex w-full items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-left transition hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Abrir chamado ${parsed.ticketId}`}><ClipboardList className="size-4 shrink-0 text-primary" /><span className="min-w-0 flex-1"><span className="block text-xs font-bold">Chamado {parsed.ticketId}</span><span className="block truncate text-[11px] text-muted-foreground">{parsed.ticketLabel}</span></span><ExternalLink className="size-3.5 shrink-0 text-primary" /></button>}{message.attachmentData && <a href={message.attachmentData} download={message.attachmentName || 'anexo'} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-2 text-xs font-semibold underline"><File className="size-4" />{message.attachmentName || 'Abrir anexo'}</a>}<p className={`mt-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
     <form onSubmit={sendMessage} className="border-t border-border bg-card p-3"><div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar foto ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 750_000) { setError('O anexo deve ter até 750 KB.'); return; } const reader = new FileReader(); reader.onload = () => setAttachment({ name: file.name, type: file.type, data: String(reader.result) }); reader.onerror = () => setError('Não foi possível ler este anexo.'); reader.readAsDataURL(file); event.currentTarget.value = ''; }} /></label><select aria-label="Enviar chamado" value={ticketRef} onChange={(event) => setTicketRef(event.target.value)} className="h-11 max-w-36 rounded-xl border border-input bg-background px-2 text-xs"><option value="">Chamado...</option>{tickets.slice(0, 100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select><button type="submit" disabled={(!draft.trim() && !attachment && !ticketRef) || sending} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div>{attachment && <p className="mt-2 truncate text-xs text-muted-foreground">Anexo: {attachment.name}</p>}{ticketRef && <p className="mt-2 truncate text-xs text-muted-foreground">Chamado selecionado: {ticketRef}</p>}</form>
   </DialogContent></Dialog>;
 }
@@ -177,3 +188,15 @@ export function UserMenu() {
 }
 
 function initials(value: string) { return value.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'US'; }
+
+function parseTicketMessage(body: string, tickets: ChatTicket[]) {
+  const lines = body.split('\n');
+  const index = lines.findIndex((line) => /^Chamado\s+[A-Z0-9-]+\s*:/i.test(line.trim()));
+  if (index < 0) return { text: body, ticketId: null as string | null, ticketLabel: '' };
+  const match = lines[index].trim().match(/^Chamado\s+([A-Z0-9-]+)\s*:\s*(.*)$/i);
+  if (!match) return { text: body, ticketId: null as string | null, ticketLabel: '' };
+  const ticketId = match[1].toUpperCase();
+  const ticket = tickets.find((item) => item.id.toUpperCase() === ticketId);
+  const ticketLabel = ticket ? `${ticket.title} · ${ticket.store}` : match[2];
+  return { text: lines.filter((_, lineIndex) => lineIndex !== index).join('\n').trim(), ticketId, ticketLabel };
+}

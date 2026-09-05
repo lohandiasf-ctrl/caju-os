@@ -46,6 +46,7 @@ export default function Home() {
   const [menu, setMenu] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [selected, setSelected] = useState<Ticket | null>(null);
+  const [ticketToShare, setTicketToShare] = useState<{ id: string; title: string; store: string; city: string } | null>(null);
   const [details, setDetails] = useState<JiraDetails | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [whatsappUrl, setWhatsappUrl] = useState('');
@@ -257,7 +258,12 @@ export default function Home() {
         {activeView === 'settings' && <><SettingsView email={user?.email ?? ''} role={role} jiraError={jiraError} user={user} /><EmployeeInvitePanel user={user} /></>}
       </div>
     </section>
-    <ColleaguesPanel tickets={tickets.map((ticket) => ({ id: ticket.id, title: ticket.title, store: ticket.store, city: ticket.city }))} />
+    <ColleaguesPanel
+      tickets={tickets.map((ticket) => ({ id: ticket.id, title: ticket.title, store: ticket.store, city: ticket.city }))}
+      ticketToShare={ticketToShare}
+      onTicketShareConsumed={() => setTicketToShare(null)}
+      onOpenTicket={(ticketId) => { const ticket = tickets.find((item) => item.id === ticketId); if (ticket) void openTicket(ticket); }}
+    />
     <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open) setSelected(null); }}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
@@ -267,10 +273,11 @@ export default function Home() {
         </DialogHeader>
         {dialogLoading ? <div className="grid min-h-40 place-items-center text-muted-foreground"><Loader2 className="size-6 animate-spin" /><span className="sr-only">Carregando chamado</span></div> : <div className="space-y-4">
           {dialogError && <div role="alert" className="rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{dialogError}</div>}
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-4">
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => setDetailsVisible((value) => !value)} disabled={!details}><Eye className="size-5 text-blue-300" /><span><span className="block font-bold">Ver detalhes</span><span className="block text-xs font-normal text-muted-foreground">Dados completos</span></span></Button>
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" render={<a href={details?.jiraUrl ?? '#'} target="_blank" rel="noreferrer" aria-disabled={!details} />} disabled={!details}><ExternalLink className="size-5 text-primary" /><span><span className="block font-bold">Abrir no Jira</span><span className="block text-xs font-normal text-muted-foreground">Chamado original</span></span></Button>
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" render={<a href={whatsappUrl || '#'} target="_blank" rel="noreferrer" aria-disabled={!whatsappUrl} />} disabled={!whatsappUrl}><MessageCircle className="size-5 text-emerald-400" /><span><span className="block font-bold">Abrir WhatsApp</span><span className="block text-xs font-normal text-muted-foreground">{whatsappUrl ? 'Ir para o grupo' : 'Link não cadastrado'}</span></span></Button>
+            <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => selected && setTicketToShare({ id: selected.id, title: selected.title, store: selected.store, city: selected.city })} disabled={!selected}><Users className="size-5 text-violet-300" /><span><span className="block font-bold">Enviar por chat</span><span className="block text-xs font-normal text-muted-foreground">Compartilhar com colega</span></span></Button>
           </div>
           {detailsVisible && details && <section className="rounded-xl border border-border bg-muted/30 p-4"><div className="grid gap-3 text-sm sm:grid-cols-2"><Detail label="Status" value={details.status} /><Detail label="Prioridade" value={details.priority} /><Detail label="Responsável" value={details.assignee || 'Não atribuído'} /><Detail label="Solicitante" value={details.reporter || 'Não informado'} /><Detail label="Tipo" value={details.issueType || 'Não informado'} /><Detail label="Criado em" value={formatDate(details.createdAt)} /></div>{details.description && <div className="mt-4 border-t border-border pt-4"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descrição</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{details.description}</p></div>}</section>}
           {(role === 'analista' || role === 'gerencia') && <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4"><div className="flex items-center gap-2"><MessageCircle className="size-5 text-emerald-400" /><div><h3 className="text-sm font-bold">Grupo do WhatsApp</h3><p className="text-xs text-muted-foreground">Cole o link de convite deste chamado.</p></div></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input type="url" value={whatsappUrl} onChange={(event) => setWhatsappUrl(event.target.value)} placeholder="https://chat.whatsapp.com/..." className="flex-1" /><Button onClick={() => void saveWhatsappLink()} disabled={linkSaving || !whatsappUrl.trim()}>{linkSaving ? <Loader2 className="animate-spin" /> : <Save />} Salvar link</Button></div></section>}
