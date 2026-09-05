@@ -54,7 +54,7 @@ export default function FinanceiroPage() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as { at: number; issues: FinancialIssue[]; rule: PayoutRule };
-        if (Date.now() - parsed.at < 60_000) {
+        if (Date.now() - parsed.at < 10 * 60_000) {
           setIssues(parsed.issues); setRule(parsed.rule); setFirstRate(formatRate(parsed.rule.firstTicketCents)); setAdditionalRate(formatRate(parsed.rule.additionalTicketCents)); setLoading(false);
           return () => { active = false; };
         }

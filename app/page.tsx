@@ -78,7 +78,7 @@ export default function Home() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as { at: number; issues: JiraTicket[] };
-        if (Date.now() - parsed.at < 60_000 && parsed.issues.length) {
+        if (Date.now() - parsed.at < 5 * 60_000 && parsed.issues.length) {
           setTickets(parsed.issues.map(toTicket));
           setJiraLoading(false);
           return () => { active = false; };
