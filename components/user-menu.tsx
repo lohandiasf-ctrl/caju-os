@@ -87,7 +87,12 @@ function ChatDialog({ colleague, tickets, onClose }: { colleague: Colleague | nu
     finally { if (!quiet) setLoading(false); }
   }, [colleague, user]);
   useEffect(() => {
-    if (!colleague) return;
+    if (!colleague) {
+      // Clear composer state when the dialog closes so a previous attachment
+      // or ticket cannot leak into the next conversation/send attempt.
+      setMessages([]); setDraft(''); setTicketRef(''); setAttachment(null); setError(''); setLoading(false);
+      return;
+    }
     setMessages([]); setDraft(''); setTicketRef(''); setError(''); void loadMessages();
     const timer = window.setInterval(() => void loadMessages(true), 5_000);
     return () => window.clearInterval(timer);
