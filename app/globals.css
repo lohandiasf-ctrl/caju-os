@@ -218,6 +218,11 @@ textarea:focus-visible {
     box-shadow: 0 24px 70px rgb(0 0 0 / 32%);
   }
 
+  main > aside.fixed.colleagues-sidebar {
+    right: 1rem;
+    left: auto;
+  }
+
   main > section > header {
     margin: 1rem 1rem 0;
     border: 1px solid var(--border);

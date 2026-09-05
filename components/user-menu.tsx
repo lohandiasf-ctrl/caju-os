@@ -41,9 +41,9 @@ export function ColleaguesPanel() {
   }, [load]);
   const list = <ColleagueList colleagues={colleagues} loading={loading} onSelect={(colleague) => { setSelected(colleague); setMobileOpen(false); }} />;
   return <>
-    <aside className="fixed inset-y-0 right-0 z-30 hidden w-[280px] flex-col border-l border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl xl:flex" aria-label="Colegas">
-      <div className="flex h-12 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-xs text-muted-foreground">Equipe e disponibilidade</p></div><div className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary"><Users className="size-[18px]" aria-hidden="true" /></div></div>
-      <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">{list}</div>
+    <aside className="colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl xl:flex" aria-label="Colegas">
+      <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-[11px] text-muted-foreground">Equipe e disponibilidade</p></div><div className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary"><Users className="size-4" aria-hidden="true" /></div></div>
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">{list}</div>
     </aside>
     <button type="button" onClick={() => setMobileOpen(true)} className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden" aria-label="Abrir colegas"><Users className="size-5" /></button>
     <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader>{list}</DialogContent></Dialog>
@@ -56,9 +56,9 @@ function ColleagueList({ colleagues, loading, onSelect }: { colleagues: Colleagu
   if (!colleagues.length) return <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhum outro funcionário ativo.</div>;
   return <div className="space-y-1.5">{colleagues.map((colleague) => {
     const name = colleague.displayName || colleague.email.split('@')[0];
-    return <button key={colleague.email} type="button" onClick={() => onSelect(colleague)} className="group flex min-h-14 w-full items-center gap-3 rounded-xl border border-transparent px-2 py-2 text-left transition hover:border-border hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Conversar com ${name}, status ${colleague.status}`}>
-      <span className="relative grid size-10 shrink-0 place-items-center overflow-visible rounded-full border border-white/10 bg-muted text-xs font-bold text-foreground">{colleague.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full rounded-full object-cover" /> : initials(name)}<span className={`absolute bottom-0 right-0 size-3 rounded-full border-2 border-sidebar ${statusColors[colleague.status]}`} /></span>
-      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{name}</span><span className="block truncate text-xs text-muted-foreground">{roleLabels[colleague.role]} · {colleague.status}</span></span>
+    return <button key={colleague.email} type="button" onClick={() => onSelect(colleague)} className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition hover:border-border hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Conversar com ${name}, status ${colleague.status}`}>
+      <span className="relative grid size-8 shrink-0 place-items-center overflow-visible rounded-full border border-white/10 bg-muted text-[10px] font-bold text-foreground">{colleague.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full rounded-full object-cover" /> : initials(name)}<span className={`absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-sidebar ${statusColors[colleague.status]}`} /></span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{name}</span><span className="block truncate text-[11px] text-muted-foreground">{roleLabels[colleague.role]} · {colleague.status}</span></span>
       <MessageCircle className="size-4 shrink-0 text-muted-foreground transition group-hover:text-primary" aria-hidden="true" />
     </button>;
   })}</div>;
