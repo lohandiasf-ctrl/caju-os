@@ -17,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Caju OS - Central de Operacoes',
   description: 'Gestao de chamados, tecnicos, lojas e atendimentos em campo.',
+  icons: {
+    icon: [{ url: '/caju-tech-emblem.png', type: 'image/png' }],
+    shortcut: ['/caju-tech-emblem.png'],
+    apple: ['/caju-tech-emblem.png'],
+  },
 };
 
 export default function RootLayout({
