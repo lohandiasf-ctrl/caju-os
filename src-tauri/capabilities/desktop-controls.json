@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "desktop-controls",
   "description": "Controles da janela do Caju OS",
-  "windows": ["main"],
+  "windows": ["main", "voice-call"],
   "remote": {
     "urls": [
       "https://operacoes.cajutech.net/*",

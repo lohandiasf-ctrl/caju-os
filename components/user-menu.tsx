@@ -42,19 +42,28 @@ async function showDesktopMessageNotification(senderName: string, message: Messa
   } catch { /* Desktop notifications are optional; in-app feedback remains available. */ }
 }
 
-async function showDesktopCallNotification(callerName: string, group: boolean) {
+async function showDesktopCallNotification(callerName: string, invitation: VoiceInvitation) {
   if (!appIsInBackground()) return;
+  const group = invitation.kind === 'group';
   const title = group ? 'Convite para reunião de voz' : 'Chamada de voz recebida';
   const body = `${callerName} está chamando você. Abra o Caju OS para atender ou recusar.`;
   try {
     if ('__TAURI_INTERNALS__' in window) {
       const notification = await import('@tauri-apps/plugin-notification');
+      const { invoke } = await import('@tauri-apps/api/core');
       let allowed = await notification.isPermissionGranted();
       if (!allowed && !desktopPermissionRequested) { desktopPermissionRequested = true; allowed = (await notification.requestPermission()) === 'granted'; }
       if (allowed) notification.sendNotification({ title, body, group: 'caju-voice', autoCancel: true });
+      const callUrl = new URL(window.location.origin);
+      callUrl.searchParams.set('voiceRoom', invitation.roomId); callUrl.searchParams.set('voiceCaller', invitation.callerName);
+      callUrl.searchParams.set('voiceKind', invitation.kind); callUrl.searchParams.set('voiceCallerEmail', invitation.callerEmail);
+      await invoke('show_voice_call_window', { url: callUrl.toString() });
       return;
     }
-    if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, tag: 'caju-voice-call', requireInteraction: true });
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const desktopNotification = new Notification(title, { body, tag: 'caju-voice-call', requireInteraction: true });
+      desktopNotification.onclick = () => { window.focus(); window.dispatchEvent(new CustomEvent('caju-voice-answer-request')); };
+    }
   } catch { /* O convite também fica visível dentro do Caju OS. */ }
 }
 
@@ -148,11 +157,16 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     if (!user?.email) return;
     const receiver = new VoiceCallReceiver(user.email, (invitation) => {
       setIncomingVoice(invitation); startCallTone();
-      void showDesktopCallNotification(invitation.callerName, invitation.kind === 'group');
+      void showDesktopCallNotification(invitation.callerName, invitation);
     });
     voiceReceiverRef.current = receiver; receiver.connect();
     return () => { receiver.dispose(); if (voiceReceiverRef.current === receiver) voiceReceiverRef.current = null; stopCallTone(); };
   }, [startCallTone, stopCallTone, user?.email]);
+  useEffect(() => {
+    const answerFromBrowserNotification = () => window.dispatchEvent(new CustomEvent('caju-voice-answer-request-in-dialog'));
+    window.addEventListener('caju-voice-answer-request', answerFromBrowserNotification);
+    return () => window.removeEventListener('caju-voice-answer-request', answerFromBrowserNotification);
+  }, []);
   useEffect(() => {
     if (!user) return;
     latestIncomingId.current = null;
@@ -211,7 +225,7 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader><TeamVoiceControl colleagues={colleagues} />{list}</DialogContent></Dialog>
     <Dialog open={shareOpen} onOpenChange={setShareOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md"><DialogHeader><DialogTitle>Enviar chamado por chat</DialogTitle><DialogDescription>{ticketToShare ? `Escolha um colega para receber o chamado ${ticketToShare.id}.` : 'Escolha um colega.'}</DialogDescription></DialogHeader>{shareList}</DialogContent></Dialog>
     <ChatDialog colleague={selected} tickets={tickets} initialTicket={chatTicket} onClose={() => { setSelected(null); setChatTicket(null); }} onOpenTicket={onOpenTicket} onMessageSent={indicateSentMessage} />
-    <IncomingVoiceCall invitation={incomingVoice} onClose={() => { stopCallTone(); setIncomingVoice(null); }} onDecline={(invitation) => { voiceReceiverRef.current?.decline(invitation); stopCallTone(); setIncomingVoice(null); }} />
+    <IncomingVoiceCall invitation={incomingVoice} onAnswered={stopCallTone} onClose={() => { stopCallTone(); setIncomingVoice(null); }} onDecline={(invitation) => { voiceReceiverRef.current?.decline(invitation); stopCallTone(); setIncomingVoice(null); }} />
     {notice && <div aria-live="assertive" className="fixed right-4 top-4 z-[80] flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10">
       <button type="button" onClick={() => { if (noticeSender) openChat(noticeSender); setNotice(null); }} className="flex min-w-0 flex-1 items-start gap-3 rounded-l-2xl p-4 text-left transition hover:bg-muted" aria-label="Abrir nova mensagem">
         <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-xs font-bold text-primary">{noticeSender?.photoUrl ? <img src={noticeSender.photoUrl} alt="" className="size-full object-cover" /> : initials(noticeSender?.displayName || notice.message.senderEmail)}</span>
@@ -405,10 +419,12 @@ function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
   const [error, setError] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
+  const [pickerMode, setPickerMode] = useState<'start' | 'add'>('start');
   const leave = useCallback(() => {
     clientRef.current?.leave(); clientRef.current = null;
     audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear();
-    setState('idle'); setMuted(false); setParticipants(0);
+    setState('idle'); setMuted(false); setParticipants(0); setInvitedEmails([]); setSelectedEmails([]);
   }, []);
   useEffect(() => leave, [leave]);
   async function join() {
@@ -428,21 +444,29 @@ function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
     try {
       const roomId = `group:${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
       await client.join(roomId, user.uid, user.displayName || user.email.split('@')[0], user.email);
-      client.invite(selectedEmails, 'group'); setPickerOpen(false); setState('connected');
+      client.invite(selectedEmails, 'group'); setInvitedEmails(selectedEmails); setSelectedEmails([]); setPickerOpen(false); setState('connected');
     } catch (reason) { leave(); setError(reason instanceof Error ? reason.message : 'Falha ao iniciar reunião.'); }
   }
+  function openPicker(mode: 'start' | 'add') { setPickerMode(mode); setSelectedEmails([]); setPickerOpen(true); }
+  function inviteMore() {
+    if (state !== 'connected' || !selectedEmails.length) return;
+    clientRef.current?.invite(selectedEmails, 'group');
+    setInvitedEmails((current) => [...new Set([...current, ...selectedEmails])]); setSelectedEmails([]); setPickerOpen(false);
+  }
+  const inviteLimit = Math.max(0, 5 - invitedEmails.length);
   return <div className="mt-3 rounded-xl border border-primary/25 bg-primary/[.07] p-2.5">
-    {state === 'idle' ? <button type="button" onClick={() => setPickerOpen(true)} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><Users className="size-4" aria-hidden="true" />Nova reunião de voz</button> : <div className="flex items-center gap-2">
+    {state === 'idle' ? <button type="button" onClick={() => openPicker('start')} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><Users className="size-4" aria-hidden="true" />Nova reunião de voz</button> : <div className="flex items-center gap-2">
       <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1"><p className="truncate text-xs font-bold text-primary">{state === 'connecting' ? 'Conectando...' : 'Reunião em andamento'}</p><p className="text-[11px] text-muted-foreground">{participants ? `${participants + 1} participantes` : 'Aguardando colegas'}</p></div>
+      <button type="button" disabled={state !== 'connected' || !inviteLimit} onClick={() => openPicker('add')} className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label="Adicionar participantes"><Users className="size-4" /></button>
       <button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}>{muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</button>
       <button type="button" onClick={leave} className="grid size-10 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Sair da reunião"><PhoneOff className="size-4" /></button>
     </div>}
     {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
-    <Dialog open={pickerOpen} onOpenChange={setPickerOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Iniciar reunião de voz</DialogTitle><DialogDescription>Selecione até 5 colegas para convidar.</DialogDescription></DialogHeader><div className="max-h-72 space-y-1 overflow-y-auto pr-1">{colleagues.map((colleague) => { const checked = selectedEmails.includes(colleague.email); const name = colleague.displayName || colleague.email.split('@')[0]; return <label key={colleague.email} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-border px-3 transition hover:bg-muted"><input type="checkbox" checked={checked} onChange={() => setSelectedEmails((current) => checked ? current.filter((email) => email !== colleague.email) : current.length < 5 ? [...current, colleague.email] : current)} className="size-4 accent-primary" /><span className={`size-2.5 rounded-full ${statusColors[colleague.status]}`} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span><span className="text-xs text-muted-foreground">{colleague.status}</span></label>; })}</div><button type="button" disabled={!selectedEmails.length || state === 'connecting'} onClick={() => void join()} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{state === 'connecting' ? <Loader2 className="size-4 animate-spin" /> : <Phone className="size-4" />}Convidar {selectedEmails.length || ''} colega{selectedEmails.length === 1 ? '' : 's'}</button></DialogContent></Dialog>
+    <Dialog open={pickerOpen} onOpenChange={setPickerOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{pickerMode === 'start' ? 'Iniciar reunião de voz' : 'Adicionar participantes'}</DialogTitle><DialogDescription>Selecione até {pickerMode === 'start' ? 5 : inviteLimit} colega{pickerMode === 'start' ? 's' : inviteLimit === 1 ? '' : 's'} para convidar.</DialogDescription></DialogHeader><div className="max-h-72 space-y-1 overflow-y-auto pr-1">{colleagues.filter((colleague) => pickerMode === 'start' || !invitedEmails.includes(colleague.email)).map((colleague) => { const checked = selectedEmails.includes(colleague.email); const name = colleague.displayName || colleague.email.split('@')[0]; return <label key={colleague.email} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-border px-3 transition hover:bg-muted"><input type="checkbox" checked={checked} onChange={() => setSelectedEmails((current) => checked ? current.filter((email) => email !== colleague.email) : current.length < inviteLimit ? [...current, colleague.email] : current)} className="size-4 accent-primary" /><span className={`size-2.5 rounded-full ${statusColors[colleague.status]}`} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span><span className="text-xs text-muted-foreground">{colleague.status}</span></label>; })}</div><button type="button" disabled={!selectedEmails.length || state === 'connecting'} onClick={() => pickerMode === 'start' ? void join() : inviteMore()} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{state === 'connecting' ? <Loader2 className="size-4 animate-spin" /> : <Phone className="size-4" />}{pickerMode === 'start' ? `Convidar ${selectedEmails.length || ''} colega${selectedEmails.length === 1 ? '' : 's'}` : `Adicionar ${selectedEmails.length || ''} participante${selectedEmails.length === 1 ? '' : 's'}`}</button></DialogContent></Dialog>
   </div>;
 }
 
-function IncomingVoiceCall({ invitation, onClose, onDecline }: { invitation: VoiceInvitation | null; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
+function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { invitation: VoiceInvitation | null; onAnswered: () => void; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
   const { user } = useAuth();
   const clientRef = useRef<VoiceChatClient | null>(null);
   const audioRef = useRef(new Map<string, HTMLAudioElement>());
@@ -464,12 +488,41 @@ function IncomingVoiceCall({ invitation, onClose, onDecline }: { invitation: Voi
       onError: (reason) => setError(reason.message),
     });
     clientRef.current = client;
-    try { await client.join(invitation.roomId, user.uid, user.displayName || user.email.split('@')[0], user.email); setState('connected'); }
+    try { await client.join(invitation.roomId, user.uid, user.displayName || user.email.split('@')[0], user.email); onAnswered(); setState('connected'); }
     catch (reason) { cleanup(); setError(reason instanceof Error ? reason.message : 'Não foi possível atender a chamada.'); }
   }
+  useEffect(() => {
+    const answerFromNotification = () => { void accept(); };
+    window.addEventListener('caju-voice-answer-request-in-dialog', answerFromNotification);
+    return () => window.removeEventListener('caju-voice-answer-request-in-dialog', answerFromNotification);
+  });
   function closeActive() { if (invitation?.kind === 'direct') { clientRef.current?.endCall(); cleanup(false); } else cleanup(); onClose(); }
   const caller = invitation?.callerName || 'Colega';
   return <Dialog open={Boolean(invitation)} onOpenChange={(open) => { if (!open && invitation) state === 'ringing' ? onDecline(invitation) : closeActive(); }}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><PhoneIncoming className="size-5 text-emerald-400" />{state === 'ringing' ? 'Chamada recebida' : 'Chamada de voz'}</DialogTitle><DialogDescription>{state === 'ringing' ? `${caller} convidou você para ${invitation?.kind === 'group' ? 'uma reunião de voz' : 'uma chamada de voz'}.` : invitation?.kind === 'group' ? `${participants + 1} participante(s) na reunião.` : 'Chamada em andamento.'}</DialogDescription></DialogHeader>{state === 'ringing' ? <div className="flex gap-2"><button type="button" onClick={() => invitation && onDecline(invitation)} className="min-h-11 flex-1 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 text-sm font-semibold text-rose-200">Recusar</button><button type="button" onClick={() => void accept()} className="min-h-11 flex-1 rounded-xl bg-emerald-500 px-3 text-sm font-semibold text-white">Atender</button></div> : <div className="flex gap-2"><button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="min-h-11 flex-1 rounded-xl border border-border bg-background text-sm font-semibold disabled:opacity-50">{muted ? 'Ativar microfone' : 'Silenciar'}</button><button type="button" onClick={closeActive} className="min-h-11 flex-1 rounded-xl bg-rose-500 px-3 text-sm font-semibold text-white">Encerrar</button></div>}{error && <p role="alert" className="text-xs text-rose-300">{error}</p>}</DialogContent></Dialog>;
+}
+
+export function DesktopVoiceCallPopup() {
+  const { user } = useAuth();
+  const receiverRef = useRef<VoiceCallReceiver | null>(null);
+  const invitation = typeof window === 'undefined' ? null : (() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get('voiceRoom'); const callerName = params.get('voiceCaller'); const callerEmail = params.get('voiceCallerEmail'); const kind = params.get('voiceKind');
+    return roomId && callerName && callerEmail && (kind === 'direct' || kind === 'group') ? { roomId, callerName, callerEmail, kind } as VoiceInvitation : null;
+  })();
+  useEffect(() => {
+    if (!invitation || !user?.email) return;
+    const receiver = new VoiceCallReceiver(user.email, () => undefined);
+    receiverRef.current = receiver; receiver.connect();
+    return () => { receiver.dispose(); receiverRef.current = null; };
+  }, [invitation?.roomId, user?.email]);
+  if (!invitation) return null;
+  const closePopup = async () => {
+    try {
+      if ('__TAURI_INTERNALS__' in window) { const { invoke } = await import('@tauri-apps/api/core'); await invoke('close_voice_call_window'); return; }
+    } catch { /* The browser fallback can close its own notification window. */ }
+    window.close();
+  };
+  return <IncomingVoiceCall invitation={invitation} onAnswered={() => undefined} onClose={() => void closePopup()} onDecline={(call) => { receiverRef.current?.decline(call); void closePopup(); }} />;
 }
 
 function MessageAttachment({ message, mine }: { message: Message; mine: boolean }) {
