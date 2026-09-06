@@ -42,9 +42,7 @@ async function showDesktopMessageNotification(senderName: string, message: Messa
   } catch { /* Desktop notifications are optional; in-app feedback remains available. */ }
 }
 
-type VoiceIdentity = { uid: string; email: string; name: string };
-
-async function showDesktopCallNotification(callerName: string, invitation: VoiceInvitation, recipient: VoiceIdentity) {
+async function showDesktopCallNotification(callerName: string, invitation: VoiceInvitation) {
   const background = appIsInBackground();
   const group = invitation.kind === 'group';
   const title = group ? 'Convite para reunião de voz' : 'Chamada de voz recebida';
@@ -57,12 +55,7 @@ async function showDesktopCallNotification(callerName: string, invitation: Voice
       if (!allowed && !desktopPermissionRequested) { desktopPermissionRequested = true; allowed = (await notification.requestPermission()) === 'granted'; }
       if (allowed) notification.sendNotification({ title, body, group: `caju-voice-${invitation.roomId}`, autoCancel: true });
       if (!background) return;
-      const callUrl = new URL(window.location.origin);
-      callUrl.searchParams.set('voiceRoom', invitation.roomId); callUrl.searchParams.set('voiceCaller', invitation.callerName);
-      callUrl.searchParams.set('voiceKind', invitation.kind); callUrl.searchParams.set('voiceCallerEmail', invitation.callerEmail);
-      callUrl.searchParams.set('voiceRecipientEmail', recipient.email); callUrl.searchParams.set('voiceRecipientId', recipient.uid);
-      callUrl.searchParams.set('voiceRecipientName', recipient.name);
-      await invoke('show_voice_call_window', { url: callUrl.toString() });
+      await invoke('show_voice_call_window', { url: window.location.href });
       return;
     }
     if (!background) return;
@@ -163,11 +156,7 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     if (!user?.email) return;
     const receiver = new VoiceCallReceiver(user.email, (invitation) => {
       setIncomingVoice(invitation); startCallTone();
-      void showDesktopCallNotification(invitation.callerName, invitation, {
-        uid: user.uid,
-        email: user.email!,
-        name: user.displayName || user.email!.split('@')[0],
-      });
+      void showDesktopCallNotification(invitation.callerName, invitation);
     });
     voiceReceiverRef.current = receiver; receiver.connect();
     return () => { receiver.dispose(); if (voiceReceiverRef.current === receiver) voiceReceiverRef.current = null; stopCallTone(); };
@@ -484,7 +473,7 @@ function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
   </div>;
 }
 
-function IncomingVoiceCall({ invitation, identity, onAnswered, onClose, onDecline }: { invitation: VoiceInvitation | null; identity?: VoiceIdentity; onAnswered: () => void; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
+function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { invitation: VoiceInvitation | null; onAnswered: () => void; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
   const { user } = useAuth();
   const clientRef = useRef<VoiceChatClient | null>(null);
   const audioRef = useRef(new Map<string, HTMLAudioElement>());
@@ -496,10 +485,7 @@ function IncomingVoiceCall({ invitation, identity, onAnswered, onClose, onDeclin
   const cleanup = useCallback((notify = true) => { if (notify) clientRef.current?.leave(); clientRef.current = null; audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear(); setState('ringing'); setMuted(false); setParticipants(0); }, []);
   useEffect(() => () => cleanup(), [cleanup]);
   async function accept() {
-    const email = identity?.email || user?.email;
-    const uid = identity?.uid || user?.uid;
-    const name = identity?.name || user?.displayName || email?.split('@')[0];
-    if (!invitation || !email || !uid || !name || state !== 'ringing') return;
+    if (!invitation || !user?.email || state !== 'ringing') return;
     setState('connecting'); setError('');
     const client = new VoiceChatClient({
       onParticipantsChanged: (items) => setParticipants(items.length),
@@ -509,7 +495,7 @@ function IncomingVoiceCall({ invitation, identity, onAnswered, onClose, onDeclin
       onError: (reason) => setError(reason.message),
     });
     clientRef.current = client;
-    try { await client.join(invitation.roomId, uid, name, email); onAnswered(); setState('connected'); }
+    try { await client.join(invitation.roomId, user.uid, user.displayName || user.email.split('@')[0], user.email); onAnswered(); setState('connected'); }
     catch (reason) { cleanup(); setError(reason instanceof Error ? reason.message : 'Não foi possível atender a chamada.'); }
   }
   useEffect(() => {
@@ -520,43 +506,6 @@ function IncomingVoiceCall({ invitation, identity, onAnswered, onClose, onDeclin
   function closeActive() { if (invitation?.kind === 'direct') { clientRef.current?.endCall(); cleanup(false); } else cleanup(); onClose(); }
   const caller = invitation?.callerName || 'Colega';
   return <Dialog open={Boolean(invitation)} onOpenChange={(open) => { if (!open && invitation) state === 'ringing' ? onDecline(invitation) : closeActive(); }}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><PhoneIncoming className="size-5 text-emerald-400" />{state === 'ringing' ? 'Chamada recebida' : 'Chamada de voz'}</DialogTitle><DialogDescription>{state === 'ringing' ? `${caller} convidou você para ${invitation?.kind === 'group' ? 'uma reunião de voz' : 'uma chamada de voz'}.` : invitation?.kind === 'group' ? `${participants + 1} participante(s) na reunião.` : 'Chamada em andamento.'}</DialogDescription></DialogHeader>{state === 'ringing' ? <div className="flex gap-2"><button type="button" onClick={() => invitation && onDecline(invitation)} className="min-h-11 flex-1 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 text-sm font-semibold text-rose-200">Recusar</button><button type="button" onClick={() => void accept()} className="min-h-11 flex-1 rounded-xl bg-emerald-500 px-3 text-sm font-semibold text-white">Atender</button></div> : <div className="flex gap-2"><button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="min-h-11 flex-1 rounded-xl border border-border bg-background text-sm font-semibold disabled:opacity-50">{muted ? 'Ativar microfone' : 'Silenciar'}</button><button type="button" onClick={closeActive} className="min-h-11 flex-1 rounded-xl bg-rose-500 px-3 text-sm font-semibold text-white">Encerrar</button></div>}{error && <p role="alert" className="text-xs text-rose-300">{error}</p>}</DialogContent></Dialog>;
-}
-
-export function DesktopVoiceCallPopup() {
-  const { user } = useAuth();
-  const receiverRef = useRef<VoiceCallReceiver | null>(null);
-  const popupData = typeof window === 'undefined' ? null : (() => {
-    const params = new URLSearchParams(window.location.search);
-    const roomId = params.get('voiceRoom'); const callerName = params.get('voiceCaller'); const callerEmail = params.get('voiceCallerEmail'); const kind = params.get('voiceKind');
-    const recipientEmail = params.get('voiceRecipientEmail'); const recipientId = params.get('voiceRecipientId'); const recipientName = params.get('voiceRecipientName');
-    if (!roomId || !callerName || !callerEmail || (kind !== 'direct' && kind !== 'group')) return null;
-    return {
-      invitation: { roomId, callerName, callerEmail, kind } as VoiceInvitation,
-      identity: recipientEmail && recipientId && recipientName ? { email: recipientEmail, uid: recipientId, name: recipientName } : undefined,
-    };
-  })();
-  const invitation = popupData?.invitation || null;
-  const identity = popupData?.identity;
-  useEffect(() => {
-    if (!invitation) return;
-    document.documentElement.classList.add('voice-call-window');
-    return () => document.documentElement.classList.remove('voice-call-window');
-  }, [invitation]);
-  useEffect(() => {
-    const email = identity?.email || user?.email;
-    if (!invitation || !email) return;
-    const receiver = new VoiceCallReceiver(email, () => undefined);
-    receiverRef.current = receiver; receiver.connect();
-    return () => { receiver.dispose(); receiverRef.current = null; };
-  }, [identity?.email, invitation?.roomId, user?.email]);
-  if (!invitation) return null;
-  const closePopup = async () => {
-    try {
-      if ('__TAURI_INTERNALS__' in window) { const { invoke } = await import('@tauri-apps/api/core'); await invoke('close_voice_call_window'); return; }
-    } catch { /* The browser fallback can close its own notification window. */ }
-    window.close();
-  };
-  return <div className="fixed inset-0 z-[1000] bg-[#090b12]"><IncomingVoiceCall invitation={invitation} identity={identity} onAnswered={() => { localStorage.setItem('caju-voice-popup-answer', JSON.stringify({ roomId: invitation.roomId, at: Date.now() })); }} onClose={() => void closePopup()} onDecline={(call) => { receiverRef.current?.decline(call); void closePopup(); }} /></div>;
 }
 
 function MessageAttachment({ message, mine }: { message: Message; mine: boolean }) {

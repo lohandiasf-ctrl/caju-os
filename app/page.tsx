@@ -1,19 +1,24 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Star, Users, Wrench } from 'lucide-react';
+import { Bell, Building2, CalendarClock, CalendarDays, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Star, Users, Wrench, X } from 'lucide-react';
+import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ColleaguesPanel, ProfileSettings, UserMenu } from '@/components/user-menu';
 import { useAuth } from '@/components/auth-provider';
 import { OperationWorkflowDialog } from '@/components/operation-workflow-dialog';
 import { N1TicketActions } from '@/components/n1-ticket-actions';
+import { dayKey, sameDay, ticketActivities, type DatedTicketActivity } from '@/lib/ticket-activities';
 
 type Status = 'Pendente de agendamento' | 'Agendado' | 'Aguardando spare' | 'Direcionado' | 'Técnico em campo';
 type DashboardView = 'overview' | 'tickets' | 'central' | 'agenda' | 'technicians' | 'projects' | 'settings';
-type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string };
+type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string; updatedAt?: string; scheduledAt?: string; partnerTriggeredAtRaw?: string };
+type TicketActivity = DatedTicketActivity<Ticket>;
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
 type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
 type N1User = { email: string; role: 'n1' };
@@ -67,6 +72,7 @@ export default function Home() {
   const [operationOpen, setOperationOpen] = useState(false);
   const [archivedKeys, setArchivedKeys] = useState<Set<string>>(() => new Set());
   const [operational, setOperational] = useState<OperationalDashboard | null>(null);
+  const [ticketDate, setTicketDate] = useState<Date | undefined>();
 
   useEffect(() => {
     const syncView = () => setActiveView(dashboardViewFromLocation());
@@ -79,9 +85,11 @@ export default function Home() {
     return tickets.filter((ticket) => {
       if (archivedKeys.has(ticket.id)) return false;
       const matchesQuery = !q || [ticket.id, ticket.title, ticket.store, ticket.city, ticket.technician].filter(Boolean).some((value) => value!.toLowerCase().includes(q));
-      return matchesQuery && (statusFilter === 'Todos' || ticket.status === statusFilter);
+      const matchesDate = activeView !== 'tickets' || !ticketDate || ticketActivities(ticket).some((activity) => sameDay(activity.date, ticketDate));
+      return matchesQuery && matchesDate && (statusFilter === 'Todos' || ticket.status === statusFilter);
     });
-  }, [archivedKeys, query, statusFilter, tickets]);
+  }, [activeView, archivedKeys, query, statusFilter, ticketDate, tickets]);
+  const allTicketActivities = useMemo(() => tickets.flatMap(ticketActivities).sort((a, b) => a.date.getTime() - b.date.getTime()), [tickets]);
   const stores = useMemo(() => Array.from(new Set(tickets.map((ticket) => `${ticket.store}|||${ticket.city}`))).map((value) => {
     const [store, city] = value.split('|||');
     return { store, city, tickets: tickets.filter((ticket) => ticket.store === store).length };
@@ -285,7 +293,8 @@ export default function Home() {
         </div>}
         {activeView === 'overview' && <OperationalSummary data={operational} />}
         {jiraError && <div role="alert" className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-200">{jiraError}</div>}
-        {(activeView === 'overview' || activeView === 'tickets' || activeView === 'central') && <><div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos`}</p></div><Button variant={showFilters ? 'secondary' : 'outline'} className="h-9" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
+        {activeView === 'tickets' && <TicketActivityCalendar activities={allTicketActivities} selected={ticketDate} onSelect={setTicketDate} onOpen={openTicket} />}
+        {(activeView === 'overview' || activeView === 'tickets' || activeView === 'central') && <><div className="mt-8 flex flex-wrap items-center gap-2"><div className="mr-auto"><h2 className="text-lg font-bold">Fluxo de chamados</h2><p className="text-xs text-muted-foreground">{jiraLoading ? 'Carregando chamados reais...' : `${filtered.length} chamados exibidos${activeView === 'tickets' && ticketDate ? ` em ${formatDay(ticketDate)}` : ''}`}</p></div><Button variant={showFilters ? 'secondary' : 'outline'} className="h-9" onClick={() => setShowFilters((value) => !value)} aria-expanded={showFilters}><Filter /> Filtros</Button><div className="flex rounded-lg border border-border bg-card p-1"><Button variant={view === 'kanban' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('kanban')}><Wrench /> Kanban</Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('list')}><List /> Lista</Button></div></div>
         {showFilters && <div className="surface-panel mt-3 flex flex-wrap gap-2 rounded-xl p-3" aria-label="Filtrar por status">{(['Todos', ...columns] as const).map((status) => <Button key={status} size="sm" variant={statusFilter === status ? 'default' : 'ghost'} onClick={() => setStatusFilter(status)}>{status}</Button>)}</div>}
         {view === 'kanban' ? <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">{columns.map((column) => {
           const items = filtered.filter((ticket) => ticket.status === column);
@@ -331,6 +340,23 @@ export default function Home() {
 
 function TicketCard({ ticket, onOpen }: { ticket: Ticket; onOpen: () => void }) {
   return <button type="button" onClick={onOpen} className="w-full rounded-xl border border-white/[.07] bg-black/15 p-4 text-left shadow-[0_14px_32px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 hover:border-primary/40 hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex justify-between gap-3"><span className="font-mono text-xs font-bold text-primary">{ticket.id}</span><Badge variant="outline" className={ticket.priority === 'Alta' ? 'border-red-400/30 bg-red-400/10 text-red-300' : 'text-muted-foreground'}>{ticket.priority}</Badge></div><h4 className="mt-3 text-sm font-semibold leading-snug">{ticket.title}</h4><div className="mt-3 space-y-2 text-xs text-muted-foreground"><p className="flex items-center gap-1.5"><Building2 className="size-3.5" />{ticket.store}</p><p className="flex items-center gap-1.5"><MapPin className="size-3.5" />{ticket.city}</p>{ticket.schedule && <p className="flex items-center gap-1.5 text-blue-300"><CalendarClock className="size-3.5" />Agendamento: {ticket.schedule}</p>}{ticket.partnerTriggeredAt && <p className="flex items-center gap-1.5 text-amber-300"><CalendarClock className="size-3.5" />Acionamento: {ticket.partnerTriggeredAt}</p>}</div><div className="mt-4 flex items-center justify-between border-t border-border pt-3"><span className="text-xs text-muted-foreground">{ticket.rawStatus}</span>{ticket.technician && <span className="text-xs font-semibold">{ticket.technician}</span>}</div></button>;
+}
+
+function TicketActivityCalendar({ activities, selected, onSelect, onOpen }: { activities: TicketActivity[]; selected?: Date; onSelect: (date?: Date) => void; onOpen: (ticket: Ticket) => void }) {
+  const [open, setOpen] = useState(false);
+  const dates = useMemo(() => Array.from(new Map(activities.map((activity) => [dayKey(activity.date), activity.date])).values()), [activities]);
+  const selectedActivities = selected ? activities.filter((activity) => sameDay(activity.date, selected)) : [];
+  const tones = { blue: 'bg-blue-400', amber: 'bg-amber-400', slate: 'bg-slate-400' } as const;
+  return <section className="surface-panel mt-6 overflow-hidden rounded-2xl" aria-labelledby="ticket-calendar-title">
+    <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+      <div><h2 id="ticket-calendar-title" className="flex items-center gap-2 font-semibold"><CalendarDays className="size-5 text-primary" aria-hidden="true" />Calendário de atividades</h2><p className="mt-1 text-xs text-muted-foreground">Escolha uma data para ver atualizações, agendamentos e acionamentos.</p></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Popover open={open} onOpenChange={setOpen}><PopoverTrigger className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label="Escolher data no calendário"><CalendarDays className="size-4" aria-hidden="true" />{selected ? formatDay(selected) : 'Escolher data'}</PopoverTrigger><PopoverContent align="end" className="w-auto rounded-2xl border-border bg-popover p-2 shadow-2xl"><Calendar mode="single" selected={selected} onSelect={(date) => { onSelect(date); if (date) setOpen(false); }} locale={ptBR} modifiers={{ hasActivity: dates }} modifiersClassNames={{ hasActivity: '[&>button]:after:absolute [&>button]:after:bottom-1 [&>button]:after:size-1 [&>button]:after:rounded-full [&>button]:after:bg-primary' }} /></PopoverContent></Popover>
+        {selected && <Button type="button" variant="ghost" className="min-h-11" onClick={() => onSelect(undefined)} aria-label="Limpar data selecionada"><X aria-hidden="true" />Limpar</Button>}
+      </div>
+    </div>
+    {selected ? <div className="p-4 sm:p-5"><div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm font-semibold">{formatDayLong(selected)}</p><Badge variant="outline">{selectedActivities.length} atividade{selectedActivities.length === 1 ? '' : 's'}</Badge></div>{selectedActivities.length ? <div className="grid gap-2 lg:grid-cols-2">{selectedActivities.map((activity, index) => <button type="button" key={`${activity.ticket.id}-${activity.label}-${index}`} onClick={() => onOpen(activity.ticket)} className="flex min-h-16 w-full items-start gap-3 rounded-xl border border-border bg-black/10 p-3 text-left transition hover:border-primary/35 hover:bg-white/[.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span className={`mt-1.5 size-2.5 shrink-0 rounded-full ${tones[activity.tone]}`} /><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{activity.label}</strong><time className="text-xs tabular-nums text-muted-foreground">{formatTime(activity.date)}</time></span><span className="mt-1 block text-xs text-muted-foreground"><b className="font-mono text-primary">{activity.ticket.id}</b> · {activity.ticket.store} · {activity.detail}</span></span></button>)}</div> : <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Nenhuma atividade encontrada nessa data.</div>}</div> : <div className="p-5 text-sm text-muted-foreground">As datas com ponto azul possuem alguma atividade registrada.</div>}
+  </section>;
 }
 
 function AgendaView({ tickets, loading, onOpen }: { tickets: Ticket[]; loading: boolean; onOpen: (ticket: Ticket) => void }) {
@@ -449,8 +475,12 @@ function toTicket(issue: JiraTicket): Ticket {
   const priority: Ticket['priority'] = priorityText.includes('highest') || priorityText.includes('high') || priorityText.includes('alta') ? 'Alta' : priorityText.includes('low') || priorityText.includes('baixa') ? 'Baixa' : 'Media';
   const updated = issue.updatedAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(issue.updatedAt)) : 'sem data';
   const storeFromTitle = issue.summary.match(/^Loja\s+([^|]+)/i)?.[0]?.trim();
-  return { id: issue.key, title: issue.summary, store: issue.store || storeFromTitle || 'Loja não informada', city: issue.city || `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined, schedule: formatJiraDate(issue.scheduledAt), partnerTriggeredAt: formatJiraDate(issue.partnerTriggeredAt) };
+  return { id: issue.key, title: issue.summary, store: issue.store || storeFromTitle || 'Loja não informada', city: issue.city || `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined, schedule: formatJiraDate(issue.scheduledAt), partnerTriggeredAt: formatJiraDate(issue.partnerTriggeredAt), updatedAt: issue.updatedAt, scheduledAt: issue.scheduledAt ?? undefined, partnerTriggeredAtRaw: issue.partnerTriggeredAt ?? undefined };
 }
+
+function formatDay(date: Date) { return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date); }
+function formatDayLong(date: Date) { return new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(date); }
+function formatTime(date: Date) { return new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(date); }
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');

@@ -178,17 +178,6 @@ main > aside.fixed nav a[aria-current='page'] {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 
-html.voice-call-window,
-html.voice-call-window body {
-  min-width: 0;
-  background: #090b12 !important;
-  overflow: hidden;
-}
-
-html.voice-call-window body > *:not([data-nextjs-toast]) {
-  background: #090b12;
-}
-
 @layer components {
   .surface-panel {
     background: linear-gradient(145deg, rgb(28 31 34 / 97%), rgb(18 20 22 / 99%));
