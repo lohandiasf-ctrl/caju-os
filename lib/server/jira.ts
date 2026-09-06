@@ -48,6 +48,7 @@ type JiraIssue = {
     customfield_14954?: unknown;
     customfield_11994?: unknown;
     customfield_12036?: unknown;
+    customfield_12279?: unknown;
     customfield_12278?: unknown;
     customfield_12413?: unknown;
     customfield_14880?: unknown;
@@ -188,8 +189,8 @@ export async function getJiraIssue(key: string) {
     ticketTotal: value('Total do Tickt', 'Total do Ticket'),
     visitNumber: value('Numero de Visita', 'Número de Visita'),
     additionalCosts: value('Detalhes de custos adicionais'),
-    technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos'),
-    scheduledDateTime: value('Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento'),
+    technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos') ?? customFieldText(issue.fields.customfield_12279),
+    scheduledDateTime: value('Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento') ?? customFieldText(issue.fields.customfield_12036),
     defectSummary: value('Resumo do defeito'),
   };
   const attachments: JiraAttachmentSummary[] = (issue.fields.attachment ?? []).flatMap((attachment) => attachment.id && attachment.filename ? [{ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType ?? 'application/octet-stream', size: attachment.size ?? 0, createdAt: attachment.created ?? '', author: attachment.author?.displayName ?? null }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -213,7 +214,8 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
   ];
   for (const [inputKey, aliases] of mappings) {
     if (input[inputKey] === undefined) continue;
-    const id = aliases.map((name) => ids.get(normalizeText(name))).find(Boolean);
+    const fixedId = inputKey === 'scheduledDateTime' ? 'customfield_12036' : inputKey === 'technicianData' ? 'customfield_12279' : undefined;
+    const id = fixedId ?? aliases.map((name) => ids.get(normalizeText(name))).find(Boolean);
     if (id) {
       const value = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
         ? numericJiraValue(input[inputKey])
@@ -236,7 +238,7 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
   return getJiraIssue(normalizedKey);
 }
 
-export async function transitionJiraIssue(key: string, localStatus: string) {
+export async function transitionJiraIssue(key: string, localStatus: string, input: Record<string, unknown> = {}) {
   const normalizedKey = validIssueKey(key);
   const aliases: Record<string, string[]> = {
     triage: ['triagem', 'aberto'], scheduling: ['pendente de agendamento', 'agendamento'], scheduled: ['agendado'], operational_preparation: ['direcionado', 'preparacao operacional'],
@@ -246,12 +248,20 @@ export async function transitionJiraIssue(key: string, localStatus: string) {
   };
   const wanted = aliases[localStatus] ?? [];
   if (!wanted.length) throw new JiraError('Etapa inválida.', 400);
-  const current = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=status`);
+  const current = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=status,customfield_12036,customfield_12279`);
   if (wanted.some((name) => normalizeText(current.fields.status?.name ?? '').includes(normalizeText(name)))) return { changed: false };
   const response = await jiraFetch<{ transitions?: Array<{ id: string; name: string; to?: { name?: string } }> }>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`);
-  const transition = response.transitions?.find((item) => wanted.some((name) => [item.name, item.to?.name ?? ''].some((candidate) => normalizeText(candidate).includes(normalizeText(name)))));
+  const transition = response.transitions?.find((item) => (localStatus === 'scheduled' && item.id === '9') || wanted.some((name) => [item.name, item.to?.name ?? ''].some((candidate) => normalizeText(candidate).includes(normalizeText(name)))));
   if (!transition) throw new JiraError(`O Jira não permite mudar de “${current.fields.status?.name ?? 'etapa atual'}” para essa etapa.`, 409);
-  await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`, { method: 'POST', body: JSON.stringify({ transition: { id: transition.id } }) });
+  const transitionFields: Record<string, unknown> = {};
+  if (localStatus === 'scheduled') {
+    const scheduledDateTime = jiraDateTimeValue(input.scheduledDateTime) ?? current.fields.customfield_12036;
+    const technicianText = cleanJiraValue(input.technicianData) ?? customFieldText(current.fields.customfield_12279);
+    if (!scheduledDateTime || !technicianText) throw new JiraError('Para agendar, selecione um técnico e informe a data/hora do atendimento.', 400);
+    transitionFields.customfield_12036 = scheduledDateTime;
+    transitionFields.customfield_12279 = typeof technicianText === 'string' ? textToAdf(technicianText) : technicianText;
+  }
+  await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`, { method: 'POST', body: JSON.stringify({ transition: { id: transition.id }, ...(Object.keys(transitionFields).length ? { fields: transitionFields } : {}) }) });
   issuesCache.clear();
   return { changed: true };
 }

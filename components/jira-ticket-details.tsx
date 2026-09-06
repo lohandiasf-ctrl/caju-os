@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Check, CircleDollarSign, Download, Eye, FileText, Image, Loader2, Paperclip, RefreshCw, Save, Upload, Video, Wrench, X } from 'lucide-react';
+import { Building2, Check, CircleDollarSign, Download, Eye, FileText, Image, Loader2, Paperclip, RefreshCw, Save, Search, Upload, Video, Wrench, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,10 +14,11 @@ export type JiraOperationalFields = {
 };
 
 type JiraAttachment = { id: string; filename: string; mimeType: string; size: number; createdAt: string; author: string | null };
+type Technician = { id: number; technicianCode: string | null; name: string; cpf: string | null; phone: string | null; city: string; state: string };
 type Details = { key: string; status: string; priority: string; assignee: string | null; reporter: string | null; issueType: string; createdAt: string; description: string; operationalFields: JiraOperationalFields; attachments: JiraAttachment[] };
 type User = { getIdToken: () => Promise<string> } | null;
 const generalFields: Array<[keyof JiraOperationalFields, string]> = [
-  ['technicianData', 'Dados dos técnicos · Nome, CPF, RG e telefone'], ['scheduledDateTime', 'Data e hora do agendamento'],
+  ['scheduledDateTime', 'Data e hora do agendamento'],
   ['storeCode', 'Código da loja'], ['storeName', 'Nome da loja'], ['contactName', 'Nome do contato'], ['contactPhone', 'Telefone de contato'],
   ['preferredServiceTime', 'Melhor horário para atendimento'], ['problemCategory', 'Categoria do problema'], ['equipmentModel', 'Equipamento / marca / modelo'],
   ['pdvNumber', 'Número do PDV'], ['problemType', 'Tipo de problema'], ['allegedDefect', 'Defeito alegado'],
@@ -42,14 +43,34 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ attachment: JiraAttachment; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [technicianQuery, setTechnicianQuery] = useState('');
+  const [technicianSearchOpen, setTechnicianSearchOpen] = useState(false);
+  const [techniciansLoading, setTechniciansLoading] = useState(false);
   const currentStatus = statusKey(details.status);
   const dirty = Object.fromEntries(Object.entries(form).filter(([key, value]) => value !== String(initialForm[key] ?? '')));
   const dirtyCount = Object.keys(dirty).length;
   const nextStatus = currentStatus === 'scheduling' ? 'scheduled' : 'in_service';
   const nextStatusLabel = currentStatus === 'scheduling' ? 'Agendar chamado' : 'Marcar técnico em campo';
   const calculatedTotal = useMemo(() => ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2'].reduce((total, key) => total + jiraNumber(form[key]), 0), [form.visitCost1, form.equipmentTotal, form.kmTotal, form.visitCost2]);
+  const technicianMatches = useMemo(() => {
+    const query = technicianQuery.trim().toLocaleLowerCase('pt-BR');
+    if (!query) return [];
+    const unique = Array.from(new Map(technicians.map((technician) => [`${technician.name.toLocaleLowerCase('pt-BR')}|${technician.cpf ?? ''}|${technician.phone ?? ''}`, technician])).values());
+    return unique.filter((technician) => `${technician.name} ${technician.technicianCode ?? ''} ${technician.cpf ?? ''} ${technician.phone ?? ''} ${technician.city} ${technician.state}`.toLocaleLowerCase('pt-BR').includes(query)).slice(0, 8);
+  }, [technicianQuery, technicians]);
 
   useEffect(() => setForm(initialForm), [initialForm]);
+  useEffect(() => {
+    if (!user) return;
+    let active = true; setTechniciansLoading(true);
+    void user.getIdToken().then((token) => fetch('/api/technicians', { headers: { Authorization: `Bearer ${token}` } })).then(async (response) => {
+      if (!response.ok) throw new Error();
+      const payload = await response.json() as { technicians?: Technician[] };
+      if (active) setTechnicians(payload.technicians ?? []);
+    }).catch(() => { if (active) setTechnicians([]); }).finally(() => { if (active) setTechniciansLoading(false); });
+    return () => { active = false; };
+  }, [user]);
   useEffect(() => {
     const hasEnteredCost = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2'].some((key) => String(form[key] ?? '').trim() !== '');
     const value = hasEnteredCost ? String(Number(calculatedTotal.toFixed(2))) : '';
@@ -86,15 +107,21 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     return true;
   }
 
+  function selectTechnician(technician: Technician) {
+    setTechnicianQuery(technician.name);
+    setTechnicianSearchOpen(false);
+    setForm((current) => ({ ...current, technicianData: `Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}` }));
+  }
+
   function changeStatus(target: string) {
     if (currentStatus === 'scheduling' && target === 'in_service') { setFailed(true); setMessage('O Jira exige concluir “Agendado” antes de avançar para “Técnico em campo”.'); return; }
     if (target === 'scheduled' && !validateScheduling()) return;
-    void updateJira({ ...dirty, status: target }, 'status');
+    void updateJira({ ...(target === 'scheduled' ? { technicianData: form.technicianData, scheduledDateTime: form.scheduledDateTime } : {}), status: target }, 'status');
   }
 
   function advanceStatus() {
     if (nextStatus === 'scheduled' && !validateScheduling()) return;
-    void updateJira({ ...dirty, status: nextStatus }, 'status');
+    void updateJira({ ...(nextStatus === 'scheduled' ? { technicianData: form.technicianData, scheduledDateTime: form.scheduledDateTime } : {}), status: nextStatus }, 'status');
   }
 
   function input([key, label]: [keyof JiraOperationalFields, string], numeric = false) {
@@ -159,8 +186,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
         <TabsTrigger value="anexos" className="min-h-10"><Paperclip /> Anexos <span className="rounded bg-primary/10 px-1.5 text-xs text-primary">{details.attachments?.length ?? 0}</span></TabsTrigger>
       </TabsList>
       <TabsContent value="dados" className="space-y-4 pt-3">
-        <div className="rounded-xl border border-primary/25 bg-primary/5 p-3"><h3 className="flex items-center gap-2 text-sm font-bold"><Building2 className="size-4 text-primary" />Dados obrigatórios do agendamento</h3><p className="mt-1 text-xs text-muted-foreground">Preencha estes dois campos antes de avançar.</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{generalFields.slice(0, 2).map((field) => input(field))}</div></div>
-        <details className="group rounded-xl border border-border bg-background/35 p-3"><summary className="cursor-pointer list-none text-sm font-bold">Informações da loja e do problema <span className="ml-1 text-xs font-normal text-muted-foreground group-open:hidden">· clique para expandir</span></summary><div className="mt-4 grid gap-3 sm:grid-cols-2">{generalFields.slice(2).map((field) => input(field))}</div>{details.description && <div className="mt-4 border-t border-border pt-4"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descrição original</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{details.description}</p></div>}</details>
+        <div className="rounded-xl border border-primary/25 bg-primary/5 p-3"><h3 className="flex items-center gap-2 text-sm font-bold"><Building2 className="size-4 text-primary" />Dados obrigatórios do agendamento</h3><p className="mt-1 text-xs text-muted-foreground">A busca usa os técnicos cadastrados no banco de dados. Confirme os dados antes de avançar.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="relative"><label className="text-xs font-semibold text-muted-foreground">Pesquisar técnico</label><div className="relative mt-1.5"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" value={technicianQuery} onFocus={() => setTechnicianSearchOpen(true)} onChange={(event) => { setTechnicianQuery(event.target.value); setTechnicianSearchOpen(true); }} onKeyDown={(event) => { if (event.key === 'Escape') setTechnicianSearchOpen(false); }} placeholder={techniciansLoading ? 'Carregando técnicos...' : 'Digite nome, cidade, CPF ou código'} className="min-h-11 pl-9" autoComplete="off" /></div>{technicianSearchOpen && technicianMatches.length > 0 && <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-2xl">{technicianMatches.map((technician) => <button key={technician.id} type="button" onClick={() => selectTechnician(technician)} className="block min-h-11 w-full rounded-lg px-3 py-2 text-left hover:bg-primary/10 focus-visible:bg-primary/10"><span className="block text-sm font-semibold">{technician.name}</span><span className="block text-xs text-muted-foreground">{technician.city}/{technician.state}{technician.technicianCode ? ` · ${technician.technicianCode}` : ''}{technician.phone ? ` · ${technician.phone}` : ''}</span></button>)}</div>}</div>{generalFields.slice(0, 1).map((field) => input(field))}<label className="text-xs font-semibold text-muted-foreground sm:col-span-2">Dados enviados ao Jira · Nome, CPF, RG e telefone<textarea rows={4} value={form.technicianData ?? ''} onChange={(event) => setForm((current) => ({ ...current, technicianData: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /><span className="mt-1 block text-[11px] font-normal text-muted-foreground">Você pode complementar o RG manualmente antes de agendar.</span></label></div></div>
+        <details className="group rounded-xl border border-border bg-background/35 p-3"><summary className="cursor-pointer list-none text-sm font-bold">Informações da loja e do problema <span className="ml-1 text-xs font-normal text-muted-foreground group-open:hidden">· clique para expandir</span></summary><div className="mt-4 grid gap-3 sm:grid-cols-2">{generalFields.slice(1).map((field) => input(field))}</div>{details.description && <div className="mt-4 border-t border-border pt-4"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descrição original</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{details.description}</p></div>}</details>
         <div className="border-t border-border pt-4"><h3 className="mb-3 flex items-center gap-2 text-sm font-bold"><Wrench className="size-4 text-amber-300" />Resumo técnico no Jira</h3><div className="grid gap-3">{([['identifiedProblem','Problema identificado'],['testsPerformed','Testes feitos'],['partToReplace','Peça a ser trocada']] as const).map(([key,label]) => <label key={key} className="text-xs font-semibold text-muted-foreground">{label}<textarea rows={3} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /></label>)}</div></div>
         {saveButton}
       </TabsContent>

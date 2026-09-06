@@ -1,5 +1,5 @@
 import { asc, eq } from 'drizzle-orm';
-import { operationalAudit, operationalStores, operationalVisits, operationalWorkflows } from '@/db/schema';
+import { operationalAudit, operationalStores, operationalVisits, operationalWorkflows, technicians } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
@@ -47,14 +47,16 @@ export async function PUT(request: Request) {
     if (status === 'scheduled' && (!technicianId || !scheduledAt || Date.parse(scheduledAt) <= Date.now())) return bad('Agendado exige técnico e data futura.');
     if (status === 'operational_preparation' && !technicianId) return bad('Preparação operacional exige técnico.');
     if (user.role !== 'gerencia' && hasFinancialChange(body)) return Response.json({ error: 'Somente gerência altera valores e pagamento.' }, { status: 403 });
+    const technician = technicianId ? await db.select({ name: technicians.name, cpf: technicians.cpf, phone: technicians.phone }).from(technicians).where(eq(technicians.id, technicianId)).get() : null;
+    const technicianData = technician ? `Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}` : null;
     const hasTechnicalSummary = [body.identifiedProblem, body.testsPerformed, body.partToReplace].some((value) => typeof value === 'string' && value.trim());
     await updateJiraIssue(ticketKey, {
       ...(present(body.storeCode) ? { storeCode: body.storeCode } : {}), ...(present(body.storeName) ? { storeName: body.storeName } : {}),
       ...(present(body.requesterName) ? { contactName: body.requesterName } : {}), ...(present(body.requesterPhone) ? { contactPhone: body.requesterPhone } : {}),
-      ...(scheduledAt ? { preferredServiceTime: scheduledAt } : {}), ...(present(body.category) ? { problemCategory: body.category } : {}), ...(present(body.pdvNumber) ? { pdvNumber: body.pdvNumber } : {}),
+      ...(scheduledAt ? { preferredServiceTime: scheduledAt, scheduledDateTime: scheduledAt } : {}), ...(technicianData ? { technicianData } : {}), ...(present(body.category) ? { problemCategory: body.category } : {}), ...(present(body.pdvNumber) ? { pdvNumber: body.pdvNumber } : {}),
       ...(hasTechnicalSummary ? { identifiedProblem: body.identifiedProblem, testsPerformed: body.testsPerformed, partToReplace: body.partToReplace } : {}),
-    }).catch((error) => { if (String(error).includes('Nenhum campo correspondente')) return null; throw error; });
-    await transitionJiraIssue(ticketKey, status);
+    }, { allowNoop: true });
+    await transitionJiraIssue(ticketKey, status, { scheduledDateTime: scheduledAt, technicianData });
     const fields = workflowFields(body, { status, technicianId, scheduledAt, now });
     const existing = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, ticketKey)).get();
     let workflowId: number;
