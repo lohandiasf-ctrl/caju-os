@@ -4,11 +4,15 @@ import { io, type Socket } from 'socket.io-client';
 
 type Peer = { socketId: string; userId: string; userName: string };
 type Signal = RTCSessionDescriptionInit | RTCIceCandidateInit;
+export type VoiceCallKind = 'direct' | 'group';
+export type VoiceInvitation = { roomId: string; callerName: string; callerEmail: string; kind: VoiceCallKind };
 
 export type VoiceChatEvents = {
   onParticipantsChanged?: (participants: Peer[]) => void;
   onRemoteStream?: (socketId: string, stream: MediaStream) => void;
   onPeerLeft?: (socketId: string) => void;
+  onCallEnded?: () => void;
+  onCallDeclined?: () => void;
   onError?: (error: Error) => void;
 };
 
@@ -33,7 +37,7 @@ export class VoiceChatClient {
 
   constructor(private events: VoiceChatEvents = {}) {}
 
-  async join(roomId: string, userId: string, userName: string) {
+  async join(roomId: string, userId: string, userName: string, email?: string) {
     const url = signalingUrl();
     if (!url) throw new Error('Servidor de voz ainda não foi configurado.');
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
@@ -42,16 +46,31 @@ export class VoiceChatClient {
     await new Promise<void>((resolve, reject) => {
       const socket = this.socket!;
       const timer = window.setTimeout(() => reject(new Error('Servidor de voz não respondeu.')), 10_000);
-      socket.once('connect', () => { window.clearTimeout(timer); socket.emit('voice:join', { roomId, userId, userName }); resolve(); });
+      socket.once('connect', () => { window.clearTimeout(timer); if (email) socket.emit('voice:register', { email }); socket.emit('voice:join', { roomId, userId, userName }); resolve(); });
       socket.once('connect_error', (error) => { window.clearTimeout(timer); reject(error); });
       socket.connect();
     });
+  }
+
+  invite(recipients: string[], kind: VoiceCallKind) {
+    this.socket?.emit('voice:call', { recipients, kind });
   }
 
   setMuted(muted: boolean) { this.stream?.getAudioTracks().forEach((track) => { track.enabled = !muted; }); }
 
   leave() {
     this.socket?.emit('voice:leave');
+    this.dispose();
+  }
+
+  endCall() {
+    this.socket?.emit('voice:end-call');
+    // Give Socket.IO one event-loop turn to flush the bilateral hangup before
+    // closing the websocket and media tracks locally.
+    window.setTimeout(() => this.dispose(), 60);
+  }
+
+  private dispose() {
     this.socket?.disconnect();
     this.socket = null;
     this.peers.forEach((peer) => peer.close());
@@ -74,6 +93,8 @@ export class VoiceChatClient {
       this.peers.get(socketId)?.close(); this.peers.delete(socketId); this.participants.delete(socketId);
       this.events.onPeerLeft?.(socketId); this.emitParticipants();
     });
+    socket.on('voice:call-ended', () => { this.events.onCallEnded?.(); this.dispose(); });
+    socket.on('voice:call-declined', () => this.events.onCallDeclined?.());
     socket.on('voice:signal', ({ from, data }: { from: string; data: Signal }) => void this.handleSignal(from, data));
     socket.on('voice:error', (message: string) => this.events.onError?.(new Error(message)));
   }
@@ -105,6 +126,21 @@ export class VoiceChatClient {
   }
 
   private emitParticipants() { this.events.onParticipantsChanged?.([...this.participants.values()]); }
+}
+
+export class VoiceCallReceiver {
+  private socket: Socket | null = null;
+  constructor(private email: string, private onIncoming: (invitation: VoiceInvitation) => void) {}
+
+  connect() {
+    this.socket = io(signalingUrl(), { transports: ['websocket'], autoConnect: false, timeout: 10_000 });
+    this.socket.on('connect', () => this.socket?.emit('voice:register', { email: this.email }));
+    this.socket.on('voice:incoming-call', (invitation: VoiceInvitation) => this.onIncoming(invitation));
+    this.socket.connect();
+  }
+
+  decline(invitation: VoiceInvitation) { this.socket?.emit('voice:call-declined', { roomId: invitation.roomId, callerEmail: invitation.callerEmail }); }
+  dispose() { this.socket?.disconnect(); this.socket = null; }
 }
 
 export function directVoiceRoom(firstEmail: string, secondEmail: string) {

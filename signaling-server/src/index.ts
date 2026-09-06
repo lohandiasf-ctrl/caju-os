@@ -12,8 +12,13 @@ const io = new Server(server, { cors: { origin: allowedOrigins, methods: ['GET',
 type Participant = { roomId: string; userId: string; userName: string };
 const participants = new Map<string, Participant>();
 const rooms = new Map<string, Set<string>>();
+const registeredEmails = new Map<string, string>();
 
 io.on('connection', (socket: Socket) => {
+  socket.on('voice:register', ({ email }: { email?: string }) => {
+    if (!email || email.length > 180 || !email.includes('@')) return;
+    registeredEmails.set(socket.id, email.toLowerCase());
+  });
   socket.on('voice:join', (payload: Participant) => {
     if (!payload?.roomId || !payload.userId || !payload.userName || payload.roomId.length > 300) return socket.emit('voice:error', 'Sala inválida.');
     leave(socket);
@@ -29,8 +34,32 @@ io.on('connection', (socket: Socket) => {
     if (!source || !target || source.roomId !== target.roomId || JSON.stringify(data).length > 100_000) return;
     io.to(to!).emit('voice:signal', { from: socket.id, data });
   });
+  socket.on('voice:call', ({ recipients, kind }: { recipients?: unknown; kind?: unknown }) => {
+    const caller = participants.get(socket.id);
+    if (!caller || !Array.isArray(recipients) || !['direct', 'group'].includes(String(kind))) return;
+    const recipientEmails = [...new Set(recipients.filter((email): email is string => typeof email === 'string' && email.includes('@')).map((email) => email.toLowerCase()))].slice(0, 5);
+    const callerEmail = registeredEmails.get(socket.id) || '';
+    for (const email of recipientEmails) {
+      for (const [id, registeredEmail] of registeredEmails) {
+        if (registeredEmail === email) io.to(id).emit('voice:incoming-call', { roomId: caller.roomId, callerName: caller.userName, callerEmail, kind });
+      }
+    }
+  });
+  socket.on('voice:call-declined', ({ roomId, callerEmail }: { roomId?: string; callerEmail?: string }) => {
+    if (!roomId || !callerEmail) return;
+    for (const [id, email] of registeredEmails) if (email === callerEmail.toLowerCase()) io.to(id).emit('voice:call-declined', { roomId });
+  });
+  socket.on('voice:end-call', () => {
+    const participant = participants.get(socket.id); if (!participant) return;
+    const memberIds = [...(rooms.get(participant.roomId) ?? [])];
+    for (const memberId of memberIds) io.to(memberId).emit('voice:call-ended', { roomId: participant.roomId });
+    for (const memberId of memberIds) {
+      const memberSocket = io.sockets.sockets.get(memberId);
+      if (memberSocket) leave(memberSocket);
+    }
+  });
   socket.on('voice:leave', () => leave(socket));
-  socket.on('disconnect', () => leave(socket));
+  socket.on('disconnect', () => { registeredEmails.delete(socket.id); leave(socket); });
 });
 
 function leave(socket: Socket) {
