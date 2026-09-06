@@ -156,10 +156,11 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     <button type="button" onClick={toggleColleagues} aria-label={colleaguesOpen ? 'Fechar colegas' : messageDot ? 'Abrir colegas, nova atividade no chat' : 'Abrir colegas'} aria-expanded={colleaguesOpen} className="fixed bottom-5 right-5 z-40 hidden size-11 place-items-center rounded-xl border border-primary/30 bg-sidebar text-primary shadow-xl transition hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:grid"><Users className="size-5" aria-hidden="true" />{messageDot && <span className="absolute right-1.5 top-1.5 size-2.5 animate-pulse rounded-full border-2 border-sidebar bg-emerald-400" />}</button>
     <aside inert={!colleaguesOpen} className={`colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? 'translate-x-0' : 'pointer-events-none translate-x-[calc(100%+1.5rem)]'}`} aria-label="Colegas" aria-hidden={!colleaguesOpen}>
       <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-[11px] text-muted-foreground">Equipe e disponibilidade</p></div><button type="button" onClick={toggleColleagues} className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary/20" aria-label="Fechar colegas"><Users className="size-4" aria-hidden="true" /></button></div>
+      <TeamVoiceControl />
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">{list}</div>
     </aside>
     <button type="button" onClick={() => { setMobileOpen(true); setMessageDot(false); }} className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden" aria-label={messageDot ? 'Abrir colegas, nova atividade no chat' : 'Abrir colegas'}><Users className="size-5" />{messageDot && <span className="absolute right-0.5 top-0.5 size-3 animate-pulse rounded-full border-2 border-background bg-emerald-400" />}</button>
-    <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader>{list}</DialogContent></Dialog>
+    <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader><TeamVoiceControl />{list}</DialogContent></Dialog>
     <Dialog open={shareOpen} onOpenChange={setShareOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md"><DialogHeader><DialogTitle>Enviar chamado por chat</DialogTitle><DialogDescription>{ticketToShare ? `Escolha um colega para receber o chamado ${ticketToShare.id}.` : 'Escolha um colega.'}</DialogDescription></DialogHeader>{shareList}</DialogContent></Dialog>
     <ChatDialog colleague={selected} tickets={tickets} initialTicket={chatTicket} onClose={() => { setSelected(null); setChatTicket(null); }} onOpenTicket={onOpenTicket} onMessageSent={indicateSentMessage} />
     {notice && <div aria-live="assertive" className="fixed right-4 top-4 z-[80] flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10">
@@ -338,6 +339,49 @@ function VoiceCallControl({ colleague }: { colleague: Colleague }) {
         <button type="button" onClick={leave} className="grid size-11 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Sair da chamada"><PhoneOff className="size-4" /></button>
       </>}
     </div>
+    {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
+  </div>;
+}
+
+function TeamVoiceControl() {
+  const { user } = useAuth();
+  const clientRef = useRef<VoiceChatClient | null>(null);
+  const audioRef = useRef(new Map<string, HTMLAudioElement>());
+  const [state, setState] = useState<'idle' | 'connecting' | 'connected'>('idle');
+  const [muted, setMuted] = useState(false);
+  const [participants, setParticipants] = useState(0);
+  const [error, setError] = useState('');
+  const leave = useCallback(() => {
+    clientRef.current?.leave(); clientRef.current = null;
+    audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear();
+    setState('idle'); setMuted(false); setParticipants(0);
+  }, []);
+  useEffect(() => leave, [leave]);
+  async function join() {
+    if (!user?.email || state !== 'idle') return;
+    setState('connecting'); setError('');
+    const client = new VoiceChatClient({
+      onParticipantsChanged: (items) => setParticipants(items.length),
+      onRemoteStream: (socketId, stream) => {
+        let audio = audioRef.current.get(socketId);
+        if (!audio) { audio = new Audio(); audio.autoplay = true; audioRef.current.set(socketId, audio); }
+        audio.srcObject = stream; void audio.play().catch(() => undefined);
+      },
+      onPeerLeft: (socketId) => { const audio = audioRef.current.get(socketId); audio?.pause(); audioRef.current.delete(socketId); },
+      onError: (reason) => setError(reason.message),
+    });
+    clientRef.current = client;
+    try {
+      await client.join('team:operacoes', user.uid, user.displayName || user.email.split('@')[0]);
+      setState('connected');
+    } catch (reason) { leave(); setError(reason instanceof Error ? reason.message : 'Falha ao iniciar reunião.'); }
+  }
+  return <div className="mt-3 rounded-xl border border-primary/25 bg-primary/[.07] p-2.5">
+    {state === 'idle' ? <button type="button" onClick={() => void join()} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><Users className="size-4" aria-hidden="true" />Nova reunião de voz</button> : <div className="flex items-center gap-2">
+      <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1"><p className="truncate text-xs font-bold text-primary">{state === 'connecting' ? 'Conectando...' : 'Reunião em andamento'}</p><p className="text-[11px] text-muted-foreground">{participants ? `${participants + 1} participantes` : 'Aguardando colegas'}</p></div>
+      <button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}>{muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</button>
+      <button type="button" onClick={leave} className="grid size-10 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Sair da reunião"><PhoneOff className="size-4" /></button>
+    </div>}
     {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
   </div>;
 }
