@@ -71,6 +71,20 @@
       "when": 1788646978917,
       "tag": "0009_stale_kree",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788657486201,
+      "tag": "0010_violet_the_captain",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1788657515925,
+      "tag": "0011_wooden_black_panther",
+      "breakpoints": true
     }
   ]
 }
