@@ -61,6 +61,7 @@ type JiraProjectIssueType = {
 type JiraField = {
   id?: string;
   name?: string;
+  schema?: { type?: string; custom?: string };
 };
 
 type JiraFieldSearchResponse = {
@@ -155,8 +156,90 @@ export async function getJiraIssue(key: string) {
   if (!new RegExp(`^${projectKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+$`).test(normalizedKey)) {
     throw new JiraError('Chamado inválido.', 400);
   }
-  const issue = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=summary,description,status,priority,assignee,reporter,created,updated,duedate,labels,issuetype,project,customfield_14954,customfield_14809,customfield_14827,customfield_11994,customfield_12036,customfield_12278`);
-  return { ...toSummary(issue), description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}` };
+  const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?expand=names&fields=*all`);
+  const named = namedValues(issue.fields, issue.names ?? {});
+  const value = (...aliases: string[]) => aliases.map((alias) => named.get(normalizeText(alias))).find(Boolean) ?? null;
+  const storeCode = value('Código da Loja', 'Codigo da Loja') ?? customFieldText(issue.fields.customfield_14954);
+  const operationalFields = {
+    storeCode,
+    storeName: value('Nome da Loja', 'Loja'),
+    contactName: value('Nome Contato', 'Nome do Contato'),
+    contactPhone: value('Telefone de Contato', 'Telefone Contato'),
+    preferredServiceTime: value('Melhor horário para atendimento técnico', 'Melhor horario para atendimento tecnico'),
+    problemCategory: value('Categoria do Problema'),
+    equipmentModel: value('Equipamento Marca / Modelo', 'Equipamento Marca/Modelo'),
+    pdvNumber: value('Numero do PDV', 'Número do PDV'),
+    problemType: value('Tipo de problema'),
+    allegedDefect: value('Defeito alegado'),
+    visitCost1: value('Custo Visita1', 'Custo Visita 1'),
+    equipmentTotal: value('Valor Total de Equipamentos'),
+    kmTotal: value('Valor total do KM', 'Valor Total do KM'),
+    visitCost2: value('Custo Visita2', 'Custo Visita 2'),
+    ticketTotal: value('Total do Tickt', 'Total do Ticket'),
+    visitNumber: value('Numero de Visita', 'Número de Visita'),
+    additionalCosts: value('Detalhes de custos adicionais'),
+    defectSummary: value('Resumo do defeito'),
+  };
+  return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields };
+}
+
+export async function updateJiraIssue(key: string, input: Record<string, unknown>) {
+  const normalizedKey = validIssueKey(key);
+  const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?expand=names&fields=*all`);
+  const ids = namedIds(issue.names ?? {});
+  const fields: Record<string, unknown> = {};
+  const mappings: Array<[string, string[]]> = [
+    ['storeCode', ['Código da Loja', 'Codigo da Loja']], ['storeName', ['Nome da Loja']], ['contactName', ['Nome Contato', 'Nome do Contato']],
+    ['contactPhone', ['Telefone de Contato', 'Telefone Contato']], ['preferredServiceTime', ['Melhor horário para atendimento técnico', 'Melhor horario para atendimento tecnico']],
+    ['problemCategory', ['Categoria do Problema']], ['equipmentModel', ['Equipamento Marca / Modelo', 'Equipamento Marca/Modelo']], ['pdvNumber', ['Numero do PDV', 'Número do PDV']],
+    ['problemType', ['Tipo de problema']], ['allegedDefect', ['Defeito alegado']], ['visitCost1', ['Custo Visita1', 'Custo Visita 1']],
+    ['equipmentTotal', ['Valor Total de Equipamentos']], ['kmTotal', ['Valor total do KM', 'Valor Total do KM']], ['visitCost2', ['Custo Visita2', 'Custo Visita 2']],
+    ['ticketTotal', ['Total do Tickt', 'Total do Ticket']], ['visitNumber', ['Numero de Visita', 'Número de Visita']], ['additionalCosts', ['Detalhes de custos adicionais']],
+  ];
+  for (const [inputKey, aliases] of mappings) {
+    if (input[inputKey] === undefined) continue;
+    const id = aliases.map((name) => ids.get(normalizeText(name))).find(Boolean);
+    if (id) fields[id] = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
+      ? numericJiraValue(input[inputKey])
+      : cleanJiraValue(input[inputKey]);
+  }
+  if (['identifiedProblem', 'testsPerformed', 'partToReplace'].some((name) => input[name] !== undefined)) {
+    const id = ids.get(normalizeText('Resumo do defeito'));
+    if (id) fields[id] = `PROBLEMA IDENTIFICADO: ${cleanJiraValue(input.identifiedProblem) ?? ''}\n\nTESTES FEITOS: ${cleanJiraValue(input.testsPerformed) ?? ''}\n\nPEÇA A SER TROCADA: ${cleanJiraValue(input.partToReplace) ?? ''}`;
+  }
+  if (!Object.keys(fields).length) throw new JiraError('Nenhum campo correspondente foi encontrado no Jira.', 400);
+  await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}`, { method: 'PUT', body: JSON.stringify({ fields }) });
+  issuesCache.clear(); financialIssuesCache = null;
+  return getJiraIssue(normalizedKey);
+}
+
+export async function transitionJiraIssue(key: string, localStatus: string) {
+  const normalizedKey = validIssueKey(key);
+  const response = await jiraFetch<{ transitions?: Array<{ id: string; name: string }> }>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`);
+  const aliases: Record<string, string[]> = {
+    scheduling: ['pendente de agendamento', 'agendamento'], scheduled: ['agendado'], operational_preparation: ['direcionado', 'preparacao operacional'],
+    in_service: ['tec-campo', 'tecnico em campo', 'em atendimento', 'em andamento'], technical_pending: ['pendencia tecnica'], validated: ['validado'],
+    awaiting_approval: ['aguardando aprovacao'], awaiting_spare: ['aguardando spare'], spare_validated: ['spare validado'], resolved: ['resolvido', 'concluido', 'finalizado'], cancelled: ['cancelado'],
+  };
+  const wanted = aliases[localStatus] ?? [];
+  const transition = response.transitions?.find((item) => wanted.some((name) => normalizeText(item.name).includes(normalizeText(name))));
+  if (!transition) return { changed: false };
+  await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`, { method: 'POST', body: JSON.stringify({ transition: { id: transition.id } }) });
+  issuesCache.clear();
+  return { changed: true };
+}
+
+export async function addJiraInternalEvidence(key: string, files: Array<{ name: string; mimeType: string; data: string }>, author: string) {
+  const normalizedKey = validIssueKey(key);
+  for (const file of files) {
+    const match = file.data.match(/^data:[^;]+;base64,(.+)$/);
+    if (!match) continue;
+    const bytes = Uint8Array.from(atob(match[1]), (character) => character.charCodeAt(0));
+    const form = new FormData(); form.append('file', new Blob([bytes], { type: file.mimeType }), file.name);
+    await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
+  }
+  const body = `Evidências anexadas pelo Caju OS por ${author}: ${files.map((file) => file.name).join(', ')}`;
+  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) });
 }
 
 export async function getFinancialIssues(days = 180): Promise<FinancialIssue[]> {
@@ -225,7 +308,7 @@ async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const credential = btoa(`${requiredEnv('JIRA_EMAIL')}:${requiredEnv('JIRA_API_TOKEN')}`);
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Basic ${credential}`, ...init?.headers },
+    headers: { Accept: 'application/json', ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), Authorization: `Basic ${credential}`, ...init?.headers },
   });
   if (!response.ok) {
     if (response.status === 401) throw new JiraError('Credencial do Jira inválida ou expirada.', 502);
@@ -233,7 +316,47 @@ async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
     if (response.status === 404) throw new JiraError('Chamado não encontrado.', 404);
     throw new JiraError(`O Jira respondeu com erro ${response.status}.`, 502);
   }
+  if (response.status === 204 || !response.headers.get('content-type')?.includes('application/json')) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+function validIssueKey(key: string) {
+  const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
+  const normalized = key.toUpperCase();
+  if (!new RegExp(`^${projectKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+$`).test(normalized)) throw new JiraError('Chamado inválido.', 400);
+  return normalized;
+}
+
+function namedValues(fields: Record<string, unknown>, names: Record<string, string>) {
+  const values = new Map<string, string>();
+  for (const [id, name] of Object.entries(names)) {
+    const value = customFieldText(fields[id]);
+    if (value) values.set(normalizeText(name), value);
+  }
+  return values;
+}
+
+function namedIds(names: Record<string, string>) {
+  const ids = new Map<string, string>();
+  for (const [id, name] of Object.entries(names)) if (id.startsWith('customfield_')) ids.set(normalizeText(name), id);
+  return ids;
+}
+
+function cleanJiraValue(value: unknown) {
+  if (value === null) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return null;
+  return value.trim().slice(0, 8000) || null;
+}
+
+function numericJiraValue(value: unknown) {
+  if (value === null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().replace(/[^\d,.-]/g, '');
+  const decimalComma = normalized.lastIndexOf(',') > normalized.lastIndexOf('.');
+  const parsed = Number(decimalComma ? normalized.replace(/\./g, '').replace(',', '.') : normalized.replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 async function getOperationalStatusNames(projectKey: string) {

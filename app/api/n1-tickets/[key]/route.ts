@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { n1TicketAssignments, operationalAudit, ticketEvidence } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { addJiraInternalEvidence, transitionJiraIssue } from '@/lib/server/jira';
 
 const validKinds = new Set(['photo', 'video', 'rat']);
 
@@ -40,6 +41,7 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
       if (!current || current.n1Email.toLowerCase() !== user.email.toLowerCase()) return Response.json({ error: 'Assuma chamado antes de validar.' }, { status: 403 });
       const attachments = parseEvidence(body.evidence);
       if (attachments.length) {
+        await addJiraInternalEvidence(ticketKey, attachments, user.email);
         await db.insert(ticketEvidence).values(attachments.map((item) => ({ ticketKey, ...item, uploadedBy: user.email, createdAt: now })));
         await db.insert(operationalAudit).values({ ticketKey, action: `${attachments.length} evidência(s) anexada(s)`, actorEmail: user.email, details: JSON.stringify(attachments.map((item) => ({ kind: item.kind, name: item.name }))), createdAt: now });
       }
@@ -47,6 +49,7 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
       const kinds = new Set(evidence.map((item) => item.kind));
       if ((!kinds.has('photo') && !kinds.has('video')) || !kinds.has('rat')) return Response.json({ error: 'Anexe ao menos uma foto ou vídeo de evidência e o RAT antes de validar.' }, { status: 400 });
       await db.update(n1TicketAssignments).set({ status: 'validated', validatedAt: now, updatedAt: now }).where(eq(n1TicketAssignments.ticketKey, ticketKey));
+      await transitionJiraIssue(ticketKey, 'validated');
       await db.insert(operationalAudit).values({ ticketKey, action: 'Chamado validado com evidências e RAT', actorEmail: user.email, details: null, createdAt: now });
     } else return bad('Ação inválida.');
     const [assignment, evidence] = await Promise.all([

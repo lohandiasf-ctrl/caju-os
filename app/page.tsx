@@ -13,6 +13,7 @@ import { ColleaguesPanel, ProfileSettings, UserMenu } from '@/components/user-me
 import { useAuth } from '@/components/auth-provider';
 import { OperationWorkflowDialog } from '@/components/operation-workflow-dialog';
 import { N1TicketActions } from '@/components/n1-ticket-actions';
+import { JiraTicketDetails, type JiraOperationalFields } from '@/components/jira-ticket-details';
 import { dayKey, sameDay, ticketActivities, type DatedTicketActivity } from '@/lib/ticket-activities';
 
 type Status = 'Pendente de agendamento' | 'Agendado' | 'Aguardando spare' | 'Direcionado' | 'Técnico em campo';
@@ -20,7 +21,7 @@ type DashboardView = 'overview' | 'tickets' | 'central' | 'agenda' | 'technician
 type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string; updatedAt?: string; scheduledAt?: string; partnerTriggeredAtRaw?: string };
 type TicketActivity = DatedTicketActivity<Ticket>;
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
-type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string };
+type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string; operationalFields: JiraOperationalFields };
 type N1User = { email: string; role: 'n1' };
 type FieldTechnician = {
   id: number; technicianExternalId: string | null; technicianCode: string | null; name: string; cpf: string | null; phone: string | null; email: string | null; pixKey: string | null;
@@ -221,6 +222,17 @@ export default function Home() {
     }
   }
 
+  async function openJira() {
+    if (!selected) return;
+    const url = details?.jiraUrl || `https://delfia.atlassian.net/browse/${selected.id}`;
+    try {
+      if ('__TAURI_INTERNALS__' in window) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('open_external_url', { url });
+      } else window.open(url, '_blank', 'noopener,noreferrer');
+    } catch { window.location.href = url; }
+  }
+
   function navigate(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
     if (!href.startsWith('/?view=') || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
@@ -323,13 +335,13 @@ export default function Home() {
           {dialogError && <div role="alert" className="rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{dialogError}</div>}
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => setDetailsVisible((value) => !value)} disabled={!details}><Eye className="size-5 text-blue-300" /><span><span className="block font-bold">Ver detalhes</span><span className="block text-xs font-normal text-muted-foreground">Dados completos</span></span></Button>
-            {role !== 'n1' && selected && <a href={details?.jiraUrl || `https://delfia.atlassian.net/browse/${selected.id}`} target="_blank" rel="noreferrer" className="group/button inline-flex min-h-16 items-center justify-start gap-3 rounded-lg border border-border bg-background p-3 text-left text-sm font-medium transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"><ExternalLink className="size-5 text-primary" /><span><span className="block font-bold">Abrir no Jira</span><span className="block text-xs font-normal text-muted-foreground">Chamado original</span></span></a>}
+            {role !== 'n1' && selected && <Button type="button" variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => void openJira()}><ExternalLink className="size-5 text-primary" /><span><span className="block font-bold">Abrir no Jira</span><span className="block text-xs font-normal text-muted-foreground">Chamado original</span></span></Button>}
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" render={<a href={whatsappUrl || '#'} target="_blank" rel="noreferrer" aria-disabled={!whatsappUrl} />} disabled={!whatsappUrl}><MessageCircle className="size-5 text-emerald-400" /><span><span className="block font-bold">Abrir WhatsApp</span><span className="block text-xs font-normal text-muted-foreground">{whatsappUrl ? 'Ir para o grupo' : 'Link não cadastrado'}</span></span></Button>
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => selected && setTicketToShare({ id: selected.id, title: selected.title, store: selected.store, city: selected.city })} disabled={!selected}><Users className="size-5 text-violet-300" /><span><span className="block font-bold">Enviar por chat</span><span className="block text-xs font-normal text-muted-foreground">Compartilhar com colega</span></span></Button>
             {role !== 'n1' && <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => setOperationOpen(true)} disabled={!selected}><Wrench className="size-5 text-amber-300" /><span><span className="block font-bold">Gerir operação</span><span className="block text-xs font-normal text-muted-foreground">Agenda, spare e pagamento</span></span></Button>}
           </div>
           {role === 'n1' && selected && <N1TicketActions ticketKey={selected.id} user={user} />}
-          {detailsVisible && details && <section className="rounded-xl border border-border bg-muted/30 p-4"><div className="grid gap-3 text-sm sm:grid-cols-2"><Detail label="Status" value={details.status} /><Detail label="Prioridade" value={details.priority} /><Detail label="Responsável" value={details.assignee || 'Não atribuído'} /><Detail label="Solicitante" value={details.reporter || 'Não informado'} /><Detail label="Tipo" value={details.issueType || 'Não informado'} /><Detail label="Criado em" value={formatDate(details.createdAt)} /></div>{details.description && <div className="mt-4 border-t border-border pt-4"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descrição</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{details.description}</p></div>}</section>}
+          {detailsVisible && details && <><section className="rounded-xl border border-border bg-muted/30 p-4"><div className="grid gap-3 text-sm sm:grid-cols-2"><Detail label="Status" value={details.status} /><Detail label="Prioridade" value={details.priority} /><Detail label="Responsável" value={details.assignee || 'Não atribuído'} /><Detail label="Solicitante" value={details.reporter || 'Não informado'} /><Detail label="Tipo" value={details.issueType || 'Não informado'} /><Detail label="Criado em" value={formatDate(details.createdAt)} /></div></section><JiraTicketDetails details={details} user={user} onUpdated={(updated) => setDetails(updated as JiraDetails)} /></>}
           {(role === 'analista' || role === 'gerencia') && <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4"><div className="flex items-center gap-2"><MessageCircle className="size-5 text-emerald-400" /><div><h3 className="text-sm font-bold">Grupo do WhatsApp</h3><p className="text-xs text-muted-foreground">Cole o link de convite deste chamado.</p></div></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input type="url" value={whatsappUrl} onChange={(event) => setWhatsappUrl(event.target.value)} placeholder="https://chat.whatsapp.com/..." className="flex-1" /><Button onClick={() => void saveWhatsappLink()} disabled={linkSaving || !whatsappUrl.trim()}>{linkSaving ? <Loader2 className="animate-spin" /> : <Save />} Salvar link</Button></div></section>}
         </div>}
       </DialogContent>
@@ -475,7 +487,10 @@ function toTicket(issue: JiraTicket): Ticket {
   const priority: Ticket['priority'] = priorityText.includes('highest') || priorityText.includes('high') || priorityText.includes('alta') ? 'Alta' : priorityText.includes('low') || priorityText.includes('baixa') ? 'Baixa' : 'Media';
   const updated = issue.updatedAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(issue.updatedAt)) : 'sem data';
   const storeFromTitle = issue.summary.match(/^Loja\s+([^|]+)/i)?.[0]?.trim();
-  return { id: issue.key, title: issue.summary, store: issue.store || storeFromTitle || 'Loja não informada', city: issue.city || `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined, schedule: formatJiraDate(issue.scheduledAt), partnerTriggeredAt: formatJiraDate(issue.partnerTriggeredAt), updatedAt: issue.updatedAt, scheduledAt: issue.scheduledAt ?? undefined, partnerTriggeredAtRaw: issue.partnerTriggeredAt ?? undefined };
+  const store = issue.store || storeFromTitle || '';
+  const storeLabel = /^[A-Z]?\d+$/i.test(store.replace(/^Loja\s+/i, '').trim()) ? `Código da loja: ${store.replace(/^Loja\s+/i, '').trim()}` : store || 'Loja não informada';
+  const title = issue.summary.replace(/^Loja\s+([A-Z]?\d+)\s*\|/i, 'Código da loja $1 |');
+  return { id: issue.key, title, store: storeLabel, city: issue.city || `Atualizado em ${updated}`, status, rawStatus: issue.status, priority, technician: issue.assignee ?? undefined, schedule: formatJiraDate(issue.scheduledAt), partnerTriggeredAt: formatJiraDate(issue.partnerTriggeredAt), updatedAt: issue.updatedAt, scheduledAt: issue.scheduledAt ?? undefined, partnerTriggeredAtRaw: issue.partnerTriggeredAt ?? undefined };
 }
 
 function formatDay(date: Date) { return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date); }

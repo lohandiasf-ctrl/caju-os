@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { operationalAudit, operationalStores, operationalVisits, operationalWorkflows } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
 
 const statuses = new Set(['triage', 'scheduling', 'scheduled', 'operational_preparation', 'in_service', 'technical_pending', 'validated', 'awaiting_approval', 'awaiting_spare', 'spare_validated', 'awaiting_payment', 'resolved', 'archived', 'cancelled']);
 const purchaseStatuses = new Set(['Agendado', 'Cancelado', 'Comprado', 'Delfia', 'Direcionado', 'Encerrado', 'Enviado', 'Fechado', 'Finalizado', 'Indisponível', 'Parceiro Delfia', 'Pendente', 'Recebido', 'Reenviado']);
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const user = await requireApiUser(request, ['gerencia', 'coordenador', 'n1']);
+    const user = await requireApiUser(request);
     const body = await request.json() as Record<string, unknown>;
     const ticketKey = clean(body.ticketKey, 100);
     if (!ticketKey) return bad('Informe chamado.');
@@ -46,6 +47,14 @@ export async function PUT(request: Request) {
     if (status === 'scheduled' && (!technicianId || !scheduledAt || Date.parse(scheduledAt) <= Date.now())) return bad('Agendado exige técnico e data futura.');
     if (status === 'operational_preparation' && !technicianId) return bad('Preparação operacional exige técnico.');
     if (user.role !== 'gerencia' && hasFinancialChange(body)) return Response.json({ error: 'Somente gerência altera valores e pagamento.' }, { status: 403 });
+    const hasTechnicalSummary = [body.identifiedProblem, body.testsPerformed, body.partToReplace].some((value) => typeof value === 'string' && value.trim());
+    await updateJiraIssue(ticketKey, {
+      ...(present(body.storeCode) ? { storeCode: body.storeCode } : {}), ...(present(body.storeName) ? { storeName: body.storeName } : {}),
+      ...(present(body.requesterName) ? { contactName: body.requesterName } : {}), ...(present(body.requesterPhone) ? { contactPhone: body.requesterPhone } : {}),
+      ...(scheduledAt ? { preferredServiceTime: scheduledAt } : {}), ...(present(body.category) ? { problemCategory: body.category } : {}), ...(present(body.pdvNumber) ? { pdvNumber: body.pdvNumber } : {}),
+      ...(hasTechnicalSummary ? { identifiedProblem: body.identifiedProblem, testsPerformed: body.testsPerformed, partToReplace: body.partToReplace } : {}),
+    }).catch((error) => { if (String(error).includes('Nenhum campo correspondente')) return null; throw error; });
+    await transitionJiraIssue(ticketKey, status);
     const fields = workflowFields(body, { status, technicianId, scheduledAt, now });
     const existing = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, ticketKey)).get();
     let workflowId: number;
@@ -119,4 +128,5 @@ function validId(value: unknown) { return typeof value === 'number' && Number.is
 function cents(value: unknown) { return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100_000_000 ? value : null; }
 function validDate(value: unknown) { return typeof value === 'string' && value && !Number.isNaN(Date.parse(value)) ? value : null; }
 function clean(value: unknown, max: number) { return typeof value === 'string' ? value.trim().slice(0, max) || null : null; }
+function present(value: unknown) { return typeof value === 'string' && Boolean(value.trim()); }
 function bad(error: string) { return Response.json({ error }, { status: 400 }); }
