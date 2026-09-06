@@ -125,7 +125,9 @@ export const employeePresence = sqliteTable('employee_presence', {
   displayName: text('display_name'),
   phone: text('phone'),
   photoUrl: text('photo_url'),
-  status: text('status', { enum: ['Online', 'Ocupado', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] }).notNull().default('Online'),
+  status: text('status', { enum: ['Online', 'Ocupado', 'Ausente', 'Não perturbe', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] }).notNull().default('Online'),
+  manualStatus: integer('manual_status', { mode: 'boolean' }).notNull().default(false),
+  lastSeenAt: text('last_seen_at'),
   updatedAt: text('updated_at').notNull(),
 });
 
@@ -138,10 +140,83 @@ export const employeeMessages = sqliteTable('employee_messages', {
   attachmentType: text('attachment_type'),
   attachmentData: text('attachment_data'),
   createdAt: text('created_at').notNull(),
+  deliveredAt: text('delivered_at'),
   readAt: text('read_at'),
 }, (table) => [
   index('idx_employee_messages_sender_recipient').on(table.senderEmail, table.recipientEmail, table.createdAt),
   index('idx_employee_messages_recipient_read').on(table.recipientEmail, table.readAt),
+]);
+
+export const chatGroups = sqliteTable('chat_groups', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const chatGroupMembers = sqliteTable('chat_group_members', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  groupId: integer('group_id').notNull().references(() => chatGroups.id),
+  email: text('email').notNull(),
+  memberRole: text('member_role', { enum: ['owner', 'member'] }).notNull().default('member'),
+  joinedAt: text('joined_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_chat_group_members_group_email').on(table.groupId, table.email),
+  index('idx_chat_group_members_email').on(table.email, table.groupId),
+]);
+
+export const chatGroupMessages = sqliteTable('chat_group_messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  groupId: integer('group_id').notNull().references(() => chatGroups.id),
+  senderEmail: text('sender_email').notNull(),
+  body: text('body').notNull(),
+  ticketId: text('ticket_id'),
+  attachmentName: text('attachment_name'),
+  attachmentType: text('attachment_type'),
+  attachmentData: text('attachment_data'),
+  createdAt: text('created_at').notNull(),
+}, (table) => [index('idx_chat_group_messages_group_created').on(table.groupId, table.createdAt)]);
+
+export const chatGroupReads = sqliteTable('chat_group_reads', {
+  groupId: integer('group_id').notNull().references(() => chatGroups.id),
+  email: text('email').notNull(),
+  lastReadMessageId: integer('last_read_message_id').notNull().default(0),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [uniqueIndex('idx_chat_group_reads_group_email').on(table.groupId, table.email)]);
+
+export const chatTyping = sqliteTable('chat_typing', {
+  conversationKey: text('conversation_key').notNull(),
+  email: text('email').notNull(),
+  expiresAt: text('expires_at').notNull(),
+}, (table) => [uniqueIndex('idx_chat_typing_conversation_email').on(table.conversationKey, table.email)]);
+
+export const communicationPreferences = sqliteTable('communication_preferences', {
+  email: text('email').primaryKey(),
+  desktopMessages: integer('desktop_messages', { mode: 'boolean' }).notNull().default(true),
+  desktopCalls: integer('desktop_calls', { mode: 'boolean' }).notNull().default(true),
+  soundMessages: integer('sound_messages', { mode: 'boolean' }).notNull().default(true),
+  soundCalls: integer('sound_calls', { mode: 'boolean' }).notNull().default(true),
+  quietHoursEnabled: integer('quiet_hours_enabled', { mode: 'boolean' }).notNull().default(false),
+  quietHoursStart: text('quiet_hours_start').notNull().default('20:00'),
+  quietHoursEnd: text('quiet_hours_end').notNull().default('07:00'),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const voiceCallHistory = sqliteTable('voice_call_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id').notNull(),
+  ownerEmail: text('owner_email').notNull(),
+  direction: text('direction', { enum: ['incoming', 'outgoing'] }).notNull(),
+  kind: text('kind', { enum: ['direct', 'group'] }).notNull(),
+  peerNames: text('peer_names').notNull(),
+  status: text('status', { enum: ['missed', 'declined', 'completed', 'failed'] }).notNull(),
+  startedAt: text('started_at').notNull(),
+  endedAt: text('ended_at'),
+  durationSeconds: integer('duration_seconds').notNull().default(0),
+}, (table) => [
+  uniqueIndex('idx_voice_call_history_session_owner').on(table.sessionId, table.ownerEmail),
+  index('idx_voice_call_history_owner_started').on(table.ownerEmail, table.startedAt),
 ]);
 
 export const technicianReviews = sqliteTable('technician_reviews', {

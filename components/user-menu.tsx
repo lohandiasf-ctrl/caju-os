@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Check, ChevronUp, ClipboardList, ExternalLink, File, FileAudio, Loader2, LogOut, MessageCircle, Mic, MicOff, Paperclip, Phone, PhoneIncoming, PhoneOff, Send, Square, Users, X } from 'lucide-react';
+import { Camera, Check, CheckCheck, ChevronUp, ClipboardList, Clock3, ExternalLink, File, FileAudio, History, Loader2, LogOut, MessageCircle, Mic, MicOff, Paperclip, Phone, PhoneIncoming, PhoneOff, Plus, Search, Send, Signal, Square, UserPlus, Users, X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
@@ -9,20 +9,25 @@ import { roleLabels } from '@/lib/permissions';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { directVoiceRoom, type VoiceInvitation, VoiceCallReceiver, VoiceChatClient } from '@/lib/voice-chat';
 
-export const statuses = ['Online', 'Ocupado', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] as const;
+export const statuses = ['Online', 'Ocupado', 'Ausente', 'Não perturbe', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] as const;
 export type Status = typeof statuses[number];
-type Colleague = { email: string; role: 'gerencia' | 'n1' | 'analista'; displayName: string | null; phone: string | null; photoUrl: string | null; status: Status; updatedAt: string | null };
-type Message = { id: number; senderEmail: string; recipientEmail: string; body: string; attachmentName?: string | null; attachmentType?: string | null; attachmentData?: string | null; createdAt: string; readAt: string | null };
+type Colleague = { email: string; role: 'gerencia' | 'coordenador' | 'n1' | 'analista' | 'tecnico'; displayName: string | null; phone: string | null; photoUrl: string | null; status: Status; manualStatus?: boolean; lastSeenAt?: string | null; updatedAt: string | null };
+type Message = { id: number; senderEmail: string; recipientEmail: string; body: string; attachmentName?: string | null; attachmentType?: string | null; attachmentData?: string | null; createdAt: string; deliveredAt?: string | null; readAt: string | null };
 type ChatTicket = { id: string; title: string; store: string; city: string };
 type NewMessageNotice = { message: Message; count: number };
+type Group = { id: number; name: string; createdBy: string; updatedAt: string; unread: number; members: { email: string; memberRole: 'owner' | 'member' }[]; lastMessage?: { body: string; createdAt: string } | null };
+type GroupMessage = { id: number; groupId: number; senderEmail: string; body: string; ticketId?: string | null; attachmentName?: string | null; attachmentType?: string | null; attachmentData?: string | null; createdAt: string };
+type CallLog = { id: number; sessionId: string; direction: 'incoming' | 'outgoing'; kind: 'direct' | 'group'; peerNames: string; status: 'missed' | 'declined' | 'completed' | 'failed'; startedAt: string; endedAt?: string | null; durationSeconds: number };
+type CommunicationPreferences = { desktopMessages: boolean; desktopCalls: boolean; soundMessages: boolean; soundCalls: boolean; quietHoursEnabled: boolean; quietHoursStart: string; quietHoursEnd: string };
+const defaultPreferences: CommunicationPreferences = { desktopMessages: true, desktopCalls: true, soundMessages: true, soundCalls: true, quietHoursEnabled: false, quietHoursStart: '20:00', quietHoursEnd: '07:00' };
 let desktopPermissionRequested = false;
 
 function appIsInBackground() {
   return document.hidden || !document.hasFocus();
 }
 
-async function showDesktopMessageNotification(senderName: string, message: Message) {
-  if (!appIsInBackground()) return;
+async function showDesktopMessageNotification(senderName: string, message: Message, preferences: CommunicationPreferences) {
+  if (!preferences.desktopMessages || inQuietHours(preferences) || localStorage.getItem('caju-status') === 'Não perturbe' || !appIsInBackground()) return;
   const body = message.body || message.attachmentName || 'Novo anexo';
   const title = `Nova mensagem de ${senderName}`;
   try {
@@ -42,7 +47,8 @@ async function showDesktopMessageNotification(senderName: string, message: Messa
   } catch { /* Desktop notifications are optional; in-app feedback remains available. */ }
 }
 
-async function showDesktopCallNotification(callerName: string, invitation: VoiceInvitation) {
+async function showDesktopCallNotification(callerName: string, invitation: VoiceInvitation, preferences: CommunicationPreferences) {
+  if (!preferences.desktopCalls || inQuietHours(preferences) || localStorage.getItem('caju-status') === 'Não perturbe') return;
   const background = appIsInBackground();
   const group = invitation.kind === 'group';
   const title = group ? 'Convite para reunião de voz' : 'Chamada de voz recebida';
@@ -67,13 +73,24 @@ async function showDesktopCallNotification(callerName: string, invitation: Voice
 }
 
 const statusColors: Record<Status, string> = {
-  Online: 'bg-emerald-400', Ocupado: 'bg-rose-400', Almoçando: 'bg-amber-400',
+  Online: 'bg-emerald-400', Ocupado: 'bg-rose-400', Ausente: 'bg-yellow-400', 'Não perturbe': 'bg-fuchsia-400', Almoçando: 'bg-amber-400',
   'Pausa de 15 minutos': 'bg-sky-400', Offline: 'bg-slate-500',
 };
 const statusTextColors: Record<Status, string> = {
-  Online: 'text-emerald-300', Ocupado: 'text-rose-300', Almoçando: 'text-amber-300',
+  Online: 'text-emerald-300', Ocupado: 'text-rose-300', Ausente: 'text-yellow-300', 'Não perturbe': 'text-fuchsia-300', Almoçando: 'text-amber-300',
   'Pausa de 15 minutos': 'text-sky-300', Offline: 'text-slate-400',
 };
+
+function inQuietHours(preferences: CommunicationPreferences) {
+  if (!preferences.quietHoursEnabled) return false;
+  const value = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return preferences.quietHoursStart <= preferences.quietHoursEnd ? value >= preferences.quietHoursStart && value < preferences.quietHoursEnd : value >= preferences.quietHoursStart || value < preferences.quietHoursEnd;
+}
+
+async function recordCall(user: { getIdToken(): Promise<string> } | null | undefined, payload: Omit<CallLog, 'id'>) {
+  if (!user) return;
+  try { await fetch('/api/calls/history', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch { /* Histórico não interrompe a chamada. */ }
+}
 
 export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketShareConsumed, onOpenTicket }: { tickets?: ChatTicket[]; ticketToShare?: ChatTicket | null; onTicketShareConsumed?: () => void; onOpenTicket?: (ticketId: string) => void }) {
   const { user } = useAuth();
@@ -87,6 +104,14 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
   const [notice, setNotice] = useState<NewMessageNotice | null>(null);
   const [messageDot, setMessageDot] = useState(false);
   const [incomingVoice, setIncomingVoice] = useState<VoiceInvitation | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [section, setSection] = useState<'people' | 'groups' | 'history'>('people');
+  const [query, setQuery] = useState('');
+  const [callHistory, setCallHistory] = useState<CallLog[]>([]);
+  const [preferences, setPreferences] = useState<CommunicationPreferences>(defaultPreferences);
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
   const latestIncomingId = useRef<number | null>(null);
   const colleaguesRef = useRef<Colleague[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -138,6 +163,20 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
       if (response.ok) setColleagues((payload.colleagues ?? []).filter((item) => item.email.toLowerCase() !== user.email?.toLowerCase()));
     } finally { setLoading(false); }
   }, [user]);
+  const loadCollaboration = useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const [groupsResponse, historyResponse, preferencesResponse] = await Promise.all([
+        fetch('/api/chat-groups', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
+        fetch('/api/calls/history', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
+        fetch('/api/communication-preferences', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' }),
+      ]);
+      if (groupsResponse.ok) setGroups(((await groupsResponse.json()) as { groups?: Group[] }).groups ?? []);
+      if (historyResponse.ok) setCallHistory(((await historyResponse.json()) as { calls?: CallLog[] }).calls ?? []);
+      if (preferencesResponse.ok) setPreferences(((await preferencesResponse.json()) as { preferences?: CommunicationPreferences }).preferences ?? defaultPreferences);
+    } catch { /* Cada painel mantém seu estado anterior e tenta novamente. */ }
+  }, [user]);
   useEffect(() => {
     void load();
     const timer = window.setInterval(() => void load(), 7_500);
@@ -145,6 +184,8 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     window.addEventListener('caju-presence-updated', refresh);
     return () => { window.clearInterval(timer); window.removeEventListener('caju-presence-updated', refresh); };
   }, [load]);
+  useEffect(() => { void loadCollaboration(); const timer = window.setInterval(() => void loadCollaboration(), 10_000); const refresh = () => void loadCollaboration(); window.addEventListener('caju-collaboration-updated', refresh); return () => { window.clearInterval(timer); window.removeEventListener('caju-collaboration-updated', refresh); }; }, [loadCollaboration]);
+  useEffect(() => { if (!user || query.trim().length < 2) { setSearchResults([]); return; } const timer = window.setTimeout(() => { void (async () => { try { const response = await fetch(`/api/messages?q=${encodeURIComponent(query.trim())}`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' }); const payload = await response.json() as { messages?: Message[] }; setSearchResults(payload.messages ?? []); } catch { setSearchResults([]); } })(); }, 300); return () => window.clearTimeout(timer); }, [query, user]);
   useEffect(() => { colleaguesRef.current = colleagues; }, [colleagues]);
   useEffect(() => {
     const unlock = () => prepareNotificationSound();
@@ -155,12 +196,12 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
   useEffect(() => {
     if (!user?.email) return;
     const receiver = new VoiceCallReceiver(user.email, (invitation) => {
-      setIncomingVoice(invitation); startCallTone();
-      void showDesktopCallNotification(invitation.callerName, invitation);
+      setIncomingVoice(invitation); if (preferences.soundCalls && !inQuietHours(preferences) && localStorage.getItem('caju-status') !== 'Não perturbe') startCallTone();
+      void showDesktopCallNotification(invitation.callerName, invitation, preferences);
     });
     voiceReceiverRef.current = receiver; receiver.connect();
     return () => { receiver.dispose(); if (voiceReceiverRef.current === receiver) voiceReceiverRef.current = null; stopCallTone(); };
-  }, [startCallTone, stopCallTone, user?.email]);
+  }, [preferences, startCallTone, stopCallTone, user?.email]);
   useEffect(() => {
     const handleExternalAnswer = (event: StorageEvent) => {
       if (event.key !== 'caju-voice-popup-answer' || !event.newValue || !incomingVoice) return;
@@ -195,24 +236,26 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
         const incoming = payload.messages ?? [];
         if (!incoming.length) return;
         const newest = incoming[incoming.length - 1];
-        setNotice({ message: newest, count: incoming.length }); setMessageDot(true); playNotificationSound(true);
+        setNotice({ message: newest, count: incoming.length }); setMessageDot(true); if (preferences.soundMessages && !inQuietHours(preferences)) playNotificationSound(true);
         if (dismissTimer) window.clearTimeout(dismissTimer);
         dismissTimer = window.setTimeout(() => setNotice(null), 6_000);
         const sender = colleaguesRef.current.find((item) => item.email.toLowerCase() === newest.senderEmail.toLowerCase());
-        void showDesktopMessageNotification(sender?.displayName || newest.senderEmail.split('@')[0], newest);
+        void showDesktopMessageNotification(sender?.displayName || newest.senderEmail.split('@')[0], newest, preferences);
       } catch { /* A próxima atualização tenta novamente sem interromper o painel. */ }
     };
     void poll();
     const timer = window.setInterval(() => void poll(), 5_000);
     return () => { active = false; window.clearInterval(timer); if (dismissTimer) window.clearTimeout(dismissTimer); };
-  }, [playNotificationSound, user]);
+  }, [playNotificationSound, preferences, user]);
   useEffect(() => { if (ticketToShare) setShareOpen(true); }, [ticketToShare]);
   const openChat = (colleague: Colleague) => { setChatTicket(null); setSelected(colleague); setMobileOpen(false); setColleaguesOpen(false); };
   const chooseShareRecipient = (colleague: Colleague) => {
     if (!ticketToShare) return;
     setChatTicket(ticketToShare); setSelected(colleague); setShareOpen(false); setMobileOpen(false); setColleaguesOpen(false); onTicketShareConsumed?.();
   };
-  const list = <ColleagueList colleagues={colleagues} loading={loading} onSelect={openChat} />;
+  const filteredColleagues = colleagues.filter((item) => `${item.displayName || ''} ${item.email} ${roleLabels[item.role]}`.toLowerCase().includes(query.toLowerCase()));
+  const filteredGroups = groups.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
+  const list = <ColleagueList colleagues={filteredColleagues} loading={loading} onSelect={openChat} />;
   const shareList = <ColleagueList colleagues={colleagues} loading={loading} onSelect={chooseShareRecipient} />;
   const noticeSender = notice ? colleagues.find((item) => item.email.toLowerCase() === notice.message.senderEmail.toLowerCase()) : null;
   function indicateSentMessage() {
@@ -224,15 +267,19 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
   return <>
     <button type="button" onClick={toggleColleagues} aria-label={colleaguesOpen ? 'Fechar colegas' : messageDot ? 'Abrir colegas, nova atividade no chat' : 'Abrir colegas'} aria-expanded={colleaguesOpen} className="fixed bottom-5 right-5 z-40 hidden size-11 place-items-center rounded-xl border border-primary/30 bg-sidebar text-primary shadow-xl transition hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:grid"><Users className="size-5" aria-hidden="true" />{messageDot && <span className="absolute right-1.5 top-1.5 size-2.5 animate-pulse rounded-full border-2 border-sidebar bg-emerald-400" />}</button>
     <aside inert={!colleaguesOpen} className={`colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? 'translate-x-0' : 'pointer-events-none translate-x-[calc(100%+1.5rem)]'}`} aria-label="Colegas" aria-hidden={!colleaguesOpen}>
-      <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Colegas</p><p className="text-[11px] text-muted-foreground">Equipe e disponibilidade</p></div><button type="button" onClick={toggleColleagues} className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary/20" aria-label="Fechar colegas"><Users className="size-4" aria-hidden="true" /></button></div>
-      <TeamVoiceControl colleagues={colleagues} />
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">{list}</div>
+      <div className="flex h-10 items-center justify-between px-1"><div><p className="text-sm font-bold">Comunicação</p><p className="text-[11px] text-muted-foreground">Equipe, grupos e chamadas</p></div><button type="button" onClick={toggleColleagues} className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary/20" aria-label="Fechar comunicação"><X className="size-4" aria-hidden="true" /></button></div>
+      <TeamVoiceControl colleagues={colleagues} onHistoryChanged={loadCollaboration} />
+      <div className="mt-3 flex rounded-xl border border-border bg-background/50 p-1">{([['people','Pessoas'],['groups','Grupos'],['history','Chamadas']] as const).map(([value,label]) => <button key={value} type="button" onClick={() => setSection(value)} className={`min-h-9 flex-1 rounded-lg px-1 text-[11px] font-semibold transition ${section === value ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}>{label}{value === 'groups' && groups.some((group) => group.unread) ? ` (${groups.reduce((sum, group) => sum + group.unread, 0)})` : ''}</button>)}</div>
+      {section !== 'history' && <label className="relative mt-2 block"><Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" /><span className="sr-only">Buscar conversas</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar..." className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-xs" /></label>}
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">{section === 'people' ? <>{list}{query.trim().length >= 2 && <MessageSearchResults messages={searchResults} currentEmail={user?.email || ''} colleagues={colleagues} onSelect={openChat} />}</> : section === 'groups' ? <GroupList groups={filteredGroups} onSelect={setSelectedGroup} onCreate={() => setCreateGroupOpen(true)} /> : <CallHistoryList calls={callHistory} />}</div>
     </aside>
     <button type="button" onClick={() => { setMobileOpen(true); setMessageDot(false); }} className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden" aria-label={messageDot ? 'Abrir colegas, nova atividade no chat' : 'Abrir colegas'}><Users className="size-5" />{messageDot && <span className="absolute right-0.5 top-0.5 size-3 animate-pulse rounded-full border-2 border-background bg-emerald-400" />}</button>
-    <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Colegas</DialogTitle><DialogDescription>Status da equipe em tempo real. Toque em uma foto para conversar.</DialogDescription></DialogHeader><TeamVoiceControl colleagues={colleagues} />{list}</DialogContent></Dialog>
+    <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Comunicação</DialogTitle><DialogDescription>Status, mensagens, grupos e chamadas.</DialogDescription></DialogHeader><TeamVoiceControl colleagues={colleagues} onHistoryChanged={loadCollaboration} /><button type="button" onClick={() => setCreateGroupOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border text-sm font-semibold"><Plus className="size-4" />Novo grupo</button>{list}<GroupList groups={groups} onSelect={(group) => { setSelectedGroup(group); setMobileOpen(false); }} onCreate={() => setCreateGroupOpen(true)} /><CallHistoryList calls={callHistory.slice(0, 5)} /></DialogContent></Dialog>
     <Dialog open={shareOpen} onOpenChange={setShareOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md"><DialogHeader><DialogTitle>Enviar chamado por chat</DialogTitle><DialogDescription>{ticketToShare ? `Escolha um colega para receber o chamado ${ticketToShare.id}.` : 'Escolha um colega.'}</DialogDescription></DialogHeader>{shareList}</DialogContent></Dialog>
     <ChatDialog colleague={selected} tickets={tickets} initialTicket={chatTicket} onClose={() => { setSelected(null); setChatTicket(null); }} onOpenTicket={onOpenTicket} onMessageSent={indicateSentMessage} />
-    <IncomingVoiceCall invitation={incomingVoice} onAnswered={stopCallTone} onClose={() => { stopCallTone(); setIncomingVoice(null); }} onDecline={(invitation) => { voiceReceiverRef.current?.decline(invitation); stopCallTone(); setIncomingVoice(null); }} />
+    <GroupChatDialog group={selectedGroup} colleagues={colleagues} tickets={tickets} onClose={() => setSelectedGroup(null)} onOpenTicket={onOpenTicket} onUpdated={loadCollaboration} />
+    <CreateGroupDialog open={createGroupOpen} colleagues={colleagues} onClose={() => setCreateGroupOpen(false)} onCreated={loadCollaboration} />
+    <IncomingVoiceCall invitation={incomingVoice} colleagues={colleagues} onAnswered={stopCallTone} onClose={() => { stopCallTone(); setIncomingVoice(null); void loadCollaboration(); }} onDecline={(invitation) => { voiceReceiverRef.current?.decline(invitation); stopCallTone(); setIncomingVoice(null); void recordCall(user, { sessionId: invitation.roomId, direction: 'incoming', kind: invitation.kind, peerNames: invitation.callerName, status: 'declined', startedAt: new Date().toISOString(), durationSeconds: 0 }); }} />
     {notice && <div aria-live="assertive" className="fixed right-4 top-4 z-[80] flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10">
       <button type="button" onClick={() => { if (noticeSender) openChat(noticeSender); setNotice(null); }} className="flex min-w-0 flex-1 items-start gap-3 rounded-l-2xl p-4 text-left transition hover:bg-muted" aria-label="Abrir nova mensagem">
         <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-primary/15 text-xs font-bold text-primary">{noticeSender?.photoUrl ? <img src={noticeSender.photoUrl} alt="" className="size-full object-cover" /> : initials(noticeSender?.displayName || notice.message.senderEmail)}</span>
@@ -250,7 +297,7 @@ function ColleagueList({ colleagues, loading, onSelect }: { colleagues: Colleagu
     const name = colleague.displayName || colleague.email.split('@')[0];
     return <button key={colleague.email} type="button" onClick={() => onSelect(colleague)} className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition hover:border-border hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" aria-label={`Conversar com ${name}, status ${colleague.status}`}>
       <span className="relative grid size-8 shrink-0 place-items-center overflow-visible rounded-full border border-white/10 bg-muted text-[10px] font-bold text-foreground">{colleague.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full rounded-full object-cover" /> : initials(name)}<span className={`absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-sidebar ${statusColors[colleague.status]}`} /></span>
-      <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{name}</span><span className="block truncate text-[11px]"><span className="text-muted-foreground">{roleLabels[colleague.role]} · </span><span className={`font-medium ${statusTextColors[colleague.status]}`}>{colleague.status}</span></span></span>
+      <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{name}</span><span className="block truncate text-[11px]"><span className="text-muted-foreground">{roleLabels[colleague.role]} · </span><span className={`font-medium ${statusTextColors[colleague.status]}`}>{colleague.status}</span></span>{colleague.status === 'Offline' && colleague.lastSeenAt && <span className="block truncate text-[10px] text-muted-foreground">Visto {relativeTime(colleague.lastSeenAt)}</span>}</span>
       <MessageCircle className="size-4 shrink-0 text-muted-foreground transition group-hover:text-primary" aria-hidden="true" />
     </button>;
   })}</div>;
@@ -267,6 +314,8 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket, 
   const [ticketRef, setTicketRef] = useState('');
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [otherTyping, setOtherTyping] = useState(false);
+  const typingTimerRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<number | null>(null);
@@ -289,9 +338,19 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket, 
       return;
     }
     setMessages([]); setDraft(''); setTicketRef(initialTicket?.id ?? ''); setAttachment(null); setError(''); void loadMessages();
-    const timer = window.setInterval(() => void loadMessages(true), 5_000);
+    const timer = window.setInterval(() => void loadMessages(true), 3_000);
     return () => window.clearInterval(timer);
   }, [colleague, initialTicket, loadMessages]);
+  useEffect(() => {
+    if (!user || !colleague) return;
+    let active = true;
+    const poll = async () => { try { const response = await fetch(`/api/typing?with=${encodeURIComponent(colleague.email)}`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' }); const payload = await response.json() as { typing?: string[] }; if (active) setOtherTyping(Boolean(payload.typing?.length)); } catch { /* indicador não bloqueia conversa */ } };
+    void poll(); const timer = window.setInterval(() => void poll(), 2_000); return () => { active = false; window.clearInterval(timer); };
+  }, [colleague, user]);
+  const signalTyping = useCallback(async (active: boolean) => {
+    if (!user || !colleague) return;
+    try { await fetch('/api/typing', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ with: colleague.email, active }) }); } catch { /* indicador opcional */ }
+  }, [colleague, user]);
   useEffect(() => {
     // Keep the effect cleanup contract explicit. Some browsers return a value
     // from scrollIntoView; returning it from the effect makes React treat it
@@ -355,7 +414,7 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket, 
       const response = await fetch('/api/messages', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ to: colleague.email, body: messageText, attachment }) });
       const payload = await response.json() as { message?: Message; error?: string };
       if (!response.ok || !payload.message) throw new Error(payload.error || 'Falha ao enviar a mensagem.');
-      setMessages((current) => [...current, payload.message!]); setDraft(''); setTicketRef(''); setAttachment(null); onMessageSent?.();
+       setMessages((current) => [...current, payload.message!]); setDraft(''); setTicketRef(''); setAttachment(null); void signalTyping(false); onMessageSent?.();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Falha ao enviar a mensagem.'); }
     finally { setSending(false); }
   }
@@ -363,8 +422,8 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket, 
   function openSharedTicket(ticketId: string) { onClose(); onOpenTicket?.(ticketId); }
   return <Dialog open={Boolean(colleague)} onOpenChange={(open) => { if (!open) { stopRecording(); onClose(); } }}><DialogContent className="grid h-[min(620px,88vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
     <DialogHeader className="border-b border-border p-4 pr-14"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">{colleague?.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full object-cover" /> : initials(name)}</span><div className="min-w-0 flex-1"><DialogTitle>{name}</DialogTitle><DialogDescription className="truncate">{colleague?.status} · {colleague?.email}</DialogDescription></div></div>{colleague && <VoiceCallControl colleague={colleague} />}</DialogHeader>
-    <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); const parsed = parseTicketMessage(message.body, tickets); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{parsed.text && <p className="whitespace-pre-wrap break-words text-sm">{parsed.text}</p>}{parsed.ticketId && <TicketShareCard ticketId={parsed.ticketId} label={parsed.ticketLabel} mine={mine} onOpen={() => openSharedTicket(parsed.ticketId!)} />}<MessageAttachment message={message} mine={mine} /><p className={`mt-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
-    <form onSubmit={sendMessage} className="border-t border-border bg-card p-3">{recording && <div role="status" aria-live="polite" className="mb-2 flex min-h-10 items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 text-sm text-rose-200"><span className="size-2 animate-pulse rounded-full bg-rose-400" />Gravando áudio · {formatDuration(recordingSeconds)}<span className="ml-auto text-xs text-rose-200/70">máx. 1:30</span></div>}<div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar imagem, áudio ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,audio/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) readAttachment(file); event.currentTarget.value = ''; }} /></label><button type="button" onClick={() => recording ? stopRecording() : void startRecording()} className={`grid size-11 shrink-0 place-items-center rounded-xl border transition ${recording ? 'border-rose-400/50 bg-rose-400/15 text-rose-300' : 'border-input bg-background hover:bg-muted'}`} aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}>{recording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}</button><button type="submit" disabled={(!draft.trim() && !attachment && !ticketRef) || sending || recording} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div><select aria-label="Enviar chamado" value={ticketRef} onChange={(event) => setTicketRef(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-input bg-background px-3 text-xs"><option value="">Anexar um chamado da lista...</option>{tickets.slice(0, 100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select>{attachment && <AttachmentPreview attachment={attachment} onRemove={() => setAttachment(null)} />}{ticketRef && <p className="mt-2 truncate text-xs text-muted-foreground">Chamado selecionado: {ticketRef}</p>}</form>
+    <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); const parsed = parseTicketMessage(message.body, tickets); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{parsed.text && <p className="whitespace-pre-wrap break-words text-sm">{parsed.text}</p>}{parsed.ticketId && <TicketShareCard ticketId={parsed.ticketId} label={parsed.ticketLabel} mine={mine} onOpen={() => openSharedTicket(parsed.ticketId!)} />}<MessageAttachment message={message} mine={mine} /><p className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}{mine && (message.readAt ? <CheckCheck className="size-3 text-sky-200" aria-label="Lida" /> : message.deliveredAt ? <CheckCheck className="size-3" aria-label="Entregue" /> : <Check className="size-3" aria-label="Enviada" />)}</p></div></div>; })}{otherTyping && <p className="text-xs text-muted-foreground">{name} está digitando<span className="animate-pulse">…</span></p>}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
+    <form onSubmit={sendMessage} className="border-t border-border bg-card p-3">{recording && <div role="status" aria-live="polite" className="mb-2 flex min-h-10 items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 text-sm text-rose-200"><span className="size-2 animate-pulse rounded-full bg-rose-400" />Gravando áudio · {formatDuration(recordingSeconds)}<span className="ml-auto text-xs text-rose-200/70">máx. 1:30</span></div>}<div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => { setDraft(event.target.value); void signalTyping(Boolean(event.target.value)); if (typingTimerRef.current !== null) window.clearTimeout(typingTimerRef.current); typingTimerRef.current = window.setTimeout(() => void signalTyping(false), 4_000); }} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar imagem, áudio ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,audio/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) readAttachment(file); event.currentTarget.value = ''; }} /></label><button type="button" onClick={() => recording ? stopRecording() : void startRecording()} className={`grid size-11 shrink-0 place-items-center rounded-xl border transition ${recording ? 'border-rose-400/50 bg-rose-400/15 text-rose-300' : 'border-input bg-background hover:bg-muted'}`} aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}>{recording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}</button><button type="submit" disabled={(!draft.trim() && !attachment && !ticketRef) || sending || recording} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div><select aria-label="Enviar chamado" value={ticketRef} onChange={(event) => setTicketRef(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-input bg-background px-3 text-xs"><option value="">Anexar um chamado da lista...</option>{tickets.slice(0, 100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select>{attachment && <AttachmentPreview attachment={attachment} onRemove={() => setAttachment(null)} />}{ticketRef && <p className="mt-2 truncate text-xs text-muted-foreground">Chamado selecionado: {ticketRef}</p>}</form>
   </DialogContent></Dialog>;
 }
 
@@ -376,6 +435,8 @@ function VoiceCallControl({ colleague }: { colleague: Colleague }) {
   const [muted, setMuted] = useState(false);
   const [participants, setParticipants] = useState(0);
   const [error, setError] = useState('');
+  const [quality, setQuality] = useState<'excellent' | 'good' | 'poor' | 'reconnecting'>('good');
+  const startedAtRef = useRef<string | null>(null);
   const reset = useCallback(() => {
     audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear();
     setState('idle'); setMuted(false); setParticipants(0);
@@ -395,28 +456,30 @@ function VoiceCallControl({ colleague }: { colleague: Colleague }) {
       onPeerLeft: (socketId) => { const audio = audioRef.current.get(socketId); audio?.pause(); audioRef.current.delete(socketId); },
       onCallEnded: () => { leave(); setError('A chamada foi encerrada pelo colega.'); },
       onCallDeclined: () => { leave(); setError('O colega recusou a chamada.'); },
+      onConnectionQuality: setQuality,
       onError: (reason) => setError(reason.message),
     });
     clientRef.current = client;
     try {
       await client.join(directVoiceRoom(user.email, colleague.email), user.uid, user.displayName || user.email.split('@')[0], user.email);
       client.invite([colleague.email], 'direct');
+      startedAtRef.current = new Date().toISOString();
       setState('connected');
     } catch (reason) { leave(); setError(reason instanceof Error ? reason.message : 'Falha ao iniciar chamada.'); }
   }
   return <div className="mt-3 rounded-xl border border-primary/25 bg-primary/[.07] p-2.5">
     <div className="flex items-center gap-2">
       {state === 'idle' ? <button type="button" onClick={() => void join()} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><Phone className="size-4" aria-hidden="true" />Iniciar chamada de voz</button> : <>
-        <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1"><p className="truncate text-xs font-bold text-primary">{state === 'connecting' ? 'Conectando...' : 'Chamada em andamento'}</p><p className="text-[11px] text-muted-foreground">{participants ? `${participants + 1} participantes` : 'Aguardando colega'}</p></div>
+        <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1"><p className="truncate text-xs font-bold text-primary">{state === 'connecting' ? 'Conectando...' : 'Chamada em andamento'}</p><p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Signal className={`size-3 ${quality === 'poor' ? 'text-rose-300' : quality === 'reconnecting' ? 'text-amber-300' : 'text-emerald-300'}`} />{participants ? `${participants + 1} participantes · ${qualityLabel(quality)}` : 'Aguardando colega'}</p></div>
         <button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="grid size-11 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}>{muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</button>
-        <button type="button" onClick={() => { clientRef.current?.endCall(); clientRef.current = null; reset(); }} className="grid size-11 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Encerrar chamada para todos"><PhoneOff className="size-4" /></button>
+        <button type="button" onClick={() => { const startedAt = startedAtRef.current || new Date().toISOString(); void recordCall(user, { sessionId: directVoiceRoom(user?.email || '', colleague.email), direction: 'outgoing', kind: 'direct', peerNames: colleague.displayName || colleague.email, status: 'completed', startedAt, endedAt: new Date().toISOString(), durationSeconds: Math.round((Date.now() - Date.parse(startedAt)) / 1000) }); clientRef.current?.endCall(); clientRef.current = null; reset(); }} className="grid size-11 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Encerrar chamada para todos"><PhoneOff className="size-4" /></button>
       </>}
     </div>
     {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
   </div>;
 }
 
-function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
+function TeamVoiceControl({ colleagues, onHistoryChanged }: { colleagues: Colleague[]; onHistoryChanged?: () => void }) {
   const { user } = useAuth();
   const clientRef = useRef<VoiceChatClient | null>(null);
   const audioRef = useRef(new Map<string, HTMLAudioElement>());
@@ -428,6 +491,9 @@ function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
   const [pickerMode, setPickerMode] = useState<'start' | 'add'>('start');
+  const [quality, setQuality] = useState<'excellent' | 'good' | 'poor' | 'reconnecting'>('good');
+  const [remoteMuted, setRemoteMuted] = useState(false);
+  const sessionRef = useRef<{ id: string; startedAt: string; names: string } | null>(null);
   const leave = useCallback(() => {
     clientRef.current?.leave(); clientRef.current = null;
     audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear();
@@ -445,13 +511,14 @@ function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
         audio.srcObject = stream; void audio.play().catch(() => undefined);
       },
       onPeerLeft: (socketId) => { const audio = audioRef.current.get(socketId); audio?.pause(); audioRef.current.delete(socketId); },
+      onConnectionQuality: setQuality,
       onError: (reason) => setError(reason.message),
     });
     clientRef.current = client;
     try {
       const roomId = `group:${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
       await client.join(roomId, user.uid, user.displayName || user.email.split('@')[0], user.email);
-      client.invite(selectedEmails, 'group'); setInvitedEmails(selectedEmails); setSelectedEmails([]); setPickerOpen(false); setState('connected');
+      client.invite(selectedEmails, 'group'); sessionRef.current = { id: roomId, startedAt: new Date().toISOString(), names: colleagues.filter((item) => selectedEmails.includes(item.email)).map((item) => item.displayName || item.email).join(', ') }; setInvitedEmails(selectedEmails); setSelectedEmails([]); setPickerOpen(false); setState('connected');
     } catch (reason) { leave(); setError(reason instanceof Error ? reason.message : 'Falha ao iniciar reunião.'); }
   }
   function openPicker(mode: 'start' | 'add') { setPickerMode(mode); setSelectedEmails([]); setPickerOpen(true); }
@@ -463,17 +530,18 @@ function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
   const inviteLimit = Math.max(0, 5 - invitedEmails.length);
   return <div className="mt-3 rounded-xl border border-primary/25 bg-primary/[.07] p-2.5">
     {state === 'idle' ? <button type="button" onClick={() => openPicker('start')} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><Users className="size-4" aria-hidden="true" />Nova reunião de voz</button> : <div className="flex items-center gap-2">
-      <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1"><p className="truncate text-xs font-bold text-primary">{state === 'connecting' ? 'Conectando...' : 'Reunião em andamento'}</p><p className="text-[11px] text-muted-foreground">{participants ? `${participants + 1} participantes` : 'Aguardando colegas'}</p></div>
+      <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1"><p className="truncate text-xs font-bold text-primary">{state === 'connecting' ? 'Conectando...' : 'Reunião em andamento'}</p><p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Signal className={`size-3 ${quality === 'poor' ? 'text-rose-300' : quality === 'reconnecting' ? 'text-amber-300' : 'text-emerald-300'}`} />{participants ? `${participants + 1} participantes · ${qualityLabel(quality)}` : 'Aguardando colegas'}</p></div>
       <button type="button" disabled={state !== 'connected' || !inviteLimit} onClick={() => openPicker('add')} className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label="Adicionar participantes"><Users className="size-4" /></button>
       <button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}>{muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</button>
-      <button type="button" onClick={leave} className="grid size-10 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Sair da reunião"><PhoneOff className="size-4" /></button>
+      <button type="button" disabled={state !== 'connected'} onClick={() => { const next = !remoteMuted; setRemoteMuted(next); audioRef.current.forEach((audio) => { audio.muted = next; }); }} className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label={remoteMuted ? 'Ouvir participantes' : 'Silenciar participantes'}><FileAudio className="size-4" /></button>
+      <button type="button" onClick={() => { const session = sessionRef.current; if (session) void recordCall(user, { sessionId: session.id, direction: 'outgoing', kind: 'group', peerNames: session.names, status: 'completed', startedAt: session.startedAt, endedAt: new Date().toISOString(), durationSeconds: Math.round((Date.now() - Date.parse(session.startedAt)) / 1000) }).then(onHistoryChanged); leave(); }} className="grid size-10 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Sair da reunião"><PhoneOff className="size-4" /></button>
     </div>}
     {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
     <Dialog open={pickerOpen} onOpenChange={setPickerOpen}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{pickerMode === 'start' ? 'Iniciar reunião de voz' : 'Adicionar participantes'}</DialogTitle><DialogDescription>Selecione até {pickerMode === 'start' ? 5 : inviteLimit} colega{pickerMode === 'start' ? 's' : inviteLimit === 1 ? '' : 's'} para convidar.</DialogDescription></DialogHeader><div className="max-h-72 space-y-1 overflow-y-auto pr-1">{colleagues.filter((colleague) => pickerMode === 'start' || !invitedEmails.includes(colleague.email)).map((colleague) => { const checked = selectedEmails.includes(colleague.email); const name = colleague.displayName || colleague.email.split('@')[0]; return <label key={colleague.email} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-border px-3 transition hover:bg-muted"><input type="checkbox" checked={checked} onChange={() => setSelectedEmails((current) => checked ? current.filter((email) => email !== colleague.email) : current.length < inviteLimit ? [...current, colleague.email] : current)} className="size-4 accent-primary" /><span className={`size-2.5 rounded-full ${statusColors[colleague.status]}`} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span><span className="text-xs text-muted-foreground">{colleague.status}</span></label>; })}</div><button type="button" disabled={!selectedEmails.length || state === 'connecting'} onClick={() => pickerMode === 'start' ? void join() : inviteMore()} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{state === 'connecting' ? <Loader2 className="size-4 animate-spin" /> : <Phone className="size-4" />}{pickerMode === 'start' ? `Convidar ${selectedEmails.length || ''} colega${selectedEmails.length === 1 ? '' : 's'}` : `Adicionar ${selectedEmails.length || ''} participante${selectedEmails.length === 1 ? '' : 's'}`}</button></DialogContent></Dialog>
   </div>;
 }
 
-function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { invitation: VoiceInvitation | null; onAnswered: () => void; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
+function IncomingVoiceCall({ invitation, colleagues, onAnswered, onClose, onDecline }: { invitation: VoiceInvitation | null; colleagues: Colleague[]; onAnswered: () => void; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
   const { user } = useAuth();
   const clientRef = useRef<VoiceChatClient | null>(null);
   const audioRef = useRef(new Map<string, HTMLAudioElement>());
@@ -481,6 +549,10 @@ function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { inv
   const [muted, setMuted] = useState(false);
   const [participants, setParticipants] = useState(0);
   const [error, setError] = useState('');
+  const [quality, setQuality] = useState<'excellent' | 'good' | 'poor' | 'reconnecting'>('good');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const startedAtRef = useRef<string | null>(null);
   useEffect(() => { setState('ringing'); setMuted(false); setParticipants(0); setError(''); }, [invitation?.roomId]);
   const cleanup = useCallback((notify = true) => { if (notify) clientRef.current?.leave(); clientRef.current = null; audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear(); setState('ringing'); setMuted(false); setParticipants(0); }, []);
   useEffect(() => () => cleanup(), [cleanup]);
@@ -492,10 +564,11 @@ function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { inv
       onRemoteStream: (socketId, stream) => { let audio = audioRef.current.get(socketId); if (!audio) { audio = new Audio(); audio.autoplay = true; audioRef.current.set(socketId, audio); } audio.srcObject = stream; void audio.play().catch(() => undefined); },
       onPeerLeft: (socketId) => { const audio = audioRef.current.get(socketId); audio?.pause(); audioRef.current.delete(socketId); },
       onCallEnded: () => { cleanup(false); onClose(); },
+      onConnectionQuality: setQuality,
       onError: (reason) => setError(reason.message),
     });
     clientRef.current = client;
-    try { await client.join(invitation.roomId, user.uid, user.displayName || user.email.split('@')[0], user.email); onAnswered(); setState('connected'); }
+    try { await client.join(invitation.roomId, user.uid, user.displayName || user.email.split('@')[0], user.email); startedAtRef.current = new Date().toISOString(); onAnswered(); setState('connected'); }
     catch (reason) { cleanup(); setError(reason instanceof Error ? reason.message : 'Não foi possível atender a chamada.'); }
   }
   useEffect(() => {
@@ -503,12 +576,12 @@ function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { inv
     window.addEventListener('caju-voice-answer-request-in-dialog', answerFromNotification);
     return () => window.removeEventListener('caju-voice-answer-request-in-dialog', answerFromNotification);
   });
-  function closeActive() { if (invitation?.kind === 'direct') { clientRef.current?.endCall(); cleanup(false); } else cleanup(); onClose(); }
+  function closeActive() { if (invitation) { const startedAt = startedAtRef.current || new Date().toISOString(); void recordCall(user, { sessionId: invitation.roomId, direction: 'incoming', kind: invitation.kind, peerNames: invitation.callerName, status: 'completed', startedAt, endedAt: new Date().toISOString(), durationSeconds: Math.round((Date.now() - Date.parse(startedAt)) / 1000) }); } if (invitation?.kind === 'direct') { clientRef.current?.endCall(); cleanup(false); } else cleanup(); onClose(); }
   const caller = invitation?.callerName || 'Colega';
-  return <Dialog open={Boolean(invitation)} onOpenChange={(open) => { if (!open && invitation) state === 'ringing' ? onDecline(invitation) : closeActive(); }}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><PhoneIncoming className="size-5 text-emerald-400" />{state === 'ringing' ? 'Chamada recebida' : 'Chamada de voz'}</DialogTitle><DialogDescription>{state === 'ringing' ? `${caller} convidou você para ${invitation?.kind === 'group' ? 'uma reunião de voz' : 'uma chamada de voz'}.` : invitation?.kind === 'group' ? `${participants + 1} participante(s) na reunião.` : 'Chamada em andamento.'}</DialogDescription></DialogHeader>{state === 'ringing' ? <div className="flex gap-2"><button type="button" onClick={() => invitation && onDecline(invitation)} className="min-h-11 flex-1 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 text-sm font-semibold text-rose-200">Recusar</button><button type="button" onClick={() => void accept()} className="min-h-11 flex-1 rounded-xl bg-emerald-500 px-3 text-sm font-semibold text-white">Atender</button></div> : <div className="flex gap-2"><button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="min-h-11 flex-1 rounded-xl border border-border bg-background text-sm font-semibold disabled:opacity-50">{muted ? 'Ativar microfone' : 'Silenciar'}</button><button type="button" onClick={closeActive} className="min-h-11 flex-1 rounded-xl bg-rose-500 px-3 text-sm font-semibold text-white">Encerrar</button></div>}{error && <p role="alert" className="text-xs text-rose-300">{error}</p>}</DialogContent></Dialog>;
+  return <><Dialog open={Boolean(invitation)} onOpenChange={(open) => { if (!open && invitation) state === 'ringing' ? onDecline(invitation) : closeActive(); }}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><PhoneIncoming className="size-5 text-emerald-400" />{state === 'ringing' ? 'Chamada recebida' : 'Chamada de voz'}</DialogTitle><DialogDescription>{state === 'ringing' ? `${caller} convidou você para ${invitation?.kind === 'group' ? 'uma reunião de voz' : 'uma chamada de voz'}.` : invitation?.kind === 'group' ? `${participants + 1} participante(s) na reunião · ${qualityLabel(quality)}.` : `Chamada em andamento · ${qualityLabel(quality)}.`}</DialogDescription></DialogHeader>{state === 'ringing' ? <div className="flex gap-2"><button type="button" onClick={() => invitation && onDecline(invitation)} className="min-h-11 flex-1 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 text-sm font-semibold text-rose-200">Recusar</button><button type="button" onClick={() => void accept()} className="min-h-11 flex-1 rounded-xl bg-emerald-500 px-3 text-sm font-semibold text-white">Atender</button></div> : <div className="grid grid-cols-3 gap-2"><button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="min-h-11 rounded-xl border border-border bg-background px-2 text-xs font-semibold disabled:opacity-50">{muted ? 'Ativar mic.' : 'Silenciar'}</button>{invitation?.kind === 'group' && <button type="button" disabled={state !== 'connected'} onClick={() => setInviteOpen(true)} className="min-h-11 rounded-xl border border-border bg-background px-2 text-xs font-semibold"><UserPlus className="mx-auto size-4" /><span className="sr-only">Adicionar participantes</span></button>}<button type="button" onClick={closeActive} className="min-h-11 rounded-xl bg-rose-500 px-2 text-xs font-semibold text-white">Encerrar</button></div>}{error && <p role="alert" className="text-xs text-rose-300">{error}</p>}</DialogContent></Dialog><Dialog open={inviteOpen} onOpenChange={setInviteOpen}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Adicionar à reunião</DialogTitle><DialogDescription>Escolha colegas para convidar agora.</DialogDescription></DialogHeader><div className="max-h-64 space-y-1 overflow-y-auto">{colleagues.map((colleague) => <label key={colleague.email} className="flex min-h-11 items-center gap-3 rounded-xl border border-border px-3"><input type="checkbox" checked={selectedEmails.includes(colleague.email)} onChange={() => setSelectedEmails((items) => items.includes(colleague.email) ? items.filter((item) => item !== colleague.email) : [...items, colleague.email].slice(0, 5))} /><span className="truncate text-sm">{colleague.displayName || colleague.email}</span></label>)}</div><button type="button" disabled={!selectedEmails.length} onClick={() => { clientRef.current?.invite(selectedEmails, 'group'); setSelectedEmails([]); setInviteOpen(false); }} className="min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50">Enviar convite</button></DialogContent></Dialog></>;
 }
 
-function MessageAttachment({ message, mine }: { message: Message; mine: boolean }) {
+function MessageAttachment({ message, mine }: { message: Pick<Message, 'attachmentData' | 'attachmentName' | 'attachmentType'>; mine: boolean }) {
   if (!message.attachmentData) return null;
   const name = message.attachmentName || 'Anexo';
   const type = message.attachmentType || '';
@@ -521,6 +594,37 @@ function AttachmentPreview({ attachment, onRemove }: { attachment: { name: strin
   return <div className="relative mt-2 overflow-hidden rounded-xl border border-border bg-background/70 p-2 pr-10">{attachment.type.startsWith('image/') ? <div className="flex items-center gap-3"><img src={attachment.data} alt={`Prévia de ${attachment.name}`} className="h-20 w-24 rounded-lg object-cover" /><div className="min-w-0"><p className="text-xs font-bold">Imagem pronta para enviar</p><p className="mt-1 truncate text-[11px] text-muted-foreground">{attachment.name}</p></div></div> : attachment.type.startsWith('audio/') ? <div><p className="mb-1 flex items-center gap-1.5 text-xs font-bold"><FileAudio className="size-4" />Áudio pronto para enviar</p><audio controls preload="metadata" src={attachment.data} className="h-10 w-full" /></div> : <div className="flex min-h-10 items-center gap-2 text-xs"><File className="size-4" /><span className="truncate">{attachment.name}</span></div>}<button type="button" onClick={onRemove} className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-muted text-muted-foreground hover:text-foreground" aria-label="Remover anexo"><X className="size-4" /></button></div>;
 }
 
+function MessageSearchResults({ messages, currentEmail, colleagues, onSelect }: { messages: Message[]; currentEmail: string; colleagues: Colleague[]; onSelect: (colleague: Colleague) => void }) {
+  if (!messages.length) return <p className="mt-3 text-center text-[11px] text-muted-foreground">Nenhuma mensagem encontrada.</p>;
+  return <div className="mt-3 border-t border-border pt-2"><p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Mensagens encontradas</p>{messages.slice(0,8).map((message) => { const peerEmail = message.senderEmail.toLowerCase() === currentEmail.toLowerCase() ? message.recipientEmail : message.senderEmail; const peer = colleagues.find((item) => item.email.toLowerCase() === peerEmail.toLowerCase()); if (!peer) return null; return <button key={message.id} type="button" onClick={() => onSelect(peer)} className="mb-1 block w-full rounded-lg border border-border/60 px-2 py-1.5 text-left hover:bg-muted"><span className="block truncate text-[11px] font-semibold">{peer.displayName || peer.email}</span><span className="block truncate text-[10px] text-muted-foreground">{message.body || message.attachmentName}</span></button>; })}</div>;
+}
+
+function GroupList({ groups, onSelect, onCreate }: { groups: Group[]; onSelect: (group: Group) => void; onCreate: () => void }) {
+  return <div className="space-y-1.5"><button type="button" onClick={onCreate} className="mb-2 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-primary/35 bg-primary/10 text-xs font-semibold text-primary"><Plus className="size-4" />Novo grupo</button>{groups.length ? groups.map((group) => <button key={group.id} type="button" onClick={() => onSelect(group)} className="flex min-h-12 w-full items-center gap-2.5 rounded-xl border border-transparent px-2 text-left transition hover:border-border hover:bg-muted"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-primary"><Users className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{group.name}</span><span className="block truncate text-[10px] text-muted-foreground">{group.members.length} participantes{group.lastMessage?.body ? ` · ${group.lastMessage.body}` : ''}</span></span>{group.unread > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">{group.unread}</span>}</button>) : <p className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">Nenhum grupo ainda.</p>}</div>;
+}
+
+function CallHistoryList({ calls }: { calls: CallLog[] }) {
+  if (!calls.length) return <p className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">O histórico aparecerá depois da primeira chamada.</p>;
+  return <div className="space-y-1.5">{calls.map((call) => <div key={call.id} className="flex min-h-12 items-center gap-2.5 rounded-xl border border-border/70 px-2"><span className={`grid size-8 shrink-0 place-items-center rounded-full ${call.status === 'missed' || call.status === 'failed' ? 'bg-rose-400/10 text-rose-300' : 'bg-emerald-400/10 text-emerald-300'}`}><History className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold">{call.peerNames}</span><span className="block text-[10px] text-muted-foreground">{call.direction === 'incoming' ? 'Recebida' : 'Realizada'} · {call.kind === 'group' ? 'grupo' : 'individual'} · {call.durationSeconds ? formatDuration(call.durationSeconds) : statusCallLabel(call.status)}</span></span><span className="text-[10px] text-muted-foreground">{relativeTime(call.startedAt)}</span></div>)}</div>;
+}
+
+function CreateGroupDialog({ open, colleagues, onClose, onCreated }: { open: boolean; colleagues: Colleague[]; onClose: () => void; onCreated: () => void }) {
+  const { user } = useAuth(); const [name, setName] = useState(''); const [members, setMembers] = useState<string[]>([]); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
+  async function create() { if (!user || !name.trim() || !members.length) return; setSaving(true); setError(''); try { const response = await fetch('/api/chat-groups', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name, members }) }); const payload = await response.json() as { error?: string }; if (!response.ok) throw new Error(payload.error || 'Falha ao criar grupo.'); setName(''); setMembers([]); onCreated(); onClose(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Falha ao criar grupo.'); } finally { setSaving(false); } }
+  return <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Novo grupo</DialogTitle><DialogDescription>Crie uma conversa permanente e escolha os participantes.</DialogDescription></DialogHeader><label className="text-xs font-semibold">Nome do grupo<input value={name} maxLength={60} onChange={(event) => setName(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm" /></label><div className="max-h-64 space-y-1 overflow-y-auto">{colleagues.map((colleague) => <label key={colleague.email} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-border px-3"><input type="checkbox" checked={members.includes(colleague.email)} onChange={() => setMembers((items) => items.includes(colleague.email) ? items.filter((item) => item !== colleague.email) : [...items, colleague.email])} /><span className={`size-2.5 rounded-full ${statusColors[colleague.status]}`} /><span className="min-w-0 flex-1 truncate text-sm">{colleague.displayName || colleague.email}</span></label>)}</div>{error && <p role="alert" className="text-xs text-rose-300">{error}</p>}<button type="button" disabled={saving || !name.trim() || !members.length} onClick={() => void create()} className="min-h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Criando...' : 'Criar grupo'}</button></DialogContent></Dialog>;
+}
+
+function GroupChatDialog({ group, colleagues, tickets, onClose, onOpenTicket, onUpdated }: { group: Group | null; colleagues: Colleague[]; tickets: ChatTicket[]; onClose: () => void; onOpenTicket?: (ticketId: string) => void; onUpdated: () => void }) {
+  const { user } = useAuth(); const [messages, setMessages] = useState<GroupMessage[]>([]); const [draft, setDraft] = useState(''); const [ticketId, setTicketId] = useState(''); const [attachment, setAttachment] = useState<{ name: string; type: string; data: string } | null>(null); const [error, setError] = useState(''); const [membersOpen, setMembersOpen] = useState(false); const bottomRef = useRef<HTMLDivElement>(null);
+  const load = useCallback(async () => { if (!user || !group) return; try { const response = await fetch(`/api/chat-groups/${group.id}/messages`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' }); const payload = await response.json() as { messages?: GroupMessage[]; error?: string }; if (!response.ok) throw new Error(payload.error); setMessages(payload.messages ?? []); setError(''); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Falha ao carregar grupo.'); } }, [group, user]);
+  useEffect(() => { if (!group) { setMessages([]); return; } void load(); const timer = window.setInterval(() => void load(), 3_000); return () => window.clearInterval(timer); }, [group, load]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  function choose(file?: File) { if (!file) return; if (!(file.type.startsWith('image/') || file.type.startsWith('audio/') || file.type === 'application/pdf') || file.size > 700_000) { setError('Envie imagem, áudio ou PDF de até 700 KB.'); return; } const reader = new FileReader(); reader.onload = () => setAttachment({ name: file.name, type: file.type, data: String(reader.result) }); reader.readAsDataURL(file); }
+  async function send(event: React.FormEvent) { event.preventDefault(); if (!user || !group || (!draft.trim() && !ticketId && !attachment)) return; try { const response = await fetch(`/api/chat-groups/${group.id}/messages`, { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ body: draft, ticketId, attachment }) }); const payload = await response.json() as { message?: GroupMessage; error?: string }; if (!response.ok || !payload.message) throw new Error(payload.error); setMessages((items) => [...items, payload.message!]); setDraft(''); setTicketId(''); setAttachment(null); setError(''); onUpdated(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Falha ao enviar.'); } }
+  const owner = group?.createdBy.toLowerCase() === user?.email?.toLowerCase();
+  return <><Dialog open={Boolean(group)} onOpenChange={(value) => { if (!value) onClose(); }}><DialogContent className="grid h-[min(640px,90vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg"><DialogHeader className="border-b border-border p-4 pr-14"><DialogTitle>{group?.name}</DialogTitle><button type="button" onClick={() => setMembersOpen(true)} className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><Users className="size-3.5" />{group?.members.length} participantes</button></DialogHeader><div className="min-h-0 overflow-y-auto bg-black/10 p-4">{messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); const sender = colleagues.find((item) => item.email === message.senderEmail); const selectedTicket = tickets.find((item) => item.id === message.ticketId); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[84%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{!mine && <p className="mb-1 text-[10px] font-bold text-primary">{sender?.displayName || message.senderEmail.split('@')[0]}</p>}{message.body && <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>}{message.ticketId && <TicketShareCard ticketId={message.ticketId} label={selectedTicket ? `${selectedTicket.title} · ${selectedTicket.store}` : 'Abrir detalhes do chamado'} mine={mine} onOpen={() => { onClose(); onOpenTicket?.(message.ticketId!); }} />}<MessageAttachment message={message} mine={mine} /><p className="mt-1 text-right text-[10px] opacity-65">{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-sm text-muted-foreground">Comece a conversa do grupo.</div>}{error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}</div><form onSubmit={send} className="border-t border-border bg-card p-3"><div className="flex gap-2"><input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Mensagem para o grupo..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 cursor-pointer place-items-center rounded-xl border border-input"><Paperclip className="size-4" /><span className="sr-only">Anexar arquivo</span><input type="file" className="sr-only" accept="image/*,audio/*,.pdf" onChange={(event) => { choose(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label><button type="submit" className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground" aria-label="Enviar"><Send className="size-4" /></button></div><select value={ticketId} onChange={(event) => setTicketId(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-input bg-background px-3 text-xs"><option value="">Anexar chamado...</option>{tickets.slice(0,100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select>{attachment && <AttachmentPreview attachment={attachment} onRemove={() => setAttachment(null)} />}</form></DialogContent></Dialog><Dialog open={membersOpen} onOpenChange={setMembersOpen}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Participantes</DialogTitle><DialogDescription>{owner ? 'Você administra este grupo.' : 'Somente o responsável pode alterar participantes.'}</DialogDescription></DialogHeader><div className="space-y-1">{group?.members.map((member) => { const colleague = colleagues.find((item) => item.email === member.email); return <div key={member.email} className="flex min-h-11 items-center gap-2 rounded-xl border border-border px-3 text-sm"><span className="min-w-0 flex-1 truncate">{colleague?.displayName || member.email}{member.memberRole === 'owner' ? ' · responsável' : ''}</span>{owner && member.memberRole !== 'owner' && <button type="button" onClick={async () => { if (!user || !group) return; await fetch(`/api/chat-groups/${group.id}/members?email=${encodeURIComponent(member.email)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${await user.getIdToken()}` } }); onUpdated(); }} className="text-xs text-rose-300">Remover</button>}</div>; })}</div>{owner && <select defaultValue="" onChange={async (event) => { const email = event.target.value; if (!email || !user || !group) return; await fetch(`/api/chat-groups/${group.id}/members`, { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) }); event.currentTarget.value = ''; onUpdated(); }} className="h-11 rounded-xl border border-input bg-background px-3 text-sm"><option value="">Adicionar colega...</option>{colleagues.filter((item) => !group?.members.some((member) => member.email === item.email)).map((item) => <option key={item.email} value={item.email}>{item.displayName || item.email}</option>)}</select>}</DialogContent></Dialog></>;
+}
+
 export function UserMenu() {
   const { user, role } = useAuth();
   const [open, setOpen] = useState(false);
@@ -530,9 +634,10 @@ export function UserMenu() {
   const [phone, setPhone] = useState('');
   const [feedback, setFeedback] = useState('');
   const statusRef = useRef<Status>('Online');
+  const manualStatusRef = useRef(false);
   const lastActivityRef = useRef(0);
-  const offlineDismissUntilRef = useRef(0);
-  const syncPresence = useCallback(async (changes: Partial<{ status: Status; displayName: string; phone: string; photoUrl: string | null }> = {}) => {
+  const idleTimerRef = useRef<number | null>(null);
+  const syncPresence = useCallback(async (changes: Partial<{ status: Status; manualStatus: boolean; displayName: string; phone: string; photoUrl: string | null }> = {}) => {
     if (!user) return;
     const response = await fetch('/api/colleagues', { method: 'PATCH', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ status, ...changes }) });
     if (!response.ok) throw new Error('Não foi possível sincronizar seu perfil.');
@@ -542,28 +647,30 @@ export function UserMenu() {
     if (!user) return;
     let active = true;
     void (async () => {
-      const localStatus = (localStorage.getItem('caju-status') as Status) || 'Online'; setStatus(localStatus);
+      const localStatus = (localStorage.getItem('caju-status') as Status) || 'Online'; const manual = localStorage.getItem('caju-status-manual') === '1'; setStatus(localStatus); manualStatusRef.current = manual;
       try {
         const response = await fetch('/api/colleagues', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
         const payload = await response.json() as { colleagues?: Colleague[] };
         const profile = payload.colleagues?.find((item) => item.email.toLowerCase() === user.email?.toLowerCase());
         if (active && profile) { setName(profile.displayName || ''); setPhone(profile.phone || ''); setPhoto(profile.photoUrl); }
-      } finally { if (active) void syncPresence({ status: localStatus }); }
+      } finally { if (active) void syncPresence({ status: localStatus, manualStatus: manual }); }
     })();
     const timer = window.setInterval(() => void syncPresence(), 15_000);
     return () => { active = false; window.clearInterval(timer); };
   }, [syncPresence, user]);
   useEffect(() => { statusRef.current = status; }, [status]);
   async function updateStatus(value: Status) {
-    if (value === 'Offline') offlineDismissUntilRef.current = Date.now() + 4_000;
-    setStatus(value); localStorage.setItem('caju-status', value); setFeedback(`Status alterado para ${value}.`);
-    try { await syncPresence({ status: value }); } catch (reason) { setFeedback(reason instanceof Error ? reason.message : 'Falha ao atualizar o status.'); }
+    const manual = value !== 'Online'; manualStatusRef.current = manual;
+    setStatus(value); localStorage.setItem('caju-status', value); localStorage.setItem('caju-status-manual', manual ? '1' : '0'); setFeedback(`Status alterado para ${value}.`);
+    try { await syncPresence({ status: value, manualStatus: manual }); } catch (reason) { setFeedback(reason instanceof Error ? reason.message : 'Falha ao atualizar o status.'); }
   }
   useEffect(() => {
     const markActive = () => {
-      if (!user || statusRef.current !== 'Offline' || Date.now() < offlineDismissUntilRef.current || Date.now() - lastActivityRef.current < 5_000) return;
+      if (!user) return;
       lastActivityRef.current = Date.now();
-      void updateStatus('Online');
+      if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current);
+      if (!manualStatusRef.current && statusRef.current !== 'Online') { statusRef.current = 'Online'; setStatus('Online'); void syncPresence({ status: 'Online', manualStatus: false }); }
+      idleTimerRef.current = window.setTimeout(() => { if (!manualStatusRef.current && document.visibilityState !== 'visible') { statusRef.current = 'Ausente'; setStatus('Ausente'); void syncPresence({ status: 'Ausente', manualStatus: false }); } }, 5 * 60 * 1000);
     };
     const visible = () => { if (document.visibilityState === 'visible') markActive(); };
     window.addEventListener('pointerdown', markActive, { capture: true });
@@ -575,8 +682,9 @@ export function UserMenu() {
       window.removeEventListener('keydown', markActive, { capture: true });
       window.removeEventListener('focus', markActive);
       document.removeEventListener('visibilitychange', visible);
+      if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current);
     };
-  }, [user]);
+  }, [syncPresence, user]);
   const label = name || user?.email?.slice(0, 2).toUpperCase() || 'US';
   return <div className="relative mt-2 rounded-xl border border-border/70 bg-card/40 p-2 group-hover/sidebar:p-3" onMouseLeave={() => setOpen(false)}>
     <button type="button" className="flex min-h-10 w-full items-center gap-3 text-left" onClick={() => setOpen((value) => !value)} onFocus={() => setOpen(true)} aria-haspopup="menu" aria-expanded={open}><div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">{photo ? <img src={photo} alt="Foto do perfil" className="size-full object-cover" /> : label.slice(0, 2).toUpperCase()}</div><div className="min-w-0 flex-1 opacity-0 transition-opacity group-hover/sidebar:opacity-100"><p className="truncate text-xs font-semibold">{name || user?.email}</p><p className="truncate text-xs text-muted-foreground">{role ? roleLabels[role] : 'Sem perfil'} · <span className="font-semibold text-emerald-300">{status}</span></p></div><ChevronUp className={`size-4 shrink-0 opacity-0 transition group-hover/sidebar:opacity-100 ${open ? '' : 'rotate-180'}`} /></button>
@@ -611,7 +719,15 @@ export function ProfileSettings() {
     if (!user) return; setSaving(true); setMessage('');
     try { const response = await fetch('/api/colleagues', { method: 'PATCH', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ displayName: name, phone, photoUrl: photo }) }); const payload = await response.json() as { error?: string }; if (!response.ok) throw new Error(payload.error || 'Falha ao salvar perfil.'); window.dispatchEvent(new Event('caju-presence-updated')); setMessage('Perfil atualizado.'); } catch (error) { setMessage(error instanceof Error ? error.message : 'Falha ao salvar perfil.'); } finally { setSaving(false); }
   }
-  return <section className="surface-panel rounded-2xl p-5"><h2 className="font-semibold">Meu perfil</h2><p className="mt-1 text-sm text-muted-foreground">Foto, nome e telefone visíveis para colegas.</p><div className="mt-4 flex items-center gap-4"><div className="grid size-16 place-items-center overflow-hidden rounded-full border border-primary/30 bg-primary/10 text-sm font-bold text-primary">{photo ? <img src={photo} alt="Foto do perfil" className="size-full object-cover" /> : initials(name || user?.email || 'US')}</div><label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-primary"><Camera className="size-4" />Alterar foto<input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label></div><div className="mt-4 grid gap-3"><label className="text-xs font-semibold text-muted-foreground" htmlFor="settings-profile-name">Nome de exibição<input id="settings-profile-name" className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={name} onChange={(event) => setName(event.target.value)} /></label><label className="text-xs font-semibold text-muted-foreground" htmlFor="settings-profile-phone">Telefone<input id="settings-profile-phone" className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={phone} onChange={(event) => setPhone(event.target.value)} /></label><button type="button" disabled={saving} onClick={() => void save()} className="h-10 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar perfil'}</button>{message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}</div></section>;
+  return <><section className="surface-panel rounded-2xl p-5"><h2 className="font-semibold">Meu perfil</h2><p className="mt-1 text-sm text-muted-foreground">Foto, nome e telefone visíveis para colegas.</p><div className="mt-4 flex items-center gap-4"><div className="grid size-16 place-items-center overflow-hidden rounded-full border border-primary/30 bg-primary/10 text-sm font-bold text-primary">{photo ? <img src={photo} alt="Foto do perfil" className="size-full object-cover" /> : initials(name || user?.email || 'US')}</div><label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-primary"><Camera className="size-4" />Alterar foto<input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => choosePhoto(event.target.files?.[0])} /></label></div><div className="mt-4 grid gap-3"><label className="text-xs font-semibold text-muted-foreground" htmlFor="settings-profile-name">Nome de exibição<input id="settings-profile-name" className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={name} onChange={(event) => setName(event.target.value)} /></label><label className="text-xs font-semibold text-muted-foreground" htmlFor="settings-profile-phone">Telefone<input id="settings-profile-phone" className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground" value={phone} onChange={(event) => setPhone(event.target.value)} /></label><button type="button" disabled={saving} onClick={() => void save()} className="h-10 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar perfil'}</button>{message && <p role="status" className="text-sm text-muted-foreground">{message}</p>}</div></section><CommunicationSettings /></>;
+}
+
+function CommunicationSettings() {
+  const { user } = useAuth(); const [preferences, setPreferences] = useState<CommunicationPreferences>(defaultPreferences); const [saving, setSaving] = useState(false); const [feedback, setFeedback] = useState('');
+  useEffect(() => { if (!user) return; let active = true; void (async () => { const response = await fetch('/api/communication-preferences', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' }); const payload = await response.json() as { preferences?: CommunicationPreferences }; if (active && payload.preferences) setPreferences(payload.preferences); })(); return () => { active = false; }; }, [user]);
+  async function save() { if (!user) return; setSaving(true); setFeedback(''); try { const response = await fetch('/api/communication-preferences', { method: 'PATCH', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(preferences) }); if (!response.ok) throw new Error(); setFeedback('Preferências salvas.'); window.dispatchEvent(new Event('caju-collaboration-updated')); } catch { setFeedback('Não foi possível salvar as preferências.'); } finally { setSaving(false); } }
+  const choices: Array<[keyof Pick<CommunicationPreferences, 'desktopMessages' | 'desktopCalls' | 'soundMessages' | 'soundCalls' | 'quietHoursEnabled'>, string]> = [['desktopMessages','Notificações de mensagens na área de trabalho'],['desktopCalls','Notificações de chamadas na área de trabalho'],['soundMessages','Som ao enviar e receber mensagens'],['soundCalls','Toque de chamada'],['quietHoursEnabled','Horário silencioso']];
+  return <section className="surface-panel rounded-2xl p-5"><h2 className="font-semibold">Comunicação e notificações</h2><p className="mt-1 text-sm text-muted-foreground">Escolha como o Caju OS avisa você.</p><div className="mt-4 space-y-2">{choices.map(([key,label]) => <label key={key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-border px-3 text-sm"><input type="checkbox" checked={preferences[key]} onChange={(event) => setPreferences((current) => ({ ...current, [key]: event.target.checked }))} className="size-4 accent-primary" /><span className="flex-1">{label}</span></label>)}</div>{preferences.quietHoursEnabled && <div className="mt-3 grid grid-cols-2 gap-3"><label className="text-xs text-muted-foreground">Início<input type="time" value={preferences.quietHoursStart} onChange={(event) => setPreferences((current) => ({ ...current, quietHoursStart: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm" /></label><label className="text-xs text-muted-foreground">Fim<input type="time" value={preferences.quietHoursEnd} onChange={(event) => setPreferences((current) => ({ ...current, quietHoursEnd: event.target.value }))} className="mt-1 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm" /></label></div>}<button type="button" disabled={saving} onClick={() => void save()} className="mt-4 min-h-11 w-full rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar notificações'}</button>{feedback && <p role="status" className="mt-2 text-xs text-muted-foreground">{feedback}</p>}</section>;
 }
 
 function TicketShareCard({ ticketId, label, mine, onOpen }: { ticketId: string; label: string; mine: boolean; onOpen: () => void }) {
@@ -629,6 +745,10 @@ function TicketShareCard({ ticketId, label, mine, onOpen }: { ticketId: string; 
 function initials(value: string) { return value.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'US'; }
 
 function formatDuration(seconds: number) { return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
+
+function qualityLabel(value: 'excellent' | 'good' | 'poor' | 'reconnecting') { return value === 'excellent' ? 'conexão excelente' : value === 'good' ? 'conexão boa' : value === 'poor' ? 'conexão instável' : 'reconectando'; }
+function statusCallLabel(value: CallLog['status']) { return value === 'missed' ? 'não atendida' : value === 'declined' ? 'recusada' : value === 'failed' ? 'falhou' : 'concluída'; }
+function relativeTime(value: string) { const seconds = Math.max(0, Math.round((Date.now() - Date.parse(value)) / 1000)); if (seconds < 60) return 'agora'; if (seconds < 3600) return `há ${Math.floor(seconds / 60)} min`; if (seconds < 86400) return `há ${Math.floor(seconds / 3600)} h`; return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(value)); }
 
 function parseTicketMessage(body: string, tickets: ChatTicket[]) {
   const lines = body.split('\n');

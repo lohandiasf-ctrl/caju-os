@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, CalendarDays, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Star, Users, Wrench, X } from 'lucide-react';
+import { Bell, Building2, CalendarClock, CalendarDays, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map as MapIcon, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Star, Users, Wrench, X } from 'lucide-react';
 import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,7 +33,7 @@ type OperationalAlert = { ticketKey: string; level: 'critical' | 'warning'; mess
 type OperationalDashboard = { alerts: OperationalAlert[]; metrics: { active: number; overdue: number; scheduled: number; visits: number; revenueCents: number; costCents: number; marginCents: number }; n1: { email: string; count: number }[]; recentAudit: { id: number; ticketKey: string; action: string; actorEmail: string; createdAt: string }[] };
 const columns: Status[] = ['Pendente de agendamento', 'Agendado', 'Aguardando spare', 'Direcionado', 'Técnico em campo'];
 const nav = [
-  ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'], ['Chamados', ClipboardList, '/?view=tickets', 'tickets'], ['Mapa operacional', Map, '/mapa', 'map'], ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
+  ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'], ['Chamados', ClipboardList, '/?view=tickets', 'tickets'], ['Mapa operacional', MapIcon, '/mapa', 'map'], ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
   ['Central N1', Headphones, '/?view=central', 'central'], ['Equipe N1', Users, '/?view=technicians', 'technicians'], ['Projetos e lojas', Building2, '/?view=projects', 'projects'], ['Spares', PackageOpen, '/spares', 'spares'], ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
 ] as const;
 const dots: Record<Status, string> = { 'Pendente de agendamento': 'bg-violet-400', Agendado: 'bg-blue-400', 'Aguardando spare': 'bg-amber-400', Direcionado: 'bg-cyan-400', 'Técnico em campo': 'bg-emerald-400' };

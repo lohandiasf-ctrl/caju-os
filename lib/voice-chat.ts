@@ -13,6 +13,7 @@ export type VoiceChatEvents = {
   onPeerLeft?: (socketId: string) => void;
   onCallEnded?: () => void;
   onCallDeclined?: () => void;
+  onConnectionQuality?: (quality: 'excellent' | 'good' | 'poor' | 'reconnecting') => void;
   onError?: (error: Error) => void;
 };
 
@@ -34,6 +35,7 @@ export class VoiceChatClient {
   private stream: MediaStream | null = null;
   private peers = new Map<string, RTCPeerConnection>();
   private participants = new Map<string, Peer>();
+  private statsTimer: number | null = null;
 
   constructor(private events: VoiceChatEvents = {}) {}
 
@@ -50,6 +52,7 @@ export class VoiceChatClient {
       socket.once('connect_error', (error) => { window.clearTimeout(timer); reject(error); });
       socket.connect();
     });
+    this.statsTimer = window.setInterval(() => void this.measureQuality(), 5_000);
   }
 
   invite(recipients: string[], kind: VoiceCallKind) {
@@ -71,6 +74,8 @@ export class VoiceChatClient {
   }
 
   private dispose() {
+    if (this.statsTimer !== null) window.clearInterval(this.statsTimer);
+    this.statsTimer = null;
     this.socket?.disconnect();
     this.socket = null;
     this.peers.forEach((peer) => peer.close());
@@ -117,7 +122,10 @@ export class VoiceChatClient {
     this.stream?.getTracks().forEach((track) => peer.addTrack(track, this.stream!));
     peer.ontrack = (event) => this.events.onRemoteStream?.(remoteId, event.streams[0]);
     peer.onicecandidate = (event) => { if (event.candidate) this.socket?.emit('voice:signal', { to: remoteId, data: event.candidate.toJSON() }); };
-    peer.onconnectionstatechange = () => { if (peer.connectionState === 'failed') this.events.onError?.(new Error('Conexão de voz falhou.')); };
+    peer.onconnectionstatechange = () => {
+      if (peer.connectionState === 'disconnected') { this.events.onConnectionQuality?.('reconnecting'); window.setTimeout(() => { if (peer.connectionState === 'disconnected') peer.restartIce(); }, 1_500); }
+      if (peer.connectionState === 'failed') { this.events.onConnectionQuality?.('poor'); peer.restartIce(); }
+    };
     if (initiator) {
       const offer = await peer.createOffer(); await peer.setLocalDescription(offer);
       this.socket?.emit('voice:signal', { to: remoteId, data: peer.localDescription });
@@ -126,6 +134,22 @@ export class VoiceChatClient {
   }
 
   private emitParticipants() { this.events.onParticipantsChanged?.([...this.participants.values()]); }
+
+  private async measureQuality() {
+    if (!this.peers.size) return;
+    let worst: 'excellent' | 'good' | 'poor' = 'excellent';
+    for (const peer of this.peers.values()) {
+      try {
+        const stats = await peer.getStats();
+        stats.forEach((report) => {
+          if (report.type !== 'candidate-pair' || report.state !== 'succeeded' || !report.nominated) return;
+          const rtt = Number(report.currentRoundTripTime || 0); const loss = Number(report.packetsLost || 0);
+          if (rtt > 0.45 || loss > 12) worst = 'poor'; else if ((rtt > 0.18 || loss > 4) && worst !== 'poor') worst = 'good';
+        });
+      } catch { worst = 'poor'; }
+    }
+    this.events.onConnectionQuality?.(worst);
+  }
 }
 
 export class VoiceCallReceiver {
