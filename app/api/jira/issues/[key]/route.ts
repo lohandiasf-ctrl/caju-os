@@ -1,5 +1,5 @@
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { getJiraIssue, JiraError, updateJiraIssue } from '@/lib/server/jira';
+import { getJiraIssue, JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
 
 export async function GET(request: Request, context: { params: Promise<{ key: string }> }) {
   try {
@@ -19,7 +19,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     await requireApiUser(request);
     const { key } = await context.params;
     const body = await request.json() as Record<string, unknown>;
-    return Response.json(await updateJiraIssue(key, body), { headers: { 'Cache-Control': 'private, no-store' } });
+    const { status, ...fields } = body;
+    if (typeof status === 'string') await transitionJiraIssue(key, status);
+    if (Object.keys(fields).length) await updateJiraIssue(key, fields);
+    if (typeof status !== 'string' && !Object.keys(fields).length) throw new JiraError('Nenhuma alteração foi informada.', 400);
+    return Response.json(await getJiraIssue(key), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });

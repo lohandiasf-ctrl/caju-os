@@ -205,7 +205,8 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
   }
   if (['identifiedProblem', 'testsPerformed', 'partToReplace'].some((name) => input[name] !== undefined)) {
     const id = ids.get(normalizeText('Resumo do defeito'));
-    if (id) fields[id] = `PROBLEMA IDENTIFICADO: ${cleanJiraValue(input.identifiedProblem) ?? ''}\n\nTESTES FEITOS: ${cleanJiraValue(input.testsPerformed) ?? ''}\n\nPEÇA A SER TROCADA: ${cleanJiraValue(input.partToReplace) ?? ''}`;
+    const existing = parseTechnicalSummary(id ? customFieldText(issue.fields[id]) : null);
+    if (id) fields[id] = `PROBLEMA IDENTIFICADO: ${cleanJiraValue(input.identifiedProblem) ?? existing.identifiedProblem}\n\nTESTES FEITOS: ${cleanJiraValue(input.testsPerformed) ?? existing.testsPerformed}\n\nPEÇA A SER TROCADA: ${cleanJiraValue(input.partToReplace) ?? existing.partToReplace}`;
   }
   if (!Object.keys(fields).length) throw new JiraError('Nenhum campo correspondente foi encontrado no Jira.', 400);
   await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}`, { method: 'PUT', body: JSON.stringify({ fields }) });
@@ -215,15 +216,19 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
 
 export async function transitionJiraIssue(key: string, localStatus: string) {
   const normalizedKey = validIssueKey(key);
-  const response = await jiraFetch<{ transitions?: Array<{ id: string; name: string }> }>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`);
   const aliases: Record<string, string[]> = {
-    scheduling: ['pendente de agendamento', 'agendamento'], scheduled: ['agendado'], operational_preparation: ['direcionado', 'preparacao operacional'],
+    triage: ['triagem', 'aberto'], scheduling: ['pendente de agendamento', 'agendamento'], scheduled: ['agendado'], operational_preparation: ['direcionado', 'preparacao operacional'],
     in_service: ['tec-campo', 'tecnico em campo', 'em atendimento', 'em andamento'], technical_pending: ['pendencia tecnica'], validated: ['validado'],
-    awaiting_approval: ['aguardando aprovacao'], awaiting_spare: ['aguardando spare'], spare_validated: ['spare validado'], resolved: ['resolvido', 'concluido', 'finalizado'], cancelled: ['cancelado'],
+    awaiting_approval: ['aguardando aprovacao'], awaiting_spare: ['aguardando spare'], spare_validated: ['spare validado'], awaiting_payment: ['aguardando pagamento'],
+    resolved: ['resolvido', 'concluido', 'finalizado'], archived: ['arquivado', 'resolvido', 'concluido'], cancelled: ['cancelado'],
   };
   const wanted = aliases[localStatus] ?? [];
-  const transition = response.transitions?.find((item) => wanted.some((name) => normalizeText(item.name).includes(normalizeText(name))));
-  if (!transition) return { changed: false };
+  if (!wanted.length) throw new JiraError('Etapa inválida.', 400);
+  const current = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=status`);
+  if (wanted.some((name) => normalizeText(current.fields.status?.name ?? '').includes(normalizeText(name)))) return { changed: false };
+  const response = await jiraFetch<{ transitions?: Array<{ id: string; name: string; to?: { name?: string } }> }>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`);
+  const transition = response.transitions?.find((item) => wanted.some((name) => [item.name, item.to?.name ?? ''].some((candidate) => normalizeText(candidate).includes(normalizeText(name)))));
+  if (!transition) throw new JiraError(`O Jira não permite mudar de “${current.fields.status?.name ?? 'etapa atual'}” para essa etapa.`, 409);
   await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/transitions`, { method: 'POST', body: JSON.stringify({ transition: { id: transition.id } }) });
   issuesCache.clear();
   return { changed: true };
@@ -311,10 +316,12 @@ async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { Accept: 'application/json', ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), Authorization: `Basic ${credential}`, ...init?.headers },
   });
   if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { errorMessages?: string[]; errors?: Record<string, string> } | null;
+    const jiraMessage = [...(payload?.errorMessages ?? []), ...Object.values(payload?.errors ?? {})].filter(Boolean).join(' ');
     if (response.status === 401) throw new JiraError('Credencial do Jira inválida ou expirada.', 502);
     if (response.status === 403) throw new JiraError('A conta de integração não possui permissão no projeto.', 502);
     if (response.status === 404) throw new JiraError('Chamado não encontrado.', 404);
-    throw new JiraError(`O Jira respondeu com erro ${response.status}.`, 502);
+    throw new JiraError(jiraMessage ? `O Jira recusou a alteração: ${jiraMessage}` : `O Jira respondeu com erro ${response.status}.`, response.status === 400 ? 400 : 502);
   }
   if (response.status === 204 || !response.headers.get('content-type')?.includes('application/json')) return undefined as T;
   return response.json() as Promise<T>;
@@ -357,6 +364,12 @@ function numericJiraValue(value: unknown) {
   const decimalComma = normalized.lastIndexOf(',') > normalized.lastIndexOf('.');
   const parsed = Number(decimalComma ? normalized.replace(/\./g, '').replace(',', '.') : normalized.replace(/,/g, ''));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseTechnicalSummary(value?: string | null) {
+  const text = value ?? '';
+  const take = (start: string, end?: string) => text.match(new RegExp(`${start}:?\\s*([\\s\\S]*?)${end ? `(?=${end}:?)` : '$'}`, 'i'))?.[1]?.trim() ?? '';
+  return { identifiedProblem: take('PROBLEMA IDENTIFICADO', 'TESTES FEITOS'), testsPerformed: take('TESTES FEITOS', 'PEÇA A SER TROCADA'), partToReplace: take('PEÇA A SER TROCADA') };
 }
 
 async function getOperationalStatusNames(projectKey: string) {

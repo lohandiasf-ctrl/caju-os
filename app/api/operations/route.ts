@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm';
 import { operationalAudit, operationalStores, operationalVisits, operationalWorkflows } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
+import { JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
 
 const statuses = new Set(['triage', 'scheduling', 'scheduled', 'operational_preparation', 'in_service', 'technical_pending', 'validated', 'awaiting_approval', 'awaiting_spare', 'spare_validated', 'awaiting_payment', 'resolved', 'archived', 'cancelled']);
 const purchaseStatuses = new Set(['Agendado', 'Cancelado', 'Comprado', 'Delfia', 'Direcionado', 'Encerrado', 'Enviado', 'Fechado', 'Finalizado', 'Indisponível', 'Parceiro Delfia', 'Pendente', 'Recebido', 'Reenviado']);
@@ -86,6 +86,7 @@ export async function PUT(request: Request) {
     return Response.json({ workflow, visits });
   } catch (error) {
     if (error instanceof Response) return error;
+    if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
     return Response.json({ error: 'Não foi possível salvar operação.' }, { status: 500 });
   }
 }
@@ -121,7 +122,7 @@ function dayAfterAtTen(date: string) { const d = new Date(date); d.setDate(d.get
 function workflowFields(body: Record<string, unknown>, base: { status: string; technicianId: number | null; scheduledAt: string | null; now: string }) { return {
   storeCode: clean(body.storeCode, 80), storeName: clean(body.storeName, 180), address: clean(body.address, 400), city: clean(body.city, 100), state: clean(body.state, 10), openedAt: validDate(body.openedAt), category: clean(body.category, 120), pdvNumber: clean(body.pdvNumber, 80), description: clean(body.description, 4000), clientValueCents: cents(body.clientValueCents), payoutCents: cents(body.payoutCents), status: base.status, technicianId: base.technicianId, scheduledAt: base.scheduledAt, expectedReturnAt: validDate(body.expectedReturnAt), validationStatus: clean(body.validationStatus, 80), spareSource: enumValue(body.spareSource, ['Delfia', 'Caju']), spareStatus: clean(body.spareStatus, 100), purchaseStatus: enumValue(body.purchaseStatus, purchaseStatuses), partsValueCents: cents(body.partsValueCents), partsSaleCents: cents(body.partsSaleCents), paymentDate: validDate(body.paymentDate), paidValueCents: cents(body.paidValueCents), pixKey: clean(body.pixKey, 180), bank: clean(body.bank, 100), accountHolder: clean(body.accountHolder, 150), pixKeyType: clean(body.pixKeyType, 60), archivedAt: null,
 }; }
-function hasFinancialChange(body: Record<string, unknown>) { return ['clientValueCents', 'payoutCents', 'partsValueCents', 'partsSaleCents', 'paymentDate', 'paidValueCents', 'pixKey', 'bank', 'accountHolder', 'pixKeyType', 'confirmPayment'].some((key) => body[key] !== undefined); }
+function hasFinancialChange(body: Record<string, unknown>) { return ['clientValueCents', 'payoutCents', 'partsValueCents', 'partsSaleCents', 'paidValueCents'].some((key) => typeof body[key] === 'number') || ['paymentDate', 'pixKey', 'bank', 'accountHolder', 'pixKeyType'].some((key) => typeof body[key] === 'string' && Boolean((body[key] as string).trim())) || body.confirmPayment === true; }
 function validStatus(value: unknown) { return typeof value === 'string' && statuses.has(value) ? value : null; }
 function enumValue(value: unknown, values: Set<string> | string[]) { return typeof value === 'string' && (values instanceof Set ? values.has(value) : values.includes(value)) ? value : null; }
 function validId(value: unknown) { return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null; }
