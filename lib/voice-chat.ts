@@ -13,7 +13,7 @@ export type VoiceChatEvents = {
 };
 
 function signalingUrl() {
-  return process.env.NEXT_PUBLIC_SIGNALING_URL?.trim() || '';
+  return process.env.NEXT_PUBLIC_SIGNALING_URL?.trim() || 'https://caju-os-signaling-production.up.railway.app';
 }
 
 function iceServers(): RTCIceServer[] {
