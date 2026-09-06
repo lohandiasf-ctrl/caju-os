@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     const rows = Array.isArray(body.rows) ? body.rows : [];
     if (!rows.length || rows.length > 5000) return NextResponse.json({ error: 'Envie entre 1 e 5000 técnicos.' }, { status: 400 });
     const db = getDb(); const now = new Date().toISOString(); let imported = 0;
+    const statements = [];
     for (const row of rows) {
       const name = text(row.name); const city = text(row.city); const state = text(row.state);
       if (!name || !city || !state) continue;
@@ -24,7 +25,13 @@ export async function POST(request: Request) {
         toolsCount: nullable(row.toolsCount), availableTools: nullable(row.availableTools), specialtiesCount: nullable(row.specialtiesCount), specialties: nullable(row.specialties), createdAt: now,
       };
       const { createdAt: _createdAt, ...updateValues } = values;
-      await db.insert(technicians).values(values).onConflictDoUpdate({ target: technicians.email, set: updateValues }); imported++;
+      statements.push(db.insert(technicians).values(values).onConflictDoUpdate({ target: technicians.email, set: updateValues })); imported++;
+    }
+    // D1 batches avoid one network round-trip per technician. Keep each batch small
+    // enough for the platform statement limit while still making CSV imports quick.
+    for (let index = 0; index < statements.length; index += 100) {
+      const batch = statements.slice(index, index + 100);
+      if (batch.length) await db.batch(batch as [typeof batch[number], ...typeof batch]);
     }
     return NextResponse.json({ imported });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Falha ao importar técnicos.' }, { status: 500 }); }
