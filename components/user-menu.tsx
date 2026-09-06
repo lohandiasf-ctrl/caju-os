@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Check, ChevronUp, ClipboardList, ExternalLink, File, FileAudio, Loader2, LogOut, MessageCircle, Mic, Paperclip, Send, Square, Users, X } from 'lucide-react';
+import { Camera, Check, ChevronUp, ClipboardList, ExternalLink, File, FileAudio, Loader2, LogOut, MessageCircle, Mic, MicOff, Paperclip, Phone, PhoneOff, Send, Square, Users, X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
 import { roleLabels } from '@/lib/permissions';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { directVoiceRoom, VoiceChatClient } from '@/lib/voice-chat';
 
 export const statuses = ['Online', 'Ocupado', 'Almoçando', 'Pausa de 15 minutos', 'Offline'] as const;
 export type Status = typeof statuses[number];
@@ -290,10 +291,55 @@ function ChatDialog({ colleague, tickets, initialTicket, onClose, onOpenTicket, 
   const name = colleague?.displayName || colleague?.email.split('@')[0] || '';
   function openSharedTicket(ticketId: string) { onClose(); onOpenTicket?.(ticketId); }
   return <Dialog open={Boolean(colleague)} onOpenChange={(open) => { if (!open) { stopRecording(); onClose(); } }}><DialogContent className="grid h-[min(620px,88vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
-    <DialogHeader className="border-b border-border p-4 pr-14"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">{colleague?.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full object-cover" /> : initials(name)}</span><div><DialogTitle>{name}</DialogTitle><DialogDescription>{colleague?.status} · {colleague?.email}</DialogDescription></div></div></DialogHeader>
+    <DialogHeader className="border-b border-border p-4 pr-14"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">{colleague?.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full object-cover" /> : initials(name)}</span><div className="min-w-0 flex-1"><DialogTitle>{name}</DialogTitle><DialogDescription className="truncate">{colleague?.status} · {colleague?.email}</DialogDescription></div></div>{colleague && <VoiceCallControl colleague={colleague} />}</DialogHeader>
     <div className="min-h-0 overflow-y-auto bg-black/10 p-4" aria-live="polite">{loading ? <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div> : messages.length ? <div className="space-y-2">{messages.map((message) => { const mine = message.senderEmail.toLowerCase() === user?.email?.toLowerCase(); const parsed = parseTicketMessage(message.body, tickets); return <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? 'rounded-br-md bg-primary text-primary-foreground' : 'rounded-bl-md border border-border bg-card'}`}>{parsed.text && <p className="whitespace-pre-wrap break-words text-sm">{parsed.text}</p>}{parsed.ticketId && <TicketShareCard ticketId={parsed.ticketId} label={parsed.ticketLabel} mine={mine} onOpen={() => openSharedTicket(parsed.ticketId!)} />}<MessageAttachment message={message} mine={mine} /><p className={`mt-1 text-[10px] ${mine ? 'text-primary-foreground/65' : 'text-muted-foreground'}`}>{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(message.createdAt))}</p></div></div>; })}<div ref={bottomRef} /></div> : <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">Envie a primeira mensagem para {name}.</div>}{error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}</div>
     <form onSubmit={sendMessage} className="border-t border-border bg-card p-3">{recording && <div role="status" aria-live="polite" className="mb-2 flex min-h-10 items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 text-sm text-rose-200"><span className="size-2 animate-pulse rounded-full bg-rose-400" />Gravando áudio · {formatDuration(recordingSeconds)}<span className="ml-auto text-xs text-rose-200/70">máx. 1:30</span></div>}<div className="flex gap-2"><label htmlFor="chat-message" className="sr-only">Mensagem</label><input id="chat-message" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} placeholder="Escreva uma mensagem..." className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm" /><label className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted" aria-label="Anexar imagem, áudio ou PDF"><Paperclip className="size-4" /><input className="sr-only" type="file" accept="image/*,audio/*,.pdf,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) readAttachment(file); event.currentTarget.value = ''; }} /></label><button type="button" onClick={() => recording ? stopRecording() : void startRecording()} className={`grid size-11 shrink-0 place-items-center rounded-xl border transition ${recording ? 'border-rose-400/50 bg-rose-400/15 text-rose-300' : 'border-input bg-background hover:bg-muted'}`} aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}>{recording ? <Square className="size-4 fill-current" /> : <Mic className="size-4" />}</button><button type="submit" disabled={(!draft.trim() && !attachment && !ticketRef) || sending || recording} className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Enviar mensagem">{sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</button></div><select aria-label="Enviar chamado" value={ticketRef} onChange={(event) => setTicketRef(event.target.value)} className="mt-2 h-10 w-full rounded-xl border border-input bg-background px-3 text-xs"><option value="">Anexar um chamado da lista...</option>{tickets.slice(0, 100).map((ticket) => <option key={ticket.id} value={ticket.id}>{ticket.id} · {ticket.store}</option>)}</select>{attachment && <AttachmentPreview attachment={attachment} onRemove={() => setAttachment(null)} />}{ticketRef && <p className="mt-2 truncate text-xs text-muted-foreground">Chamado selecionado: {ticketRef}</p>}</form>
   </DialogContent></Dialog>;
+}
+
+function VoiceCallControl({ colleague }: { colleague: Colleague }) {
+  const { user } = useAuth();
+  const clientRef = useRef<VoiceChatClient | null>(null);
+  const audioRef = useRef(new Map<string, HTMLAudioElement>());
+  const [state, setState] = useState<'idle' | 'connecting' | 'connected'>('idle');
+  const [muted, setMuted] = useState(false);
+  const [participants, setParticipants] = useState(0);
+  const [error, setError] = useState('');
+  const leave = useCallback(() => {
+    clientRef.current?.leave(); clientRef.current = null;
+    audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear();
+    setState('idle'); setMuted(false); setParticipants(0);
+  }, []);
+  useEffect(() => leave, [leave, colleague.email]);
+  async function join() {
+    if (!user?.email || state !== 'idle') return;
+    setState('connecting'); setError('');
+    const client = new VoiceChatClient({
+      onParticipantsChanged: (items) => setParticipants(items.length),
+      onRemoteStream: (socketId, stream) => {
+        let audio = audioRef.current.get(socketId);
+        if (!audio) { audio = new Audio(); audio.autoplay = true; audioRef.current.set(socketId, audio); }
+        audio.srcObject = stream; void audio.play().catch(() => undefined);
+      },
+      onPeerLeft: (socketId) => { const audio = audioRef.current.get(socketId); audio?.pause(); audioRef.current.delete(socketId); },
+      onError: (reason) => setError(reason.message),
+    });
+    clientRef.current = client;
+    try {
+      await client.join(directVoiceRoom(user.email, colleague.email), user.uid, user.displayName || user.email.split('@')[0]);
+      setState('connected');
+    } catch (reason) { leave(); setError(reason instanceof Error ? reason.message : 'Falha ao iniciar chamada.'); }
+  }
+  return <div className="mt-3 rounded-xl border border-primary/25 bg-primary/[.07] p-2.5">
+    <div className="flex items-center gap-2">
+      {state === 'idle' ? <button type="button" onClick={() => void join()} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><Phone className="size-4" aria-hidden="true" />Iniciar chamada de voz</button> : <>
+        <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1"><p className="truncate text-xs font-bold text-primary">{state === 'connecting' ? 'Conectando...' : 'Chamada em andamento'}</p><p className="text-[11px] text-muted-foreground">{participants ? `${participants + 1} participantes` : 'Aguardando colega'}</p></div>
+        <button type="button" disabled={state !== 'connected'} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className="grid size-11 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50" aria-label={muted ? 'Ativar microfone' : 'Silenciar microfone'}>{muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}</button>
+        <button type="button" onClick={leave} className="grid size-11 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Sair da chamada"><PhoneOff className="size-4" /></button>
+      </>}
+    </div>
+    {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
+  </div>;
 }
 
 function MessageAttachment({ message, mine }: { message: Message; mine: boolean }) {
