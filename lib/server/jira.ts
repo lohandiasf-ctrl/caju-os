@@ -199,14 +199,17 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
   for (const [inputKey, aliases] of mappings) {
     if (input[inputKey] === undefined) continue;
     const id = aliases.map((name) => ids.get(normalizeText(name))).find(Boolean);
-    if (id) fields[id] = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
-      ? numericJiraValue(input[inputKey])
-      : cleanJiraValue(input[inputKey]);
+    if (id) {
+      const value = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
+        ? numericJiraValue(input[inputKey])
+        : cleanJiraValue(input[inputKey]);
+      fields[id] = isAdfDocument(issue.fields[id]) && typeof value === 'string' ? textToAdf(value) : value;
+    }
   }
   if (['identifiedProblem', 'testsPerformed', 'partToReplace'].some((name) => input[name] !== undefined)) {
     const id = ids.get(normalizeText('Resumo do defeito'));
     const existing = parseTechnicalSummary(id ? customFieldText(issue.fields[id]) : null);
-    if (id) fields[id] = `PROBLEMA IDENTIFICADO: ${cleanJiraValue(input.identifiedProblem) ?? existing.identifiedProblem}\n\nTESTES FEITOS: ${cleanJiraValue(input.testsPerformed) ?? existing.testsPerformed}\n\nPEÇA A SER TROCADA: ${cleanJiraValue(input.partToReplace) ?? existing.partToReplace}`;
+    if (id) fields[id] = textToAdf(`PROBLEMA IDENTIFICADO: ${cleanJiraValue(input.identifiedProblem) ?? existing.identifiedProblem}\n\nTESTES FEITOS: ${cleanJiraValue(input.testsPerformed) ?? existing.testsPerformed}\n\nPEÇA A SER TROCADA: ${cleanJiraValue(input.partToReplace) ?? existing.partToReplace}`);
   }
   if (!Object.keys(fields).length) throw new JiraError('Nenhum campo correspondente foi encontrado no Jira.', 400);
   await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}`, { method: 'PUT', body: JSON.stringify({ fields }) });
@@ -372,6 +375,18 @@ function parseTechnicalSummary(value?: string | null) {
   return { identifiedProblem: take('PROBLEMA IDENTIFICADO', 'TESTES FEITOS'), testsPerformed: take('TESTES FEITOS', 'PEÇA A SER TROCADA'), partToReplace: take('PEÇA A SER TROCADA') };
 }
 
+function isAdfDocument(value: unknown): value is { type: 'doc' } {
+  return Boolean(value && typeof value === 'object' && (value as { type?: unknown }).type === 'doc');
+}
+
+function textToAdf(value: string) {
+  return {
+    version: 1,
+    type: 'doc',
+    content: value.split('\n').map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })),
+  };
+}
+
 async function getOperationalStatusNames(projectKey: string) {
   if (operationalStatusesCache && operationalStatusesCache.expiresAt > Date.now()) return operationalStatusesCache.names;
 
@@ -507,6 +522,7 @@ function customFieldText(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() || null;
   if (typeof value === 'number') return String(value);
   if (value && typeof value === 'object') {
+    if (isAdfDocument(value)) return adfToText(value).trim() || null;
     const field = value as { value?: unknown; name?: unknown; displayName?: unknown };
     for (const candidate of [field.value, field.name, field.displayName]) if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
   }
@@ -552,7 +568,8 @@ function uniquePreferred(preferred: string[], fallback: string[]) {
 
 function adfToText(value: unknown): string {
   if (!value || typeof value !== 'object') return typeof value === 'string' ? value : '';
-  const node = value as { text?: unknown; content?: unknown[] };
+  const node = value as { type?: unknown; text?: unknown; content?: unknown[] };
   const own = typeof node.text === 'string' ? node.text : '';
-  return own + (Array.isArray(node.content) ? node.content.map(adfToText).join('') : '');
+  const children = Array.isArray(node.content) ? node.content.map(adfToText).join('') : '';
+  return own + children + (node.type === 'paragraph' ? '\n' : '');
 }
