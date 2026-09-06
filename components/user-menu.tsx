@@ -14,6 +14,32 @@ type Colleague = { email: string; role: 'gerencia' | 'n1' | 'analista'; displayN
 type Message = { id: number; senderEmail: string; recipientEmail: string; body: string; attachmentName?: string | null; attachmentType?: string | null; attachmentData?: string | null; createdAt: string; readAt: string | null };
 type ChatTicket = { id: string; title: string; store: string; city: string };
 type NewMessageNotice = { message: Message; count: number };
+let desktopPermissionRequested = false;
+
+function appIsInBackground() {
+  return document.hidden || !document.hasFocus();
+}
+
+async function showDesktopMessageNotification(senderName: string, message: Message) {
+  if (!appIsInBackground()) return;
+  const body = message.body || message.attachmentName || 'Novo anexo';
+  const title = `Nova mensagem de ${senderName}`;
+  try {
+    // Tauri uses Windows native toast notifications. The dynamic import keeps
+    // the web edition free of desktop-only code.
+    if ('__TAURI_INTERNALS__' in window) {
+      const notification = await import('@tauri-apps/plugin-notification');
+      let allowed = await notification.isPermissionGranted();
+      if (!allowed && !desktopPermissionRequested) {
+        desktopPermissionRequested = true;
+        allowed = (await notification.requestPermission()) === 'granted';
+      }
+      if (allowed) notification.sendNotification({ title, body, group: 'caju-messages', autoCancel: true });
+      return;
+    }
+    if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, tag: `caju-message-${message.id}` });
+  } catch { /* Desktop notifications are optional; in-app feedback remains available. */ }
+}
 
 const statusColors: Record<Status, string> = {
   Online: 'bg-emerald-400', Ocupado: 'bg-rose-400', Almoçando: 'bg-amber-400',
@@ -102,10 +128,8 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
         setNotice({ message: newest, count: incoming.length }); setMessageDot(true); playNotificationSound(true);
         if (dismissTimer) window.clearTimeout(dismissTimer);
         dismissTimer = window.setTimeout(() => setNotice(null), 6_000);
-        if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-          const sender = colleaguesRef.current.find((item) => item.email.toLowerCase() === newest.senderEmail.toLowerCase());
-          new Notification(`Nova mensagem de ${sender?.displayName || newest.senderEmail.split('@')[0]}`, { body: newest.body || newest.attachmentName || 'Novo anexo' });
-        }
+        const sender = colleaguesRef.current.find((item) => item.email.toLowerCase() === newest.senderEmail.toLowerCase());
+        void showDesktopMessageNotification(sender?.displayName || newest.senderEmail.split('@')[0], newest);
       } catch { /* A próxima atualização tenta novamente sem interromper o painel. */ }
     };
     void poll();
