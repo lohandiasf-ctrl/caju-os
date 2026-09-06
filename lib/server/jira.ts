@@ -49,11 +49,15 @@ type JiraIssue = {
     customfield_11994?: unknown;
     customfield_12036?: unknown;
     customfield_12279?: unknown;
+    customfield_12316?: unknown;
+    customfield_16237?: unknown;
+    customfield_11956?: unknown;
+    customfield_16238?: unknown;
+    customfield_11963?: unknown;
     customfield_12278?: unknown;
     customfield_12413?: unknown;
     customfield_14880?: unknown;
     customfield_11955?: unknown;
-    customfield_12316?: unknown;
     customfield_19825?: unknown;
   } & Record<string, unknown>;
 };
@@ -189,7 +193,7 @@ export async function getJiraIssue(key: string) {
     ticketTotal: value('Total do Tickt', 'Total do Ticket'),
     visitNumber: value('Numero de Visita', 'Número de Visita'),
     additionalCosts: value('Detalhes de custos adicionais'),
-    technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos') ?? customFieldText(issue.fields.customfield_12279),
+    technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos') ?? customFieldText(issue.fields.customfield_12279) ?? technicianFieldsToText(issue.fields),
     scheduledDateTime: value('Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento') ?? customFieldText(issue.fields.customfield_12036),
     defectSummary: value('Resumo do defeito'),
   };
@@ -211,10 +215,16 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     ['ticketTotal', ['Total do Tickt', 'Total do Ticket']], ['visitNumber', ['Numero de Visita', 'Número de Visita']], ['additionalCosts', ['Detalhes de custos adicionais']],
     ['technicianData', ['Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos']],
     ['scheduledDateTime', ['Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento']],
+    ['technicianName', ['Nome do Técnico', 'Nome do Tecnico']], ['technicianPhone', ['Telefone do Técnico', 'Telefone do Tecnico']],
+    ['technicianRg', ['RG']], ['technicianCpf', ['CPF/CNPJ Técnico', 'CPF/CNPJ Tecnico']], ['technicianContact', ['Número Contato', 'Numero Contato']],
   ];
   for (const [inputKey, aliases] of mappings) {
     if (input[inputKey] === undefined) continue;
-    const fixedId = inputKey === 'scheduledDateTime' ? 'customfield_12036' : inputKey === 'technicianData' ? 'customfield_12279' : undefined;
+    const fixedIds: Record<string, string> = {
+      scheduledDateTime: 'customfield_12036', technicianData: 'customfield_12279', technicianName: 'customfield_12316',
+      technicianPhone: 'customfield_16237', technicianRg: 'customfield_11956', technicianCpf: 'customfield_16238', technicianContact: 'customfield_11963',
+    };
+    const fixedId = fixedIds[inputKey];
     const id = fixedId ?? aliases.map((name) => ids.get(normalizeText(name))).find(Boolean);
     if (id) {
       const value = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
@@ -223,6 +233,14 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
       const requiresAdf = inputKey === 'technicianData' || isAdfDocument(issue.fields[id]);
       fields[id] = requiresAdf && typeof value === 'string' ? textToAdf(value) : value;
     }
+  }
+  if (input.technicianData !== undefined) {
+    const technician = parseTechnicianData(cleanJiraValue(input.technicianData));
+    const individualFields: Record<string, string | null> = {
+      customfield_12316: technician.name, customfield_16237: technician.phone, customfield_11956: technician.rg,
+      customfield_16238: technician.cpf, customfield_11963: technician.phone,
+    };
+    for (const [id, value] of Object.entries(individualFields)) if (value) fields[id] = value;
   }
   if (['identifiedProblem', 'testsPerformed', 'partToReplace'].some((name) => input[name] !== undefined)) {
     const id = ids.get(normalizeText('Resumo do defeito'));
@@ -448,6 +466,27 @@ function jiraDateTimeValue(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value.trim().slice(0, 100) : parsed.toISOString();
+}
+
+function parseTechnicianData(value: string | number | null) {
+  const text = typeof value === 'string' ? value : '';
+  const field = (...labels: string[]) => {
+    for (const label of labels) {
+      const match = text.match(new RegExp(`(?:^|\\n)\\s*${label}\\s*:\\s*([^\\n]+)`, 'i'));
+      if (match?.[1]?.trim()) return match[1].trim().slice(0, 500);
+    }
+    return null;
+  };
+  return { name: field('Nome'), phone: field('TEL', 'Telefone'), rg: field('RG'), cpf: field('CPF(?:/CNPJ)?') };
+}
+
+function technicianFieldsToText(fields: JiraIssue['fields']) {
+  const values = {
+    name: customFieldText(fields.customfield_12316), phone: customFieldText(fields.customfield_16237) ?? customFieldText(fields.customfield_11963),
+    rg: customFieldText(fields.customfield_11956), cpf: customFieldText(fields.customfield_16238),
+  };
+  if (!Object.values(values).some(Boolean)) return null;
+  return `Nome: ${values.name ?? 'Não informado'}\nCPF: ${values.cpf ?? 'Não informado'}\nRG: ${values.rg ?? 'Não informado'}\nTEL: ${values.phone ?? 'Não informado'}`;
 }
 
 function parseTechnicalSummary(value?: string | null) {

@@ -21,7 +21,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     const body = await request.json() as Record<string, unknown>;
     const { status, ...fields } = body;
     const editableFields = { ...fields };
-    if (status === 'scheduled') { delete editableFields.technicianData; delete editableFields.scheduledDateTime; }
+    // Persist scheduling and technician fields before running Jira workflow validators.
     if (Object.keys(editableFields).length) await updateJiraIssue(key, editableFields, { allowNoop: typeof status === 'string' });
     if (typeof status === 'string') await transitionJiraIssue(key, status, fields);
     if (typeof status !== 'string' && !Object.keys(fields).length) throw new JiraError('Nenhuma alteração foi informada.', 400);
