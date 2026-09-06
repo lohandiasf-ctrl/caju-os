@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, webview::Color};
 
 #[tauri::command]
 fn show_voice_call_window(app: tauri::AppHandle, url: String) -> Result<(), String> {
@@ -12,6 +12,7 @@ fn show_voice_call_window(app: tauri::AppHandle, url: String) -> Result<(), Stri
         .title("Chamada recebida · Caju OS")
         .inner_size(380.0, 280.0)
         .min_inner_size(360.0, 260.0)
+        .background_color(Color(9, 11, 18, 255))
         .resizable(false)
         .always_on_top(true)
         .decorations(false)

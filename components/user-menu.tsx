@@ -42,8 +42,10 @@ async function showDesktopMessageNotification(senderName: string, message: Messa
   } catch { /* Desktop notifications are optional; in-app feedback remains available. */ }
 }
 
-async function showDesktopCallNotification(callerName: string, invitation: VoiceInvitation) {
-  if (!appIsInBackground()) return;
+type VoiceIdentity = { uid: string; email: string; name: string };
+
+async function showDesktopCallNotification(callerName: string, invitation: VoiceInvitation, recipient: VoiceIdentity) {
+  const background = appIsInBackground();
   const group = invitation.kind === 'group';
   const title = group ? 'Convite para reunião de voz' : 'Chamada de voz recebida';
   const body = `${callerName} está chamando você. Abra o Caju OS para atender ou recusar.`;
@@ -53,13 +55,17 @@ async function showDesktopCallNotification(callerName: string, invitation: Voice
       const { invoke } = await import('@tauri-apps/api/core');
       let allowed = await notification.isPermissionGranted();
       if (!allowed && !desktopPermissionRequested) { desktopPermissionRequested = true; allowed = (await notification.requestPermission()) === 'granted'; }
-      if (allowed) notification.sendNotification({ title, body, group: 'caju-voice', autoCancel: true });
+      if (allowed) notification.sendNotification({ title, body, group: `caju-voice-${invitation.roomId}`, autoCancel: true });
+      if (!background) return;
       const callUrl = new URL(window.location.origin);
       callUrl.searchParams.set('voiceRoom', invitation.roomId); callUrl.searchParams.set('voiceCaller', invitation.callerName);
       callUrl.searchParams.set('voiceKind', invitation.kind); callUrl.searchParams.set('voiceCallerEmail', invitation.callerEmail);
+      callUrl.searchParams.set('voiceRecipientEmail', recipient.email); callUrl.searchParams.set('voiceRecipientId', recipient.uid);
+      callUrl.searchParams.set('voiceRecipientName', recipient.name);
       await invoke('show_voice_call_window', { url: callUrl.toString() });
       return;
     }
+    if (!background) return;
     if ('Notification' in window && Notification.permission === 'granted') {
       const desktopNotification = new Notification(title, { body, tag: 'caju-voice-call', requireInteraction: true });
       desktopNotification.onclick = () => { window.focus(); window.dispatchEvent(new CustomEvent('caju-voice-answer-request')); };
@@ -157,7 +163,11 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     if (!user?.email) return;
     const receiver = new VoiceCallReceiver(user.email, (invitation) => {
       setIncomingVoice(invitation); startCallTone();
-      void showDesktopCallNotification(invitation.callerName, invitation);
+      void showDesktopCallNotification(invitation.callerName, invitation, {
+        uid: user.uid,
+        email: user.email!,
+        name: user.displayName || user.email!.split('@')[0],
+      });
     });
     voiceReceiverRef.current = receiver; receiver.connect();
     return () => { receiver.dispose(); if (voiceReceiverRef.current === receiver) voiceReceiverRef.current = null; stopCallTone(); };
@@ -474,7 +484,7 @@ function TeamVoiceControl({ colleagues }: { colleagues: Colleague[] }) {
   </div>;
 }
 
-function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { invitation: VoiceInvitation | null; onAnswered: () => void; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
+function IncomingVoiceCall({ invitation, identity, onAnswered, onClose, onDecline }: { invitation: VoiceInvitation | null; identity?: VoiceIdentity; onAnswered: () => void; onClose: () => void; onDecline: (invitation: VoiceInvitation) => void }) {
   const { user } = useAuth();
   const clientRef = useRef<VoiceChatClient | null>(null);
   const audioRef = useRef(new Map<string, HTMLAudioElement>());
@@ -486,7 +496,10 @@ function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { inv
   const cleanup = useCallback((notify = true) => { if (notify) clientRef.current?.leave(); clientRef.current = null; audioRef.current.forEach((audio) => { audio.pause(); audio.srcObject = null; }); audioRef.current.clear(); setState('ringing'); setMuted(false); setParticipants(0); }, []);
   useEffect(() => () => cleanup(), [cleanup]);
   async function accept() {
-    if (!invitation || !user?.email || state !== 'ringing') return;
+    const email = identity?.email || user?.email;
+    const uid = identity?.uid || user?.uid;
+    const name = identity?.name || user?.displayName || email?.split('@')[0];
+    if (!invitation || !email || !uid || !name || state !== 'ringing') return;
     setState('connecting'); setError('');
     const client = new VoiceChatClient({
       onParticipantsChanged: (items) => setParticipants(items.length),
@@ -496,7 +509,7 @@ function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { inv
       onError: (reason) => setError(reason.message),
     });
     clientRef.current = client;
-    try { await client.join(invitation.roomId, user.uid, user.displayName || user.email.split('@')[0], user.email); onAnswered(); setState('connected'); }
+    try { await client.join(invitation.roomId, uid, name, email); onAnswered(); setState('connected'); }
     catch (reason) { cleanup(); setError(reason instanceof Error ? reason.message : 'Não foi possível atender a chamada.'); }
   }
   useEffect(() => {
@@ -512,17 +525,30 @@ function IncomingVoiceCall({ invitation, onAnswered, onClose, onDecline }: { inv
 export function DesktopVoiceCallPopup() {
   const { user } = useAuth();
   const receiverRef = useRef<VoiceCallReceiver | null>(null);
-  const invitation = typeof window === 'undefined' ? null : (() => {
+  const popupData = typeof window === 'undefined' ? null : (() => {
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get('voiceRoom'); const callerName = params.get('voiceCaller'); const callerEmail = params.get('voiceCallerEmail'); const kind = params.get('voiceKind');
-    return roomId && callerName && callerEmail && (kind === 'direct' || kind === 'group') ? { roomId, callerName, callerEmail, kind } as VoiceInvitation : null;
+    const recipientEmail = params.get('voiceRecipientEmail'); const recipientId = params.get('voiceRecipientId'); const recipientName = params.get('voiceRecipientName');
+    if (!roomId || !callerName || !callerEmail || (kind !== 'direct' && kind !== 'group')) return null;
+    return {
+      invitation: { roomId, callerName, callerEmail, kind } as VoiceInvitation,
+      identity: recipientEmail && recipientId && recipientName ? { email: recipientEmail, uid: recipientId, name: recipientName } : undefined,
+    };
   })();
+  const invitation = popupData?.invitation || null;
+  const identity = popupData?.identity;
   useEffect(() => {
-    if (!invitation || !user?.email) return;
-    const receiver = new VoiceCallReceiver(user.email, () => undefined);
+    if (!invitation) return;
+    document.documentElement.classList.add('voice-call-window');
+    return () => document.documentElement.classList.remove('voice-call-window');
+  }, [invitation]);
+  useEffect(() => {
+    const email = identity?.email || user?.email;
+    if (!invitation || !email) return;
+    const receiver = new VoiceCallReceiver(email, () => undefined);
     receiverRef.current = receiver; receiver.connect();
     return () => { receiver.dispose(); receiverRef.current = null; };
-  }, [invitation?.roomId, user?.email]);
+  }, [identity?.email, invitation?.roomId, user?.email]);
   if (!invitation) return null;
   const closePopup = async () => {
     try {
@@ -530,7 +556,7 @@ export function DesktopVoiceCallPopup() {
     } catch { /* The browser fallback can close its own notification window. */ }
     window.close();
   };
-  return <IncomingVoiceCall invitation={invitation} onAnswered={() => { localStorage.setItem('caju-voice-popup-answer', JSON.stringify({ roomId: invitation.roomId, at: Date.now() })); }} onClose={() => void closePopup()} onDecline={(call) => { receiverRef.current?.decline(call); void closePopup(); }} />;
+  return <div className="fixed inset-0 z-[1000] bg-[#090b12]"><IncomingVoiceCall invitation={invitation} identity={identity} onAnswered={() => { localStorage.setItem('caju-voice-popup-answer', JSON.stringify({ roomId: invitation.roomId, at: Date.now() })); }} onClose={() => void closePopup()} onDecline={(call) => { receiverRef.current?.decline(call); void closePopup(); }} /></div>;
 }
 
 function MessageAttachment({ message, mine }: { message: Message; mine: boolean }) {
