@@ -196,7 +196,7 @@ export async function getJiraIssue(key: string) {
   return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields, attachments };
 }
 
-export async function updateJiraIssue(key: string, input: Record<string, unknown>) {
+export async function updateJiraIssue(key: string, input: Record<string, unknown>, options: { allowNoop?: boolean } = {}) {
   const normalizedKey = validIssueKey(key);
   const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?expand=names&fields=*all`);
   const ids = namedIds(issue.names ?? {});
@@ -227,7 +227,10 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     const existing = parseTechnicalSummary(id ? customFieldText(issue.fields[id]) : null);
     if (id) fields[id] = textToAdf(`PROBLEMA IDENTIFICADO: ${cleanJiraValue(input.identifiedProblem) ?? existing.identifiedProblem}\n\nTESTES FEITOS: ${cleanJiraValue(input.testsPerformed) ?? existing.testsPerformed}\n\nPEÇA A SER TROCADA: ${cleanJiraValue(input.partToReplace) ?? existing.partToReplace}`);
   }
-  if (!Object.keys(fields).length) throw new JiraError('Nenhum campo correspondente foi encontrado no Jira.', 400);
+  if (!Object.keys(fields).length) {
+    if (options.allowNoop) return getJiraIssue(normalizedKey);
+    throw new JiraError('Nenhum dos campos alterados existe neste tipo de chamado do Jira.', 400);
+  }
   await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}`, { method: 'PUT', body: JSON.stringify({ fields }) });
   issuesCache.clear(); financialIssuesCache = null;
   return getJiraIssue(normalizedKey);
@@ -268,17 +271,37 @@ export async function addJiraInternalEvidence(key: string, files: Array<{ name: 
 
 export async function uploadJiraAttachments(key: string, files: File[], author: string) {
   const normalizedKey = validIssueKey(key);
-  for (const file of files) {
-    const form = new FormData();
-    form.append('file', file, file.name);
-    await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
+  let finalizingInternalComment = false;
+  try {
+    const request = await jiraFetch<{ serviceDeskId?: string }>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}`);
+    if (!request.serviceDeskId) throw new JiraError('Central de serviços não encontrada.', 404);
+    const temporaryAttachmentIds: string[] = [];
+    for (const file of files) {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const uploaded = await jiraFetch<{ temporaryAttachments?: Array<{ temporaryAttachmentId?: string }> }>(`/rest/servicedeskapi/servicedesk/${encodeURIComponent(request.serviceDeskId)}/attachTemporaryFile`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check', 'X-ExperimentalApi': 'opt-in' }, body: form });
+      temporaryAttachmentIds.push(...(uploaded.temporaryAttachments ?? []).flatMap((item) => item.temporaryAttachmentId ? [item.temporaryAttachmentId] : []));
+    }
+    if (temporaryAttachmentIds.length !== files.length) throw new JiraError('O Jira não confirmou todos os arquivos temporários.', 502);
+    finalizingInternalComment = true;
+    await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/attachment`, {
+      method: 'POST',
+      body: JSON.stringify({ temporaryAttachmentIds, public: false, additionalComment: { body: `Evidências anexadas pelo Caju OS por ${author}.` } }),
+    });
+  } catch (error) {
+    if (finalizingInternalComment) throw error;
+    for (const file of files) {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
+    }
+    const body = `Evidências anexadas pelo Caju OS por ${author}: ${files.map((file) => file.name).join(', ')}`;
+    await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) });
   }
-  const body = `Novas evidências anexadas pelo Caju OS por ${author}: ${files.map((file) => file.name).join(', ')}`;
-  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) }).catch(() => null);
   return getJiraIssue(normalizedKey);
 }
 
-export async function getJiraAttachmentContent(key: string, attachmentId: string) {
+export async function getJiraAttachmentContent(key: string, attachmentId: string, thumbnail = false) {
   const normalizedKey = validIssueKey(key);
   if (!/^\d+$/.test(attachmentId)) throw new JiraError('Anexo inválido.', 400);
   const issue = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=attachment`);
@@ -286,7 +309,8 @@ export async function getJiraAttachmentContent(key: string, attachmentId: string
   if (!attachment?.filename) throw new JiraError('Anexo não encontrado neste chamado.', 404);
   const baseUrl = requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '');
   const credential = btoa(`${requiredEnv('JIRA_EMAIL')}:${requiredEnv('JIRA_API_TOKEN')}`);
-  const response = await fetch(`${baseUrl}/rest/api/3/attachment/content/${encodeURIComponent(attachmentId)}`, { headers: { Authorization: `Basic ${credential}`, Accept: '*/*' }, redirect: 'follow' });
+  const resource = thumbnail ? 'thumbnail' : 'content';
+  const response = await fetch(`${baseUrl}/rest/api/3/attachment/${resource}/${encodeURIComponent(attachmentId)}`, { headers: { Authorization: `Basic ${credential}`, Accept: '*/*' }, redirect: 'follow' });
   if (!response.ok || !response.body) throw new JiraError(`Não foi possível abrir o anexo no Jira (${response.status}).`, 502);
   return { body: response.body, filename: attachment.filename, mimeType: attachment.mimeType ?? response.headers.get('content-type') ?? 'application/octet-stream', size: attachment.size ?? null };
 }

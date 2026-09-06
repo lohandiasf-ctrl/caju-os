@@ -5,8 +5,10 @@ export async function GET(request: Request, context: { params: Promise<{ key: st
   try {
     await requireApiUser(request);
     const { key, id } = await context.params;
-    const attachment = await getJiraAttachmentContent(key, id);
-    const disposition = new URL(request.url).searchParams.get('download') === '1' ? 'attachment' : 'inline';
+    const url = new URL(request.url);
+    const thumbnail = url.searchParams.get('thumbnail') === '1';
+    const attachment = await getJiraAttachmentContent(key, id, thumbnail);
+    const disposition = url.searchParams.get('download') === '1' ? 'attachment' : 'inline';
     return new Response(attachment.body, { headers: {
       'Content-Type': attachment.mimeType,
       'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,
