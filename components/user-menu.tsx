@@ -163,6 +163,14 @@ export function ColleaguesPanel({ tickets = [], ticketToShare = null, onTicketSh
     return () => { receiver.dispose(); if (voiceReceiverRef.current === receiver) voiceReceiverRef.current = null; stopCallTone(); };
   }, [startCallTone, stopCallTone, user?.email]);
   useEffect(() => {
+    const handleExternalAnswer = (event: StorageEvent) => {
+      if (event.key !== 'caju-voice-popup-answer' || !event.newValue || !incomingVoice) return;
+      try { if ((JSON.parse(event.newValue) as { roomId?: string }).roomId === incomingVoice.roomId) { stopCallTone(); setIncomingVoice(null); } } catch { /* Ignore malformed storage events. */ }
+    };
+    window.addEventListener('storage', handleExternalAnswer);
+    return () => window.removeEventListener('storage', handleExternalAnswer);
+  }, [incomingVoice, stopCallTone]);
+  useEffect(() => {
     const answerFromBrowserNotification = () => window.dispatchEvent(new CustomEvent('caju-voice-answer-request-in-dialog'));
     window.addEventListener('caju-voice-answer-request', answerFromBrowserNotification);
     return () => window.removeEventListener('caju-voice-answer-request', answerFromBrowserNotification);
@@ -522,7 +530,7 @@ export function DesktopVoiceCallPopup() {
     } catch { /* The browser fallback can close its own notification window. */ }
     window.close();
   };
-  return <IncomingVoiceCall invitation={invitation} onAnswered={() => undefined} onClose={() => void closePopup()} onDecline={(call) => { receiverRef.current?.decline(call); void closePopup(); }} />;
+  return <IncomingVoiceCall invitation={invitation} onAnswered={() => { localStorage.setItem('caju-voice-popup-answer', JSON.stringify({ roomId: invitation.roomId, at: Date.now() })); }} onClose={() => void closePopup()} onDecline={(call) => { receiverRef.current?.decline(call); void closePopup(); }} />;
 }
 
 function MessageAttachment({ message, mine }: { message: Message; mine: boolean }) {
