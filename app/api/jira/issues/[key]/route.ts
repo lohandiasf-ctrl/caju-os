@@ -20,8 +20,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     const { key } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     const { status, ...fields } = body;
-    if (typeof status === 'string') await transitionJiraIssue(key, status);
     if (Object.keys(fields).length) await updateJiraIssue(key, fields);
+    if (typeof status === 'string') await transitionJiraIssue(key, status);
     if (typeof status !== 'string' && !Object.keys(fields).length) throw new JiraError('Nenhuma alteração foi informada.', 400);
     return Response.json(await getJiraIssue(key), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {

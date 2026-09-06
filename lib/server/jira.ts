@@ -17,6 +17,15 @@ export type JiraIssueSummary = {
   partnerTriggeredAt: string | null;
 };
 
+export type JiraAttachmentSummary = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+  author: string | null;
+};
+
 type JiraIssue = {
   id: string;
   key: string;
@@ -33,6 +42,7 @@ type JiraIssue = {
     labels?: string[];
     issuetype?: { name?: string };
     project?: { key?: string; name?: string };
+    attachment?: Array<{ id?: string; filename?: string; mimeType?: string; size?: number; created?: string; author?: { displayName?: string } }>;
     customfield_14809?: unknown;
     customfield_14827?: unknown;
     customfield_14954?: unknown;
@@ -178,9 +188,12 @@ export async function getJiraIssue(key: string) {
     ticketTotal: value('Total do Tickt', 'Total do Ticket'),
     visitNumber: value('Numero de Visita', 'Número de Visita'),
     additionalCosts: value('Detalhes de custos adicionais'),
+    technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos'),
+    scheduledDateTime: value('Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento'),
     defectSummary: value('Resumo do defeito'),
   };
-  return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields };
+  const attachments: JiraAttachmentSummary[] = (issue.fields.attachment ?? []).flatMap((attachment) => attachment.id && attachment.filename ? [{ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType ?? 'application/octet-stream', size: attachment.size ?? 0, createdAt: attachment.created ?? '', author: attachment.author?.displayName ?? null }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields, attachments };
 }
 
 export async function updateJiraIssue(key: string, input: Record<string, unknown>) {
@@ -195,6 +208,8 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     ['problemType', ['Tipo de problema']], ['allegedDefect', ['Defeito alegado']], ['visitCost1', ['Custo Visita1', 'Custo Visita 1']],
     ['equipmentTotal', ['Valor Total de Equipamentos']], ['kmTotal', ['Valor total do KM', 'Valor Total do KM']], ['visitCost2', ['Custo Visita2', 'Custo Visita 2']],
     ['ticketTotal', ['Total do Tickt', 'Total do Ticket']], ['visitNumber', ['Numero de Visita', 'Número de Visita']], ['additionalCosts', ['Detalhes de custos adicionais']],
+    ['technicianData', ['Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos']],
+    ['scheduledDateTime', ['Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento']],
   ];
   for (const [inputKey, aliases] of mappings) {
     if (input[inputKey] === undefined) continue;
@@ -202,8 +217,9 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     if (id) {
       const value = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
         ? numericJiraValue(input[inputKey])
-        : cleanJiraValue(input[inputKey]);
-      fields[id] = isAdfDocument(issue.fields[id]) && typeof value === 'string' ? textToAdf(value) : value;
+        : inputKey === 'scheduledDateTime' ? jiraDateTimeValue(input[inputKey]) : cleanJiraValue(input[inputKey]);
+      const requiresAdf = inputKey === 'technicianData' || isAdfDocument(issue.fields[id]);
+      fields[id] = requiresAdf && typeof value === 'string' ? textToAdf(value) : value;
     }
   }
   if (['identifiedProblem', 'testsPerformed', 'partToReplace'].some((name) => input[name] !== undefined)) {
@@ -247,7 +263,32 @@ export async function addJiraInternalEvidence(key: string, files: Array<{ name: 
     await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
   }
   const body = `Evidências anexadas pelo Caju OS por ${author}: ${files.map((file) => file.name).join(', ')}`;
-  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) });
+  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) }).catch(() => null);
+}
+
+export async function uploadJiraAttachments(key: string, files: File[], author: string) {
+  const normalizedKey = validIssueKey(key);
+  for (const file of files) {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
+  }
+  const body = `Novas evidências anexadas pelo Caju OS por ${author}: ${files.map((file) => file.name).join(', ')}`;
+  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) }).catch(() => null);
+  return getJiraIssue(normalizedKey);
+}
+
+export async function getJiraAttachmentContent(key: string, attachmentId: string) {
+  const normalizedKey = validIssueKey(key);
+  if (!/^\d+$/.test(attachmentId)) throw new JiraError('Anexo inválido.', 400);
+  const issue = await jiraFetch<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?fields=attachment`);
+  const attachment = issue.fields.attachment?.find((item) => item.id === attachmentId);
+  if (!attachment?.filename) throw new JiraError('Anexo não encontrado neste chamado.', 404);
+  const baseUrl = requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '');
+  const credential = btoa(`${requiredEnv('JIRA_EMAIL')}:${requiredEnv('JIRA_API_TOKEN')}`);
+  const response = await fetch(`${baseUrl}/rest/api/3/attachment/content/${encodeURIComponent(attachmentId)}`, { headers: { Authorization: `Basic ${credential}`, Accept: '*/*' }, redirect: 'follow' });
+  if (!response.ok || !response.body) throw new JiraError(`Não foi possível abrir o anexo no Jira (${response.status}).`, 502);
+  return { body: response.body, filename: attachment.filename, mimeType: attachment.mimeType ?? response.headers.get('content-type') ?? 'application/octet-stream', size: attachment.size ?? null };
 }
 
 export async function getFinancialIssues(days = 180): Promise<FinancialIssue[]> {
@@ -367,6 +408,12 @@ function numericJiraValue(value: unknown) {
   const decimalComma = normalized.lastIndexOf(',') > normalized.lastIndexOf('.');
   const parsed = Number(decimalComma ? normalized.replace(/\./g, '').replace(',', '.') : normalized.replace(/,/g, ''));
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function jiraDateTimeValue(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value.trim().slice(0, 100) : parsed.toISOString();
 }
 
 function parseTechnicalSummary(value?: string | null) {

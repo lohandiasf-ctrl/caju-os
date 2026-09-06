@@ -21,7 +21,7 @@ type DashboardView = 'overview' | 'tickets' | 'central' | 'agenda' | 'technician
 type Ticket = { id: string; title: string; store: string; city: string; status: Status; rawStatus: string; priority: 'Alta' | 'Media' | 'Baixa'; technician?: string; schedule?: string; partnerTriggeredAt?: string; updatedAt?: string; scheduledAt?: string; partnerTriggeredAtRaw?: string };
 type TicketActivity = DatedTicketActivity<Ticket>;
 type JiraTicket = { key: string; summary: string; status: string; statusCategory: string; priority: string; assignee: string | null; updatedAt: string; store: string | null; city: string | null; scheduledAt: string | null; partnerTriggeredAt: string | null };
-type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string; operationalFields: JiraOperationalFields };
+type JiraDetails = JiraTicket & { description: string; reporter: string | null; issueType: string; project: string; createdAt: string; jiraUrl: string; operationalFields: JiraOperationalFields; attachments: Array<{ id: string; filename: string; mimeType: string; size: number; createdAt: string; author: string | null }> };
 type N1User = { email: string; role: 'n1' };
 type FieldTechnician = {
   id: number; technicianExternalId: string | null; technicianCode: string | null; name: string; cpf: string | null; phone: string | null; email: string | null; pixKey: string | null;
