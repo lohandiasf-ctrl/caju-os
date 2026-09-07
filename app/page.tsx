@@ -59,6 +59,7 @@ import {
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
+import { notifyDesktop } from "@/lib/desktop-notifications";
 import {
   JiraTicketDetails,
   type JiraOperationalFields,
@@ -315,6 +316,7 @@ export default function Home() {
   const knownTicketIds = useRef<Set<string>>(new Set());
   const seenOperationalAlerts = useRef<Set<string>>(new Set());
   const [removedTicketAlerts, setRemovedTicketAlerts] = useState<string[]>([]);
+  const [newTicketAlerts, setNewTicketAlerts] = useState<string[]>([]);
 
   useEffect(() => {
     const syncView = () => setActiveView(dashboardViewFromLocation());
@@ -447,10 +449,13 @@ export default function Home() {
   }, [tickets]);
 
   useEffect(() => {
-    if (!operational || !['gerencia', 'coordenador', 'analista'].includes(role ?? '')) return;
+    if (!operational || !user) return;
     for (const alert of operational.alerts) {
       const key = `${alert.ticketKey}|${alert.message}`;
-      if (!seenOperationalAlerts.current.has(key) && seenOperationalAlerts.current.size && Notification.permission === 'granted') new Notification(`Alerta operacional · ${alert.ticketKey}`, { body: alert.message, tag: key });
+      if (!seenOperationalAlerts.current.has(key) && seenOperationalAlerts.current.size) {
+        const kind = /spare|entrega|rastrei/i.test(alert.message) ? "spare" : /agend/i.test(alert.message) ? "schedule" : /campo/i.test(alert.message) ? "field-check" : "operational";
+        void notifyDesktop({ title: `Alerta operacional · ${alert.ticketKey}`, body: alert.message, tag: key, kind });
+      }
       seenOperationalAlerts.current.add(key);
     }
   }, [operational, role]);
@@ -474,9 +479,17 @@ export default function Home() {
         if (!active) return;
         const nextIds = new Set(issues.map((issue) => issue.key));
         const removed = [...knownTicketIds.current].filter((key) => !nextIds.has(key));
+        const added = issues.filter((issue) => !knownTicketIds.current.has(issue.key));
+        if (added.length && knownTicketIds.current.size) {
+          const messages = added.slice(0, 8).map((issue) => `${issue.key} · ${issue.summary}`);
+          setNewTicketAlerts((current) => [...messages, ...current].slice(0, 10));
+          for (const issue of added.slice(0, 8)) {
+            void notifyDesktop({ title: `Novo chamado · ${issue.key}`, body: issue.summary, tag: `jira-new-${issue.key}`, kind: /spare/i.test(issue.status) ? "spare" : "new-ticket" });
+          }
+        }
         if (removed.length) {
           setRemovedTicketAlerts((current) => [...removed.map((key) => `${key} foi retirado da fila do Jira.`), ...current].slice(0, 10));
-          if (Notification.permission === "granted") for (const key of removed.slice(0, 3)) new Notification("Chamado retirado da fila", { body: `${key} não está mais na fila operacional.`, tag: `jira-removed-${key}` });
+          for (const key of removed.slice(0, 8)) void notifyDesktop({ title: "Chamado retirado da fila", body: `${key} não está mais na fila operacional.`, tag: `jira-removed-${key}`, kind: "removed-ticket" });
         }
         knownTicketIds.current = nextIds; setTickets(issues.map(toTicket));
       } catch { /* A próxima atualização tenta novamente. */ }
@@ -955,7 +968,7 @@ export default function Home() {
             onClick={() => setNotificationsOpen((value) => !value)}
           >
             <Bell />
-            {(removedTicketAlerts.length || operational?.alerts.length ||
+            {(removedTicketAlerts.length || newTicketAlerts.length || operational?.alerts.length ||
               tickets.some((ticket) => ticket.priority === "Alta")) && (
               <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
             )}
@@ -965,13 +978,14 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Central de alertas</h2>
                 <Badge variant="outline">
-                  {removedTicketAlerts.length + (operational?.alerts.length ?? 0) +
+                  {removedTicketAlerts.length + newTicketAlerts.length + (operational?.alerts.length ?? 0) +
                     tickets.filter((ticket) => ticket.priority === "Alta")
                       .length}
                 </Badge>
               </div>
               <div className="mt-3 space-y-2">
                 {removedTicketAlerts.slice(0, 3).map((message) => <div key={message} className="rounded-lg border border-blue-400/25 bg-blue-400/10 px-3 py-2 text-xs text-blue-100">{message}</div>)}
+                {newTicketAlerts.slice(0, 3).map((message) => <div key={message} className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-primary-foreground">Novo chamado · {message}</div>)}
                 {operational?.alerts.slice(0, 5).map((alert) => (
                   <button
                     key={`${alert.ticketKey}-${alert.message}`}
