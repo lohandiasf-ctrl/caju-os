@@ -251,9 +251,33 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     if (options.allowNoop) return getJiraIssue(normalizedKey);
     throw new JiraError('Nenhum dos campos alterados existe neste tipo de chamado do Jira.', 400);
   }
-  await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}`, { method: 'PUT', body: JSON.stringify({ fields }) });
+  await updateJiraFieldsWithScreenFallback(normalizedKey, fields);
   issuesCache.clear(); financialIssuesCache = null;
   return getJiraIssue(normalizedKey);
+}
+
+/**
+ * Jira screens vary by request type. The five individual technician fields are
+ * useful when exposed, but must never stop scheduling when a screen hides one
+ * of them. The workflow-required ADF block and date remain in the request.
+ */
+async function updateJiraFieldsWithScreenFallback(key: string, initialFields: Record<string, unknown>) {
+  const fields = { ...initialFields };
+  const optionalTechnicianFields = new Set(['customfield_12316', 'customfield_16237', 'customfield_11956', 'customfield_16238', 'customfield_11963']);
+  while (Object.keys(fields).length) {
+    try {
+      await jiraFetch<void>(`/rest/api/3/issue/${encodeURIComponent(key)}`, { method: 'PUT', body: JSON.stringify({ fields }) });
+      return;
+    } catch (error) {
+      const blocked = error instanceof JiraError
+        ? Array.from(error.message.matchAll(/Field ['“”]?([^'“”\s]+)['“”]? cannot be set/gi)).map((match) => match[1])
+        : [];
+      const removable = blocked.filter((id) => optionalTechnicianFields.has(id) && id in fields);
+      if (!removable.length) throw error;
+      for (const id of removable) delete fields[id];
+    }
+  }
+  throw new JiraError('O Jira não disponibiliza os campos individuais do técnico para este tipo de chamado.', 400);
 }
 
 export async function transitionJiraIssue(key: string, localStatus: string, input: Record<string, unknown> = {}) {
