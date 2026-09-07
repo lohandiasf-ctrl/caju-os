@@ -256,8 +256,8 @@ export default function Home() {
     setValidationSending(true);
     try {
       if ('__TAURI_INTERNALS__' in window) {
-        const copied = await copyToClipboard(text);
         const { invoke } = await import('@tauri-apps/api/core');
+        const copied = await invoke<boolean>('copy_to_clipboard', { text });
         await invoke('open_external_url', { url: VALIDATION_WHATSAPP_GROUP });
         setValidationNotice(copied ? 'Grupo de validação aberto e mensagem copiada. Cole e envie no WhatsApp.' : 'Grupo de validação aberto. Copie o link do Jira acima e envie no WhatsApp.');
       } else {

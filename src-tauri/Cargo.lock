@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "caju-os-desktop"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "tauri",
  "tauri-build",
