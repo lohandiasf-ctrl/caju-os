@@ -3738,7 +3738,63 @@ function relativeTime(value: string) {
 }
 
 function ScreenPreview({ stream, label }: { stream: MediaStream; label: string }) {
-  return <div className="mt-2 overflow-hidden rounded-xl border border-border bg-black"><video ref={(node) => { if (node && node.srcObject !== stream) node.srcObject = stream; }} autoPlay muted playsInline className="aspect-video w-full object-contain" aria-label={label} /><p className="px-3 py-2 text-[11px] text-muted-foreground">{label}</p></div>;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = stream;
+    void video.play().catch(() => undefined);
+    return () => {
+      if (video.srcObject === stream) video.srcObject = null;
+    };
+  }, [stream]);
+  useEffect(() => {
+    const sync = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  async function toggleFullscreen() {
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if (video.requestFullscreen) {
+        await video.requestFullscreen();
+      } else {
+        const mobileVideo = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+        mobileVideo.webkitEnterFullscreen?.();
+      }
+    } catch {
+      // Some mobile browsers only allow their native video fullscreen method.
+      const mobileVideo = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+      mobileVideo.webkitEnterFullscreen?.();
+    }
+  }
+  return (
+    <div className="relative mt-2 overflow-hidden rounded-xl border border-border bg-black">
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        onLoadedMetadata={(event) => void event.currentTarget.play().catch(() => undefined)}
+        onCanPlay={(event) => void event.currentTarget.play().catch(() => undefined)}
+        className="aspect-video w-full object-contain"
+        aria-label={label}
+      />
+      <button
+        type="button"
+        onClick={() => void toggleFullscreen()}
+        className="absolute right-2 top-2 grid size-11 place-items-center rounded-xl border border-white/20 bg-black/65 text-white shadow-lg backdrop-blur transition hover:bg-black/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label={fullscreen ? "Sair da tela cheia" : "Abrir tela compartilhada em tela cheia"}
+      >
+        <Maximize2 className="size-4" aria-hidden="true" />
+      </button>
+      <p className="px-3 py-2 text-[11px] text-muted-foreground">{label} · Toque para ampliar</p>
+    </div>
+  );
 }
 
 function parseTicketMessage(body: string, tickets: ChatTicket[]) {

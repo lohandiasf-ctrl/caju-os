@@ -146,7 +146,14 @@ export class VoiceChatClient {
     const peer = new RTCPeerConnection({ iceServers: iceServers() }); this.peers.set(remoteId, peer);
     this.stream?.getTracks().forEach((track) => peer.addTrack(track, this.stream!));
     this.screenStream?.getTracks().forEach((track) => peer.addTrack(track, this.screenStream!));
-    peer.ontrack = (event) => event.track.kind === 'video' ? this.events.onRemoteScreenStream?.(remoteId, event.streams[0]) : this.events.onRemoteStream?.(remoteId, event.streams[0]);
+    peer.ontrack = (event) => {
+      // Mobile WebViews sometimes omit RTCTrackEvent.streams even when the
+      // track is valid. Build a stream from the track so remote screen video
+      // does not render as a black/empty element.
+      const stream = event.streams[0] ?? new MediaStream([event.track]);
+      if (event.track.kind === 'video') this.events.onRemoteScreenStream?.(remoteId, stream);
+      else this.events.onRemoteStream?.(remoteId, stream);
+    };
     peer.onicecandidate = (event) => { if (event.candidate) this.socket?.emit('voice:signal', { to: remoteId, data: event.candidate.toJSON() }); };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'disconnected') { this.events.onConnectionQuality?.('reconnecting'); window.setTimeout(() => { if (peer.connectionState === 'disconnected') peer.restartIce(); }, 1_500); }
