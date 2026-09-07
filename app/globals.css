@@ -103,8 +103,7 @@ body {
       radial-gradient(circle at 20% 90%, rgb(21 38 58 / 18%), transparent 28rem),
       radial-gradient(circle at 78% 8%, rgb(58 92 190 / 14%), transparent 26rem),
       linear-gradient(145deg, #090b12, #101522 58%, #07090f);
-    /* Fixed backgrounds repaint the full viewport during scroll in WebView2. */
-    background-attachment: scroll;
+    background-attachment: fixed;
   }
   html {
     @apply font-sans;
@@ -128,7 +127,7 @@ body {
       linear-gradient(135deg, rgb(255 255 255 / 5%), transparent 34%),
       linear-gradient(145deg, rgb(23 28 40 / 94%), rgb(12 16 25 / 97%));
     box-shadow: 0 18px 46px rgb(0 0 0 / 24%), inset 0 1px 0 rgb(255 255 255 / 5%);
-    backdrop-filter: none;
+    backdrop-filter: blur(20px) saturate(125%);
   }
 
   .caju-sidebar,
@@ -141,7 +140,7 @@ body {
 
   main > section > header {
     background: rgb(14 19 30 / 76%);
-    backdrop-filter: blur(10px) saturate(112%);
+    backdrop-filter: blur(22px) saturate(135%);
   }
 }
 
@@ -185,7 +184,7 @@ main > aside.fixed nav a[aria-current='page'] {
     border: 1px solid rgb(255 255 255 / 8%);
     border-radius: 1rem;
     box-shadow: 0 20px 60px -20px rgb(0 0 0 / 70%), 0 0 0 1px rgb(255 255 255 / 2%), inset 0 1px 0 rgb(255 255 255 / 3%);
-    backdrop-filter: none;
+    backdrop-filter: blur(18px);
   }
 
   .metric-glow {
@@ -201,29 +200,9 @@ main > aside.fixed nav a[aria-current='page'] {
     height: 8rem;
     border-radius: 999px;
     background: rgb(47 125 255 / 12%);
-    opacity: .72;
+    filter: blur(18px);
     pointer-events: none;
   }
-}
-
-/* Chromium skips off-screen Kanban cards, preserving the 16.67 ms frame budget. */
-.ticket-card {
-  content-visibility: auto;
-  contain: layout paint style;
-  contain-intrinsic-size: auto 220px;
-  backface-visibility: hidden;
-}
-
-.ticket-card:hover,
-.ticket-card:focus-visible { will-change: transform; }
-
-section[aria-label="Chamada de voz em andamento"] {
-  backdrop-filter: none !important;
-  transition-property: none !important;
-}
-
-@media (max-width: 1023px), (prefers-reduced-transparency: reduce) {
-  main > section > header { backdrop-filter: none; background: rgb(14 19 30 / 97%); }
 }
 
 /* Shared cockpit language across every operational module. */

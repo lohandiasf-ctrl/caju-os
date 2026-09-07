@@ -1630,7 +1630,7 @@ function TicketCard({
     <button
       type="button"
       onClick={onOpen}
-      className="ticket-card w-full rounded-xl border border-white/[.07] bg-black/15 p-4 text-left shadow-[0_14px_32px_rgba(0,0,0,.12)] transition-[transform,border-color,background-color] hover:-translate-y-0.5 hover:border-primary/40 hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="w-full rounded-xl border border-white/[.07] bg-black/15 p-4 text-left shadow-[0_14px_32px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 hover:border-primary/40 hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div className="flex justify-between gap-3">
         <span className="font-mono text-xs font-bold text-primary">

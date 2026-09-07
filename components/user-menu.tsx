@@ -717,7 +717,7 @@ export function ColleaguesPanel({
       </button>
       <aside
         inert={!colleaguesOpen}
-        className={`colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
+        className={`colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
         aria-label="Colegas"
         aria-hidden={!colleaguesOpen}
       >
@@ -2296,7 +2296,7 @@ function IncomingVoiceCall({
       {active && (
         <section
           aria-label="Chamada de voz em andamento"
-          className={`fixed bottom-4 right-4 z-[70] rounded-2xl border border-emerald-400/30 bg-card shadow-2xl ${minimized ? "w-56" : "w-[min(25rem,calc(100vw-2rem))]"}`}
+          className={`fixed bottom-4 right-4 z-[70] rounded-2xl border border-emerald-400/30 bg-card/95 shadow-2xl backdrop-blur-xl transition-[width] motion-reduce:transition-none ${minimized ? "w-56" : "w-[min(25rem,calc(100vw-2rem))]"}`}
         >
           <div className="flex min-h-14 items-center gap-3 p-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-400/12 text-emerald-300">
