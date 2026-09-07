@@ -1,0 +1,1 @@
+async function e(){return Response.json({key:process.env.GOOGLE_MAPS_API_KEY||``},{headers:{"Cache-Control":`private, max-age=300`}})}export{e as GET};

@@ -26,7 +26,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     const { key } = await context.params;
     const body = await request.json() as Record<string, unknown>;
     queueBody = body;
-    const { status, ...fields } = body;
+    const { status, changeReason, changeOrigin, ...fields } = body;
     if (typeof status === 'string' && !['gerencia', 'coordenador', 'n1', 'analista'].includes(user.role)) return Response.json({ error: 'Seu perfil pode preencher dados e evidências, mas não alterar a etapa do Jira.' }, { status: 403 });
     const editableFields = { ...fields };
     const before = await getJiraIssue(key);
@@ -41,7 +41,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
       ticketKey: key,
       action: typeof status === 'string' ? `Jira alterado para ${status}` : 'Campos do Jira atualizados',
       actorEmail: user.email,
-      details: JSON.stringify({ collaborator: user.email, origin: 'sistema→Jira', reason: 'Edição direta nos detalhes do chamado', changedAt: now, changes: diffJira({ status: before.status, ...before.operationalFields }, { status: after.status, ...after.operationalFields }), before: { status: before.status, fields: before.operationalFields }, after: { status: after.status, fields: after.operationalFields } }),
+      details: JSON.stringify({ collaborator: user.email, origin: typeof changeOrigin === 'string' && changeOrigin === 'sistema' ? 'sistema' : 'Jira', reason: typeof changeReason === 'string' && changeReason.trim() ? changeReason.trim().slice(0, 500) : 'Edição direta nos detalhes do chamado', changedAt: now, changes: diffJira({ status: before.status, ...before.operationalFields }, { status: after.status, ...after.operationalFields }), before: { status: before.status, fields: before.operationalFields }, after: { status: after.status, fields: after.operationalFields } }),
       createdAt: now,
     });
     return Response.json(after, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -49,7 +49,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     if (error instanceof Response) return error;
     if (shouldQueueJiraError(error)) {
       const { key } = await context.params;
-      const { status, ...fields } = queueBody;
+      const { status, changeReason: _reason, changeOrigin: _origin, ...fields } = queueBody;
       if (Object.keys(fields).length) await enqueueJiraSync(key, 'update', fields, queueActor);
       if (typeof status === 'string') await enqueueJiraSync(key, 'transition', { status, ...fields }, queueActor);
       return Response.json({ queued: true, error: 'O Jira está temporariamente indisponível. A alteração foi guardada e será repetida automaticamente.' }, { status: 202 });

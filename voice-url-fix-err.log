@@ -1,0 +1,40 @@
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+  - vinext:jsx-in-js (19%)
+  - rsc:virtual-client-package (17%)
+  - rsc:scan-strip (17%)
+  - alias (10%)
+  - vinext:og-inline-fetch-assets (9%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+  - vinext:og-inline-fetch-assets (23%)
+  - vinext:css-data-url (15%)
+  - vinext:middleware-server-only (11%)
+  - rsc:virtual-client-package (11%)
+  - alias (11%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+  - rsc:virtual-client-package (38%)
+  - vinext:og-inline-fetch-assets (17%)
+  - vite-plugin-commonjs (15%)
+  - vinext:image-imports (14%)
+  - vinext:css-data-url (3%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+  - vinext:middleware-server-only (17%)
+  - vinext:css-data-url (13%)
+  - vinext:og-inline-fetch-assets (12%)
+  - alias (12%)
+  - rsc:virtual-client-package (9%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+  - vinext:og-inline-fetch-assets (18%)
+  - vinext:css-data-url (16%)
+  - alias (14%)
+  - rsc:virtual-client-package (12%)
+  - vinext:middleware-server-only (11%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+

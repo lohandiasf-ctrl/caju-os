@@ -1,0 +1,12 @@
+C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\serde-08d4d45c0a18738a.d: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\Lohan\ Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\build\serde-aab779a4f8940fd3\out/private.rs
+
+C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\libserde-08d4d45c0a18738a.rmeta: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs C:\Users\Lohan\ Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\build\serde-aab779a4f8940fd3\out/private.rs
+
+C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\lib.rs:
+C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\integer128.rs:
+C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\mod.rs:
+C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\de.rs:
+C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.229\src\private\ser.rs:
+C:\Users\Lohan\ Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\build\serde-aab779a4f8940fd3\out/private.rs:
+
+# env-dep:OUT_DIR=C:\\Users\\Lohan Dias\\Downloads\\Caju_Monitor_v2\\caju-os-web\\src-tauri\\target-notification-check\\debug\\build\\serde-aab779a4f8940fd3\\out

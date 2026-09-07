@@ -1,0 +1,15 @@
+        Info Looking up installed tauri packages to check mismatched versions...
+   Compiling caju-os-desktop v0.1.5 (C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri)
+    Finished `release` profile [optimized] target(s) in 3m 53s
+       Built application at: C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target\release\caju-os-desktop.exe
+        Info Patching C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target\release\caju-os-desktop.exe with bundle type information: msi
+        Info Target: x64
+     Running candle for "C:\\Users\\Lohan Dias\\Downloads\\Caju_Monitor_v2\\caju-os-web\\src-tauri\\target\\release\\wix\\x64\\main.wxs"
+     Running light to produce C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target\release\bundle\msi\Caju OS_0.1.5_x64_en-US.msi
+        Info Patching C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target\release\caju-os-desktop.exe with bundle type information: nsis
+        Info Target: x64
+     Running makensis to produce C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target\release\bundle\nsis\Caju OS_0.1.5_x64-setup.exe
+    Finished 2 bundles at:
+        C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target\release\bundle\msi\Caju OS_0.1.5_x64_en-US.msi
+        C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target\release\bundle\nsis\Caju OS_0.1.5_x64-setup.exe
+

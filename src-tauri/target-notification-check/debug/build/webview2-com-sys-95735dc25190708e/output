@@ -1,0 +1,2 @@
+cargo:rustc-link-search=native=C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\build\webview2-com-sys-95735dc25190708e\out\x64
+cargo:rustc-link-lib=advapi32

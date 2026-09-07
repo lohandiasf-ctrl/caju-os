@@ -1,0 +1,7 @@
+C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\cfg_if-0887bce52ea08434.d: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cfg-if-1.0.4\src\lib.rs
+
+C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\libcfg_if-0887bce52ea08434.rlib: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cfg-if-1.0.4\src\lib.rs
+
+C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\libcfg_if-0887bce52ea08434.rmeta: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cfg-if-1.0.4\src\lib.rs
+
+C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cfg-if-1.0.4\src\lib.rs:

@@ -47,7 +47,17 @@ export async function POST(request: Request) {
       const title = clean(body.title, 500);
       if (!title) return Response.json({ error: 'Descreva a atividade.' }, { status: 400 });
       const minutes = integer(body.followUpMinutes, 5, 1_440) ?? 30;
-      await db.insert(operationalTasks).values({ ticketKey, title, assignedTo: clean(body.assignedTo, 180), status: 'open', nextCheckAt: new Date(Date.now() + minutes * 60_000).toISOString(), createdBy: user.email, createdAt: now, updatedAt: now });
+      const dueMinutes = integer(body.dueMinutes, 30, 10_080) ?? 120;
+      const nextCheckAt = new Date(Date.now() + minutes * 60_000).toISOString();
+      const dueAt = new Date(Date.now() + dueMinutes * 60_000).toISOString();
+      await db.insert(operationalTasks).values({ ticketKey, title, assignedTo: clean(body.assignedTo, 180), status: 'open', nextCheckAt, dueAt, createdBy: user.email, createdAt: now, updatedAt: now });
+      await db.insert(operationalAudit).values({
+        ticketKey,
+        action: 'Tarefa delegada criada',
+        actorEmail: user.email,
+        details: JSON.stringify({ collaborator: user.email, origin: 'sistema', reason: 'Delegação operacional', changedAt: now, changes: [{ field: 'tarefa', previous: null, next: title }] }),
+        createdAt: now,
+      });
       return Response.json({ ok: true });
     }
     return Response.json({ error: 'Ação inválida.' }, { status: 400 });
@@ -74,7 +84,29 @@ export async function PATCH(request: Request) {
     const status = clean(body.status, 30);
     if (!['accepted', 'in_progress', 'done'].includes(status ?? '')) return Response.json({ error: 'Status inválido.' }, { status: 400 });
     const now = new Date().toISOString();
-    await getDb().update(operationalTasks).set({ status: status as 'accepted' | 'in_progress' | 'done', acceptedBy: status === 'accepted' ? user.email : undefined, progressNote: clean(body.progressNote, 1000), nextCheckAt: status === 'done' ? now : new Date(Date.now() + 30 * 60_000).toISOString(), updatedAt: now }).where(eq(operationalTasks.id, id));
+    const db = getDb();
+    const existing = await db.select().from(operationalTasks).where(eq(operationalTasks.id, id)).get();
+    if (!existing) return Response.json({ error: 'Atividade não encontrada.' }, { status: 404 });
+    const acceptedBy = status === 'accepted' ? user.email : existing.acceptedBy;
+    await db.update(operationalTasks).set({ status: status as 'accepted' | 'in_progress' | 'done', acceptedBy, progressNote: clean(body.progressNote, 1000), nextCheckAt: status === 'done' ? now : new Date(Date.now() + 30 * 60_000).toISOString(), updatedAt: now }).where(eq(operationalTasks.id, id));
+    if (existing.ticketKey) {
+      await db.insert(operationalAudit).values({
+        ticketKey: existing.ticketKey,
+        action: status === 'accepted' ? 'Tarefa aceita' : status === 'done' ? 'Tarefa concluída' : 'Andamento da tarefa registrado',
+        actorEmail: user.email,
+        details: JSON.stringify({
+          collaborator: user.email,
+          origin: 'sistema',
+          reason: clean(body.progressNote, 1000) ?? `Status ${status}`,
+          changedAt: now,
+          changes: [
+            { field: 'status', previous: existing.status, next: status },
+            { field: 'acceptedBy', previous: existing.acceptedBy, next: acceptedBy },
+          ],
+        }),
+        createdAt: now,
+      });
+    }
     return Response.json({ ok: true });
   } catch (error) {
     if (error instanceof Response) return error;

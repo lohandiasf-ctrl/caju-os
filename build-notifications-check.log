@@ -1,0 +1,123 @@
+
+> sites-project@0.1.0 build
+> vinext build
+
+
+  vinext build  (Vite 8.0.13)
+
+[1/5] analyze client references...
+[2K
+transforming...✓ 384 modules transformed.
+rendering chunks...
+[PLUGIN_TIMINGS] Your build spent significant time in plugins. Here is a breakdown:
+  - vinext:css-data-url (40%)
+  - vite-plugin-commonjs (15%)
+  - alias (14%)
+  - rsc:virtual-client-package (12%)
+  - vinext:og-inline-fetch-assets (10%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 24.69s
+[2/5] analyze server references...
+[2K
+transforming...✓ 1758 modules transformed.
+rendering chunks...
+[PLUGIN_TIMINGS] Your build spent significant time in plugins. Here is a breakdown:
+  - rsc:virtual-client-package (15%)
+  - vinext:og-inline-fetch-assets (12%)
+  - vinext:css-data-url (10%)
+  - vinext:middleware-server-only (10%)
+  - alias (9%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 8.97s
+[3/5] build rsc environment...
+[2K
+transforming...✓ 381 modules transformed.
+rendering chunks...
+computing gzip size...
+[PLUGIN_TIMINGS] Your build spent significant time in plugins. Here is a breakdown:
+  - vinext:og-inline-fetch-assets (33%)
+  - rsc:virtual-client-package (14%)
+  - vinext:image-imports (12%)
+  - vinext:css-data-url (11%)
+  - rsc:scan-strip (11%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 18.93s
+[4/5] build client environment...
+[2K
+transforming...✓ 3701 modules transformed.
+rendering chunks...
+computing gzip size...
+[PLUGIN_TIMINGS] Your build spent significant time in plugins. Here is a breakdown:
+  - vinext:middleware-server-only (18%)
+  - vinext:css-data-url (16%)
+  - vinext:og-inline-fetch-assets (13%)
+  - alias (11%)
+  - rsc:virtual-client-package (10%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 13.45s
+[5/5] build ssr environment...
+[2K
+transforming...✓ 1772 modules transformed.
+rendering chunks...
+computing gzip size...
+[PLUGIN_TIMINGS] Your build spent significant time in plugins. Here is a breakdown:
+  - vinext:og-inline-fetch-assets (15%)
+  - vinext:css-data-url (13%)
+  - alias (12%)
+  - rsc:virtual-client-package (7%)
+  - vinext:middleware-server-only (7%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 8.81s
+[0m
+  Route (app)
+  ┌ ? /                                    
+  ├ ? /acesso-negado                       
+  ├ λ /api/admin/export                    
+  ├ λ /api/admin/jira-sync                 
+  ├ λ /api/app-version                     
+  ├ λ /api/auth/me                         
+  ├ λ /api/calls/history                   
+  ├ λ /api/chat-groups                     
+  ├ λ /api/chat-groups/:id/members         
+  ├ λ /api/chat-groups/:id/messages        
+  ├ λ /api/colleagues                      
+  ├ λ /api/communication-preferences       
+  ├ λ /api/finance/rules                   
+  ├ λ /api/jira/finance                    
+  ├ λ /api/jira/issues                     
+  ├ λ /api/jira/issues/:key                
+  ├ λ /api/jira/issues/:key/attachments    
+  ├ λ /api/jira/issues/:key/attachments/:id
+  ├ λ /api/jira/issues/:key/validation     
+  ├ λ /api/jira/issues/:key/whatsapp       
+  ├ λ /api/maps-config                     
+  ├ λ /api/messages                        
+  ├ λ /api/n1-tickets/:key                 
+  ├ λ /api/operational-dashboard           
+  ├ λ /api/operations                      
+  ├ λ /api/operations/intelligence         
+  ├ λ /api/technicians                     
+  ├ λ /api/technicians/:id/reviews         
+  ├ λ /api/technicians/import              
+  ├ λ /api/typing                          
+  ├ λ /api/users/invite                    
+  ├ λ /api/users/n1                        
+  ├ ? /central-n1                          
+  ├ ? /financeiro                          
+  ├ ? /login                               
+  ├ ? /mapa                                
+  └ ? /spares                              
+
+  λ API  ? Unknown
+
+  ? Some routes could not be classified. vinext currently uses static analysis
+    and cannot detect dynamic API usage (headers(), cookies(), etc.) at build time.
+    Automatic classification will be improved in a future release.
+
+  Build complete. Run `vinext start` to start the production server.
+

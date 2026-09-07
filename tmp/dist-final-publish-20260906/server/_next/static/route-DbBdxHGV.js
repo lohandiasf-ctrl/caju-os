@@ -1,0 +1,1 @@
+import{t as e}from"./firebase-auth-BK5AoyeS.js";async function t(t){try{let n=await e(t);return Response.json(n,{headers:{"Cache-Control":`no-store`}})}catch(e){return e instanceof Response?e:(console.error(`Falha ao consultar perfil autenticado`,e),Response.json({error:`Falha ao consultar o perfil.`},{status:500}))}}export{t as GET};

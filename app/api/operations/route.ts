@@ -71,6 +71,7 @@ export async function PUT(request: Request) {
     }
     const fields = workflowFields(body, { status, technicianId, scheduledAt, now });
     const changeReason = clean(body.changeReason, 500) ?? 'Alteração operacional';
+    const origin = body.changeOrigin === 'Jira' ? 'Jira' : 'sistema';
     const changedFields = diffWorkflow(existing, fields);
     let workflowId: number;
     if (existing) {
@@ -85,7 +86,7 @@ export async function PUT(request: Request) {
       ticketKey,
       action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`,
       actorEmail: user.email,
-      details: JSON.stringify({ collaborator: user.email, origin: 'sistema', reason: changeReason, changedAt: now, changes: changedFields, before: existing, after: { ...fields, status, technicianId, scheduledAt }, jiraQueued }),
+      details: JSON.stringify({ collaborator: user.email, origin, reason: changeReason, changedAt: now, changes: changedFields, before: existing, after: { ...fields, status, technicianId, scheduledAt }, jiraQueued }),
       createdAt: now,
     });
     const requesterName = clean(body.requesterName, 120);

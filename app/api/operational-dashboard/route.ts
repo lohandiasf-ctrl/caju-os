@@ -32,9 +32,14 @@ export async function GET(request: Request) {
       if (workflow.clientValueCents && margin <= workflow.clientValueCents * .15 && now - Date.parse(workflow.createdAt) >= 24 * 3_600_000) return [{ ticketKey: workflow.ticketKey, level: 'warning', message: 'Baixa lucratividade: confirmar outras pendências da loja' }];
       return [];
     });
-    for (const task of tasks) if (task.status !== 'done' && task.status !== 'cancelled' && Date.parse(task.nextCheckAt) <= now) {
-      const overdueMinutes = Math.floor((now - Date.parse(task.nextCheckAt)) / 60_000);
-      alerts.push({ ticketKey: task.ticketKey ?? 'EQUIPE', level: overdueMinutes >= 30 ? 'critical' : 'warning', message: overdueMinutes >= 30 ? `Gerência: atividade vencida sem retorno · ${task.title}` : `Atualização pendente: ${task.title}` });
+    for (const task of tasks) if (task.status !== 'done' && task.status !== 'cancelled') {
+      const followUp = Date.parse(task.nextCheckAt);
+      const due = Date.parse(task.dueAt || '') || followUp + 30 * 60_000;
+      if (Number.isFinite(due) && due <= now) {
+        alerts.push({ ticketKey: task.ticketKey ?? 'EQUIPE', level: 'critical', message: `Gerência: atividade vencida sem retorno · ${task.title}` });
+      } else if (Number.isFinite(followUp) && followUp <= now) {
+        alerts.push({ ticketKey: task.ticketKey ?? 'EQUIPE', level: 'warning', message: `Perguntar andamento (30 min): ${task.title}` });
+      }
     }
     for (const shipment of shipments) if (shipment.expectedAt && Date.parse(shipment.expectedAt) < now && !/entregue|recebido/i.test(shipment.status)) alerts.push({ ticketKey: shipment.ticketKey, level: 'warning', message: `Entrega atrasada: ${shipment.trackingCode}` });
     alerts.sort((a, b) => a.level === b.level ? 0 : a.level === 'critical' ? -1 : 1);

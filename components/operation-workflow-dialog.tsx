@@ -27,19 +27,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  delegatedTaskState,
+  knowledgeArticles,
+  recommendTechnicians,
+  type DispatchTechnician,
+} from "@/lib/operational-intelligence";
 
-type Technician = {
-  id: number;
-  name: string;
-  city: string;
-  state: string;
-  status?: string;
-  approved?: boolean;
-  availableTools?: string | null;
-  specialties?: string | null;
-  extraCities?: string | null;
-};
+type Technician = DispatchTechnician;
 type Props = {
   open: boolean;
   ticket: {
@@ -81,6 +76,7 @@ type Intelligence = {
     status: string;
     progressNote: string | null;
     nextCheckAt: string;
+    dueAt?: string | null;
   }>;
   snapshots: Array<{
     id: number;
@@ -150,6 +146,7 @@ const initial = (ticket: Props["ticket"]): Form => ({
   testsPerformed: "",
   partToReplace: "",
   changeReason: "",
+  changeOrigin: "sistema",
 });
 
 export function OperationWorkflowDialog({
@@ -191,6 +188,7 @@ export function OperationWorkflowDialog({
   const [trackingEta, setTrackingEta] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
+  const [taskDueHours, setTaskDueHours] = useState("2");
   const financial = role === "gerencia";
   const set = (key: string, value: Form[string]) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -651,6 +649,9 @@ export function OperationWorkflowDialog({
               </output>
             </section>
             <Section icon={Brain} title="Central inteligente do chamado">
+              <p className="text-xs text-muted-foreground">
+                O sistema calcula automaticamente o melhor técnico usando distância, cidade/região, disponibilidade, especialidade, histórico de desempenho, ferramentas necessárias, custo de deslocamento, prioridade e lucro.
+              </p>
               <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
@@ -729,8 +730,11 @@ export function OperationWorkflowDialog({
                   <ShieldCheck className="size-4 text-primary" />
                   Auditoria detalhada
                 </h4>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Cada mudança registra colaborador, data/hora, valor anterior, valor novo, origem (sistema ou Jira) e motivo.
+                </p>
                 <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
-                  {intelligence.audit?.slice(0, 8).map((item) => {
+                  {intelligence.audit?.map((item) => {
                     const details = parseAuditDetails(item.details);
                     return (
                       <article
@@ -748,8 +752,8 @@ export function OperationWorkflowDialog({
                         </p>
                         {!!details.changes.length && (
                           <div className="mt-2 space-y-1">
-                            {details.changes.slice(0, 6).map((change) => (
-                              <p key={change.field} className="rounded bg-background/60 px-2 py-1">
+                            {details.changes.map((change) => (
+                              <p key={`${change.field}-${String(change.previous)}-${String(change.next)}`} className="rounded bg-background/60 px-2 py-1">
                                 <b>{fieldLabel(change.field)}:</b>{" "}
                                 <span className="text-red-200">{formatAuditValue(change.previous)}</span>{" "}
                                 →{" "}
@@ -1094,13 +1098,16 @@ export function OperationWorkflowDialog({
                 )}
               </div>
             </Section>
-            <Section icon={ClipboardCheck} title="Atividades acompanhadas">
-              <div className="grid gap-3 sm:grid-cols-[1fr_220px_auto]">
+            <Section icon={ClipboardCheck} title="Tarefas delegadas">
+              <p className="text-xs text-muted-foreground">
+                Alguém aceita, o sistema registra o responsável, pergunta o andamento em 30 minutos e notifica o gerente após o vencimento. O histórico fica ligado a este chamado.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_180px_120px_auto]">
                 <Field label="Atividade">
                   <Input
                     value={taskTitle}
                     onChange={(event) => setTaskTitle(event.target.value)}
-                    placeholder="Ex.: entrar em contato com o técnico"
+                    placeholder={`Entrar em contato com loja ${String(form.storeCode || ticket.store || "L252")}`}
                   />
                 </Field>
                 <Field label="Responsável">
@@ -1108,6 +1115,15 @@ export function OperationWorkflowDialog({
                     value={taskAssignee}
                     onChange={(event) => setTaskAssignee(event.target.value)}
                     placeholder="Nome ou e-mail"
+                  />
+                </Field>
+                <Field label="Prazo (h)">
+                  <Input
+                    type="number"
+                    min={1}
+                    step={0.5}
+                    value={taskDueHours}
+                    onChange={(event) => setTaskDueHours(event.target.value)}
                   />
                 </Field>
                 <div className="self-end">
@@ -1120,31 +1136,39 @@ export function OperationWorkflowDialog({
                         title: taskTitle,
                         assignedTo: taskAssignee,
                         followUpMinutes: 30,
+                        dueMinutes: Math.round(Number(taskDueHours || 2) * 60),
                       })
                     }
                   >
-                    Criar atividade
+                    Delegar
                   </Button>
                 </div>
               </div>
               <div className="mt-3 space-y-2">
-                {intelligence.tasks.map((task) => (
+                {intelligence.tasks.map((task) => {
+                  const state = delegatedTaskState(task);
+                  return (
                   <div
                     key={task.id}
-                    className="rounded-lg border border-border bg-background/40 p-3 text-xs"
+                    className={`rounded-lg border p-3 text-xs ${state.kind === "manager" ? "border-red-400/30 bg-red-400/10" : state.kind === "followup" ? "border-amber-400/30 bg-amber-400/10" : "border-border bg-background/40"}`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span>
                         <b>{task.title}</b>
-                        {task.assignedTo
-                          ? ` · ${task.assignedTo}`
-                          : " · equipe"}
+                        {task.acceptedBy
+                          ? ` · responsável ${task.acceptedBy}`
+                          : task.assignedTo
+                            ? ` · sugerido ${task.assignedTo}`
+                            : " · equipe"}
                       </span>
                       <span className="text-muted-foreground">
-                        {task.status} · retorno{" "}
-                        {new Date(task.nextCheckAt).toLocaleString("pt-BR")}
+                        {state.label} · check {new Date(task.nextCheckAt).toLocaleString("pt-BR")}
+                        {task.dueAt ? ` · vence ${new Date(task.dueAt).toLocaleString("pt-BR")}` : ""}
                       </span>
                     </div>
+                    {task.progressNote && (
+                      <p className="mt-1 text-muted-foreground">{task.progressNote}</p>
+                    )}
                     {task.status !== "done" && (
                       <div className="mt-2 flex gap-2">
                         <Button
@@ -1153,7 +1177,7 @@ export function OperationWorkflowDialog({
                           variant="outline"
                           onClick={() => void updateTask(task.id, "accepted")}
                         >
-                          Vou realizar
+                          Aceitar
                         </Button>
                         <Button
                           type="button"
@@ -1163,7 +1187,7 @@ export function OperationWorkflowDialog({
                             void updateTask(task.id, "in_progress")
                           }
                         >
-                          Já entrei em contato
+                          Registrar andamento
                         </Button>
                         <Button
                           type="button"
@@ -1175,10 +1199,11 @@ export function OperationWorkflowDialog({
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
                 {!intelligence.tasks.length && (
                   <p className="text-xs text-muted-foreground">
-                    Nenhuma atividade pendente.
+                    Nenhuma tarefa delegada neste chamado.
                   </p>
                 )}
               </div>

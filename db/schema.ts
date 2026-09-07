@@ -337,6 +337,7 @@ export const operationalTasks = sqliteTable('operational_tasks', {
   status: text('status', { enum: ['open', 'accepted', 'in_progress', 'done', 'cancelled'] }).notNull().default('open'),
   progressNote: text('progress_note'),
   nextCheckAt: text('next_check_at').notNull(),
+  dueAt: text('due_at'),
   createdBy: text('created_by').notNull(),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
