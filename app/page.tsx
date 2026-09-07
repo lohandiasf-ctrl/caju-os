@@ -38,6 +38,7 @@ const nav = [
   ['Central N1', Headphones, '/?view=central', 'central'], ['Equipe N1', Users, '/?view=technicians', 'technicians'], ['Projetos e lojas', Building2, '/?view=projects', 'projects'], ['Spares', PackageOpen, '/spares', 'spares'], ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
 ] as const;
 const dots: Record<Status, string> = { 'Pendente de agendamento': 'bg-violet-400', Agendado: 'bg-blue-400', 'Aguardando spare': 'bg-amber-400', Direcionado: 'bg-cyan-400', 'Técnico em campo': 'bg-emerald-400' };
+const VALIDATION_WHATSAPP_GROUP = 'https://chat.whatsapp.com/DkSDNsDagPrKkxrXyLi4NL';
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   overview: ['Operação em tempo real', 'Visão geral dos chamados', 'Fila, prioridade e execução em uma única visão.'],
   tickets: ['Central de atendimento', 'Chamados operacionais', 'Consulte, filtre e abra cada chamado sem perder contexto.'],
@@ -71,6 +72,10 @@ export default function Home() {
   const [n1Users, setN1Users] = useState<N1User[]>([]);
   const [n1Loading, setN1Loading] = useState(true);
   const [operationOpen, setOperationOpen] = useState(false);
+  const [validationOpen, setValidationOpen] = useState(false);
+  const [validationConfirmed, setValidationConfirmed] = useState(false);
+  const [validationSending, setValidationSending] = useState(false);
+  const [validationNotice, setValidationNotice] = useState('');
   const [archivedKeys, setArchivedKeys] = useState<Set<string>>(() => new Set());
   const [operational, setOperational] = useState<OperationalDashboard | null>(null);
   const [ticketDate, setTicketDate] = useState<Date | undefined>();
@@ -180,6 +185,9 @@ export default function Home() {
     setDetailsVisible(true);
     setWhatsappUrl('');
     setDialogError('');
+    setValidationOpen(false);
+    setValidationConfirmed(false);
+    setValidationNotice('');
     setDialogLoading(true);
     try {
       const token = await user.getIdToken();
@@ -231,6 +239,38 @@ export default function Home() {
         await invoke('open_external_url', { url });
       } else window.open(url, '_blank', 'noopener,noreferrer');
     } catch { window.location.href = url; }
+  }
+
+  const validationRequirements = useMemo(() => {
+    const missing: string[] = [];
+    if (!isInServiceStatus(details?.status ?? selected?.rawStatus ?? '')) missing.push('status Técnico em campo');
+    if (!details?.operationalFields.ticketTotal?.trim()) missing.push('valores salvos');
+    if (!(details?.attachments?.length ?? 0)) missing.push('ao menos uma evidência');
+    return missing;
+  }, [details, selected]);
+  const validationReady = Boolean(details) && validationRequirements.length === 0;
+
+  async function sendForValidation() {
+    if (!details || !validationConfirmed || !validationReady) return;
+    const text = `Podem validar, por favor?\n${details.jiraUrl}`;
+    setValidationSending(true);
+    try {
+      if ('__TAURI_INTERNALS__' in window) {
+        const copied = await copyToClipboard(text);
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('open_external_url', { url: VALIDATION_WHATSAPP_GROUP });
+        setValidationNotice(copied ? 'Grupo de validação aberto e mensagem copiada. Cole e envie no WhatsApp.' : 'Grupo de validação aberto. Copie o link do Jira acima e envie no WhatsApp.');
+      } else {
+        window.open(VALIDATION_WHATSAPP_GROUP, '_blank', 'noopener,noreferrer');
+        const copied = await copyToClipboard(text);
+        setValidationNotice(copied ? 'Grupo de validação aberto e mensagem copiada. Cole e envie no WhatsApp.' : 'Grupo de validação aberto. Copie o link do Jira acima e envie no WhatsApp.');
+      }
+      setValidationOpen(false);
+    } catch {
+      setValidationNotice('Não foi possível abrir o grupo de validação. Tente novamente.');
+    } finally {
+      setValidationSending(false);
+    }
   }
 
   function navigate(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
@@ -337,13 +377,26 @@ export default function Home() {
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => setDetailsVisible((value) => !value)} disabled={!details}><Eye className="size-5 text-blue-300" /><span><span className="block font-bold">{detailsVisible ? 'Ocultar detalhes' : 'Ver detalhes'}</span><span className="block text-xs font-normal text-muted-foreground">Editar e sincronizar com o Jira</span></span></Button>
             {role !== 'n1' && selected && <Button type="button" variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => void openJira()}><ExternalLink className="size-5 text-primary" /><span><span className="block font-bold">Abrir no Jira</span><span className="block text-xs font-normal text-muted-foreground">Chamado original</span></span></Button>}
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" render={<a href={whatsappUrl || '#'} target="_blank" rel="noreferrer" aria-disabled={!whatsappUrl} />} disabled={!whatsappUrl}><MessageCircle className="size-5 text-emerald-400" /><span><span className="block font-bold">Abrir WhatsApp</span><span className="block text-xs font-normal text-muted-foreground">{whatsappUrl ? 'Ir para o grupo' : 'Link não cadastrado'}</span></span></Button>
+            <Button type="button" variant="outline" className="h-auto min-h-16 justify-start gap-3 border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50" onClick={() => { setValidationConfirmed(false); setValidationOpen(true); }} disabled={!validationReady} aria-describedby="validation-requirements"><ShieldCheck className="size-5 text-emerald-300" /><span><span className="block font-bold">Enviar para validação</span><span className="block text-xs font-normal text-muted-foreground">{validationReady ? 'Enviar link ao grupo de validação' : `Falta: ${validationRequirements.join(', ')}`}</span></span></Button>
             <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => selected && setTicketToShare({ id: selected.id, title: selected.title, store: selected.store, city: selected.city })} disabled={!selected}><Users className="size-5 text-violet-300" /><span><span className="block font-bold">Enviar por chat</span><span className="block text-xs font-normal text-muted-foreground">Compartilhar com colega</span></span></Button>
             {role !== 'n1' && <Button variant="outline" className="h-auto min-h-16 justify-start gap-3 p-3 text-left" onClick={() => setOperationOpen(true)} disabled={!selected}><Wrench className="size-5 text-amber-300" /><span><span className="block font-bold">Gerir operação</span><span className="block text-xs font-normal text-muted-foreground">Agenda, spare e pagamento</span></span></Button>}
           </div>
+          <p id="validation-requirements" className={`text-xs ${validationReady ? 'text-emerald-200' : 'text-muted-foreground'}`} role="status">{validationNotice || (validationReady ? 'Pronto para solicitar a validação da equipe.' : 'O envio é liberado somente após concluir os requisitos informados no botão.')}</p>
           {role === 'n1' && selected && <N1TicketActions ticketKey={selected.id} user={user} />}
           {detailsVisible && details && <><section className="rounded-xl border border-border bg-muted/30 p-4"><div className="grid gap-3 text-sm sm:grid-cols-2"><Detail label="Status" value={details.status} /><Detail label="Prioridade" value={details.priority} /><Detail label="Responsável" value={details.assignee || 'Não atribuído'} /><Detail label="Solicitante" value={details.reporter || 'Não informado'} /><Detail label="Tipo" value={details.issueType || 'Não informado'} /><Detail label="Criado em" value={formatDate(details.createdAt)} /></div></section><JiraTicketDetails details={details} user={user} onUpdated={(updated) => { const next = updated as JiraDetails; setDetails(next); setTickets((current) => current.map((ticket) => ticket.id === next.key ? toTicket(next) : ticket)); }} /></>}
           {(role === 'analista' || role === 'gerencia') && <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4"><div className="flex items-center gap-2"><MessageCircle className="size-5 text-emerald-400" /><div><h3 className="text-sm font-bold">Grupo do WhatsApp</h3><p className="text-xs text-muted-foreground">Cole o link de convite deste chamado.</p></div></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input type="url" value={whatsappUrl} onChange={(event) => setWhatsappUrl(event.target.value)} placeholder="https://chat.whatsapp.com/..." className="flex-1" /><Button onClick={() => void saveWhatsappLink()} disabled={linkSaving || !whatsappUrl.trim()}>{linkSaving ? <Loader2 className="animate-spin" /> : <Save />} Salvar link</Button></div></section>}
         </div>}
+      </DialogContent>
+    </Dialog>
+    <Dialog open={validationOpen} onOpenChange={(open) => { setValidationOpen(open); if (!open) setValidationConfirmed(false); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>Enviar para validação</DialogTitle><DialogDescription>Confirme a conferência antes de abrir o grupo de validação.</DialogDescription></DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-sm"><p className="font-semibold text-emerald-200">Mensagem preparada</p><p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">Podem validar, por favor?{'\n'}{details?.jiraUrl}</p></div>
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/25 p-3 text-sm transition hover:bg-muted/45"><input type="checkbox" checked={validationConfirmed} onChange={(event) => setValidationConfirmed(event.target.checked)} className="mt-0.5 size-4 shrink-0 accent-primary" /><span>Confirmo que o funcionário preencheu todos os dados, atualizou os valores e anexou as evidências do chamado.</span></label>
+          <p className="text-xs text-muted-foreground">O grupo será aberto com a mensagem copiada para a área de transferência, pronta para enviar.</p>
+          <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setValidationOpen(false)}>Cancelar</Button><Button type="button" onClick={() => void sendForValidation()} disabled={!validationConfirmed || validationSending}>{validationSending ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {validationSending ? 'Preparando...' : 'Abrir grupo e enviar'}</Button></div>
+        </div>
       </DialogContent>
     </Dialog>
     {selected && <OperationWorkflowDialog open={operationOpen} ticket={selected} role={role} user={user} onOpenChange={setOperationOpen} onArchived={(ticketKey) => { setArchivedKeys((current) => new Set([...current, ticketKey])); setOperationOpen(false); setSelected(null); }} />}
@@ -499,6 +552,25 @@ function formatTime(date: Date) { return new Intl.DateTimeFormat('pt-BR', { hour
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function isInServiceStatus(value: string) {
+  const normalized = normalizeText(value);
+  return normalized.includes('tec-campo') || normalized.includes('tecnico em campo') || normalized.includes('em atendimento');
+}
+
+async function copyToClipboard(value: string) {
+  if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(value); return true; }
+  const field = document.createElement('textarea');
+  field.value = value;
+  field.setAttribute('readonly', '');
+  field.style.position = 'fixed';
+  field.style.opacity = '0';
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand('copy');
+  field.remove();
+  return copied;
 }
 
 function normalizePerson(value: string) {
