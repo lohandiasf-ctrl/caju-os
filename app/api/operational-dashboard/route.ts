@@ -32,7 +32,10 @@ export async function GET(request: Request) {
       if (workflow.clientValueCents && margin <= workflow.clientValueCents * .15 && now - Date.parse(workflow.createdAt) >= 24 * 3_600_000) return [{ ticketKey: workflow.ticketKey, level: 'warning', message: 'Baixa lucratividade: confirmar outras pendências da loja' }];
       return [];
     });
-    for (const task of tasks) if (task.status !== 'done' && task.status !== 'cancelled' && Date.parse(task.nextCheckAt) <= now) alerts.push({ ticketKey: task.ticketKey ?? 'EQUIPE', level: 'warning', message: `Atualização pendente: ${task.title}` });
+    for (const task of tasks) if (task.status !== 'done' && task.status !== 'cancelled' && Date.parse(task.nextCheckAt) <= now) {
+      const overdueMinutes = Math.floor((now - Date.parse(task.nextCheckAt)) / 60_000);
+      alerts.push({ ticketKey: task.ticketKey ?? 'EQUIPE', level: overdueMinutes >= 30 ? 'critical' : 'warning', message: overdueMinutes >= 30 ? `Gerência: atividade vencida sem retorno · ${task.title}` : `Atualização pendente: ${task.title}` });
+    }
     for (const shipment of shipments) if (shipment.expectedAt && Date.parse(shipment.expectedAt) < now && !/entregue|recebido/i.test(shipment.status)) alerts.push({ ticketKey: shipment.ticketKey, level: 'warning', message: `Entrega atrasada: ${shipment.trackingCode}` });
     alerts.sort((a, b) => a.level === b.level ? 0 : a.level === 'critical' ? -1 : 1);
     const active = workflows.filter((item) => !closed.has(item.status));

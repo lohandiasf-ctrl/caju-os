@@ -1,5 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { employeeActivity, operationalTasks, requesterHistory, shipmentTracking, ticketSnapshots } from '@/db/schema';
+import { employeeActivity, operationalAudit, operationalTasks, requesterHistory, shipmentTracking, ticketSnapshots } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 
@@ -9,13 +9,14 @@ export async function GET(request: Request) {
     const ticketKey = clean(new URL(request.url).searchParams.get('ticket'), 100);
     if (!ticketKey) return Response.json({ error: 'Informe chamado.' }, { status: 400 });
     const db = getDb();
-    const [requesters, shipments, tasks, snapshots] = await Promise.all([
+    const [requesters, shipments, tasks, snapshots, audit] = await Promise.all([
       db.select().from(requesterHistory).where(eq(requesterHistory.ticketKey, ticketKey)).orderBy(desc(requesterHistory.createdAt)).all(),
       db.select().from(shipmentTracking).where(eq(shipmentTracking.ticketKey, ticketKey)).orderBy(desc(shipmentTracking.updatedAt)).all(),
       db.select().from(operationalTasks).where(eq(operationalTasks.ticketKey, ticketKey)).orderBy(desc(operationalTasks.updatedAt)).all(),
       db.select({ id: ticketSnapshots.id, actorEmail: ticketSnapshots.actorEmail, reason: ticketSnapshots.reason, createdAt: ticketSnapshots.createdAt }).from(ticketSnapshots).where(eq(ticketSnapshots.ticketKey, ticketKey)).orderBy(desc(ticketSnapshots.createdAt)).limit(30).all(),
+      db.select().from(operationalAudit).where(eq(operationalAudit.ticketKey, ticketKey)).orderBy(desc(operationalAudit.createdAt)).limit(50).all(),
     ]);
-    return Response.json({ requesters, shipments, tasks, snapshots }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ requesters, shipments, tasks, snapshots, audit }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: 'Não foi possível carregar inteligência operacional.' }, { status: 500 });
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
     if (action === 'task') {
       const title = clean(body.title, 500);
       if (!title) return Response.json({ error: 'Descreva a atividade.' }, { status: 400 });
-      const minutes = integer(body.followUpMinutes, 5, 1_440) ?? 15;
+      const minutes = integer(body.followUpMinutes, 5, 1_440) ?? 30;
       await db.insert(operationalTasks).values({ ticketKey, title, assignedTo: clean(body.assignedTo, 180), status: 'open', nextCheckAt: new Date(Date.now() + minutes * 60_000).toISOString(), createdBy: user.email, createdAt: now, updatedAt: now });
       return Response.json({ ok: true });
     }
@@ -73,7 +74,7 @@ export async function PATCH(request: Request) {
     const status = clean(body.status, 30);
     if (!['accepted', 'in_progress', 'done'].includes(status ?? '')) return Response.json({ error: 'Status inválido.' }, { status: 400 });
     const now = new Date().toISOString();
-    await getDb().update(operationalTasks).set({ status: status as 'accepted' | 'in_progress' | 'done', acceptedBy: status === 'accepted' ? user.email : undefined, progressNote: clean(body.progressNote, 1000), nextCheckAt: status === 'done' ? now : new Date(Date.now() + 15 * 60_000).toISOString(), updatedAt: now }).where(eq(operationalTasks.id, id));
+    await getDb().update(operationalTasks).set({ status: status as 'accepted' | 'in_progress' | 'done', acceptedBy: status === 'accepted' ? user.email : undefined, progressNote: clean(body.progressNote, 1000), nextCheckAt: status === 'done' ? now : new Date(Date.now() + 30 * 60_000).toISOString(), updatedAt: now }).where(eq(operationalTasks.id, id));
     return Response.json({ ok: true });
   } catch (error) {
     if (error instanceof Response) return error;

@@ -70,6 +70,8 @@ export async function PUT(request: Request) {
       await enqueueJiraSync(ticketKey, 'transition', { status, scheduledDateTime: scheduledAt, technicianData }, user.email);
     }
     const fields = workflowFields(body, { status, technicianId, scheduledAt, now });
+    const changeReason = clean(body.changeReason, 500) ?? 'Alteração operacional';
+    const changedFields = diffWorkflow(existing, fields);
     let workflowId: number;
     if (existing) {
       await db.insert(ticketSnapshots).values({ ticketKey, actorEmail: user.email, reason: 'Antes da alteração operacional', snapshot: JSON.stringify(existing), createdAt: now });
@@ -79,7 +81,13 @@ export async function PUT(request: Request) {
       const result = await db.insert(operationalWorkflows).values({ ticketKey, ...fields, createdBy: user.email, createdAt: now, updatedAt: now }).returning({ id: operationalWorkflows.id }).get();
       workflowId = result.id;
     }
-    await db.insert(operationalAudit).values({ ticketKey, action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`, actorEmail: user.email, details: JSON.stringify({ before: existing, after: { ...fields, status, technicianId, scheduledAt }, jiraQueued }), createdAt: now });
+    await db.insert(operationalAudit).values({
+      ticketKey,
+      action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`,
+      actorEmail: user.email,
+      details: JSON.stringify({ collaborator: user.email, origin: 'sistema', reason: changeReason, changedAt: now, changes: changedFields, before: existing, after: { ...fields, status, technicianId, scheduledAt }, jiraQueued }),
+      createdAt: now,
+    });
     const requesterName = clean(body.requesterName, 120);
     if (requesterName) {
       const previous = await db.select().from(requesterHistory).where(eq(requesterHistory.ticketKey, ticketKey)).orderBy(asc(requesterHistory.createdAt)).all();
@@ -142,6 +150,13 @@ function dayAfterAtTen(date: string) { const d = new Date(date); d.setDate(d.get
 function workflowFields(body: Record<string, unknown>, base: { status: string; technicianId: number | null; scheduledAt: string | null; now: string }) { return {
   storeCode: clean(body.storeCode, 80), storeName: clean(body.storeName, 180), address: clean(body.address, 400), city: clean(body.city, 100), state: clean(body.state, 10), openedAt: validDate(body.openedAt), category: clean(body.category, 120), pdvNumber: clean(body.pdvNumber, 80), description: clean(body.description, 4000), clientValueCents: cents(body.clientValueCents), payoutCents: cents(body.payoutCents), status: base.status, technicianId: base.technicianId, scheduledAt: base.scheduledAt, expectedReturnAt: validDate(body.expectedReturnAt), validationStatus: clean(body.validationStatus, 80), spareSource: enumValue(body.spareSource, ['Delfia', 'Caju']), spareStatus: clean(body.spareStatus, 100), purchaseStatus: enumValue(body.purchaseStatus, purchaseStatuses), partsValueCents: cents(body.partsValueCents), partsSaleCents: cents(body.partsSaleCents), paymentDate: validDate(body.paymentDate), paidValueCents: cents(body.paidValueCents), pixKey: clean(body.pixKey, 180), bank: clean(body.bank, 100), accountHolder: clean(body.accountHolder, 150), pixKeyType: clean(body.pixKeyType, 60), archivedAt: null,
 }; }
+function diffWorkflow(before: Record<string, unknown> | null | undefined, after: Record<string, unknown>) {
+  return Object.entries(after).flatMap(([field, value]) => {
+    const previous = before?.[field] ?? null;
+    const next = value ?? null;
+    return String(previous ?? '') === String(next ?? '') ? [] : [{ field, previous, next }];
+  });
+}
 function hasFinancialChange(body: Record<string, unknown>) { return ['clientValueCents', 'payoutCents', 'partsValueCents', 'partsSaleCents', 'paidValueCents'].some((key) => typeof body[key] === 'number') || ['paymentDate', 'pixKey', 'bank', 'accountHolder', 'pixKeyType'].some((key) => typeof body[key] === 'string' && Boolean((body[key] as string).trim())) || body.confirmPayment === true; }
 function validStatus(value: unknown) { return typeof value === 'string' && statuses.has(value) ? value : null; }
 function enumValue(value: unknown, values: Set<string> | string[]) { return typeof value === 'string' && (values instanceof Set ? values.has(value) : values.includes(value)) ? value : null; }

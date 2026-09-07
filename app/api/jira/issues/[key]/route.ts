@@ -36,7 +36,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     if (typeof status === 'string') await transitionJiraIssue(key, status, fields);
     if (typeof status !== 'string' && !Object.keys(fields).length) throw new JiraError('Nenhuma alteração foi informada.', 400);
     const after = await getJiraIssue(key);
-    await getDb().insert(operationalAudit).values({ ticketKey: key, action: typeof status === 'string' ? `Jira alterado para ${status}` : 'Campos do Jira atualizados', actorEmail: user.email, details: JSON.stringify({ before: { status: before.status, fields: before.operationalFields }, after: { status: after.status, fields: after.operationalFields } }), createdAt: new Date().toISOString() });
+    const now = new Date().toISOString();
+    await getDb().insert(operationalAudit).values({
+      ticketKey: key,
+      action: typeof status === 'string' ? `Jira alterado para ${status}` : 'Campos do Jira atualizados',
+      actorEmail: user.email,
+      details: JSON.stringify({ collaborator: user.email, origin: 'sistema→Jira', reason: 'Edição direta nos detalhes do chamado', changedAt: now, changes: diffJira({ status: before.status, ...before.operationalFields }, { status: after.status, ...after.operationalFields }), before: { status: before.status, fields: before.operationalFields }, after: { status: after.status, fields: after.operationalFields } }),
+      createdAt: now,
+    });
     return Response.json(after, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
@@ -51,4 +58,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     console.error('Falha ao atualizar chamado do Jira', error);
     return Response.json({ error: 'Não foi possível atualizar o chamado no Jira.' }, { status: 500 });
   }
+}
+
+function diffJira(before: Record<string, unknown>, after: Record<string, unknown>) {
+  return Object.entries(after).flatMap(([field, value]) => {
+    const previous = before[field] ?? null;
+    const next = value ?? null;
+    return String(previous ?? '') === String(next ?? '') ? [] : [{ field, previous, next }];
+  });
 }

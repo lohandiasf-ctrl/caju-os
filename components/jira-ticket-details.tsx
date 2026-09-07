@@ -40,6 +40,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   const [message, setMessage] = useState('');
   const [failed, setFailed] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [fileWarnings, setFileWarnings] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ attachment: JiraAttachment; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -137,11 +138,16 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     if (!user || !selectedFiles.length) return;
     setUploading(true); setMessage(`Enviando ${selectedFiles.length} arquivo(s) ao Jira...`); setFailed(false);
     try {
+      const warnings = await validateEvidenceFiles(selectedFiles);
+      if (warnings.length) {
+        setFileWarnings(warnings);
+        throw new Error('Revise as evidências: há foto escura, ilegível ou pequena demais.');
+      }
       const body = new FormData(); selectedFiles.forEach((file) => body.append('files', file));
       const response = await fetch(`/api/jira/issues/${details.key}/attachments`, { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}` }, body });
       const payload = await response.json() as Details & { error?: string };
       if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar os anexos.');
-      onUpdated(payload); setSelectedFiles([]); setMessage('Evidências anexadas ao Jira.');
+      onUpdated(payload); setSelectedFiles([]); setFileWarnings([]); setMessage('Evidências anexadas ao Jira.');
     } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Não foi possível enviar os anexos.'); }
     finally { setUploading(false); }
   }
@@ -209,7 +215,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
       <TabsContent value="anexos" className="space-y-4 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="flex items-center gap-2 text-sm font-bold"><Paperclip className="size-4 text-primary" />Anexos e evidências</h3><p className="mt-1 text-xs text-muted-foreground">RAT, fotos, vídeos e documentos armazenados no chamado do Jira.</p></div><span className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground">{details.attachments?.length ?? 0} arquivo(s)</span></div>
         <div className="grid gap-3 sm:grid-cols-2">{details.attachments?.map((attachment) => <article key={attachment.id} className="min-w-0 overflow-hidden rounded-xl border border-border bg-background/55"><AttachmentThumbnail issueKey={details.key} attachment={attachment} user={user} onOpen={() => void showPreview(attachment)} /><div className="p-3"><p className="break-words text-sm font-semibold">{attachment.filename}</p><p className="mt-1 text-xs text-muted-foreground">{formatBytes(attachment.size)}{attachment.author ? ` · ${attachment.author}` : ''}{attachment.createdAt ? ` · ${formatAttachmentDate(attachment.createdAt)}` : ''}</p><div className="mt-3 flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void showPreview(attachment)} disabled={previewLoading}><Eye /> Visualizar</Button><Button type="button" size="sm" variant="ghost" onClick={() => void fetchAttachment(attachment, true)} aria-label={`Baixar ${attachment.filename}`}><Download /> Baixar</Button></div></div></article>)}{!details.attachments?.length && <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground sm:col-span-2">Nenhum anexo encontrado neste chamado.</div>}</div>
-        <div className="rounded-xl border border-dashed border-primary/35 bg-primary/5 p-4"><label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/30 bg-background/70 px-4 text-sm font-semibold text-primary transition hover:bg-primary/10"><Upload className="size-4" />Selecionar novas evidências<input type="file" multiple className="sr-only" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onChange={(event) => { setSelectedFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ''; }} /></label>{selectedFiles.length > 0 && <div className="mt-3 space-y-2">{selectedFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs"><Paperclip className="size-3.5 text-primary" /><span className="min-w-0 flex-1 break-words">{file.name} · {formatBytes(file.size)}</span><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-muted" aria-label={`Remover ${file.name}`} onClick={() => setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))}><X className="size-4" /></button></div>)}<Button type="button" className="min-h-11 w-full" onClick={() => void uploadFiles()} disabled={uploading}>{uploading ? <Loader2 className="animate-spin" /> : <Upload />} {uploading ? 'Enviando ao Jira...' : `Enviar ${selectedFiles.length} arquivo(s) ao Jira`}</Button></div>}</div>
+        <div className="rounded-xl border border-dashed border-primary/35 bg-primary/5 p-4"><label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/30 bg-background/70 px-4 text-sm font-semibold text-primary transition hover:bg-primary/10"><Upload className="size-4" />Selecionar novas evidências<input type="file" multiple className="sr-only" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onChange={(event) => { setFileWarnings([]); setSelectedFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ''; }} /></label>{selectedFiles.length > 0 && <div className="mt-3 space-y-2">{fileWarnings.length > 0 && <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-100"><b>Validação das fotos:</b><ul className="mt-1 list-disc space-y-1 pl-5">{fileWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}{selectedFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs"><Paperclip className="size-3.5 text-primary" /><span className="min-w-0 flex-1 break-words">{file.name} · {formatBytes(file.size)}</span><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-muted" aria-label={`Remover ${file.name}`} onClick={() => { setFileWarnings([]); setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}><X className="size-4" /></button></div>)}<Button type="button" className="min-h-11 w-full" onClick={() => void uploadFiles()} disabled={uploading}>{uploading ? <Loader2 className="animate-spin" /> : <Upload />} {uploading ? 'Enviando ao Jira...' : `Validar e enviar ${selectedFiles.length} arquivo(s) ao Jira`}</Button></div>}</div>
       </TabsContent>
     </Tabs>
     {preview && <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Visualização de ${preview.attachment.filename}`} onMouseDown={(event) => { if (event.currentTarget === event.target) setPreview(null); }}><div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"><header className="flex items-center gap-3 border-b border-border p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{preview.attachment.filename}</p><p className="text-xs text-muted-foreground">{formatBytes(preview.attachment.size)}</p></div><Button type="button" variant="outline" size="sm" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar</Button><Button type="button" variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Fechar visualização"><X /></Button></header><div className="grid min-h-0 flex-1 place-items-center overflow-auto bg-black/40 p-3">{preview.attachment.mimeType.startsWith('image/') ? <img src={preview.url} alt={preview.attachment.filename} className="max-h-[76vh] max-w-full object-contain" /> : preview.attachment.mimeType.startsWith('video/') ? <video src={preview.url} controls autoPlay className="max-h-[76vh] max-w-full" /> : preview.attachment.mimeType === 'application/pdf' ? <iframe src={preview.url} title={preview.attachment.filename} className="h-[76vh] w-full rounded-lg bg-white" /> : <div className="max-w-md text-center"><FileText className="mx-auto size-12 text-primary" /><p className="mt-3 text-sm">Este arquivo não possui visualização no navegador.</p><Button type="button" className="mt-4" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar arquivo</Button></div>}</div></div></div>}
@@ -240,3 +246,35 @@ function formatBytes(value: number) { if (!value) return 'Tamanho não informado
 function formatAttachmentDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date); }
 function jiraNumber(value?: string) { if (!value) return 0; const normalized = value.trim().replace(/[^\d,.-]/g, ''); const decimalComma = normalized.lastIndexOf(',') > normalized.lastIndexOf('.'); const parsed = Number(decimalComma ? normalized.replace(/\./g, '').replace(',', '.') : normalized.replace(/,/g, '')); return Number.isFinite(parsed) ? parsed : 0; }
 function formatCurrency(value: number) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); }
+async function validateEvidenceFiles(files: File[]) {
+  const warnings: string[] = [];
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue;
+    const quality = await inspectImageQuality(file).catch(() => null);
+    if (!quality) continue;
+    if (quality.width < 700 || quality.height < 500) warnings.push(`${file.name}: resolução baixa (${quality.width}x${quality.height}).`);
+    if (quality.brightness < 38) warnings.push(`${file.name}: foto muito escura.`);
+    if (quality.contrast < 22) warnings.push(`${file.name}: contraste baixo, pode ficar ilegível.`);
+  }
+  return warnings;
+}
+async function inspectImageQuality(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return { width: bitmap.width, height: bitmap.height, brightness: 100, contrast: 100 };
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+  let sum = 0; let sumSquares = 0; let count = 0;
+  for (let index = 0; index < data.length; index += 16) {
+    const luminance = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+    sum += luminance; sumSquares += luminance * luminance; count += 1;
+  }
+  const brightness = sum / Math.max(1, count);
+  const variance = sumSquares / Math.max(1, count) - brightness * brightness;
+  return { width: bitmap.width, height: bitmap.height, brightness, contrast: Math.sqrt(Math.max(0, variance)) };
+}

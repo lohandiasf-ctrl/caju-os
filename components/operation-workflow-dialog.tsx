@@ -2,14 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  BookOpen,
+  Brain,
   CalendarClock,
   CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
   History,
   Loader2,
+  MapPin,
   PackageOpen,
   Save,
+  ShieldCheck,
   Store,
   TrendingUp,
   Truck,
@@ -25,7 +29,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type Technician = { id: number; name: string; city: string; state: string };
+type Technician = {
+  id: number;
+  name: string;
+  city: string;
+  state: string;
+  status?: string;
+  approved?: boolean;
+  availableTools?: string | null;
+  specialties?: string | null;
+  extraCities?: string | null;
+};
 type Props = {
   open: boolean;
   ticket: {
@@ -72,6 +86,13 @@ type Intelligence = {
     id: number;
     actorEmail: string;
     reason: string;
+    createdAt: string;
+  }>;
+  audit?: Array<{
+    id: number;
+    action: string;
+    actorEmail: string;
+    details: string | null;
     createdAt: string;
   }>;
 };
@@ -128,6 +149,7 @@ const initial = (ticket: Props["ticket"]): Form => ({
   identifiedProblem: "",
   testsPerformed: "",
   partToReplace: "",
+  changeReason: "",
 });
 
 export function OperationWorkflowDialog({
@@ -160,6 +182,7 @@ export function OperationWorkflowDialog({
     shipments: [],
     tasks: [],
     snapshots: [],
+    audit: [],
   });
   const [trackingCode, setTrackingCode] = useState("");
   const [trackingSource, setTrackingSource] = useState<"Delfia" | "Caju">(
@@ -508,6 +531,22 @@ export function OperationWorkflowDialog({
       : margin <= 0
         ? "Baixa lucratividade · validar outras pendências em até 24h"
         : "Margem regular";
+  const selectedTechnician = technicians.find(
+    (tech) => tech.id === Number(form.technicianId),
+  );
+  const recommendedTechnicians = recommendTechnicians(technicians, {
+    city: String(form.city ?? ticket.city ?? ""),
+    state: String(form.state ?? ""),
+    category: String(form.category ?? ticket.title ?? ""),
+    priority:
+      margin > 0 && margin >= Number(form.clientValueCents ?? 0) * 0.35
+        ? "alta"
+        : margin <= 0
+          ? "baixa"
+          : "normal",
+    marginCents: margin,
+  }).slice(0, 3);
+  const articles = knowledgeArticles(String(form.category ?? ""), ticket.title);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] flex-col overflow-hidden sm:max-w-4xl">
@@ -611,6 +650,125 @@ export function OperationWorkflowDialog({
                 }).format(margin / 100)}
               </output>
             </section>
+            <Section icon={Brain} title="Central inteligente do chamado">
+              <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Melhor técnico calculado
+                    </h4>
+                    {selectedTechnician && (
+                      <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
+                        Selecionado: {selectedTechnician.name}
+                      </span>
+                    )}
+                  </div>
+                  {recommendedTechnicians.map((item, index) => (
+                    <button
+                      key={item.tech.id}
+                      type="button"
+                      onClick={() => {
+                        set("technicianId", item.tech.id);
+                        setTechnicianQuery(item.tech.name);
+                      }}
+                      className="w-full rounded-xl border border-border bg-background/45 p-3 text-left transition hover:border-primary/50 hover:bg-primary/5"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">
+                            {index === 0 ? "⭐ " : ""}
+                            {item.tech.name}
+                          </p>
+                          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <MapPin className="size-3.5" />
+                            {item.tech.city}/{item.tech.state}
+                            {item.tech.status ? ` · ${item.tech.status}` : ""}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
+                          {item.score}/100
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {item.reasons.join(" · ")}
+                      </p>
+                    </button>
+                  ))}
+                  {!recommendedTechnicians.length && (
+                    <p className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
+                      Cadastre/importe técnicos para ativar a recomendação automática.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    Artigos e checklists sugeridos
+                  </h4>
+                  {articles.map((article) => (
+                    <details
+                      key={article.title}
+                      className="rounded-xl border border-border bg-background/45 p-3"
+                    >
+                      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold">
+                        <BookOpen className="size-4 text-primary" />
+                        {article.title}
+                      </summary>
+                      <ul className="mt-2 space-y-1 pl-6 text-xs text-muted-foreground">
+                        {article.steps.map((step) => (
+                          <li key={step} className="list-disc">
+                            {step}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-border bg-background/35 p-3">
+                <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  <ShieldCheck className="size-4 text-primary" />
+                  Auditoria detalhada
+                </h4>
+                <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {intelligence.audit?.slice(0, 8).map((item) => {
+                    const details = parseAuditDetails(item.details);
+                    return (
+                      <article
+                        key={item.id}
+                        className="rounded-lg border border-border bg-black/10 p-3 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <b>{item.action}</b>
+                          <span className="text-muted-foreground">
+                            {new Date(item.createdAt).toLocaleString("pt-BR")}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          Colaborador: {details.collaborator || item.actorEmail} · origem: {details.origin || "sistema"} · motivo: {details.reason || "não informado"}
+                        </p>
+                        {!!details.changes.length && (
+                          <div className="mt-2 space-y-1">
+                            {details.changes.slice(0, 6).map((change) => (
+                              <p key={change.field} className="rounded bg-background/60 px-2 py-1">
+                                <b>{fieldLabel(change.field)}:</b>{" "}
+                                <span className="text-red-200">{formatAuditValue(change.previous)}</span>{" "}
+                                →{" "}
+                                <span className="text-emerald-200">{formatAuditValue(change.next)}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                  {!intelligence.audit?.length && (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhuma alteração auditada ainda.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Section>
             <Section icon={Store} title="Loja e solicitantes">
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Código da loja">
@@ -961,7 +1119,7 @@ export function OperationWorkflowDialog({
                       void saveIntelligence("task", {
                         title: taskTitle,
                         assignedTo: taskAssignee,
-                        followUpMinutes: 15,
+                        followUpMinutes: 30,
                       })
                     }
                   >
@@ -1119,6 +1277,13 @@ export function OperationWorkflowDialog({
                 placeholder="Problema, serviço, pendências e instruções."
               />
             </Field>
+            <Field label="Motivo da alteração">
+              <Input
+                value={String(form.changeReason ?? "")}
+                onChange={(event) => set("changeReason", event.target.value)}
+                placeholder="Ex.: agendamento confirmado com gerente, ajuste vindo do Jira, correção de valor"
+              />
+            </Field>
             <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
               <Button
                 type="button"
@@ -1235,4 +1400,179 @@ function localStatus(value = "") {
     return "in_service";
   if (status.includes("spare")) return "awaiting_spare";
   return "triage";
+}
+
+function recommendTechnicians(
+  technicians: Technician[],
+  ticket: {
+    city: string;
+    state: string;
+    category: string;
+    priority: "alta" | "normal" | "baixa";
+    marginCents: number;
+  },
+) {
+  const city = normalize(ticket.city);
+  const state = normalize(ticket.state);
+  const category = normalize(ticket.category);
+  const profitable = ticket.priority === "alta" || ticket.marginCents > 0;
+  return technicians
+    .map((tech) => {
+      let score = 30;
+      const reasons: string[] = [];
+      const techCity = normalize(tech.city);
+      const techState = normalize(tech.state);
+      const specialties = normalize(tech.specialties ?? "");
+      const tools = normalize(tech.availableTools ?? "");
+      const extraCities = normalize(tech.extraCities ?? "");
+      if (techCity && city && techCity === city) {
+        score += 28;
+        reasons.push("mesma cidade");
+      } else if (city && extraCities.includes(city)) {
+        score += 20;
+        reasons.push("atende a região");
+      } else if (techState && state && techState === state) {
+        score += 12;
+        reasons.push("mesmo estado");
+      }
+      if (tech.status === "online") {
+        score += 18;
+        reasons.push("disponível agora");
+      } else if (tech.status === "busy") {
+        score -= 10;
+        reasons.push("ocupado");
+      } else if (tech.status === "offline") {
+        score -= 18;
+        reasons.push("offline");
+      }
+      if (tech.approved) {
+        score += 8;
+        reasons.push("aprovado");
+      }
+      if (matchesSpecialty(category, specialties)) {
+        score += 16;
+        reasons.push("especialidade compatível");
+      }
+      if (matchesTools(category, tools)) {
+        score += 10;
+        reasons.push("ferramentas adequadas");
+      }
+      if (profitable && score >= 60) {
+        score += 6;
+        reasons.push("prioridade por lucro");
+      }
+      if (!reasons.length) reasons.push("candidato geral");
+      return { tech, score: Math.max(0, Math.min(100, score)), reasons };
+    })
+    .sort((a, b) => b.score - a.score || a.tech.name.localeCompare(b.tech.name, "pt-BR"));
+}
+
+function knowledgeArticles(category: string, title: string) {
+  const text = normalize(`${category} ${title}`);
+  const base = [
+    {
+      title: "Testes obrigatórios por categoria",
+      steps: [
+        "Confirmar equipamento, PDV e sintoma informado pela loja.",
+        "Registrar teste feito, resultado e evidência antes de mudar etapa.",
+        "Se houver troca de peça, preencher a peça exata e anexar foto/RAT.",
+      ],
+    },
+    {
+      title: "Procedimento de RAT",
+      steps: [
+        "Conferir data, loja, técnico, assinatura e descrição do serviço.",
+        "Anexar RAT legível como evidência interna do chamado.",
+        "Validar se a descrição bate com o resumo técnico enviado ao Jira.",
+      ],
+    },
+    {
+      title: "Como preencher campos do Jira",
+      steps: [
+        "Problema identificado: causa encontrada, não só o sintoma.",
+        "Testes feitos: passos objetivos realizados pelo técnico/N1.",
+        "Peça a ser trocada: modelo ou 'não se aplica' quando não houver troca.",
+      ],
+    },
+  ];
+  if (/cpu|pdv|trav|lent|deslig|performance/.test(text)) {
+    return [
+      {
+        title: "Como resolver CPU travando",
+        steps: [
+          "Verificar inicialização, uso de CPU/memória e espaço em disco.",
+          "Testar reinício controlado, periféricos e comunicação com PDV/self-checkout.",
+          "Se persistir, registrar logs/foto e indicar peça ou reinstalação necessária.",
+        ],
+      },
+      ...base,
+    ];
+  }
+  if (/impress|scanner|leitor|pinpad|tef/.test(text)) {
+    return [
+      {
+        title: "Quando trocar determinada peça",
+        steps: [
+          "Trocar só após teste cruzado com cabo/fonte/porta funcional.",
+          "Registrar serial/modelo da peça atual e evidência do defeito.",
+          "Preencher peça a ser trocada antes de enviar para validação.",
+        ],
+      },
+      ...base,
+    ];
+  }
+  return base;
+}
+
+function matchesSpecialty(category: string, specialties: string) {
+  if (!category || !specialties) return false;
+  return category
+    .split(/\s+/)
+    .filter((word) => word.length > 3)
+    .some((word) => specialties.includes(word));
+}
+
+function matchesTools(category: string, tools: string) {
+  if (!category || !tools) return false;
+  if (/rede|cabo|switch/.test(category)) return /alicate|rede|testador|crimp/.test(tools);
+  if (/cpu|pdv|desktop|hardware/.test(category)) return /chave|multimetro|format|pendrive|ssd|memoria/.test(tools);
+  if (/impress|scanner/.test(category)) return /limpeza|chave|multimetro|usb/.test(tools);
+  return false;
+}
+
+function normalize(value: string) {
+  return value.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function parseAuditDetails(value: string | null) {
+  if (!value) return { collaborator: "", origin: "", reason: "", changes: [] as Array<{ field: string; previous: unknown; next: unknown }> };
+  try {
+    const data = JSON.parse(value) as { collaborator?: string; origin?: string; reason?: string; changes?: Array<{ field: string; previous: unknown; next: unknown }> };
+    return { collaborator: data.collaborator ?? "", origin: data.origin ?? "", reason: data.reason ?? "", changes: Array.isArray(data.changes) ? data.changes : [] };
+  } catch {
+    return { collaborator: "", origin: "", reason: "", changes: [] as Array<{ field: string; previous: unknown; next: unknown }> };
+  }
+}
+
+function fieldLabel(field: string) {
+  return ({
+    status: "Etapa",
+    technicianId: "Técnico",
+    scheduledAt: "Agendamento",
+    expectedReturnAt: "Retorno previsto",
+    clientValueCents: "Valor recebido",
+    payoutCents: "Repasse técnico",
+    partsValueCents: "Valor de peças",
+    partsSaleCents: "Venda de peças",
+    storeCode: "Código da loja",
+    storeName: "Nome da loja",
+    category: "Categoria",
+    description: "Descrição",
+  } as Record<string, string>)[field] ?? field;
+}
+
+function formatAuditValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "vazio";
+  if (typeof value === "number" && /Cents$/.test(String(value))) return String(value);
+  return String(value).slice(0, 80);
 }
