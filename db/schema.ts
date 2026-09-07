@@ -280,3 +280,24 @@ export const operationalAudit = sqliteTable('operational_audit', {
   details: text('details'),
   createdAt: text('created_at').notNull(),
 }, (table) => [index('idx_operational_audit_ticket').on(table.ticketKey, table.createdAt)]);
+
+// Durable outbox for Jira writes. Failed transient requests are retried from the
+// administration screen without losing the user's operation.
+export const jiraSyncJobs = sqliteTable('jira_sync_jobs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  issueKey: text('issue_key').notNull(),
+  operation: text('operation', { enum: ['update', 'transition'] }).notNull(),
+  payload: text('payload').notNull(),
+  status: text('status', { enum: ['pending', 'processing', 'succeeded', 'failed'] }).notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  idempotencyKey: text('idempotency_key').notNull(),
+  actorEmail: text('actor_email').notNull(),
+  lastError: text('last_error'),
+  nextAttemptAt: text('next_attempt_at').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_jira_sync_jobs_idempotency').on(table.idempotencyKey),
+  index('idx_jira_sync_jobs_status_next').on(table.status, table.nextAttemptAt),
+  index('idx_jira_sync_jobs_issue').on(table.issueKey, table.createdAt),
+]);

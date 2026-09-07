@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Building2, CalendarClock, CalendarDays, CircleDollarSign, ClipboardList, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map as MapIcon, MapPin, Menu, MessageCircle, PackageOpen, Plus, Save, Search, Settings, ShieldCheck, Star, Users, Wrench, X } from 'lucide-react';
+import { Activity, Bell, Building2, CalendarClock, CalendarDays, CircleDollarSign, ClipboardList, DatabaseBackup, Download, ExternalLink, Eye, Filter, Headphones, LayoutDashboard, List, Loader2, Map as MapIcon, MapPin, Menu, MessageCircle, PackageOpen, Plus, RefreshCw, Save, Search, Settings, ShieldCheck, Star, Users, Wrench, X } from 'lucide-react';
 import { ptBR } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -244,8 +244,12 @@ export default function Home() {
   const validationRequirements = useMemo(() => {
     const missing: string[] = [];
     if (!isInServiceStatus(details?.status ?? selected?.rawStatus ?? '')) missing.push('status Técnico em campo');
-    if (!details?.operationalFields.ticketTotal?.trim()) missing.push('valores salvos');
+    if (!(Number(String(details?.operationalFields.ticketTotal ?? '').replace(',', '.')) > 0)) missing.push('valores salvos');
     if (!(details?.attachments?.length ?? 0)) missing.push('ao menos uma evidência');
+    const summary = parseDefectSummary(details?.operationalFields.defectSummary ?? '');
+    if (!summary.identifiedProblem) missing.push('problema identificado');
+    if (!summary.testsPerformed) missing.push('testes feitos');
+    if (!summary.partToReplace) missing.push('peça a ser trocada');
     return missing;
   }, [details, selected]);
   const validationReady = Boolean(details) && validationRequirements.length === 0;
@@ -255,6 +259,10 @@ export default function Home() {
     const text = `Podem validar, por favor?\n${details.jiraUrl}`;
     setValidationSending(true);
     try {
+      if (!user) throw new Error('Sessão indisponível.');
+      const validationResponse = await fetch(`/api/jira/issues/${details.key}/validation`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      const validation = await validationResponse.json() as { ready?: boolean; missing?: string[]; error?: string };
+      if (!validationResponse.ok || !validation.ready) throw new Error(validation.error || `Ainda falta: ${(validation.missing ?? []).join(', ')}.`);
       if ('__TAURI_INTERNALS__' in window) {
         const { invoke } = await import('@tauri-apps/api/core');
         const copied = await invoke<boolean>('copy_to_clipboard', { text });
@@ -266,8 +274,8 @@ export default function Home() {
         setValidationNotice(copied ? 'Grupo de validação aberto e mensagem copiada. Cole e envie no WhatsApp.' : 'Grupo de validação aberto. Copie o link do Jira acima e envie no WhatsApp.');
       }
       setValidationOpen(false);
-    } catch {
-      setValidationNotice('Não foi possível abrir o grupo de validação. Tente novamente.');
+    } catch (error) {
+      setValidationNotice(error instanceof Error ? error.message : 'Não foi possível abrir o grupo de validação. Tente novamente.');
     } finally {
       setValidationSending(false);
     }
@@ -502,7 +510,22 @@ function SettingsView({ email, role, jiraError, user }: { email: string; role: s
   const [importing, setImporting] = useState(false); const [importMessage, setImportMessage] = useState(''); const [inviteEmail, setInviteEmail] = useState(''); const [inviteRole, setInviteRole] = useState<'gerencia'|'n1'|'analista'>('n1'); const [inviteMessage, setInviteMessage] = useState('');
   async function inviteEmployee() { if (!user || !inviteEmail) return; setInviteMessage('Enviando...'); const response = await fetch('/api/users/invite', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: inviteEmail, role: inviteRole }) }); const payload = await response.json() as { error?: string }; setInviteMessage(response.ok ? 'Convite enviado por e-mail.' : (payload.error ?? 'Falha ao enviar convite.')); if (response.ok) setInviteEmail(''); }
   async function importFile(file: File) { if (!user) return; setImporting(true); setImportMessage(''); try { const text = await readCsvText(file); const lines = text.split(/\r?\n/).filter(Boolean); const headers = splitCsv(lines.shift() ?? ';').map(normalizeHeader); const rows = lines.map((line) => { const values = splitCsv(line); const row = Object.fromEntries(headers.map((header, i) => [header, values[i] ?? ''])); return { technicianExternalId: row.idtecnico, technicianCode: row.codigotec, name: row.nome ?? row.nomecompleto ?? row.tecnico, cpf: row.cpf, phone: row.whatsapptelefone ?? row.telefone, email: row.email, pixKey: row.chavepix, age: row.idade, city: row.cidade, state: normalizeState(row.uf ?? row.estado), fullAddress: row.enderecocompleto, sourceStatus: row.status, onboardingCompleted: row.onboardingconcluido, approved: /sim|yes|true|ativo/i.test(row.onboardingconcluido ?? ''), hasVehicle: row.possuiveiculo, vehicleType: row.tipodeveiculo, alternativeTransport: row.transportealternativo, servesOtherCities: row.atendeoutrascidades, extraCities: row.cidadesatendidasextras, toolsCount: row.qtdferramentas, availableTools: row.ferramentasdisponiveis, specialtiesCount: row.qtdespecialidades, specialties: row.especialidadesareasdedominio }; }).filter((row) => row.name && row.city && row.state); const response = await fetch('/api/technicians/import', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) }); const payload = await response.json() as { imported?: number; error?: string }; if (!response.ok) throw new Error(payload.error); setImportMessage(`${payload.imported ?? 0} técnicos importados com sucesso.`); } catch (error) { setImportMessage(error instanceof Error ? error.message : 'Falha ao importar planilha.'); } finally { setImporting(false); } }
-  return <div className="mt-6 grid gap-4 lg:grid-cols-2"><ProfileSettings />{role === 'gerencia' && <><section className="surface-panel rounded-2xl p-5"><h2 className="font-semibold">Conta e acesso</h2><div className="mt-4 space-y-3"><Detail label="E-mail" value={email} /><Detail label="Perfil" value="Gerência" /></div></section><section className="surface-panel rounded-2xl p-5"><h2 className="font-semibold">Integrações</h2><div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-black/10 p-4"><div><p className="text-sm font-medium">Jira Service Management</p><p className="text-xs text-muted-foreground">Sincronização de chamados FSA</p></div><Badge variant="outline" className={jiraError ? 'border-amber-400/30 text-amber-200' : 'border-emerald-400/30 text-emerald-200'}>{jiraError ? 'Atenção' : 'Conectado'}</Badge></div></section><section className="surface-panel rounded-2xl p-5 lg:col-span-2"><h2 className="font-semibold">Alimentar banco de técnicos</h2><p className="mt-1 text-sm text-muted-foreground">Importa todos os campos da planilha: cadastro, contato, endereço, veículo, cidades, ferramentas e especialidades. CSV UTF-8 e Windows-1252 suportados; reenvie a planilha para corrigir nomes já importados.</p><label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm font-semibold hover:bg-primary/10">Selecionar planilha: {importing ? 'Importando...' : 'CSV'}<input className="sr-only" type="file" accept=".csv,text/csv" disabled={importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFile(file); event.currentTarget.value = ''; }} /></label>{importMessage && <p className="mt-3 text-sm text-muted-foreground">{importMessage}</p>}</section></>}</div>;
+  return <div className="mt-6 grid gap-4 lg:grid-cols-2"><ProfileSettings />{role === 'gerencia' && <><section className="surface-panel rounded-2xl p-5"><h2 className="font-semibold">Conta e acesso</h2><div className="mt-4 space-y-3"><Detail label="E-mail" value={email} /><Detail label="Perfil" value="Gerência" /></div></section><IntegrationHealthPanel user={user} jiraError={jiraError} /><section className="surface-panel rounded-2xl p-5 lg:col-span-2"><h2 className="font-semibold">Alimentar banco de técnicos</h2><p className="mt-1 text-sm text-muted-foreground">Importa todos os campos da planilha: cadastro, contato, endereço, veículo, cidades, ferramentas e especialidades. CSV UTF-8 e Windows-1252 suportados; reenvie a planilha para corrigir nomes já importados.</p><label className="mt-4 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 text-sm font-semibold hover:bg-primary/10">Selecionar planilha: {importing ? 'Importando...' : 'CSV'}<input className="sr-only" type="file" accept=".csv,text/csv" disabled={importing} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFile(file); event.currentTarget.value = ''; }} /></label>{importMessage && <p className="mt-3 text-sm text-muted-foreground">{importMessage}</p>}</section></>}</div>;
+}
+
+function IntegrationHealthPanel({ user, jiraError }: { user: { getIdToken: () => Promise<string> } | null; jiraError: string }) {
+  type Health = { configured: boolean; pending: number; failed: number; succeeded: number; lastSuccessAt: string | null; processed?: number; error?: string };
+  const [health, setHealth] = useState<Health | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [installedVersion, setInstalledVersion] = useState('Web');
+  const [latestVersion, setLatestVersion] = useState('0.1.12');
+  async function load() { if (!user) return; try { const response = await fetch('/api/admin/jira-sync', { headers: { Authorization: `Bearer ${await user.getIdToken()}` } }); const payload = await response.json() as Health; if (!response.ok) throw new Error(payload.error); setHealth(payload); } catch (error) { setNotice(error instanceof Error ? error.message : 'Falha ao consultar integração.'); } }
+  async function retry() { if (!user) return; setBusy(true); setNotice('Repetindo sincronizações pendentes…'); try { const response = await fetch('/api/admin/jira-sync', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}` } }); const payload = await response.json() as Health; if (!response.ok) throw new Error(payload.error); setHealth(payload); setNotice(`${payload.processed ?? 0} sincronização(ões) processada(s).`); } catch (error) { setNotice(error instanceof Error ? error.message : 'Falha ao repetir sincronizações.'); } finally { setBusy(false); } }
+  async function backup() { if (!user) return; const response = await fetch('/api/admin/export', { headers: { Authorization: `Bearer ${await user.getIdToken()}` } }); if (!response.ok) { setNotice('Não foi possível gerar o backup.'); return; } const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = `caju-os-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url); }
+  useEffect(() => { void load(); void fetch('/api/app-version').then((response) => response.json() as Promise<{ version?: string }>).then((data) => setLatestVersion(data.version ?? '0.1.12')).catch(() => undefined); if ('__TAURI_INTERNALS__' in window) void import('@tauri-apps/api/app').then(({ getVersion }) => getVersion()).then(setInstalledVersion).catch(() => setInstalledVersion('Desktop')); }, [user]);
+  const healthy = !jiraError && health?.configured && !health.failed;
+  return <section className="surface-panel rounded-2xl p-5 lg:col-span-2" aria-labelledby="integration-health-title"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="integration-health-title" className="flex items-center gap-2 font-semibold"><Activity className="size-5 text-primary" aria-hidden="true" />Saúde e continuidade</h2><p className="mt-1 text-sm text-muted-foreground">Fila segura do Jira, recuperação e versão do aplicativo.</p></div><Badge variant="outline" className={healthy ? 'border-emerald-400/30 text-emerald-200' : 'border-amber-400/30 text-amber-200'}>{healthy ? 'Operação saudável' : 'Requer atenção'}</Badge></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><Metric label="Pendentes" value={health?.pending ?? 0} /><Metric label="Falhas para repetir" value={health?.failed ?? 0} /><Metric label="Sincronizadas" value={health?.succeeded ?? 0} /></div><div className="mt-4 flex flex-wrap gap-2"><Button type="button" variant="outline" className="min-h-11" onClick={() => void retry()} disabled={busy || !health?.pending}>{busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}Repetir pendências</Button><Button type="button" variant="outline" className="min-h-11" onClick={() => void backup()}><DatabaseBackup />Baixar backup</Button><Button type="button" variant="outline" className="min-h-11" render={<a href="/downloads/Caju-OS-0.1.12-x64-setup.exe" download />}><Download />Baixar versão {latestVersion}</Button></div><p className="mt-3 text-xs text-muted-foreground" role="status">{notice || `Instalado: ${installedVersion} · Disponível: ${latestVersion}${health?.lastSuccessAt ? ` · Última sincronização: ${formatDate(health.lastSuccessAt)}` : ''}`}</p></section>;
 }
 
 function splitCsv(line: string) { const result: string[] = []; let value = ''; let quoted = false; for (const char of line) { if (char === '"') quoted = !quoted; else if (char === ';' && !quoted) { result.push(value.trim()); value = ''; } else value += char; } result.push(value.trim()); return result; }
@@ -552,6 +575,11 @@ function formatTime(date: Date) { return new Intl.DateTimeFormat('pt-BR', { hour
 
 function normalizeText(value: string) {
   return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function parseDefectSummary(value: string) {
+  const take = (start: string, end?: string) => value.match(new RegExp(`${start}:?\\s*([\\s\\S]*?)${end ? `(?=${end}:?)` : '$'}`, 'i'))?.[1]?.trim() ?? '';
+  return { identifiedProblem: take('PROBLEMA IDENTIFICADO', 'TESTES FEITOS'), testsPerformed: take('TESTES FEITOS', 'PEÇA A SER TROCADA'), partToReplace: take('PEÇA A SER TROCADA') };
 }
 
 function isInServiceStatus(value: string) {

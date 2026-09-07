@@ -3,6 +3,7 @@ import { operationalAudit, operationalStores, operationalVisits, operationalWork
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
+import { enqueueJiraSync, shouldQueueJiraError } from '@/lib/server/jira-sync';
 
 const statuses = new Set(['triage', 'scheduling', 'scheduled', 'operational_preparation', 'in_service', 'technical_pending', 'validated', 'awaiting_approval', 'awaiting_spare', 'spare_validated', 'awaiting_payment', 'resolved', 'archived', 'cancelled']);
 const purchaseStatuses = new Set(['Agendado', 'Cancelado', 'Comprado', 'Delfia', 'Direcionado', 'Encerrado', 'Enviado', 'Fechado', 'Finalizado', 'Indisponível', 'Parceiro Delfia', 'Pendente', 'Recebido', 'Reenviado']);
@@ -42,6 +43,8 @@ export async function PUT(request: Request) {
     const db = getDb();
     const now = new Date().toISOString();
     const status = validStatus(body.status) ?? 'triage';
+    const existing = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, ticketKey)).get();
+    if (user.role === 'tecnico' && existing && status !== existing.status) return Response.json({ error: 'Seu perfil pode preencher o atendimento, mas não alterar a etapa do chamado.' }, { status: 403 });
     const technicianId = validId(body.technicianId);
     const scheduledAt = validDate(body.scheduledAt);
     if (status === 'scheduled' && (!technicianId || !scheduledAt || Date.parse(scheduledAt) <= Date.now())) return bad('Agendado exige técnico e data futura.');
@@ -50,15 +53,23 @@ export async function PUT(request: Request) {
     const technician = technicianId ? await db.select({ name: technicians.name, cpf: technicians.cpf, phone: technicians.phone }).from(technicians).where(eq(technicians.id, technicianId)).get() : null;
     const technicianData = technician ? `Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}` : null;
     const hasTechnicalSummary = [body.identifiedProblem, body.testsPerformed, body.partToReplace].some((value) => typeof value === 'string' && value.trim());
-    await updateJiraIssue(ticketKey, {
+    const jiraFields = {
       ...(present(body.storeCode) ? { storeCode: body.storeCode } : {}), ...(present(body.storeName) ? { storeName: body.storeName } : {}),
       ...(present(body.requesterName) ? { contactName: body.requesterName } : {}), ...(present(body.requesterPhone) ? { contactPhone: body.requesterPhone } : {}),
       ...(scheduledAt ? { preferredServiceTime: scheduledAt, scheduledDateTime: scheduledAt } : {}), ...(technicianData ? { technicianData } : {}), ...(present(body.category) ? { problemCategory: body.category } : {}), ...(present(body.pdvNumber) ? { pdvNumber: body.pdvNumber } : {}),
       ...(hasTechnicalSummary ? { identifiedProblem: body.identifiedProblem, testsPerformed: body.testsPerformed, partToReplace: body.partToReplace } : {}),
-    }, { allowNoop: true });
-    await transitionJiraIssue(ticketKey, status, { scheduledDateTime: scheduledAt, technicianData });
+    };
+    let jiraQueued = false;
+    try {
+      await updateJiraIssue(ticketKey, jiraFields, { allowNoop: true });
+      await transitionJiraIssue(ticketKey, status, { scheduledDateTime: scheduledAt, technicianData });
+    } catch (error) {
+      if (!shouldQueueJiraError(error)) throw error;
+      jiraQueued = true;
+      await enqueueJiraSync(ticketKey, 'update', jiraFields, user.email);
+      await enqueueJiraSync(ticketKey, 'transition', { status, scheduledDateTime: scheduledAt, technicianData }, user.email);
+    }
     const fields = workflowFields(body, { status, technicianId, scheduledAt, now });
-    const existing = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, ticketKey)).get();
     let workflowId: number;
     if (existing) {
       await db.update(operationalWorkflows).set({ ...fields, updatedAt: now }).where(eq(operationalWorkflows.id, existing.id));
@@ -67,7 +78,7 @@ export async function PUT(request: Request) {
       const result = await db.insert(operationalWorkflows).values({ ticketKey, ...fields, createdBy: user.email, createdAt: now, updatedAt: now }).returning({ id: operationalWorkflows.id }).get();
       workflowId = result.id;
     }
-    await db.insert(operationalAudit).values({ ticketKey, action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`, actorEmail: user.email, details: JSON.stringify({ status, technicianId, scheduledAt }), createdAt: now });
+    await db.insert(operationalAudit).values({ ticketKey, action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`, actorEmail: user.email, details: JSON.stringify({ before: existing, after: { ...fields, status, technicianId, scheduledAt }, jiraQueued }), createdAt: now });
     const storeCode = clean(body.storeCode, 80);
     if (storeCode && clean(body.storeName, 180) && clean(body.address, 400) && clean(body.city, 100) && clean(body.state, 10)) {
       await db.insert(operationalStores).values({
@@ -85,7 +96,7 @@ export async function PUT(request: Request) {
     }
     const workflow = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.id, workflowId)).get();
     const visits = await db.select().from(operationalVisits).where(eq(operationalVisits.workflowId, workflowId)).orderBy(asc(operationalVisits.visitNumber)).all();
-    return Response.json({ workflow, visits });
+    return Response.json({ workflow, visits, jiraQueued, notice: jiraQueued ? 'Operação salva. O Jira será atualizado pela fila assim que voltar.' : 'Operação e Jira atualizados.' }, { status: jiraQueued ? 202 : 200 });
   } catch (error) {
     if (error instanceof Response) return error;
     if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });

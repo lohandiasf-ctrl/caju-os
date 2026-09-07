@@ -1,5 +1,9 @@
 import { env } from 'cloudflare:workers';
 
+export function isJiraConfigured() {
+  return Boolean(env.JIRA_BASE_URL?.trim() && env.JIRA_EMAIL?.trim() && env.JIRA_API_TOKEN?.trim());
+}
+
 export type JiraIssueSummary = {
   key: string;
   summary: string;

@@ -92,8 +92,9 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
       const response = await fetch(`/api/jira/issues/${details.key}`, {
         method: 'PATCH', headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(normalizedPatch),
       });
-      const payload = await response.json() as Details & { error?: string };
+      const payload = await response.json() as Details & { error?: string; queued?: boolean };
       if (!response.ok) throw new Error(payload.error || 'Não foi possível atualizar o Jira.');
+      if (payload.queued) { setMessage(payload.error || 'Alteração guardada para sincronização.'); return; }
       onUpdated(payload); setMessage('Atualizado no Jira.');
     } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Não foi possível atualizar o Jira.'); }
     finally { setSavingKey(null); }
