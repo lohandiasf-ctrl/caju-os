@@ -1,5 +1,5 @@
 import { asc, eq } from 'drizzle-orm';
-import { operationalAudit, operationalStores, operationalVisits, operationalWorkflows, technicians } from '@/db/schema';
+import { operationalAudit, operationalStores, operationalVisits, operationalWorkflows, requesterHistory, technicians, ticketSnapshots } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
@@ -50,8 +50,8 @@ export async function PUT(request: Request) {
     if (status === 'scheduled' && (!technicianId || !scheduledAt || Date.parse(scheduledAt) <= Date.now())) return bad('Agendado exige técnico e data futura.');
     if (status === 'operational_preparation' && !technicianId) return bad('Preparação operacional exige técnico.');
     if (user.role !== 'gerencia' && hasFinancialChange(body)) return Response.json({ error: 'Somente gerência altera valores e pagamento.' }, { status: 403 });
-    const technician = technicianId ? await db.select({ name: technicians.name, cpf: technicians.cpf, phone: technicians.phone }).from(technicians).where(eq(technicians.id, technicianId)).get() : null;
-    const technicianData = technician ? `Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}` : null;
+    const technician = technicianId ? await db.select({ name: technicians.name, cpf: technicians.cpf, fullAddress: technicians.fullAddress }).from(technicians).where(eq(technicians.id, technicianId)).get() : null;
+    const technicianData = technician ? `Nome completo: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nEndereço completo: ${technician.fullAddress || 'Não informado'}` : null;
     const hasTechnicalSummary = [body.identifiedProblem, body.testsPerformed, body.partToReplace].some((value) => typeof value === 'string' && value.trim());
     const jiraFields = {
       ...(present(body.storeCode) ? { storeCode: body.storeCode } : {}), ...(present(body.storeName) ? { storeName: body.storeName } : {}),
@@ -72,6 +72,7 @@ export async function PUT(request: Request) {
     const fields = workflowFields(body, { status, technicianId, scheduledAt, now });
     let workflowId: number;
     if (existing) {
+      await db.insert(ticketSnapshots).values({ ticketKey, actorEmail: user.email, reason: 'Antes da alteração operacional', snapshot: JSON.stringify(existing), createdAt: now });
       await db.update(operationalWorkflows).set({ ...fields, updatedAt: now }).where(eq(operationalWorkflows.id, existing.id));
       workflowId = existing.id;
     } else {
@@ -79,6 +80,12 @@ export async function PUT(request: Request) {
       workflowId = result.id;
     }
     await db.insert(operationalAudit).values({ ticketKey, action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`, actorEmail: user.email, details: JSON.stringify({ before: existing, after: { ...fields, status, technicianId, scheduledAt }, jiraQueued }), createdAt: now });
+    const requesterName = clean(body.requesterName, 120);
+    if (requesterName && (!existing || requesterName !== existing.storeName)) {
+      const previous = await db.select().from(requesterHistory).where(eq(requesterHistory.ticketKey, ticketKey)).orderBy(asc(requesterHistory.createdAt)).all();
+      const fingerprint = `${requesterName}|${clean(body.requesterRole, 80) ?? ''}|${clean(body.requesterPhone, 40) ?? ''}`;
+      if (!previous.some((item) => `${item.name}|${item.role ?? ''}|${item.phone ?? ''}` === fingerprint)) await db.insert(requesterHistory).values({ ticketKey, name: requesterName, role: clean(body.requesterRole, 80), phone: clean(body.requesterPhone, 40), recordedBy: user.email, createdAt: now });
+    }
     const storeCode = clean(body.storeCode, 80);
     if (storeCode && clean(body.storeName, 180) && clean(body.address, 400) && clean(body.city, 100) && clean(body.state, 10)) {
       await db.insert(operationalStores).values({

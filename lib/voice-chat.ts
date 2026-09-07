@@ -10,6 +10,7 @@ export type VoiceInvitation = { roomId: string; callerName: string; callerEmail:
 export type VoiceChatEvents = {
   onParticipantsChanged?: (participants: Peer[]) => void;
   onRemoteStream?: (socketId: string, stream: MediaStream) => void;
+  onRemoteScreenStream?: (socketId: string, stream: MediaStream) => void;
   onPeerLeft?: (socketId: string) => void;
   onCallEnded?: () => void;
   onCallDeclined?: () => void;
@@ -33,6 +34,7 @@ function iceServers(): RTCIceServer[] {
 export class VoiceChatClient {
   private socket: Socket | null = null;
   private stream: MediaStream | null = null;
+  private screenStream: MediaStream | null = null;
   private peers = new Map<string, RTCPeerConnection>();
   private participants = new Map<string, Peer>();
   private statsTimer: number | null = null;
@@ -61,6 +63,27 @@ export class VoiceChatClient {
 
   setMuted(muted: boolean) { this.stream?.getAudioTracks().forEach((track) => { track.enabled = !muted; }); }
 
+  async startScreenShare() {
+    if (!navigator.mediaDevices?.getDisplayMedia) throw new Error('Compartilhamento de tela não é suportado neste dispositivo.');
+    this.stopScreenShare();
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false });
+    this.screenStream = stream;
+    const track = stream.getVideoTracks()[0];
+    track.onended = () => this.stopScreenShare();
+    for (const peer of this.peers.values()) peer.addTrack(track, stream);
+    await this.renegotiate();
+    return stream;
+  }
+
+  stopScreenShare() {
+    this.screenStream?.getTracks().forEach((track) => track.stop());
+    this.screenStream = null;
+    for (const peer of this.peers.values()) {
+      for (const sender of peer.getSenders()) if (sender.track?.kind === 'video') peer.removeTrack(sender);
+    }
+    void this.renegotiate();
+  }
+
   leave() {
     this.socket?.emit('voice:leave');
     this.dispose();
@@ -83,6 +106,8 @@ export class VoiceChatClient {
     this.participants.clear();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
+    this.screenStream?.getTracks().forEach((track) => track.stop());
+    this.screenStream = null;
   }
 
   private registerHandlers() {
@@ -120,7 +145,8 @@ export class VoiceChatClient {
     const existing = this.peers.get(remoteId); if (existing) return existing;
     const peer = new RTCPeerConnection({ iceServers: iceServers() }); this.peers.set(remoteId, peer);
     this.stream?.getTracks().forEach((track) => peer.addTrack(track, this.stream!));
-    peer.ontrack = (event) => this.events.onRemoteStream?.(remoteId, event.streams[0]);
+    this.screenStream?.getTracks().forEach((track) => peer.addTrack(track, this.screenStream!));
+    peer.ontrack = (event) => event.track.kind === 'video' ? this.events.onRemoteScreenStream?.(remoteId, event.streams[0]) : this.events.onRemoteStream?.(remoteId, event.streams[0]);
     peer.onicecandidate = (event) => { if (event.candidate) this.socket?.emit('voice:signal', { to: remoteId, data: event.candidate.toJSON() }); };
     peer.onconnectionstatechange = () => {
       if (peer.connectionState === 'disconnected') { this.events.onConnectionQuality?.('reconnecting'); window.setTimeout(() => { if (peer.connectionState === 'disconnected') peer.restartIce(); }, 1_500); }
@@ -134,6 +160,13 @@ export class VoiceChatClient {
   }
 
   private emitParticipants() { this.events.onParticipantsChanged?.([...this.participants.values()]); }
+
+  private async renegotiate() {
+    for (const [remoteId, peer] of this.peers) {
+      try { const offer = await peer.createOffer(); await peer.setLocalDescription(offer); this.socket?.emit('voice:signal', { to: remoteId, data: peer.localDescription }); }
+      catch (error) { this.events.onError?.(error instanceof Error ? error : new Error('Falha ao compartilhar tela.')); }
+    }
+  }
 
   private async measureQuality() {
     if (!this.peers.size) return;

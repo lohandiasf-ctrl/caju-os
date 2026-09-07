@@ -1,7 +1,7 @@
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { getJiraIssue, JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
 import { getDb } from '@/db';
-import { operationalAudit } from '@/db/schema';
+import { operationalAudit, ticketSnapshots } from '@/db/schema';
 import { enqueueJiraSync, shouldQueueJiraError } from '@/lib/server/jira-sync';
 
 export async function GET(request: Request, context: { params: Promise<{ key: string }> }) {
@@ -30,6 +30,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     if (typeof status === 'string' && !['gerencia', 'coordenador', 'n1', 'analista'].includes(user.role)) return Response.json({ error: 'Seu perfil pode preencher dados e evidências, mas não alterar a etapa do Jira.' }, { status: 403 });
     const editableFields = { ...fields };
     const before = await getJiraIssue(key);
+    await getDb().insert(ticketSnapshots).values({ ticketKey: key, actorEmail: user.email, reason: 'Antes da alteração direta no Jira', snapshot: JSON.stringify({ status: before.status, fields: before.operationalFields }), createdAt: new Date().toISOString() });
     // Persist scheduling and technician fields before running Jira workflow validators.
     if (Object.keys(editableFields).length) await updateJiraIssue(key, editableFields, { allowNoop: typeof status === 'string' });
     if (typeof status === 'string') await transitionJiraIssue(key, status, fields);

@@ -301,3 +301,64 @@ export const jiraSyncJobs = sqliteTable('jira_sync_jobs', {
   index('idx_jira_sync_jobs_status_next').on(table.status, table.nextAttemptAt),
   index('idx_jira_sync_jobs_issue').on(table.issueKey, table.createdAt),
 ]);
+
+export const requesterHistory = sqliteTable('requester_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketKey: text('ticket_key').notNull(),
+  name: text('name').notNull(),
+  role: text('role'),
+  phone: text('phone'),
+  recordedBy: text('recorded_by').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [index('idx_requester_history_ticket').on(table.ticketKey, table.createdAt)]);
+
+export const shipmentTracking = sqliteTable('shipment_tracking', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketKey: text('ticket_key').notNull(),
+  source: text('source', { enum: ['Delfia', 'Caju'] }).notNull(),
+  trackingCode: text('tracking_code').notNull(),
+  carrier: text('carrier'),
+  status: text('status').notNull().default('Postado'),
+  expectedAt: text('expected_at'),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_shipment_tracking_code').on(table.ticketKey, table.trackingCode),
+  index('idx_shipment_tracking_ticket').on(table.ticketKey, table.updatedAt),
+]);
+
+export const operationalTasks = sqliteTable('operational_tasks', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketKey: text('ticket_key'),
+  title: text('title').notNull(),
+  assignedTo: text('assigned_to'),
+  acceptedBy: text('accepted_by'),
+  status: text('status', { enum: ['open', 'accepted', 'in_progress', 'done', 'cancelled'] }).notNull().default('open'),
+  progressNote: text('progress_note'),
+  nextCheckAt: text('next_check_at').notNull(),
+  createdBy: text('created_by').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  index('idx_operational_tasks_assignee').on(table.assignedTo, table.status, table.nextCheckAt),
+  index('idx_operational_tasks_ticket').on(table.ticketKey, table.createdAt),
+]);
+
+export const employeeActivity = sqliteTable('employee_activity', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull(),
+  event: text('event').notNull(),
+  context: text('context'),
+  durationSeconds: integer('duration_seconds').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+}, (table) => [index('idx_employee_activity_email_created').on(table.email, table.createdAt)]);
+
+export const ticketSnapshots = sqliteTable('ticket_snapshots', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  ticketKey: text('ticket_key').notNull(),
+  actorEmail: text('actor_email').notNull(),
+  reason: text('reason').notNull(),
+  snapshot: text('snapshot').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [index('idx_ticket_snapshots_ticket').on(table.ticketKey, table.createdAt)]);

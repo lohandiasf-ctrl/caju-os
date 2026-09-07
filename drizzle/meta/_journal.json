@@ -99,6 +99,13 @@
       "when": 1788743798271,
       "tag": "0013_natural_pandemic",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788794897814,
+      "tag": "0014_tough_jack_flag",
+      "breakpoints": true
     }
   ]
 }

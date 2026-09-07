@@ -30,6 +30,8 @@ export type JiraAttachmentSummary = {
   author: string | null;
 };
 
+export type JiraInternalComment = { id: string; body: string; author: string | null; createdAt: string };
+
 type JiraIssue = {
   id: string;
   key: string;
@@ -202,7 +204,9 @@ export async function getJiraIssue(key: string) {
     defectSummary: value('Resumo do defeito'),
   };
   const attachments: JiraAttachmentSummary[] = (issue.fields.attachment ?? []).flatMap((attachment) => attachment.id && attachment.filename ? [{ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType ?? 'application/octet-stream', size: attachment.size ?? 0, createdAt: attachment.created ?? '', author: attachment.author?.displayName ?? null }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields, attachments };
+  const commentPayload = await jiraFetch<{ values?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string }; public?: boolean }> }>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment?internal=true&limit=20`).catch(() => ({ values: [] }));
+  const internalComments: JiraInternalComment[] = (commentPayload.values ?? []).filter((comment) => comment.public !== true).map((comment) => ({ id: String(comment.id ?? ''), body: adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: comment.created ?? '' })).filter((comment) => comment.id && comment.body);
+  return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields, attachments, internalComments };
 }
 
 export async function updateJiraIssue(key: string, input: Record<string, unknown>, options: { allowNoop?: boolean } = {}) {
