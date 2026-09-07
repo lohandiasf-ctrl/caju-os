@@ -39,6 +39,7 @@ type Props = {
   user: { getIdToken: () => Promise<string> } | null;
   onOpenChange: (open: boolean) => void;
   onArchived: (ticketKey: string) => void;
+  onSaved?: (ticketKey: string) => void;
 };
 type Form = Record<string, string | number | boolean | null>;
 type Intelligence = {
@@ -136,6 +137,7 @@ export function OperationWorkflowDialog({
   user,
   onOpenChange,
   onArchived,
+  onSaved,
 }: Props) {
   const [form, setForm] = useState<Form>(() => initial(ticket));
   const [visits, setVisits] = useState<
@@ -343,6 +345,7 @@ export function OperationWorkflowDialog({
         workflow?: Form;
         visits?: typeof visits;
         error?: string;
+        notice?: string;
       };
       if (!response.ok)
         throw new Error(data.error || "Falha ao salvar operação.");
@@ -350,13 +353,15 @@ export function OperationWorkflowDialog({
         setForm((current) => ({ ...current, ...data.workflow }));
       setVisits(data.visits ?? []);
       setMessage(
-        confirmPayment
-          ? "Pagamento confirmado. Chamado arquivado."
-          : addVisit
-            ? "Nova visita adicionada ao histórico."
-            : "Operação salva.",
+        data.notice ||
+          (confirmPayment
+            ? "Pagamento confirmado. Chamado arquivado."
+            : addVisit
+              ? "Nova visita adicionada ao histórico."
+              : "Operação salva."),
       );
       if (confirmPayment) onArchived(ticket.id);
+      else onSaved?.(ticket.id);
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Falha ao salvar operação.",
@@ -1194,12 +1199,18 @@ function dateOnly(value: Form[string]) {
   return typeof value === "string" && value ? value.slice(0, 10) : "";
 }
 function toIso(value: Form[string]) {
-  return typeof value === "string" && value
-    ? new Date(value).toISOString()
-    : null;
+  if (typeof value !== "string" || !value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 function moneyToCents(value: string) {
-  const amount = Number(value.replace(",", "."));
+  const normalized = value.trim().replace(/[^\d,.-]/g, "");
+  const decimalComma = normalized.lastIndexOf(",") > normalized.lastIndexOf(".");
+  const amount = Number(
+    decimalComma
+      ? normalized.replace(/\./g, "").replace(",", ".")
+      : normalized.replace(/,/g, ""),
+  );
   return Number.isFinite(amount) && amount >= 0
     ? Math.round(amount * 100)
     : null;

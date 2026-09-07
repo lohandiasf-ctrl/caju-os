@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { ArrowLeft, BadgeDollarSign, Bell, Building2, CalendarDays, CircleDollarSign, Download, LayoutDashboard, Loader2, Menu, Save, Search, Settings, TrendingUp, Users, WalletCards } from 'lucide-react';
+import { ArrowLeft, BadgeDollarSign, Building2, CalendarDays, CircleDollarSign, Download, LayoutDashboard, Loader2, Menu, Save, Search, Settings, TrendingUp, Users, WalletCards } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -150,10 +150,10 @@ export default function FinanceiroPage() {
 
   return <main className="min-h-screen text-foreground">
     <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border bg-sidebar px-4 py-5 transition-transform lg:translate-x-0 ${menu ? 'translate-x-0' : '-translate-x-full'}`}>
-      <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2"><div className="grid size-10 place-items-center overflow-hidden rounded-xl border border-primary/30 bg-black"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></div><div><div className="text-[15px] font-extrabold">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando financeiro</div></div></a>
+      <a href="/?view=overview" className="flex h-12 shrink-0 items-center gap-3 px-2"><div className="grid size-10 place-items-center overflow-hidden rounded-xl border border-primary/30 bg-black"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></div><div><div className="text-[15px] font-extrabold">Caju OS</div><div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">Comando financeiro</div></div></a>
       <nav className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4 pr-1" aria-label="Navegação financeira">
         <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground">Gestão</p>
-        <SideLink href="/" icon={LayoutDashboard}>Visão geral</SideLink>
+        <SideLink href="/?view=overview" icon={LayoutDashboard}>Visão geral</SideLink>
         <SideLink href="/financeiro" icon={CircleDollarSign} active>Financeiro</SideLink>
         <SideLink href="#receita-tecnicos" icon={Users}>Receita por técnico</SideLink>
         <SideLink href="#repasses" icon={BadgeDollarSign}>Regra de repasse</SideLink>
@@ -164,8 +164,8 @@ export default function FinanceiroPage() {
     <section className="min-h-screen lg:pl-[252px]">
       <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
         <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenu(true)} aria-label="Abrir menu"><Menu /></Button>
-        <a href="/" className="hidden items-center gap-2 text-xs text-muted-foreground hover:text-foreground sm:flex"><ArrowLeft className="size-4" />Operação</a>
-        <div className="ml-auto flex items-center gap-2"><Badge variant="outline" className="hidden border-emerald-400/25 bg-emerald-400/10 text-emerald-300 sm:flex">Dados reais do Jira</Badge><Button variant="ghost" size="icon" aria-label="Notificações"><Bell /></Button></div>
+        <a href="/?view=overview" className="hidden items-center gap-2 text-xs text-muted-foreground hover:text-foreground sm:flex"><ArrowLeft className="size-4" />Operação</a>
+        <div className="ml-auto flex items-center gap-2"><Badge variant="outline" className="hidden border-emerald-400/25 bg-emerald-400/10 text-emerald-300 sm:flex">Dados reais do Jira</Badge></div>
       </header>
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Gestão financeira</p><h1 className="text-2xl font-extrabold tracking-[-.03em] sm:text-3xl">Financeiro</h1><p className="mt-1 text-sm text-muted-foreground">Valores do ticket, spare, repasses e margem em uma visão.</p></div><div className="flex flex-wrap gap-2">{([7, 30, 90] as const).map((days) => <Button key={days} size="sm" variant={period === days ? 'secondary' : 'outline'} onClick={() => { setPeriod(days); setPage(1); }}>{days} dias</Button>)}<Button size="sm" onClick={exportCsv} disabled={!rows.length}><Download />Exportar</Button></div></div>

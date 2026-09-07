@@ -207,7 +207,7 @@ const nav = [
   ["Mapa operacional", MapIcon, "/mapa", "map"],
   ["Agenda", CalendarClock, "/?view=agenda", "agenda"],
   ["Central N1", Headphones, "/?view=central", "central"],
-  ["Equipe N1", Users, "/?view=technicians", "technicians"],
+  ["Equipe", Users, "/?view=technicians", "technicians"],
   ["Projetos e lojas", Building2, "/?view=projects", "projects"],
   ["Spares", PackageOpen, "/spares", "spares"],
   ["Financeiro", CircleDollarSign, "/financeiro", "finance"],
@@ -319,11 +319,18 @@ export default function Home() {
   const [newTicketAlerts, setNewTicketAlerts] = useState<string[]>([]);
 
   useEffect(() => {
-    const syncView = () => setActiveView(dashboardViewFromLocation());
+    const syncView = () => {
+      const requested = dashboardViewFromLocation();
+      const next = canUseDashboardView(role, requested)
+        ? requested
+        : defaultDashboardView(role);
+      setActiveView(next);
+      if (requested !== next) window.history.replaceState(null, "", `/?view=${next}`);
+    };
     syncView();
     window.addEventListener("popstate", syncView);
     return () => window.removeEventListener("popstate", syncView);
-  }, []);
+  }, [role]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((ticket) => {
@@ -622,6 +629,38 @@ export default function Home() {
     }
   }
 
+  async function refreshTicketDetails(ticketKey: string) {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/jira/issues/${ticketKey}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as JiraDetails & {
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(payload.error || "Não foi possível atualizar o chamado.");
+      setDetails(payload);
+      setSelected((current) =>
+        current?.id === payload.key ? toTicket(payload) : current,
+      );
+      setTickets((current) =>
+        current.map((ticket) =>
+          ticket.id === payload.key ? toTicket(payload) : ticket,
+        ),
+      );
+      sessionStorage.removeItem("caju-jira-issues-cache");
+    } catch (error) {
+      setDialogError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o chamado.",
+      );
+    }
+  }
+
   async function saveWhatsappLink() {
     if (!user || !selected) return;
     setLinkSaving(true);
@@ -757,6 +796,15 @@ export default function Home() {
     )
       return;
     event.preventDefault();
+    const requested = dashboardViewFromHref(href);
+    if (requested && !canUseDashboardView(role, requested)) {
+      event.preventDefault();
+      window.history.pushState(null, "", `/?view=${defaultDashboardView(role)}`);
+      setActiveView(defaultDashboardView(role));
+      setMenu(false);
+      setNotificationsOpen(false);
+      return;
+    }
     window.history.pushState(null, "", href);
     setActiveView(dashboardViewFromLocation());
     setMenu(false);
@@ -859,29 +907,7 @@ export default function Home() {
             Operação
           </p>
           {nav
-            .filter(
-              ([label]) =>
-                role === "gerencia" ||
-                role === "coordenador" ||
-                (role === "n1"
-                  ? !["Financeiro", "Spares", "Projetos e lojas"].includes(
-                      label,
-                    )
-                  : role === "tecnico"
-                    ? [
-                        "Visão geral",
-                        "Mapa operacional",
-                        "Agenda",
-                        "Equipe N1",
-                      ].includes(label)
-                    : ![
-                        "Financeiro",
-                        "Spares",
-                        "Central N1",
-                        "Projetos e lojas",
-                        "Técnicos",
-                      ].includes(label)),
-            )
+            .filter(([, , , key]) => canUseNavItem(role, key))
             .map(([label, Icon, href, key]) => {
               const isActive = key === activeView;
               return (
@@ -1627,6 +1653,7 @@ export default function Home() {
             setOperationOpen(false);
             setSelected(null);
           }}
+          onSaved={(ticketKey) => void refreshTicketDetails(ticketKey)}
         />
       )}
     </main>
@@ -1977,7 +2004,7 @@ function TechniciansView({
           onClick={() => setTab("n1")}
           className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition ${tab === "n1" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
         >
-          Equipe N1
+          Equipe interna
         </button>
         <button
           type="button"
@@ -3283,4 +3310,43 @@ function dashboardViewFromLocation(): DashboardView {
   ].includes(requestedView ?? "")
     ? (requestedView as DashboardView)
     : "overview";
+}
+
+function dashboardViewFromHref(href: string) {
+  if (!href.startsWith("/?view=")) return null;
+  const value = new URLSearchParams(href.slice(2)).get("view");
+  return [
+    "overview",
+    "tickets",
+    "central",
+    "agenda",
+    "technicians",
+    "projects",
+    "settings",
+  ].includes(value ?? "")
+    ? (value as DashboardView)
+    : null;
+}
+
+function canUseDashboardView(role: string | null, view: DashboardView) {
+  if (role === "gerencia" || role === "coordenador") return true;
+  if (role === "n1")
+    return !["projects"].includes(view);
+  if (role === "tecnico")
+    return ["overview", "agenda", "technicians", "settings"].includes(view);
+  if (role === "analista")
+    return !["central", "projects"].includes(view);
+  return view === "overview";
+}
+
+function defaultDashboardView(role: string | null): DashboardView {
+  return canUseDashboardView(role, "overview") ? "overview" : "tickets";
+}
+
+function canUseNavItem(role: string | null, key: string) {
+  if (["map", "spares", "finance"].includes(key)) {
+    if (key === "spares" || key === "finance") return role === "gerencia";
+    return Boolean(role);
+  }
+  return canUseDashboardView(role, key as DashboardView);
 }

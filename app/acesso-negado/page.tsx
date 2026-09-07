@@ -16,7 +16,7 @@ export default function AccessDeniedPage() {
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{accessError || 'Seu perfil não possui permissão para acessar esta área. Peça à Gerência para revisar o cadastro.'}</p>
         <div className="cockpit-inset mt-5 rounded-xl p-3 text-xs text-muted-foreground"><p className="truncate">{user?.email}</p><p className="mt-1">Perfil: {role || 'não definido'}</p></div>
         <div className="mt-6 grid gap-2">
-          {role && <Button className="w-full" onClick={() => window.location.assign('/')}><Home />Voltar ao início</Button>}
+          {role && <Button className="w-full" onClick={() => window.location.assign('/?view=overview')}><Home />Voltar ao início</Button>}
           <Button className="w-full" variant="outline" onClick={() => void signOut(auth)}><LogOut />Sair e usar outra conta</Button>
         </div>
       </section>

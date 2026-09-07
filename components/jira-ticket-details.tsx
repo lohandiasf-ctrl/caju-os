@@ -48,6 +48,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   const [technicianSearchOpen, setTechnicianSearchOpen] = useState(false);
   const [techniciansLoading, setTechniciansLoading] = useState(false);
   const currentStatus = statusKey(details.status);
+  const [statusDraft, setStatusDraft] = useState(currentStatus);
   const dirty = Object.fromEntries(Object.entries(form).filter(([key, value]) => value !== String(initialForm[key] ?? '')));
   const dirtyCount = Object.keys(dirty).length;
   const nextStatus = currentStatus === 'scheduling' ? 'scheduled' : 'in_service';
@@ -61,6 +62,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   }, [technicianQuery, technicians]);
 
   useEffect(() => setForm(initialForm), [initialForm]);
+  useEffect(() => setStatusDraft(currentStatus), [currentStatus]);
   useEffect(() => {
     if (!user) return;
     let active = true; setTechniciansLoading(true);
@@ -114,8 +116,10 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     setForm((current) => ({ ...current, technicianData: `Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}` }));
   }
 
-  function changeStatus(target: string) {
+  function applyStatus(target: string) {
+    if (!target || target === currentStatus) { setFailed(false); setMessage('Escolha uma nova etapa antes de aplicar.'); return; }
     if (currentStatus === 'scheduling' && target === 'in_service') { setFailed(true); setMessage('O Jira exige concluir “Agendado” antes de avançar para “Técnico em campo”.'); return; }
+    if (currentStatus === 'in_service' && target === 'scheduled') { setFailed(true); setMessage('O chamado já está em campo. Use uma etapa posterior do fluxo.'); return; }
     if (target === 'scheduled' && !validateScheduling()) return;
     void updateJira({ ...(target === 'scheduled' ? { technicianData: form.technicianData, scheduledDateTime: form.scheduledDateTime } : {}), status: target }, 'status');
   }
@@ -166,13 +170,16 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   return <section className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
     <div className="rounded-xl border border-primary/25 bg-background/80 p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-sm font-bold">Fluxo do chamado</p><p className="text-xs text-muted-foreground">Etapa atual: {details.status}</p></div><span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{currentStatus === 'scheduling' ? '1. Agendar' : currentStatus === 'scheduled' ? '2. Preparar' : currentStatus === 'in_service' ? '3. Atender' : 'Acompanhamento'}</span></div>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <label className="min-w-0 flex-1 text-xs font-semibold text-muted-foreground">Etapa do chamado no Jira
-          <select value={currentStatus} onChange={(event) => changeStatus(event.target.value)} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-11 w-full text-foreground">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+        <label className="min-w-0 flex-1 text-xs font-semibold text-muted-foreground">Próxima etapa no Jira
+          <select value={statusDraft} onChange={(event) => setStatusDraft(event.target.value)} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-11 w-full text-foreground">
             {!currentStatus && <option value="">{details.status}</option>}
             {workflowStatuses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
+        <Button type="button" variant="outline" className="min-h-11 sm:min-w-36" onClick={() => applyStatus(statusDraft)} disabled={Boolean(savingKey) || !statusDraft || statusDraft === currentStatus}>
+          {savingKey === 'status' ? <Loader2 className="animate-spin" /> : <Check />} Aplicar etapa
+        </Button>
         <Button type="button" className="min-h-11 sm:min-w-44" onClick={advanceStatus} disabled={Boolean(savingKey) || currentStatus === 'in_service'}>
           {savingKey === 'status' ? <Loader2 className="animate-spin" /> : currentStatus === 'in_service' ? <Check /> : <RefreshCw />} {currentStatus === 'in_service' ? 'Técnico em campo' : nextStatusLabel}
         </Button>

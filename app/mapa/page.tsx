@@ -192,7 +192,7 @@ export default function Page() {
       <aside
         className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <a href="/" className="flex h-12 shrink-0 items-center gap-3 px-2">
+        <a href="/?view=overview" className="flex h-12 shrink-0 items-center gap-3 px-2">
           <span className="cockpit-brand grid size-10 place-items-center overflow-hidden rounded-xl"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></span>
           <div>
             <b>Caju OS</b>
@@ -206,7 +206,7 @@ export default function Page() {
             Cobertura técnica
           </p>
           <a
-            href="/"
+            href="/?view=overview"
             className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground"
           >
             <LayoutDashboard className="size-4" />
@@ -228,6 +228,7 @@ export default function Page() {
       </aside>
       {menu && (
         <button
+          aria-label="Fechar menu"
           className="fixed inset-0 z-30 bg-black/60 lg:hidden"
           onClick={() => setMenu(false)}
         />
@@ -243,7 +244,7 @@ export default function Page() {
             <Menu />
           </Button>
           <a
-            href="/"
+            href="/?view=overview"
             className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"
           >
             <ArrowLeft className="size-4" />

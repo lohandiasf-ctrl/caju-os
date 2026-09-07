@@ -81,7 +81,7 @@ export async function PUT(request: Request) {
     }
     await db.insert(operationalAudit).values({ ticketKey, action: body.confirmPayment === true ? 'Pagamento confirmado e chamado arquivado' : body.addVisit === true ? 'Visita/retorno adicionado' : existing ? `Operação atualizada: ${status}` : `Operação criada: ${status}`, actorEmail: user.email, details: JSON.stringify({ before: existing, after: { ...fields, status, technicianId, scheduledAt }, jiraQueued }), createdAt: now });
     const requesterName = clean(body.requesterName, 120);
-    if (requesterName && (!existing || requesterName !== existing.storeName)) {
+    if (requesterName) {
       const previous = await db.select().from(requesterHistory).where(eq(requesterHistory.ticketKey, ticketKey)).orderBy(asc(requesterHistory.createdAt)).all();
       const fingerprint = `${requesterName}|${clean(body.requesterRole, 80) ?? ''}|${clean(body.requesterPhone, 40) ?? ''}`;
       if (!previous.some((item) => `${item.name}|${item.role ?? ''}|${item.phone ?? ''}` === fingerprint)) await db.insert(requesterHistory).values({ ticketKey, name: requesterName, role: clean(body.requesterRole, 80), phone: clean(body.requesterPhone, 40), recordedBy: user.email, createdAt: now });
