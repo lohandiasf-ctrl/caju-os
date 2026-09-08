@@ -1,6 +1,7 @@
 'use client';
 
 import { io, type Socket } from 'socket.io-client';
+import { auth } from '@/lib/firebase';
 
 type Peer = { socketId: string; userId: string; userName: string };
 type Signal = RTCSessionDescriptionInit | RTCIceCandidateInit;
@@ -22,13 +23,30 @@ function signalingUrl() {
   return process.env.NEXT_PUBLIC_SIGNALING_URL?.trim() || 'https://caju-os-signaling-production.up.railway.app';
 }
 
-function iceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
-  const urls = process.env.NEXT_PUBLIC_TURN_URLS?.split(',').map((value) => value.trim()).filter(Boolean);
-  const username = process.env.NEXT_PUBLIC_TURN_USERNAME;
-  const credential = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
-  if (urls?.length && username && credential) servers.push({ urls, username, credential });
-  return servers;
+const STUN_ONLY: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+let iceCache: { servers: RTCIceServer[]; expiresAt: number } | null = null;
+
+// TURN credentials are minted per session by /api/turn-credentials and expire,
+// so they are fetched rather than baked into the bundle. Any failure degrades
+// to STUN only, which still connects outside symmetric NAT.
+async function iceServers(): Promise<RTCIceServer[]> {
+  if (iceCache && iceCache.expiresAt > Date.now()) return iceCache.servers;
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) return STUN_ONLY;
+    const response = await fetch('/api/turn-credentials', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) return STUN_ONLY;
+    const payload = await response.json() as { iceServers?: RTCIceServer[]; ttl?: number };
+    const servers = payload.iceServers?.length ? payload.iceServers : STUN_ONLY;
+    // Refresh a little before the credential actually lapses.
+    iceCache = { servers, expiresAt: Date.now() + (payload.ttl ?? 3600) * 900 };
+    return servers;
+  } catch {
+    return STUN_ONLY;
+  }
 }
 
 export class VoiceChatClient {
@@ -143,7 +161,7 @@ export class VoiceChatClient {
 
   private async createPeer(remoteId: string, initiator: boolean) {
     const existing = this.peers.get(remoteId); if (existing) return existing;
-    const peer = new RTCPeerConnection({ iceServers: iceServers() }); this.peers.set(remoteId, peer);
+    const peer = new RTCPeerConnection({ iceServers: await iceServers() }); this.peers.set(remoteId, peer);
     this.stream?.getTracks().forEach((track) => peer.addTrack(track, this.stream!));
     this.screenStream?.getTracks().forEach((track) => peer.addTrack(track, this.screenStream!));
     peer.ontrack = (event) => {

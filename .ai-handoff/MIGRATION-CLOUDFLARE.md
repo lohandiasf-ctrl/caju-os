@@ -37,9 +37,21 @@ Scripts npm: `db:migrate:remote`, `db:seed:remote`, `deploy`, `release`.
   `.env.local` (era injetado pela plataforma da OpenAI).
 
 **Voz**: degrada sozinha. `NEXT_PUBLIC_SIGNALING_URL` tem fallback hardcoded
-para o Railway em `lib/voice-chat.ts`; sem `NEXT_PUBLIC_TURN_*` usa só o STUN do
-Google (falha atrás de NAT simétrico). São variáveis **build-time** — para
-ativar TURN, coloque no `.env.local` antes do `npm run build`.
+para o Railway em `lib/voice-chat.ts`.
+
+TURN agora usa **Cloudflare Realtime** (1.000 GB/mês grátis) com credenciais de
+curta duração: `app/api/turn-credentials/route.ts` as gera sob demanda para o
+usuário autenticado, e `lib/voice-chat.ts` busca e cacheia até expirar. As
+antigas `NEXT_PUBLIC_TURN_*` foram removidas — eram build-time e ficavam
+públicas dentro do bundle. Para ativar:
+
+```powershell
+npx wrangler secret put TURN_KEY_ID --name caju-os
+npx wrangler secret put TURN_KEY_API_TOKEN --name caju-os
+```
+
+Sem esses secrets a rota devolve `configured: false` e a chamada cai para STUN
+apenas, que funciona fora de NAT simétrico.
 
 ## Dados migrados (2.182 registros)
 
