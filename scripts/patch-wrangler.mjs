@@ -72,6 +72,12 @@ if (wrangler.name !== workerName) {
   if (wrangler.topLevelName) wrangler.topLevelName = workerName;
 }
 
+// --- Workers AI --------------------------------------------------------------
+// Used by /api/rat/extract to read the technician's report. Declared here as
+// well as in vite.config.ts: this file has the last word on what ships.
+wrangler.ai = { binding: 'AI' };
+console.log('patch-wrangler: Workers AI binding -> AI.');
+
 // --- scheduled handler -------------------------------------------------------
 // The generated entry exports only `fetch`. Swap in a wrapper that also exports
 // `scheduled`, so delegated-task follow-ups fire without anyone opening the app.

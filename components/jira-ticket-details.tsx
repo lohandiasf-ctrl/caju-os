@@ -36,6 +36,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   const initial = useMemo(() => ({ ...details.operationalFields, ...parseDefect(details.operationalFields.defectSummary) }), [details]);
   const initialForm = useMemo(() => Object.fromEntries(Object.entries(initial).map(([key, value]) => [key, key === 'scheduledDateTime' ? dateTimeLocal(value) : value ?? ''])), [initial]);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [ratReading, setRatReading] = useState(false);
+  const [ratInfo, setRatInfo] = useState('');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [failed, setFailed] = useState(false);
@@ -173,6 +175,44 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
 
   const saveButton = <Button type="button" className="min-h-11 w-full" onClick={() => void updateJira(dirty, 'all')} disabled={Boolean(savingKey) || !dirtyCount}>{savingKey === 'all' ? <Loader2 className="animate-spin" /> : <Save />} Salvar alterações no Jira</Button>;
 
+  // Explicit action rather than firing on every attachment: it costs a Workers
+  // AI call, and in this screen all files are uploaded together with no way to
+  // tell which one is the RAT.
+  async function readRat(file?: File) {
+    if (!file || !user) return;
+    setRatReading(true);
+    setRatInfo('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await fetch('/api/rat/extract', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+        body,
+      });
+      const payload = await response.json() as {
+        identifiedProblem?: string; testsPerformed?: string; partToReplace?: string;
+        confidence?: string; info?: string; error?: string;
+      };
+      if (!response.ok) { setRatInfo(payload.error ?? 'Não foi possível ler a RAT.'); return; }
+      // Never overwrite what the technician already typed.
+      const merged: Record<string, string> = {};
+      for (const key of ['identifiedProblem', 'testsPerformed', 'partToReplace'] as const) {
+        const extracted = (payload[key] ?? '').trim();
+        if (extracted && !(form[key] ?? '').trim()) merged[key] = extracted;
+      }
+      setForm((current) => ({ ...current, ...merged }));
+      const filled = Object.keys(merged).length;
+      setRatInfo(payload.info ?? (filled
+        ? `${filled} campo(s) preenchido(s) · confiança ${payload.confidence ?? 'baixa'}. Confira antes de salvar.`
+        : 'Nada novo foi extraído — os campos já preenchidos foram mantidos.'));
+    } catch {
+      setRatInfo('Falha ao ler a RAT. Preencha manualmente.');
+    } finally {
+      setRatReading(false);
+    }
+  }
+
   return <section className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
     <div className="rounded-xl border border-primary/25 bg-background/80 p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-sm font-bold">Fluxo do chamado</p><p className="text-xs text-muted-foreground">Etapa atual: {details.status}</p></div><span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{currentStatus === 'scheduling' ? '1. Agendar' : currentStatus === 'scheduled' ? '2. Preparar' : currentStatus === 'in_service' ? '3. Atender' : 'Acompanhamento'}</span></div>
@@ -203,7 +243,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
         <div className="rounded-xl border border-primary/25 bg-primary/5 p-3"><h3 className="flex items-center gap-2 text-sm font-bold"><Building2 className="size-4 text-primary" />Dados obrigatórios do agendamento</h3><p className="mt-1 text-xs text-muted-foreground">A busca usa os técnicos cadastrados no banco de dados. Confirme os dados antes de avançar.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="relative"><label className="text-xs font-semibold text-muted-foreground">Pesquisar técnico</label><div className="relative mt-1.5"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" value={technicianQuery} onFocus={() => setTechnicianSearchOpen(true)} onChange={(event) => { setTechnicianQuery(event.target.value); setTechnicianSearchOpen(true); }} onKeyDown={(event) => { if (event.key === 'Escape') setTechnicianSearchOpen(false); }} placeholder={techniciansLoading ? 'Carregando técnicos...' : 'Digite nome, cidade, CPF ou código'} className="min-h-11 pl-9" autoComplete="off" /></div>{technicianSearchOpen && technicianMatches.length > 0 && <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-2xl">{technicianMatches.map((technician) => <button key={technician.id} type="button" onClick={() => selectTechnician(technician)} className="block min-h-11 w-full rounded-lg px-3 py-2 text-left hover:bg-primary/10 focus-visible:bg-primary/10"><span className="block text-sm font-semibold">{technician.name}</span><span className="block text-xs text-muted-foreground">{technician.city}/{technician.state}{technician.technicianCode ? ` · ${technician.technicianCode}` : ''}{technician.phone ? ` · ${technician.phone}` : ''}</span></button>)}</div>}</div>{generalFields.slice(0, 1).map((field) => input(field))}<label className="text-xs font-semibold text-muted-foreground sm:col-span-2">Dados enviados ao Jira · Nome, CPF, RG e telefone<textarea rows={4} value={form.technicianData ?? ''} onChange={(event) => setForm((current) => ({ ...current, technicianData: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /><span className="mt-1 block text-[11px] font-normal text-muted-foreground">Você pode complementar o RG manualmente antes de agendar.</span></label></div></div>
         <details className="group rounded-xl border border-border bg-background/35 p-3"><summary className="cursor-pointer list-none text-sm font-bold">Informações da loja e do problema <span className="ml-1 text-xs font-normal text-muted-foreground group-open:hidden">· clique para expandir</span></summary><div className="mt-4 grid gap-3 sm:grid-cols-2">{generalFields.slice(1).map((field) => input(field))}</div>{details.description && <div className="mt-4 border-t border-border pt-4"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descrição original</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{details.description}</p></div>}</details>
         <details className="group rounded-xl border border-border bg-background/35 p-3"><summary className="cursor-pointer list-none text-sm font-bold">Comentários internos do Jira <span className="ml-1 text-xs font-normal text-muted-foreground">· {details.internalComments?.length ?? 0}</span></summary><div className="mt-3 space-y-2">{details.internalComments?.map((comment) => <article key={comment.id} className="rounded-lg border border-border bg-black/10 p-3"><p className="whitespace-pre-wrap text-sm">{comment.body}</p><footer className="mt-2 text-xs text-muted-foreground">{comment.author || 'Jira'} · {comment.createdAt ? new Date(comment.createdAt).toLocaleString('pt-BR') : ''}</footer></article>)}{!details.internalComments?.length && <p className="text-xs text-muted-foreground">Nenhum comentário interno disponível.</p>}</div></details>
-        <div className="border-t border-border pt-4"><h3 className="mb-3 flex items-center gap-2 text-sm font-bold"><Wrench className="size-4 text-amber-300" />Resumo técnico no Jira</h3><div className="grid gap-3">{([['identifiedProblem','Problema identificado'],['testsPerformed','Testes feitos'],['partToReplace','Peça a ser trocada']] as const).map(([key,label]) => <label key={key} className="text-xs font-semibold text-muted-foreground">{label}<textarea rows={3} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /></label>)}</div></div>
+        <div className="border-t border-border pt-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-sm font-bold"><Wrench className="size-4 text-amber-300" />Resumo técnico no Jira</h3><label className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-primary/30 bg-background/70 px-3 text-xs font-semibold text-primary transition hover:bg-primary/10 ${ratReading ? 'pointer-events-none opacity-60' : ''}`}>{ratReading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}{ratReading ? 'Lendo RAT...' : 'Ler RAT e preencher'}<input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" disabled={ratReading} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void readRat(file); }} /></label></div>{ratInfo && <p className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">{ratInfo}</p>}<div className="grid gap-3">{([['identifiedProblem','Problema identificado'],['testsPerformed','Testes feitos'],['partToReplace','Peça a ser trocada']] as const).map(([key,label]) => <label key={key} className="text-xs font-semibold text-muted-foreground">{label}<textarea rows={3} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /></label>)}</div></div>
         {saveButton}
       </TabsContent>
       <TabsContent value="valores" className="space-y-4 pt-3">
@@ -260,12 +300,17 @@ async function validateEvidenceFiles(files: File[]) {
 }
 async function inspectImageQuality(file: File) {
   const bitmap = await createImageBitmap(file);
+  // Read the dimensions before close(): the spec zeroes width/height on a
+  // closed ImageBitmap, and reading them afterwards reported every photo as
+  // 0x0, which tripped the resolution check and blocked every upload.
+  const width = bitmap.width;
+  const height = bitmap.height;
   const canvas = document.createElement('canvas');
   const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) return { width: bitmap.width, height: bitmap.height, brightness: 100, contrast: 100 };
+  if (!context) { bitmap.close(); return { width, height, brightness: 100, contrast: 100 }; }
   context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
   const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -276,5 +321,5 @@ async function inspectImageQuality(file: File) {
   }
   const brightness = sum / Math.max(1, count);
   const variance = sumSquares / Math.max(1, count) - brightness * brightness;
-  return { width: bitmap.width, height: bitmap.height, brightness, contrast: Math.sqrt(Math.max(0, variance)) };
+  return { width, height, brightness, contrast: Math.sqrt(Math.max(0, variance)) };
 }

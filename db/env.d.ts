@@ -11,5 +11,9 @@ declare namespace Cloudflare {
     TURN_KEY_API_TOKEN?: string;
     // Shared secret so only the scheduled handler can trigger the task sweep.
     CRON_SECRET?: string;
+    // Workers AI, usado para ler a RAT. `Ai` e um tipo global de
+    // @cloudflare/workers-types: importar aqui transformaria este .d.ts em
+    // modulo e quebraria a declaracao de namespace.
+    AI: Ai;
   }
 }

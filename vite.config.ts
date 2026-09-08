@@ -19,6 +19,7 @@ const localBindingConfig = {
     },
   ],
   r2_buckets: [],
+  ai: { binding: 'AI' },
 };
 
 export default defineConfig(async () => {
