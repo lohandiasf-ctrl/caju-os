@@ -1,10 +1,9 @@
 // Post-build step for self-hosted Cloudflare deploys.
 //
-// `npm run build` runs the @openai/sites-vite-plugin, which emits
-// dist/server/wrangler.json with a PLACEHOLDER D1 database_id
-// (00000000-0000-4000-8000-000000000000) and database_name "site-creator-d1".
-// On the OpenAI Sites platform the control plane swaps in the real binding.
-// Off that platform we do it here, reading the real values from .cloudflare.json.
+// The build emits dist/server/wrangler.json with a PLACEHOLDER D1 database_id
+// (00000000-0000-4000-8000-000000000000), because the real id is
+// account-specific and must not be committed. This script swaps in the real
+// values from the gitignored .cloudflare.json.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

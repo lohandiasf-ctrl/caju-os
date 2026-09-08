@@ -1,4 +1,5 @@
 "use client";
+import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -17,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 declare global {
   interface Window {
-    google: any;
     TECHNICIAN_DIRECTORY?: Technician[];
   }
 }
@@ -56,34 +56,14 @@ export default function Page() {
     [error, setError] = useState("");
   useEffect(() => {
     let mounted = true;
-    Promise.all([
-      fetch("/data/technician-map.json").then((r) => r.json() as Promise<C[]>),
-      fetch("/api/maps-config").then(
-        (r) => r.json() as Promise<{ key: string }>,
-      ),
-    ])
-      .then(([d, c]) => {
+    fetch("/data/technician-map.json")
+      .then((r) => r.json() as Promise<C[]>)
+      .then((d) => {
         if (!mounted) return;
         setData(d);
-        if (!c.key) throw Error("Chave do mapa não configurada");
-        if (typeof window.google?.maps?.Map === "function") {
-          setReady(true);
-          return;
-        }
-        const s = document.createElement("script");
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(c.key)}&v=weekly`;
-        s.async = true;
-        s.onload = () => {
-          if (!mounted) return;
-          if (typeof window.google?.maps?.Map === "function") setReady(true);
-          else setError("Google Maps carregou sem a biblioteca de mapas");
-        };
-        s.onerror = () => { if (mounted) setError("Falha ao carregar o Google Maps"); };
-        document.head.appendChild(s);
+        setReady(true);
       })
-      .catch((e: unknown) =>
-        mounted && setError(e instanceof Error ? e.message : "Falha ao carregar o mapa"),
-      );
+      .catch(() => mounted && setError("Falha ao carregar o mapa"));
     return () => { mounted = false; };
   }, []);
   useEffect(() => {
@@ -144,45 +124,38 @@ export default function Page() {
   const nearbyTechnicians = nearby.filter((technician) => !localTechnicians.includes(technician));
   useEffect(() => {
     if (!ready || !el.current) return;
-    try {
-      if (typeof window.google?.maps?.Map !== "function") throw Error("Biblioteca do Google Maps indisponível");
-      if (!gm.current)
-        gm.current = new window.google.maps.Map(el.current, {
-          center: { lat: -14.5, lng: -44 },
-          zoom: 5,
-          mapId: "DEMO_MAP_ID",
-          disableDefaultUI: true,
-          zoomControl: true,
-        });
-      marks.current.forEach((x) => x.setMap(null));
+    let cancelled = false;
+    void (async () => {
+      const L = (await import("leaflet")).default;
+      if (cancelled || !el.current) return;
+      if (!gm.current) {
+        gm.current = L.map(el.current, { zoomControl: true, attributionControl: true })
+          .setView([-14.5, -44], 4);
+        // Standard OSM tiles: no API key, no quota, no billing. The dark look
+        // is applied with a CSS filter on .leaflet-tile (see globals.css) so we
+        // do not depend on a keyed dark-basemap provider.
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        }).addTo(gm.current);
+      }
+      marks.current.forEach((m) => m.remove());
       marks.current = show.map((c) => {
-        const m = new window.google.maps.Marker({
-          map: gm.current,
-          position: { lat: c.lat, lng: c.lng },
-          title: `${c.city}/${c.uf}`,
-          label: c.technicians
-            ? {
-                text: String(c.technicians),
-                color: "#fff",
-                fontSize: "10px",
-                fontWeight: "700",
-              }
-            : undefined,
-          icon: {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: c.technicians ? 10 : 5,
-            fillColor: c.technicians ? "#e56223" : "#64748b",
-            fillOpacity: 0.9,
-            strokeColor: "#fff",
-            strokeWeight: 1,
-          },
+        const size = c.technicians ? 22 : 11;
+        const color = c.technicians ? "#e56223" : "#64748b";
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:1px solid #fff;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:700;box-shadow:0 1px 4px rgb(0 0 0 / 45%)">${c.technicians || ""}</div>`,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
         });
-        m.addListener("click", () => setSel(c));
+        const m = L.marker([c.lat, c.lng], { icon, title: `${c.city}/${c.uf}` }).addTo(gm.current);
+        m.on("click", () => setSel(c));
         return m;
       });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Falha ao iniciar o mapa");
-    }
+      gm.current.invalidateSize();
+    })().catch(() => setError("Falha ao iniciar o mapa"));
+    return () => { cancelled = true; };
   }, [ready, show]);
   const total = show.reduce((s, x) => s + x.technicians, 0),
     onboard = show.reduce((s, x) => s + x.onboarded, 0),
@@ -309,7 +282,7 @@ export default function Page() {
               </div>
             </section>
           )}
-          <div className="relative mt-5 overflow-hidden rounded-xl border border-border bg-card">
+          <div className="map-surface relative mt-5 overflow-hidden rounded-xl border border-border bg-card">
             <div ref={el} className="h-[650px] w-full bg-[#17201c]" />
             {error && (
               <div className="absolute inset-0 grid place-items-center bg-card text-amber-300">
