@@ -5,8 +5,8 @@
 // account-specific and must not be committed. This script swaps in the real
 // values from the gitignored .cloudflare.json.
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { loadCfConfig, DIST_WRANGLER_PATH, REPO_ROOT } from './cf-config.mjs';
 
 const PLACEHOLDER_ID = '00000000-0000-4000-8000-000000000000';
@@ -71,6 +71,15 @@ if (wrangler.name !== workerName) {
   wrangler.name = workerName;
   if (wrangler.topLevelName) wrangler.topLevelName = workerName;
 }
+
+// --- scheduled handler -------------------------------------------------------
+// The generated entry exports only `fetch`. Swap in a wrapper that also exports
+// `scheduled`, so delegated-task follow-ups fire without anyone opening the app.
+const distDir = dirname(DIST_WRANGLER_PATH);
+copyFileSync(join(REPO_ROOT, 'scripts', 'worker-entry.js'), join(distDir, 'worker-entry.js'));
+wrangler.main = 'worker-entry.js';
+wrangler.triggers = { crons: ['*/10 * * * *'] };
+console.log('patch-wrangler: scheduled handler wired (cron */10 * * * *).');
 
 // --- custom domain (DNS cutover) ---------------------------------------------
 // Opt in by adding "custom_domain": "operacoes.cajutech.net" to .cloudflare.json.

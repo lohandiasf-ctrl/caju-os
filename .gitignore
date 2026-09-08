@@ -49,3 +49,4 @@ src-tauri/gen/
 
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
+.wrangler-pending.sql

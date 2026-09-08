@@ -9,5 +9,7 @@ declare namespace Cloudflare {
     // back to STUN only, which still works outside symmetric NAT.
     TURN_KEY_ID?: string;
     TURN_KEY_API_TOKEN?: string;
+    // Shared secret so only the scheduled handler can trigger the task sweep.
+    CRON_SECRET?: string;
   }
 }

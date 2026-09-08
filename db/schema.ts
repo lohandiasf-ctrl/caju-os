@@ -338,6 +338,8 @@ export const operationalTasks = sqliteTable('operational_tasks', {
   progressNote: text('progress_note'),
   nextCheckAt: text('next_check_at').notNull(),
   dueAt: text('due_at'),
+  // Set once the manager has been notified, so the sweep does not re-escalate.
+  escalatedAt: text('escalated_at'),
   createdBy: text('created_by').notNull(),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),

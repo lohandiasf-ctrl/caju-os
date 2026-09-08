@@ -14,7 +14,6 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate:remote": "node scripts/db-migrate-remote.mjs",
-    "db:seed:remote": "wrangler d1 execute caju-os-prod --remote --file=.wrangler-data.sql",
     "deploy": "node scripts/patch-wrangler.mjs && wrangler deploy -c dist/server/wrangler.json",
     "release": "npm test && npx tsc --noEmit && npm run build && npm run deploy",
     "desktop:dev": "tauri dev",

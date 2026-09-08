@@ -1,0 +1,1 @@
+ALTER TABLE `operational_tasks` ADD `escalated_at` text;
