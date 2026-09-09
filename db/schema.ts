@@ -387,3 +387,29 @@ export const partsCatalog = sqliteTable('parts_catalog', {
   updatedBy: text('updated_by').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [uniqueIndex('idx_parts_catalog_name').on(table.name)]);
+
+// Canal aberto a todos os perfis para sugerir melhorias e relatar problemas do
+// próprio sistema. Separado do chamado operacional: aqui o assunto é o Caju OS,
+// não o atendimento em loja.
+export const feedback = sqliteTable('feedback', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  authorEmail: text('author_email').notNull(),
+  kind: text('kind', { enum: ['sugestao', 'correcao'] }).notNull().default('sugestao'),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  status: text('status', { enum: ['aberto', 'analisando', 'planejado', 'concluido', 'recusado'] }).notNull().default('aberto'),
+  handledBy: text('handled_by'),
+  handledNote: text('handled_note'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  index('idx_feedback_status_created').on(table.status, table.createdAt),
+  index('idx_feedback_author').on(table.authorEmail, table.createdAt),
+]);
+
+// Apoiar uma ideia existente em vez de abrir outra igual. Um voto por pessoa.
+export const feedbackVotes = sqliteTable('feedback_votes', {
+  feedbackId: integer('feedback_id').notNull().references(() => feedback.id),
+  email: text('email').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [uniqueIndex('idx_feedback_votes_unique').on(table.feedbackId, table.email)]);

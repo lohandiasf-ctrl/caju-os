@@ -134,6 +134,13 @@
       "when": 1788919267976,
       "tag": "0018_brainy_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788920482232,
+      "tag": "0019_rich_shotgun",
+      "breakpoints": true
     }
   ]
 }

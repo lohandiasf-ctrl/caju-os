@@ -22,6 +22,7 @@ import {
   MapPin,
   Menu,
   MessageCircle,
+  MessageSquarePlus,
   PackageOpen,
   Plus,
   RefreshCw,
@@ -58,6 +59,7 @@ import {
 } from "@/components/user-menu";
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
+import { FeedbackBoard } from "@/components/feedback-board";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { notifyDesktop } from "@/lib/desktop-notifications";
 import {
@@ -84,6 +86,7 @@ type DashboardView =
   | "agenda"
   | "technicians"
   | "projects"
+  | "feedback"
   | "settings";
 type Ticket = {
   id: string;
@@ -211,6 +214,7 @@ const nav = [
   ["Projetos e lojas", Building2, "/?view=projects", "projects"],
   ["Spares", PackageOpen, "/spares", "spares"],
   ["Financeiro", CircleDollarSign, "/financeiro", "finance"],
+  ["Feedback", MessageSquarePlus, "/?view=feedback", "feedback"],
 ] as const;
 const dots: Record<Status, string> = {
   "Pendente de agendamento": "bg-violet-400",
@@ -220,6 +224,11 @@ const dots: Record<Status, string> = {
   "Técnico em campo": "bg-emerald-400",
 };
 const viewCopy: Record<DashboardView, [string, string, string]> = {
+  feedback: [
+    "Voz da equipe",
+    "Feedback e sugestões",
+    "Registre o que atrapalha, proponha melhorias e apoie as ideias dos colegas.",
+  ],
   overview: [
     "Operação em tempo real",
     "Visão geral dos chamados",
@@ -1273,6 +1282,7 @@ export default function Home() {
           {activeView === "projects" && (
             <ProjectsView stores={stores} loading={jiraLoading} />
           )}
+          {activeView === "feedback" && <FeedbackBoard user={user} />}
           {activeView === "settings" && (
             <>
               <SettingsView
@@ -3204,10 +3214,10 @@ function canUseDashboardView(role: string | null, view: DashboardView) {
   if (role === "n1")
     return !["projects"].includes(view);
   if (role === "tecnico")
-    return ["overview", "agenda", "technicians", "settings"].includes(view);
+    return ["overview", "agenda", "technicians", "feedback", "settings"].includes(view);
   if (role === "analista")
     return !["central", "projects"].includes(view);
-  return view === "overview";
+  return view === "overview" || view === "feedback";
 }
 
 function defaultDashboardView(role: string | null): DashboardView {
