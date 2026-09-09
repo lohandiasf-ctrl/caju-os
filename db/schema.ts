@@ -147,6 +147,21 @@ export const employeeMessages = sqliteTable('employee_messages', {
   index('idx_employee_messages_recipient_read').on(table.recipientEmail, table.readAt),
 ]);
 
+export const bulletinNotes = sqliteTable('bulletin_notes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  authorEmail: text('author_email').notNull(),
+  targetName: text('target_name'),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  archivedAt: text('archived_at'),
+  archivedBy: text('archived_by'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  index('idx_bulletin_notes_active_created').on(table.archivedAt, table.createdAt),
+  index('idx_bulletin_notes_author').on(table.authorEmail, table.createdAt),
+]);
+
 export const chatGroups = sqliteTable('chat_groups', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),

@@ -11,6 +11,11 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Bilhetes na tela inicial — *(este trabalho)*
+A visão geral ganhou um mural interno de recados rápidos. Funcionários
+autenticados podem criar e ver bilhetes; autor, gerência e coordenação podem
+arquivar. Os recados ficam no D1 na tabela `bulletin_notes`.
+
 ### Publica desktop 0.1.14 — *(este trabalho)*
 Versao desktop `0.1.14` publicada em `/downloads/Caju-OS-0.1.14-x64-setup.exe`
 com leitura nativa de arquivos copiados do Explorer e de dentro de ZIP aberto

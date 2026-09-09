@@ -60,6 +60,7 @@ import {
 import { CajuLoading } from "@/components/caju-loading";
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
+import { BulletinBoard } from "@/components/bulletin-board";
 import { FeedbackBoard } from "@/components/feedback-board";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { notifyDesktop } from "@/lib/desktop-notifications";
@@ -1170,7 +1171,10 @@ export default function Home() {
             </div>
           )}
           {activeView === "overview" && (
-            <OperationalSummary data={operational} />
+            <>
+              <OperationalSummary data={operational} />
+              <BulletinBoard user={user} />
+            </>
           )}
           {jiraError && (
             <div

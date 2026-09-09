@@ -132,7 +132,7 @@ Em resumo: Kanban de chamados com filtros, detalhe do chamado sincronizando com
 o Jira, agendamento com técnico, recomendação automática de técnico (8 fatores),
 mapa operacional de cobertura, Central N1 com validação por evidência, chat
 direto e em grupo, chamadas de voz 1-a-1 e em grupo com tela compartilhada,
-notificações in-app e desktop, gestão financeira (restrita a gerência),
+bilhetes na tela inicial, notificações in-app e desktop, gestão financeira (restrita a gerência),
 auditoria append-only de toda mudança, tarefas delegadas com varredura
 agendada, catálogo de peças, leitura da RAT por IA, quadro de feedback aberto a
 todos os perfis, exportação/backup administrativo.
