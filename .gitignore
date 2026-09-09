@@ -50,3 +50,6 @@ src-tauri/gen/
 # TypeScript incremental build cache
 tsconfig.tsbuildinfo
 .wrangler-pending.sql
+
+# Espelho gerado por "npx skills add"; a fonte versionada e .agents/skills
+.claude/skills/
