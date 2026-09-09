@@ -1339,16 +1339,16 @@ export default function Home() {
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 justify-start gap-3 p-3 text-left"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
                   onClick={() => setDetailsVisible((value) => !value)}
                   disabled={!details}
                 >
-                  <Eye className="size-5 text-blue-300" />
-                  <span>
-                    <span className="block font-bold">
+                  <Eye className="size-5 shrink-0 text-blue-300" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words font-bold">
                       {detailsVisible ? "Ocultar detalhes" : "Ver detalhes"}
                     </span>
-                    <span className="block text-xs font-normal text-muted-foreground">
+                    <span className="block break-words text-xs font-normal text-muted-foreground">
                       Editar e sincronizar com o Jira
                     </span>
                   </span>
@@ -1357,13 +1357,13 @@ export default function Home() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-auto min-h-16 justify-start gap-3 p-3 text-left"
+                    className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
                     onClick={() => void openJira()}
                   >
-                    <ExternalLink className="size-5 text-primary" />
-                    <span>
-                      <span className="block font-bold">Abrir no Jira</span>
-                      <span className="block text-xs font-normal text-muted-foreground">
+                    <ExternalLink className="size-5 shrink-0 text-primary" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words font-bold">Abrir no Jira</span>
+                      <span className="block break-words text-xs font-normal text-muted-foreground">
                         Chamado original
                       </span>
                     </span>
@@ -1371,7 +1371,7 @@ export default function Home() {
                 )}
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 justify-start gap-3 p-3 text-left"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
                   render={
                     <a
                       href={whatsappUrl || "#"}
@@ -1382,10 +1382,10 @@ export default function Home() {
                   }
                   disabled={!whatsappUrl}
                 >
-                  <MessageCircle className="size-5 text-emerald-400" />
-                  <span>
-                    <span className="block font-bold">Abrir WhatsApp</span>
-                    <span className="block text-xs font-normal text-muted-foreground">
+                  <MessageCircle className="size-5 shrink-0 text-emerald-400" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words font-bold">Abrir WhatsApp</span>
+                    <span className="block break-words text-xs font-normal text-muted-foreground">
                       {whatsappUrl ? "Ir para o grupo" : "Link não cadastrado"}
                     </span>
                   </span>
@@ -1393,15 +1393,15 @@ export default function Home() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-auto min-h-16 justify-start gap-3 border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50"
                   onClick={() => void copyJiraLinkForValidation()}
                   disabled={!validationReady || validationSending}
                   aria-describedby="validation-requirements"
                 >
-                  <ShieldCheck className="size-5 text-emerald-300" />
-                  <span>
-                    <span className="block font-bold">Validar</span>
-                    <span className="block text-xs font-normal text-muted-foreground">
+                  <ShieldCheck className="size-5 shrink-0 text-emerald-300" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words font-bold">Validar</span>
+                    <span className="block break-words text-xs font-normal text-muted-foreground">
                       {validationReady
                         ? "Copiar link do Jira para enviar no grupo SUP"
                         : `Falta: ${validationRequirements.join(", ")}`}
@@ -1410,7 +1410,7 @@ export default function Home() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 justify-start gap-3 p-3 text-left"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
                   onClick={() =>
                     selected &&
                     setTicketToShare({
@@ -1422,10 +1422,10 @@ export default function Home() {
                   }
                   disabled={!selected}
                 >
-                  <Users className="size-5 text-violet-300" />
-                  <span>
-                    <span className="block font-bold">Enviar por chat</span>
-                    <span className="block text-xs font-normal text-muted-foreground">
+                  <Users className="size-5 shrink-0 text-violet-300" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words font-bold">Enviar por chat</span>
+                    <span className="block break-words text-xs font-normal text-muted-foreground">
                       Compartilhar com colega
                     </span>
                   </span>
@@ -1433,14 +1433,14 @@ export default function Home() {
                 {role !== "n1" && (
                   <Button
                     variant="outline"
-                    className="h-auto min-h-16 justify-start gap-3 p-3 text-left"
+                    className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
                     onClick={() => setOperationOpen(true)}
                     disabled={!selected}
                   >
-                    <Wrench className="size-5 text-amber-300" />
-                    <span>
-                      <span className="block font-bold">Gerir operação</span>
-                      <span className="block text-xs font-normal text-muted-foreground">
+                    <Wrench className="size-5 shrink-0 text-amber-300" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words font-bold">Gerir operação</span>
+                      <span className="block break-words text-xs font-normal text-muted-foreground">
                         Agenda, spare e pagamento
                       </span>
                     </span>
@@ -1502,7 +1502,7 @@ export default function Home() {
               {(role === "analista" || role === "gerencia") && (
                 <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4">
                   <div className="flex items-center gap-2">
-                    <MessageCircle className="size-5 text-emerald-400" />
+                    <MessageCircle className="size-5 shrink-0 text-emerald-400" />
                     <div>
                       <h3 className="text-sm font-bold">Grupo do WhatsApp</h3>
                       <p className="text-xs text-muted-foreground">
@@ -2977,7 +2977,7 @@ function EmptyState({ label }: { label: string }) {
 function LoadingPanel({ label }: { label: string }) {
   return (
     <div className="surface-panel mt-6 flex min-h-48 items-center justify-center gap-3 rounded-2xl text-sm text-muted-foreground">
-      <Loader2 className="size-5 animate-spin" />
+      <Loader2 className="size-5 shrink-0 animate-spin" />
       {label}
     </div>
   );

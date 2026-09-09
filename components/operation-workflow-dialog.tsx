@@ -190,6 +190,9 @@ export function OperationWorkflowDialog({
   const [taskTitle, setTaskTitle] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDueHours, setTaskDueHours] = useState("2");
+  const [parts, setParts] = useState<Array<{ id: number; name: string; salePriceCents: number }>>([]);
+  const brl = (cents: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
   const financial = role === "gerencia";
   const set = (key: string, value: Form[string]) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -202,6 +205,20 @@ export function OperationWorkflowDialog({
       set(key, moneyToCents(event.target.value)),
     inputMode: "decimal" as const,
   });
+
+  useEffect(() => {
+    if (!open || !user) return;
+    let live = true;
+    void user.getIdToken()
+      .then((token) => fetch("/api/parts", { headers: { Authorization: `Bearer ${token}` } }))
+      .then((response) => (response.ok ? response.json() : { parts: [] }))
+      .then((payload) => {
+        const list = (payload as { parts?: Array<{ id: number; name: string; salePriceCents: number }> }).parts;
+        if (live) setParts(list ?? []);
+      })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [open, user]);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -1283,6 +1300,35 @@ export function OperationWorkflowDialog({
                   />
                 </Field>
                 <Field label="PEÇA A SER TROCADA">
+                  {parts.length > 0 && (
+                    <select
+                      className="field mb-1.5 text-xs"
+                      value=""
+                      aria-label="Escolher peça do catálogo"
+                      onChange={(event) => {
+                        const chosen = parts.find((part) => String(part.id) === event.target.value);
+                        if (!chosen) return;
+                        // Escreve o nome da peça e, para quem pode mexer em
+                        // dinheiro, já lança o preço de venda do catálogo.
+                        const current = String(form.partToReplace ?? "").trim();
+                        set("partToReplace", current ? `${current}
+${chosen.name}` : chosen.name);
+                        if (financial) {
+                          const already = Number(form.partsSaleCents ?? 0);
+                          set("partsSaleCents", already + chosen.salePriceCents);
+                        }
+                      }}
+                    >
+                      <option value="">
+                        {financial ? "Adicionar peça do catálogo (soma o valor)..." : "Adicionar peça do catálogo..."}
+                      </option>
+                      {parts.map((part) => (
+                        <option key={part.id} value={part.id}>
+                          {part.name} · {brl(part.salePriceCents)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <textarea
                     value={String(form.partToReplace ?? "")}
                     onChange={(event) =>
@@ -1291,6 +1337,11 @@ export function OperationWorkflowDialog({
                     rows={3}
                     className="field min-h-20"
                   />
+                  {financial && Number(form.partsSaleCents ?? 0) > 0 && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Venda de peças acumulada: {brl(Number(form.partsSaleCents))} · ajuste no campo Financeiro se precisar.
+                    </p>
+                  )}
                 </Field>
               </div>
             </Section>

@@ -376,3 +376,14 @@ export const geocodeCache = sqliteTable('geocode_cache', {
   label: text('label').notNull(),
   createdAt: text('created_at').notNull(),
 });
+
+// Tabela de preços das peças vendidas. Alimenta o campo de venda de peças do
+// chamado, que antes era digitado à mão a cada atendimento.
+export const partsCatalog = sqliteTable('parts_catalog', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  salePriceCents: integer('sale_price_cents').notNull(),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [uniqueIndex('idx_parts_catalog_name').on(table.name)]);

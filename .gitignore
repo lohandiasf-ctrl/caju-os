@@ -53,3 +53,4 @@ tsconfig.tsbuildinfo
 
 # Espelho gerado por "npx skills add"; a fonte versionada e .agents/skills
 .claude/skills/
+.wrangler-parts.sql
