@@ -79,15 +79,24 @@ type Status =
   | "Aguardando spare"
   | "Direcionado"
   | "Técnico em campo";
-type DashboardView =
-  | "overview"
-  | "tickets"
-  | "central"
-  | "agenda"
-  | "technicians"
-  | "projects"
-  | "feedback"
-  | "settings";
+// Uma lista só. Quando havia o tipo de um lado e listas literais de validação
+// do outro, adicionar uma view compilava sem erro e o clique no menu não fazia
+// nada, porque a URL era rejeitada e caía na view padrão.
+const DASHBOARD_VIEWS = [
+  "overview",
+  "tickets",
+  "central",
+  "agenda",
+  "technicians",
+  "projects",
+  "feedback",
+  "settings",
+] as const;
+type DashboardView = (typeof DASHBOARD_VIEWS)[number];
+
+function isDashboardView(value: string | null): value is DashboardView {
+  return DASHBOARD_VIEWS.includes((value ?? "") as DashboardView);
+}
 type Ticket = {
   id: string;
   title: string;
@@ -3180,33 +3189,13 @@ function formatJiraDate(value: string | null) {
 
 function dashboardViewFromLocation(): DashboardView {
   const requestedView = new URLSearchParams(window.location.search).get("view");
-  return [
-    "overview",
-    "tickets",
-    "central",
-    "agenda",
-    "technicians",
-    "projects",
-    "settings",
-  ].includes(requestedView ?? "")
-    ? (requestedView as DashboardView)
-    : "overview";
+  return isDashboardView(requestedView) ? requestedView : "overview";
 }
 
 function dashboardViewFromHref(href: string) {
   if (!href.startsWith("/?view=")) return null;
   const value = new URLSearchParams(href.slice(2)).get("view");
-  return [
-    "overview",
-    "tickets",
-    "central",
-    "agenda",
-    "technicians",
-    "projects",
-    "settings",
-  ].includes(value ?? "")
-    ? (value as DashboardView)
-    : null;
+  return isDashboardView(value) ? value : null;
 }
 
 function canUseDashboardView(role: string | null, view: DashboardView) {
