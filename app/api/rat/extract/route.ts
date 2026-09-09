@@ -13,15 +13,20 @@ type Extraction = {
   info?: string;
 };
 
-const PROMPT = `Você lê RAT (Relatório de Atendimento Técnico) de suporte de TI em lojas de varejo, muitas vezes fotografadas em campo, tortas e mal iluminadas.
+const PROMPT = `Você transcreve RAT (Relatório de Atendimento Técnico) de suporte de TI em lojas de varejo.
+
+O formulário é PREENCHIDO À MÃO pelo técnico em campo, fotografado com celular. Espere letra cursiva ou de forma, irregular, em português do Brasil, com foto torta, sombra e iluminação ruim. Os rótulos impressos do formulário ajudam a localizar cada campo; o que interessa é o texto MANUSCRITO escrito ao lado ou abaixo deles.
 
 Extraia apenas estas três informações e responda SOMENTE com JSON válido, sem markdown:
 {"identifiedProblem":"","testsPerformed":"","partToReplace":"","confidence":"alta|media|baixa"}
 
 Regras:
-- Campo não encontrado: string vazia.
-- confidence "alta" se os três estão legíveis, "media" se ao menos um, "baixa" se nenhum.
-- Nunca invente. Transcreva apenas o que está visível.`;
+- Transcreva o manuscrito o mais fielmente possível, corrigindo apenas o óbvio.
+- Termos comuns no contexto: PDV, CPU, HD, SSD, fonte, impressora, pinpad, TEF, leitor, cabo de rede, memória, placa-mãe, no-break.
+- Campo ilegível ou não preenchido: string vazia. Não chute.
+- confidence "alta" só se a letra estiver claramente legível nos três campos;
+  "media" se conseguiu ler parte; "baixa" se a escrita está difícil ou ausente.
+- Nunca invente. Transcreva apenas o que está escrito.`;
 
 // Extraction is a convenience: any failure returns empty fields with 200 so the
 // technician is never blocked from filling the form by hand.
@@ -69,10 +74,18 @@ export async function POST(request: Request) {
     if (!ALLOWED_MIME.includes(file.type)) {
       return Response.json(empty(`Formato não suportado (${file.type || 'desconhecido'}). Use PNG, JPG ou WebP.`));
     }
-    if (!env.AI) return Response.json(empty('Leitura automática indisponível no momento.'));
+    if (!env.AI) return Response.json(empty('Leitura automática indisponível: binding AI ausente.'));
 
     const image = [...new Uint8Array(await file.arrayBuffer())];
-    const result = await env.AI.run(MODEL, { prompt: PROMPT, image, max_tokens: 512, temperature: 0.1 });
+    let result: unknown;
+    try {
+      result = await env.AI.run(MODEL, { prompt: PROMPT, image, max_tokens: 512, temperature: 0.1 });
+    } catch (aiError) {
+      // Surface the real reason: a generic message here cost a debugging round.
+      const detail = aiError instanceof Error ? aiError.message : String(aiError);
+      console.error('Workers AI recusou a leitura da RAT', aiError);
+      return Response.json(empty(`IA recusou: ${detail.slice(0, 220)}`));
+    }
     const raw = typeof result === 'string' ? result : String((result as { response?: unknown })?.response ?? '');
     if (!raw.trim()) return Response.json(empty('O modelo não retornou conteúdo.'));
 

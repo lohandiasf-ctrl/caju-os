@@ -1,4 +1,4 @@
-import { and, asc, eq, gt } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { chatGroupMembers, chatGroupMessages, chatGroupReads, chatGroups } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';

@@ -365,3 +365,14 @@ export const ticketSnapshots = sqliteTable('ticket_snapshots', {
   snapshot: text('snapshot').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [index('idx_ticket_snapshots_ticket').on(table.ticketKey, table.createdAt)]);
+
+// Coordenadas de cidades que não têm técnico e por isso não estão em
+// technician-map.json. Resolvidas sob demanda no Nominatim e guardadas aqui
+// para não repetir a chamada — a política de uso deles pede cache.
+export const geocodeCache = sqliteTable('geocode_cache', {
+  query: text('query').primaryKey(),
+  lat: real('lat').notNull(),
+  lng: real('lng').notNull(),
+  label: text('label').notNull(),
+  createdAt: text('created_at').notNull(),
+});

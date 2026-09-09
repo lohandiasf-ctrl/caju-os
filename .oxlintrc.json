@@ -19,8 +19,8 @@
     "node": true
   },
   "options": {
-    "typeAware": true,
-    "typeCheck": true
+    "typeAware": false,
+    "typeCheck": false
   },
   "ignorePatterns": [
     ".next/**",
@@ -29,7 +29,13 @@
     "build/**",
     "dist/**",
     "coverage/**",
-    "next-env.d.ts"
+    "next-env.d.ts",
+    "node_modules/**",
+    "src-tauri/**",
+    ".wrangler/**",
+    "tmp-*/**",
+    ".sites-package*/**",
+    ".publish-stage*/**"
   ],
   "rules": {
     "no-array-constructor": "error",

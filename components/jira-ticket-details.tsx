@@ -38,6 +38,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   const [form, setForm] = useState<Record<string, string>>({});
   const [ratReading, setRatReading] = useState(false);
   const [ratInfo, setRatInfo] = useState('');
+  const [ratNeedsLicence, setRatNeedsLicence] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [failed, setFailed] = useState(false);
@@ -203,11 +204,36 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
       }
       setForm((current) => ({ ...current, ...merged }));
       const filled = Object.keys(merged).length;
+      // Workers AI gates this model behind Meta's licence until the account
+      // submits it once; surface that as an action instead of a dead end.
+      if ((payload.info ?? '').includes('5016')) setRatNeedsLicence(true);
       setRatInfo(payload.info ?? (filled
         ? `${filled} campo(s) preenchido(s) · confiança ${payload.confidence ?? 'baixa'}. Confira antes de salvar.`
         : 'Nada novo foi extraído — os campos já preenchidos foram mantidos.'));
     } catch {
       setRatInfo('Falha ao ler a RAT. Preencha manualmente.');
+    } finally {
+      setRatReading(false);
+    }
+  }
+
+  async function acceptModelLicence() {
+    if (!user) return;
+    setRatReading(true);
+    try {
+      const response = await fetch('/api/rat/agree', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
+      const payload = await response.json() as { aceito?: boolean; error?: string };
+      if (payload.aceito) {
+        setRatNeedsLicence(false);
+        setRatInfo('Licença aceita. Clique em "Ler RAT e preencher" novamente.');
+      } else {
+        setRatInfo(payload.error ?? 'Não foi possível registrar o aceite.');
+      }
+    } catch {
+      setRatInfo('Falha ao registrar o aceite da licença.');
     } finally {
       setRatReading(false);
     }
@@ -243,7 +269,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
         <div className="rounded-xl border border-primary/25 bg-primary/5 p-3"><h3 className="flex items-center gap-2 text-sm font-bold"><Building2 className="size-4 text-primary" />Dados obrigatórios do agendamento</h3><p className="mt-1 text-xs text-muted-foreground">A busca usa os técnicos cadastrados no banco de dados. Confirme os dados antes de avançar.</p><div className="mt-3 grid gap-3 sm:grid-cols-2"><div className="relative"><label className="text-xs font-semibold text-muted-foreground">Pesquisar técnico</label><div className="relative mt-1.5"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input type="search" value={technicianQuery} onFocus={() => setTechnicianSearchOpen(true)} onChange={(event) => { setTechnicianQuery(event.target.value); setTechnicianSearchOpen(true); }} onKeyDown={(event) => { if (event.key === 'Escape') setTechnicianSearchOpen(false); }} placeholder={techniciansLoading ? 'Carregando técnicos...' : 'Digite nome, cidade, CPF ou código'} className="min-h-11 pl-9" autoComplete="off" /></div>{technicianSearchOpen && technicianMatches.length > 0 && <div className="absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-2xl">{technicianMatches.map((technician) => <button key={technician.id} type="button" onClick={() => selectTechnician(technician)} className="block min-h-11 w-full rounded-lg px-3 py-2 text-left hover:bg-primary/10 focus-visible:bg-primary/10"><span className="block text-sm font-semibold">{technician.name}</span><span className="block text-xs text-muted-foreground">{technician.city}/{technician.state}{technician.technicianCode ? ` · ${technician.technicianCode}` : ''}{technician.phone ? ` · ${technician.phone}` : ''}</span></button>)}</div>}</div>{generalFields.slice(0, 1).map((field) => input(field))}<label className="text-xs font-semibold text-muted-foreground sm:col-span-2">Dados enviados ao Jira · Nome, CPF, RG e telefone<textarea rows={4} value={form.technicianData ?? ''} onChange={(event) => setForm((current) => ({ ...current, technicianData: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /><span className="mt-1 block text-[11px] font-normal text-muted-foreground">Você pode complementar o RG manualmente antes de agendar.</span></label></div></div>
         <details className="group rounded-xl border border-border bg-background/35 p-3"><summary className="cursor-pointer list-none text-sm font-bold">Informações da loja e do problema <span className="ml-1 text-xs font-normal text-muted-foreground group-open:hidden">· clique para expandir</span></summary><div className="mt-4 grid gap-3 sm:grid-cols-2">{generalFields.slice(1).map((field) => input(field))}</div>{details.description && <div className="mt-4 border-t border-border pt-4"><p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Descrição original</p><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{details.description}</p></div>}</details>
         <details className="group rounded-xl border border-border bg-background/35 p-3"><summary className="cursor-pointer list-none text-sm font-bold">Comentários internos do Jira <span className="ml-1 text-xs font-normal text-muted-foreground">· {details.internalComments?.length ?? 0}</span></summary><div className="mt-3 space-y-2">{details.internalComments?.map((comment) => <article key={comment.id} className="rounded-lg border border-border bg-black/10 p-3"><p className="whitespace-pre-wrap text-sm">{comment.body}</p><footer className="mt-2 text-xs text-muted-foreground">{comment.author || 'Jira'} · {comment.createdAt ? new Date(comment.createdAt).toLocaleString('pt-BR') : ''}</footer></article>)}{!details.internalComments?.length && <p className="text-xs text-muted-foreground">Nenhum comentário interno disponível.</p>}</div></details>
-        <div className="border-t border-border pt-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-sm font-bold"><Wrench className="size-4 text-amber-300" />Resumo técnico no Jira</h3><label className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-primary/30 bg-background/70 px-3 text-xs font-semibold text-primary transition hover:bg-primary/10 ${ratReading ? 'pointer-events-none opacity-60' : ''}`}>{ratReading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}{ratReading ? 'Lendo RAT...' : 'Ler RAT e preencher'}<input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" disabled={ratReading} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void readRat(file); }} /></label></div>{ratInfo && <p className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">{ratInfo}</p>}<div className="grid gap-3">{([['identifiedProblem','Problema identificado'],['testsPerformed','Testes feitos'],['partToReplace','Peça a ser trocada']] as const).map(([key,label]) => <label key={key} className="text-xs font-semibold text-muted-foreground">{label}<textarea rows={3} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /></label>)}</div></div>
+        <div className="border-t border-border pt-4"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-sm font-bold"><Wrench className="size-4 text-amber-300" />Resumo técnico no Jira</h3><label className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-lg border border-primary/30 bg-background/70 px-3 text-xs font-semibold text-primary transition hover:bg-primary/10 ${ratReading ? 'pointer-events-none opacity-60' : ''}`}>{ratReading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}{ratReading ? 'Lendo RAT...' : 'Ler RAT e preencher'}<input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" disabled={ratReading} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ''; void readRat(file); }} /></label></div>{ratInfo && <div className="mb-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100"><p>{ratNeedsLicence ? 'Este modelo de IA exige aceitar uma vez a Llama 3.2 Community License da Meta antes do primeiro uso.' : ratInfo}</p>{ratNeedsLicence && <div className="mt-2 flex flex-wrap items-center gap-2"><a href="https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/LICENSE" target="_blank" rel="noreferrer" className="underline">Ler a licença</a><Button type="button" size="sm" className="min-h-8" disabled={ratReading} onClick={() => void acceptModelLicence()}>{ratReading ? <Loader2 className="animate-spin" /> : null} Aceitar e habilitar</Button></div>}</div>}<div className="grid gap-3">{([['identifiedProblem','Problema identificado'],['testsPerformed','Testes feitos'],['partToReplace','Peça a ser trocada']] as const).map(([key,label]) => <label key={key} className="text-xs font-semibold text-muted-foreground">{label}<textarea rows={3} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey)} className="field mt-1.5 min-h-24 text-foreground" /></label>)}</div></div>
         {saveButton}
       </TabsContent>
       <TabsContent value="valores" className="space-y-4 pt-3">

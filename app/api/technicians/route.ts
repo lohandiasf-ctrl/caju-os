@@ -3,9 +3,16 @@ import { technicianReviews, technicians } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 
+// CPF, chave PIX e endereço completo são dado pessoal de 1.501 pessoas e só
+// servem a quem trata pagamento ou monta o cadastro enviado ao Jira. O perfil
+// `tecnico` enxerga a lista para escolher colegas e ver cobertura — não precisa
+// disso, e a tela de Técnicos é aberta a ele.
+const SENSITIVE_ROLES = new Set(['gerencia', 'coordenador', 'n1', 'analista']);
+
 export async function GET(request: Request) {
   try {
-    await requireApiUser(request);
+    const user = await requireApiUser(request);
+    const canSeeSensitive = SENSITIVE_ROLES.has(user.role);
     const db = getDb();
     const [rows, reviews] = await Promise.all([
       db.select({
@@ -28,7 +35,8 @@ export async function GET(request: Request) {
     }
     const techniciansWithHistory = rows.map((row) => {
       const history = stats.get(row.id);
-      return { ...row, reviewCount: history?.count ?? 0, reviewAvg: history ? history.sum / history.count : null };
+      const base = canSeeSensitive ? row : { ...row, cpf: null, pixKey: null, fullAddress: null };
+      return { ...base, reviewCount: history?.count ?? 0, reviewAvg: history ? history.sum / history.count : null };
     });
     return Response.json({ technicians: techniciansWithHistory }, { headers: { 'Cache-Control': 'private, max-age=60' } });
   } catch (error) {

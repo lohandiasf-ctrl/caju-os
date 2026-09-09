@@ -2639,30 +2639,6 @@ function SettingsView({
 }) {
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"gerencia" | "n1" | "analista">(
-    "n1",
-  );
-  const [inviteMessage, setInviteMessage] = useState("");
-  async function inviteEmployee() {
-    if (!user || !inviteEmail) return;
-    setInviteMessage("Enviando...");
-    const response = await fetch("/api/users/invite", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${await user.getIdToken()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-    });
-    const payload = (await response.json()) as { error?: string };
-    setInviteMessage(
-      response.ok
-        ? "Convite enviado por e-mail."
-        : (payload.error ?? "Falha ao enviar convite."),
-    );
-    if (response.ok) setInviteEmail("");
-  }
   async function importFile(file: File) {
     if (!user) return;
     setImporting(true);

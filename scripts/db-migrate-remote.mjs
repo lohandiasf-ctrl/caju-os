@@ -37,7 +37,7 @@ if (probe.status === 0) {
   try {
     const rows = JSON.parse(probe.stdout)[0]?.results ?? [];
     applied = new Set(rows.map((r) => r.name));
-  } catch (error) {
+  } catch {
     console.error('db-migrate-remote: d1_migrations returned unparseable output; refusing to guess.');
     process.exit(1);
   }
