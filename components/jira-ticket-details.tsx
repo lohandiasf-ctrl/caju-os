@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type ClipboardEvent, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Check, CircleDollarSign, Download, Eye, FileText, Image, Loader2, Paperclip, RefreshCw, Save, Search, Upload, Video, Wrench, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,7 @@ const workflowStatuses = [
   ['scheduling', 'Pendente de agendamento'], ['scheduled', 'Agendado'], ['operational_preparation', 'Direcionado'], ['in_service', 'Técnico em campo'],
   ['technical_pending', 'Pendência técnica'], ['awaiting_spare', 'Aguardando spare'], ['validated', 'Validado'], ['resolved', 'Resolvido'], ['cancelled', 'Cancelado'],
 ] as const;
+const evidenceAccept = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
 
 export function JiraTicketDetails({ details, user, onUpdated }: { details: Details; user: User; onUpdated: (details: Details) => void }) {
   const initial = useMemo(() => ({ ...details.operationalFields, ...parseDefect(details.operationalFields.defectSummary) }), [details]);
@@ -46,6 +47,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   const [failed, setFailed] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileWarnings, setFileWarnings] = useState<string[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const evidenceFileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ attachment: JiraAttachment; url: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -142,6 +145,34 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
 
   function input([key, label]: [keyof JiraOperationalFields, string], numeric = false) {
     return <label key={key} className="text-xs font-semibold text-muted-foreground">{label}<Input type={key === 'scheduledDateTime' ? 'datetime-local' : numeric ? 'number' : 'text'} min={numeric ? 0 : undefined} step={numeric ? '0.01' : undefined} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey)} className="mt-1.5 min-h-11 text-foreground" /></label>;
+  }
+
+  function queueEvidenceFiles(files: File[], source: 'selecionados' | 'arrastados' | 'colados') {
+    const normalized = files.map(normalizeEvidenceFile);
+    const accepted = normalized.filter(isEvidenceFile);
+    const ignored = files.length - accepted.length;
+    if (!accepted.length) {
+      setFailed(true);
+      setMessage(ignored ? 'Nenhum arquivo compatível foi encontrado. Envie imagens, vídeos, PDF, documentos, planilhas, CSV ou TXT.' : 'Nenhum arquivo recebido.');
+      return;
+    }
+    setFileWarnings([]);
+    setFailed(false);
+    setSelectedFiles((current) => mergeEvidenceFiles(current, accepted));
+    setMessage(`${accepted.length} arquivo(s) ${source} pronto(s) para enviar ao Jira.${ignored ? ` ${ignored} arquivo(s) ignorado(s) por formato incompatível.` : ''}`);
+  }
+
+  function handleEvidenceDrop(event: DragEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    setDragActive(false);
+    queueEvidenceFiles(Array.from(event.dataTransfer.files ?? []), 'arrastados');
+  }
+
+  function handleEvidencePaste(event: ClipboardEvent<HTMLButtonElement>) {
+    const files = Array.from(event.clipboardData.files ?? []);
+    if (!files.length) return;
+    event.preventDefault();
+    queueEvidenceFiles(files, 'colados');
   }
 
   async function uploadFiles() {
@@ -289,7 +320,7 @@ ${chosen.name}` : chosen.name, equipmentTotal: String(Number((totalAtual + chose
       <TabsContent value="anexos" className="space-y-4 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="flex items-center gap-2 text-sm font-bold"><Paperclip className="size-4 text-primary" />Anexos e evidências</h3><p className="mt-1 text-xs text-muted-foreground">RAT, fotos, vídeos e documentos armazenados no chamado do Jira.</p></div><span className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground">{details.attachments?.length ?? 0} arquivo(s)</span></div>
         <div className="grid gap-3 sm:grid-cols-2">{details.attachments?.map((attachment) => <article key={attachment.id} className="min-w-0 overflow-hidden rounded-xl border border-border bg-background/55"><AttachmentThumbnail issueKey={details.key} attachment={attachment} user={user} onOpen={() => void showPreview(attachment)} /><div className="p-3"><p className="break-words text-sm font-semibold">{attachment.filename}</p><p className="mt-1 text-xs text-muted-foreground">{formatBytes(attachment.size)}{attachment.author ? ` · ${attachment.author}` : ''}{attachment.createdAt ? ` · ${formatAttachmentDate(attachment.createdAt)}` : ''}</p><div className="mt-3 flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void showPreview(attachment)} disabled={previewLoading}><Eye /> Visualizar</Button><Button type="button" size="sm" variant="ghost" onClick={() => void fetchAttachment(attachment, true)} aria-label={`Baixar ${attachment.filename}`}><Download /> Baixar</Button></div></div></article>)}{!details.attachments?.length && <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground sm:col-span-2">Nenhum anexo encontrado neste chamado.</div>}</div>
-        <div className="rounded-xl border border-dashed border-primary/35 bg-primary/5 p-4"><label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-primary/30 bg-background/70 px-4 text-sm font-semibold text-primary transition hover:bg-primary/10"><Upload className="size-4" />Selecionar novas evidências<input type="file" multiple className="sr-only" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" onChange={(event) => { setFileWarnings([]); setSelectedFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ''; }} /></label>{selectedFiles.length > 0 && <div className="mt-3 space-y-2">{fileWarnings.length > 0 && <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-100"><b>Validação das fotos:</b><ul className="mt-1 list-disc space-y-1 pl-5">{fileWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}{selectedFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs"><Paperclip className="size-3.5 text-primary" /><span className="min-w-0 flex-1 break-words">{file.name} · {formatBytes(file.size)}</span><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-muted" aria-label={`Remover ${file.name}`} onClick={() => { setFileWarnings([]); setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}><X className="size-4" /></button></div>)}<Button type="button" className="min-h-11 w-full" onClick={() => void uploadFiles()} disabled={uploading}>{uploading ? <Loader2 className="animate-spin" /> : <Upload />} {uploading ? 'Enviando ao Jira...' : `Validar e enviar ${selectedFiles.length} arquivo(s) ao Jira`}</Button></div>}</div>
+        <div className={`rounded-xl border border-dashed p-4 transition ${dragActive ? 'border-primary bg-primary/15 shadow-[0_0_0_1px_rgba(70,120,255,0.35)]' : 'border-primary/35 bg-primary/5'}`}><button type="button" onClick={() => evidenceFileInputRef.current?.click()} onPaste={handleEvidencePaste} onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }} onDrop={handleEvidenceDrop} className={`flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border px-4 py-5 text-center text-sm font-semibold text-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${dragActive ? 'border-primary bg-primary/15' : 'border-primary/30 bg-background/70 hover:bg-primary/10'}`}><span className="inline-flex items-center gap-2"><Upload className="size-4" />Selecionar novas evidências</span><span className="text-xs font-medium text-muted-foreground">Clique, arraste arquivos para cá ou cole com Ctrl+V.</span></button><input ref={evidenceFileInputRef} type="file" multiple className="sr-only" accept={evidenceAccept} aria-label="Selecionar evidências para anexar ao Jira" onChange={(event) => { queueEvidenceFiles(Array.from(event.target.files ?? []), 'selecionados'); event.currentTarget.value = ''; }} />{selectedFiles.length > 0 && <div className="mt-3 space-y-2">{fileWarnings.length > 0 && <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-100"><b>Validação das fotos:</b><ul className="mt-1 list-disc space-y-1 pl-5">{fileWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}{selectedFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs"><Paperclip className="size-3.5 text-primary" /><span className="min-w-0 flex-1 break-words">{file.name} · {formatBytes(file.size)}</span><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-muted" aria-label={`Remover ${file.name}`} onClick={() => { setFileWarnings([]); setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}><X className="size-4" /></button></div>)}<Button type="button" className="min-h-11 w-full" onClick={() => void uploadFiles()} disabled={uploading}>{uploading ? <Loader2 className="animate-spin" /> : <Upload />} {uploading ? 'Enviando ao Jira...' : `Validar e enviar ${selectedFiles.length} arquivo(s) ao Jira`}</Button></div>}</div>
       </TabsContent>
     </Tabs>
     {preview && <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Visualização de ${preview.attachment.filename}`} onMouseDown={(event) => { if (event.currentTarget === event.target) setPreview(null); }}><div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"><header className="flex items-center gap-3 border-b border-border p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{preview.attachment.filename}</p><p className="text-xs text-muted-foreground">{formatBytes(preview.attachment.size)}</p></div><Button type="button" variant="outline" size="sm" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar</Button><Button type="button" variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Fechar visualização"><X /></Button></header><div className="grid min-h-0 flex-1 place-items-center overflow-auto bg-black/40 p-3">{preview.attachment.mimeType.startsWith('image/') ? <img src={preview.url} alt={preview.attachment.filename} className="max-h-[76vh] max-w-full object-contain" /> : preview.attachment.mimeType.startsWith('video/') ? <video src={preview.url} controls autoPlay className="max-h-[76vh] max-w-full" /> : preview.attachment.mimeType === 'application/pdf' ? <iframe src={preview.url} title={preview.attachment.filename} className="h-[76vh] w-full rounded-lg bg-white" /> : <div className="max-w-md text-center"><FileText className="mx-auto size-12 text-primary" /><p className="mt-3 text-sm">Este arquivo não possui visualização no navegador.</p><Button type="button" className="mt-4" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar arquivo</Button></div>}</div></div></div>}
@@ -311,6 +342,44 @@ function AttachmentThumbnail({ issueKey, attachment, user, onOpen }: { issueKey:
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [attachment.id, image, issueKey, user]);
   return <button type="button" onClick={onOpen} className="group relative grid aspect-[16/9] w-full place-items-center overflow-hidden bg-muted/35 text-primary" aria-label={`Visualizar ${attachment.filename}`}>{url ? <img src={url} alt="" className="size-full object-cover transition duration-200 group-hover:scale-[1.02]" /> : <Icon className="size-10" />}<span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/45 group-hover:opacity-100 group-focus-visible:bg-black/45 group-focus-visible:opacity-100"><Eye className="size-7 text-white" /></span></button>;
+}
+
+function normalizeEvidenceFile(file: File, index: number) {
+  if (file.name && !/^image\.(png|jpe?g|webp|gif|bmp|avif)$/i.test(file.name)) return file;
+  if (!file.type.startsWith('image/')) return file;
+  const extension = file.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return new File([file], `evidencia-colada-${timestamp}-${index + 1}.${extension}`, { type: file.type || 'image/png', lastModified: Date.now() });
+}
+
+function isEvidenceFile(file: File) {
+  const name = file.name.toLowerCase();
+  return file.type.startsWith('image/')
+    || file.type.startsWith('video/')
+    || file.type === 'application/pdf'
+    || file.type === 'text/plain'
+    || file.type === 'text/csv'
+    || [
+      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt',
+      '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif',
+      '.mp4', '.mov', '.avi', '.mkv', '.webm',
+    ].some((extension) => name.endsWith(extension));
+}
+
+function mergeEvidenceFiles(current: File[], incoming: File[]) {
+  const seen = new Set(current.map(evidenceFileKey));
+  const merged = [...current];
+  for (const file of incoming) {
+    const key = evidenceFileKey(file);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(file);
+  }
+  return merged;
+}
+
+function evidenceFileKey(file: File) {
+  return `${file.name}|${file.size}|${file.lastModified}`;
 }
 
 function statusKey(value: string) { const normalized = value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); if (normalized.includes('tec-campo') || normalized.includes('tecnico em campo') || normalized.includes('em atendimento')) return 'in_service'; if (normalized === 'agendado') return 'scheduled'; if (normalized.includes('agendamento')) return 'scheduling'; if (normalized.includes('direcion')) return 'operational_preparation'; if (normalized.includes('pendencia')) return 'technical_pending'; if (normalized.includes('spare')) return 'awaiting_spare'; if (normalized.includes('valid')) return 'validated'; if (normalized.includes('resol') || normalized.includes('conclu') || normalized.includes('finaliz')) return 'resolved'; if (normalized.includes('cancel')) return 'cancelled'; return ''; }

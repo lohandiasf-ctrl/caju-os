@@ -11,6 +11,13 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Permite arrastar e colar evidências no chamado — *(este trabalho)*
+A aba **Anexos** agora aceita três caminhos de upload no mesmo lugar: clicar
+para selecionar, arrastar arquivos para a área destacada ou colar com
+`Ctrl+V` depois de focar a área. As evidências entram em uma fila acumulativa,
+sem substituir a seleção anterior, ignorando formatos incompatíveis e mantendo
+a validação visual antes do envio ao Jira.
+
 ### Evita erro genérico na listagem de chamados — *(este trabalho)*
 Busca de chamados no Jira ficou mais tolerante: se o endpoint novo
 `/rest/api/3/search/jql` falhar sem paginação, o sistema tenta o endpoint
