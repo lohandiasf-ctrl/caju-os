@@ -378,10 +378,13 @@ dependencies = [
 name = "caju-os-desktop"
 version = "0.1.13"
 dependencies = [
+ "base64 0.22.1",
+ "serde",
  "tauri",
  "tauri-build",
  "tauri-plugin-notification",
  "url",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

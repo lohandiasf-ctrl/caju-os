@@ -15,6 +15,7 @@ export type JiraOperationalFields = {
 };
 
 type JiraAttachment = { id: string; filename: string; mimeType: string; size: number; createdAt: string; author: string | null };
+type NativeClipboardFile = { name: string; mime_type: string; data_base64: string };
 type Technician = { id: number; technicianCode: string | null; name: string; cpf: string | null; phone: string | null; city: string; state: string };
 type Details = { key: string; status: string; priority: string; assignee: string | null; reporter: string | null; issueType: string; createdAt: string; description: string; operationalFields: JiraOperationalFields; attachments: JiraAttachment[]; internalComments?: Array<{ id: string; body: string; author: string | null; createdAt: string }> };
 type User = { getIdToken: () => Promise<string> } | null;
@@ -108,9 +109,15 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
       if (target?.closest('input, textarea, [contenteditable="true"]')) return;
       const clipboardEvent = event as Event & { clipboardData?: DataTransfer };
       const files = clipboardFiles(clipboardEvent.clipboardData);
-      if (!files.length) return;
-      event.preventDefault();
-      queueEvidenceFiles(files, 'colados');
+      if (files.length) {
+        event.preventDefault();
+        queueEvidenceFiles(files, 'colados');
+        return;
+      }
+      if (isTauriDesktop()) {
+        event.preventDefault();
+        void readNativeClipboardFiles();
+      }
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
@@ -191,6 +198,18 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     if (!files.length) return;
     event.preventDefault();
     queueEvidenceFiles(files, 'colados');
+  }
+
+  async function readNativeClipboardFiles() {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const nativeFiles = await invoke<NativeClipboardFile[]>('read_clipboard_files');
+      const files = nativeFiles.map(nativeClipboardFile).filter((file): file is File => Boolean(file));
+      if (files.length) queueEvidenceFiles(files, 'colados');
+    } catch (error) {
+      setFailed(true);
+      setMessage(error instanceof Error ? error.message : 'Não foi possível ler os arquivos copiados do Windows.');
+    }
   }
 
   async function uploadFiles() {
@@ -370,6 +389,20 @@ function clipboardFiles(data?: DataTransfer | null) {
     .filter((item) => item.kind === 'file')
     .map((item) => item.getAsFile())
     .filter((file): file is File => Boolean(file));
+}
+
+function nativeClipboardFile(item: NativeClipboardFile) {
+  try {
+    const encoded = atob(item.data_base64);
+    const bytes = Uint8Array.from(encoded, (character) => character.charCodeAt(0));
+    return new File([bytes], item.name, { type: item.mime_type || 'application/octet-stream', lastModified: Date.now() });
+  } catch {
+    return null;
+  }
+}
+
+function isTauriDesktop() {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
 function normalizeEvidenceFile(file: File, index: number) {

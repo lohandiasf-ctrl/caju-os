@@ -11,6 +11,13 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Ctrl+V de arquivos copiados do Explorer no EXE — *(este trabalho)*
+O Tauri ganhou o comando nativo `read_clipboard_files`, que le o clipboard do
+Windows (`CF_HDROP`) e transforma arquivos copiados no Explorer em evidencias
+do chamado. A web continua usando o clipboard do navegador; no desktop, quando
+o navegador nao entrega os arquivos, o sistema consulta a ponte nativa. Limites:
+8 arquivos por colagem, 25 MB por arquivo e 50 MB no total.
+
 ### Aceita pacotes ZIP e RAR como evidência — *(este trabalho)*
 O seletor, arrastar/colar e a API de anexos agora aceitam arquivos `.zip` e
 `.rar` até 25 MB. O pacote é anexado completo ao chamado do Jira, preservando

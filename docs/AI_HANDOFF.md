@@ -33,6 +33,11 @@ Desktop: **Tauri 0.1.13** (`src-tauri/tauri.conf.json`). É uma casca fina que
 carrega `https://operacoes.cajutech.net`; mudanças só-web chegam ao EXE atual
 após o deploy, sem recompilar.
 
+Exceção desktop: a colagem de arquivos copiados do Windows Explorer usa o
+comando nativo Tauri `read_clipboard_files` (`CF_HDROP`). Esse recurso so chega
+aos usuarios apos rebuild/redistribuicao do instalador; publicar apenas o Worker
+nao atualiza essa ponte nativa.
+
 ## Stack técnica
 
 | Camada | O quê |
