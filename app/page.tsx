@@ -219,8 +219,6 @@ const dots: Record<Status, string> = {
   Direcionado: "bg-cyan-400",
   "Técnico em campo": "bg-emerald-400",
 };
-const VALIDATION_WHATSAPP_GROUP =
-  "https://chat.whatsapp.com/DkSDNsDagPrKkxrXyLi4NL";
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   overview: [
     "Operação em tempo real",
@@ -302,8 +300,6 @@ export default function Home() {
   const [n1Users, setN1Users] = useState<N1User[]>([]);
   const [n1Loading, setN1Loading] = useState(true);
   const [operationOpen, setOperationOpen] = useState(false);
-  const [validationOpen, setValidationOpen] = useState(false);
-  const [validationConfirmed, setValidationConfirmed] = useState(false);
   const [validationSending, setValidationSending] = useState(false);
   const [validationNotice, setValidationNotice] = useState("");
   const [archivedKeys, setArchivedKeys] = useState<Set<string>>(
@@ -587,8 +583,6 @@ export default function Home() {
     setDetailsVisible(true);
     setWhatsappUrl("");
     setDialogError("");
-    setValidationOpen(false);
-    setValidationConfirmed(false);
     setValidationNotice("");
     setDialogLoading(true);
     try {
@@ -735,51 +729,23 @@ export default function Home() {
   const validationReady =
     Boolean(details) && validationRequirements.length === 0;
 
-  async function sendForValidation() {
-    if (!details || !validationConfirmed || !validationReady) return;
-    const text = `Podem validar, por favor?\n${details.jiraUrl}`;
+  async function copyJiraLinkForValidation() {
+    if (!details?.jiraUrl) return;
+    const link = details.jiraUrl;
     setValidationSending(true);
     try {
-      if (!user) throw new Error("Sessão indisponível.");
-      const validationResponse = await fetch(
-        `/api/jira/issues/${details.key}/validation`,
-        { headers: { Authorization: `Bearer ${await user.getIdToken()}` } },
-      );
-      const validation = (await validationResponse.json()) as {
-        ready?: boolean;
-        missing?: string[];
-        error?: string;
-      };
-      if (!validationResponse.ok || !validation.ready)
-        throw new Error(
-          validation.error ||
-            `Ainda falta: ${(validation.missing ?? []).join(", ")}.`,
-        );
-      if ("__TAURI_INTERNALS__" in window) {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const copied = await invoke<boolean>("copy_to_clipboard", { text });
-        await invoke("open_external_url", { url: VALIDATION_WHATSAPP_GROUP });
-        setValidationNotice(
-          copied
-            ? "Grupo de validação aberto e mensagem copiada. Cole e envie no WhatsApp."
-            : "Grupo de validação aberto. Copie o link do Jira acima e envie no WhatsApp.",
-        );
-      } else {
-        window.open(VALIDATION_WHATSAPP_GROUP, "_blank", "noopener,noreferrer");
-        const copied = await copyToClipboard(text);
-        setValidationNotice(
-          copied
-            ? "Grupo de validação aberto e mensagem copiada. Cole e envie no WhatsApp."
-            : "Grupo de validação aberto. Copie o link do Jira acima e envie no WhatsApp.",
-        );
-      }
-      setValidationOpen(false);
-    } catch (error) {
+      // O app desktop precisa do comando do Tauri; no navegador vale o helper
+      // que ja existe neste arquivo, com fallback para execCommand.
+      const copied = "__TAURI_INTERNALS__" in window
+        ? await (await import("@tauri-apps/api/core")).invoke<boolean>("copy_to_clipboard", { text: link })
+        : await copyToClipboard(link);
       setValidationNotice(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível abrir o grupo de validação. Tente novamente.",
+        copied
+          ? "Link copiado. Envie no grupo SUP para validação."
+          : "Não foi possível copiar. Copie o link do Jira manualmente.",
       );
+    } catch {
+      setValidationNotice("Não foi possível copiar. Copie o link do Jira manualmente.");
     } finally {
       setValidationSending(false);
     }
@@ -1428,21 +1394,16 @@ export default function Home() {
                   type="button"
                   variant="outline"
                   className="h-auto min-h-16 justify-start gap-3 border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50"
-                  onClick={() => {
-                    setValidationConfirmed(false);
-                    setValidationOpen(true);
-                  }}
-                  disabled={!validationReady}
+                  onClick={() => void copyJiraLinkForValidation()}
+                  disabled={!validationReady || validationSending}
                   aria-describedby="validation-requirements"
                 >
                   <ShieldCheck className="size-5 text-emerald-300" />
                   <span>
-                    <span className="block font-bold">
-                      Enviar para validação
-                    </span>
+                    <span className="block font-bold">Validar</span>
                     <span className="block text-xs font-normal text-muted-foreground">
                       {validationReady
-                        ? "Enviar link ao grupo de validação"
+                        ? "Copiar link do Jira para enviar no grupo SUP"
                         : `Falta: ${validationRequirements.join(", ")}`}
                     </span>
                   </span>
@@ -1573,72 +1534,6 @@ export default function Home() {
               )}
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={validationOpen}
-        onOpenChange={(open) => {
-          setValidationOpen(open);
-          if (!open) setValidationConfirmed(false);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Enviar para validação</DialogTitle>
-            <DialogDescription>
-              Confirme a conferência antes de abrir o grupo de validação.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-sm">
-              <p className="font-semibold text-emerald-200">
-                Mensagem preparada
-              </p>
-              <p className="mt-2 whitespace-pre-wrap break-words text-muted-foreground">
-                Podem validar, por favor?{"\n"}
-                {details?.jiraUrl}
-              </p>
-            </div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/25 p-3 text-sm transition hover:bg-muted/45">
-              <input
-                type="checkbox"
-                checked={validationConfirmed}
-                onChange={(event) =>
-                  setValidationConfirmed(event.target.checked)
-                }
-                className="mt-0.5 size-4 shrink-0 accent-primary"
-              />
-              <span>
-                Confirmo que o funcionário preencheu todos os dados, atualizou
-                os valores e anexou as evidências do chamado.
-              </span>
-            </label>
-            <p className="text-xs text-muted-foreground">
-              O grupo será aberto com a mensagem copiada para a área de
-              transferência, pronta para enviar.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setValidationOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                onClick={() => void sendForValidation()}
-                disabled={!validationConfirmed || validationSending}
-              >
-                {validationSending ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <ShieldCheck />
-                )}{" "}
-                {validationSending ? "Preparando..." : "Abrir grupo e enviar"}
-              </Button>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
       {selected && (
