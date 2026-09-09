@@ -57,6 +57,7 @@ import {
   ProfileSettings,
   UserMenu,
 } from "@/components/user-menu";
+import { CajuLoading } from "@/components/caju-loading";
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
 import { FeedbackBoard } from "@/components/feedback-board";
@@ -1341,9 +1342,8 @@ export default function Home() {
             </DialogDescription>
           </DialogHeader>
           {dialogLoading ? (
-            <div className="grid min-h-40 place-items-center text-muted-foreground">
-              <Loader2 className="size-6 animate-spin" />
-              <span className="sr-only">Carregando chamado</span>
+            <div className="grid min-h-40 place-items-center">
+              <CajuLoading label="Carregando chamado..." fullscreen={false} compact />
             </div>
           ) : (
             <div className="space-y-4">
@@ -2889,8 +2889,8 @@ function Metric({ label, value }: { label: string; value: number }) {
 function OperationalSummary({ data }: { data: OperationalDashboard | null }) {
   if (!data)
     return (
-      <section className="surface-panel mt-5 rounded-2xl p-5 text-sm text-muted-foreground">
-        Carregando indicadores operacionais...
+      <section className="surface-panel mt-5 grid min-h-48 place-items-center rounded-2xl p-5">
+        <CajuLoading label="Carregando indicadores operacionais..." fullscreen={false} compact />
       </section>
     );
   const currency = (cents: number) =>
@@ -2995,9 +2995,8 @@ function EmptyState({ label }: { label: string }) {
 }
 function LoadingPanel({ label }: { label: string }) {
   return (
-    <div className="surface-panel mt-6 flex min-h-48 items-center justify-center gap-3 rounded-2xl text-sm text-muted-foreground">
-      <Loader2 className="size-5 shrink-0 animate-spin" />
-      {label}
+    <div className="surface-panel mt-6 grid min-h-48 place-items-center rounded-2xl">
+      <CajuLoading label={label} fullscreen={false} compact />
     </div>
   );
 }

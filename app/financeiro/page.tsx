@@ -9,6 +9,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { UserMenu } from '@/components/user-menu';
+import { CajuLoading } from '@/components/caju-loading';
 import { useAuth } from '@/components/auth-provider';
 
 type FinancialIssue = {
@@ -170,7 +171,7 @@ export default function FinanceiroPage() {
       <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Gestão financeira</p><h1 className="text-2xl font-extrabold tracking-[-.03em] sm:text-3xl">Financeiro</h1><p className="mt-1 text-sm text-muted-foreground">Valores do ticket, spare, repasses e margem em uma visão.</p></div><div className="flex flex-wrap gap-2">{([7, 30, 90] as const).map((days) => <Button key={days} size="sm" variant={period === days ? 'secondary' : 'outline'} onClick={() => { setPeriod(days); setPage(1); }}>{days} dias</Button>)}<Button size="sm" onClick={exportCsv} disabled={!rows.length}><Download />Exportar</Button></div></div>
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">{error}</div>}
-        {loading ? <div className="surface-panel mt-7 flex min-h-48 items-center justify-center gap-3 rounded-2xl text-sm text-muted-foreground"><Loader2 className="size-5 animate-spin" />Carregando dados reais do Jira...</div> : <>
+        {loading ? <div className="surface-panel mt-7 grid min-h-48 place-items-center rounded-2xl"><CajuLoading label="Carregando dados reais do Jira..." fullscreen={false} compact /></div> : <>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             <Metric label="Faturamento previsto" value={money(revenue)} note={`${periodIssues.length} tickets movimentados`} icon={TrendingUp} tone="green" />
             <Metric label="Serviços" value={money(serviceRevenue)} note="Total do ticket menos spare" icon={Building2} tone="blue" />

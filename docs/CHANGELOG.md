@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Loading fluido da Caju em telas e painéis — *(este trabalho)*
+A animação fluida criada no thread `01a083ff-99b7-78f1-9053-7605594e0854` já
+era o asset publicado em `public/brand/caju-loading.gif/.webp` (hashes
+conferidos). `CajuLoading` agora tem variantes compacta e de painel, e os
+loadings de abertura de chamado, agenda/equipe/lojas, indicadores
+operacionais, gestão operacional, atendimento N1 e financeiro usam a marca.
+Spinners pequenos de botões foram mantidos como feedback de ação.
+**Validação:** `npm test`, `npx tsc --noEmit` e `npm run build` passaram.
+
 ### Consolidação da validação de foto — *(este trabalho)*
 `lib/image-validation.ts` virou a fonte única da validação visual de evidências:
 agora expõe validação por canvas, por `File` e por lote. A tela de detalhe do
