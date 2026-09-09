@@ -119,10 +119,19 @@ let financialIssuesCache: { expiresAt: number; value: FinancialIssue[] } | null 
 const CACHE_TTL_MS = 45_000;
 
 async function jiraSearch(body: { jql: string; fields: string[]; maxResults: number; nextPageToken?: string }) {
-  const enhanced = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  let enhanced: JiraSearchResponse | null = null;
+  try {
+    enhanced = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    if (body.nextPageToken) throw error;
+    return jiraFetch<JiraSearchResponse>('/rest/api/3/search', {
+      method: 'POST',
+      body: JSON.stringify({ jql: body.jql, fields: body.fields, maxResults: body.maxResults, startAt: 0 }),
+    });
+  }
   if ((enhanced.issues?.length ?? 0) > 0 || body.nextPageToken) return enhanced;
   try {
     return await jiraFetch<JiraSearchResponse>('/rest/api/3/search', {
@@ -163,7 +172,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
   }
 
   const value = {
-    issues: (response.issues ?? []).map(toSummary),
+    issues: (response.issues ?? []).map(toSummary).filter((issue): issue is JiraIssueSummary => Boolean(issue)),
     nextPageToken: response.nextPageToken ?? null,
     isLast: response.isLast ?? !response.nextPageToken,
   };
@@ -439,10 +448,15 @@ async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const baseUrl = requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '');
   if (!/^https:\/\/[a-z0-9-]+\.atlassian\.net$/i.test(baseUrl)) throw new JiraError('URL do Jira inválida.', 500);
   const credential = btoa(`${requiredEnv('JIRA_EMAIL')}:${requiredEnv('JIRA_API_TOKEN')}`);
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: { Accept: 'application/json', ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), Authorization: `Basic ${credential}`, ...init?.headers },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers: { Accept: 'application/json', ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }), Authorization: `Basic ${credential}`, ...init?.headers },
+    });
+  } catch {
+    throw new JiraError('Não foi possível conectar ao Jira agora. Tente novamente em instantes.', 502);
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { errorMessages?: string[]; errors?: Record<string, string> } | null;
     const jiraMessage = [...(payload?.errorMessages ?? []), ...Object.values(payload?.errors ?? {})].filter(Boolean).join(' ');
@@ -452,7 +466,11 @@ async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new JiraError(jiraMessage ? `O Jira recusou a alteração: ${jiraMessage}` : `O Jira respondeu com erro ${response.status}.`, response.status === 400 ? 400 : 502);
   }
   if (response.status === 204 || !response.headers.get('content-type')?.includes('application/json')) return undefined as T;
-  return response.json() as Promise<T>;
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new JiraError('O Jira respondeu em um formato inesperado. Tente atualizar a tela.', 502);
+  }
 }
 
 function validIssueKey(key: string) {
@@ -646,23 +664,24 @@ function normalizeText(value: string) {
 }
 
 function toSummary(issue: JiraIssue): JiraIssueSummary {
+  const fields = issue.fields ?? {};
   return {
     key: issue.key,
-    summary: issue.fields.summary ?? 'Sem título',
-    status: issue.fields.status?.name ?? 'Sem status',
-    statusCategory: issue.fields.status?.statusCategory?.key ?? 'undefined',
-    priority: issue.fields.priority?.name ?? 'Sem prioridade',
-    assignee: issue.fields.assignee?.displayName ?? null,
-    createdAt: issue.fields.created ?? '',
-    updatedAt: issue.fields.updated ?? '',
-    dueDate: issue.fields.duedate ?? null,
-    labels: issue.fields.labels ?? [],
-    store: customFieldText(issue.fields.customfield_14954)
-      ?? customFieldText(issue.fields.customfield_14809)
-      ?? customFieldText(issue.fields.customfield_14827),
-    city: customFieldText(issue.fields.customfield_11994),
-    scheduledAt: customFieldText(issue.fields.customfield_12036),
-    partnerTriggeredAt: customFieldText(issue.fields.customfield_12278),
+    summary: fields.summary ?? 'Sem título',
+    status: fields.status?.name ?? 'Sem status',
+    statusCategory: fields.status?.statusCategory?.key ?? 'undefined',
+    priority: fields.priority?.name ?? 'Sem prioridade',
+    assignee: fields.assignee?.displayName ?? null,
+    createdAt: fields.created ?? '',
+    updatedAt: fields.updated ?? '',
+    dueDate: fields.duedate ?? null,
+    labels: fields.labels ?? [],
+    store: customFieldText(fields.customfield_14954)
+      ?? customFieldText(fields.customfield_14809)
+      ?? customFieldText(fields.customfield_14827),
+    city: customFieldText(fields.customfield_11994),
+    scheduledAt: customFieldText(fields.customfield_12036),
+    partnerTriggeredAt: customFieldText(fields.customfield_12278),
   };
 }
 

@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Evita erro genérico na listagem de chamados — *(este trabalho)*
+Busca de chamados no Jira ficou mais tolerante: se o endpoint novo
+`/rest/api/3/search/jql` falhar sem paginação, o sistema tenta o endpoint
+clássico `/rest/api/3/search`; falhas de rede e respostas JSON inválidas viram
+mensagens tratáveis; e respostas parciais de chamados não derrubam o dashboard.
+Isso complementa a redução de leituras D1 feita na branch
+`claude/fix-d1-read-budget`.
+**Validação:** `npm test`, `npx tsc --noEmit`, `npm run build` e
+`npx oxlint lib/server/jira.ts` passaram.
+
 ### Reduz consumo de leituras do D1 — *(branch claude/fix-d1-read-budget)*
 Raiz do "Falha inesperada ao consultar o Jira." + dashboard zerado: o D1 bateu
 o **limite diário de leituras do plano gratuito** (5 mi linhas/dia). Quando isso
