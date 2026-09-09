@@ -80,6 +80,28 @@ type Status =
   | "Aguardando spare"
   | "Direcionado"
   | "Técnico em campo";
+type JiraFilterPreset = "operational" | "assignedPartner" | "spareApproved24h";
+const jiraFilterPresets: Array<{
+  value: JiraFilterPreset;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "operational",
+    label: "Fila operacional",
+    description: "Chamados ativos acompanhados pelo sistema.",
+  },
+  {
+    value: "assignedPartner",
+    label: "Meus chamados no Jira",
+    description: "Filtro do Jira por parceiro atribuído ao usuário atual.",
+  },
+  {
+    value: "spareApproved24h",
+    label: "Spare aprovado 24h",
+    description: "Aguardando spare com aprovação nas últimas 24 horas.",
+  },
+];
 // Uma lista só. Quando havia o tipo de um lado e listas literais de validação
 // do outro, adicionar uma view compilava sem erro e o clique no menu não fazia
 // nada, porque a URL era rejeitada e caía na view padrão.
@@ -286,6 +308,8 @@ export default function Home() {
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
+  const [jiraFilterPreset, setJiraFilterPreset] =
+    useState<JiraFilterPreset>("operational");
   const [menu, setMenu] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   useEffect(() => {
@@ -368,6 +392,14 @@ export default function Home() {
       );
     });
   }, [activeView, archivedKeys, query, statusFilter, ticketDate, tickets]);
+  const visibleKanbanColumns = useMemo(() => {
+    if (statusFilter !== "Todos") return [statusFilter];
+    if (jiraFilterPreset === "operational") return columns;
+    const statusesWithTickets = columns.filter((column) =>
+      filtered.some((ticket) => ticket.status === column),
+    );
+    return statusesWithTickets.length ? statusesWithTickets : columns;
+  }, [filtered, jiraFilterPreset, statusFilter]);
   const allTicketActivities = useMemo(
     () =>
       tickets
@@ -393,7 +425,8 @@ export default function Home() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    const cached = sessionStorage.getItem("caju-jira-issues-cache");
+    const cacheKey = `caju-jira-issues-cache:${jiraFilterPreset}`;
+    const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as {
@@ -408,7 +441,7 @@ export default function Home() {
           };
         }
       } catch {
-        sessionStorage.removeItem("caju-jira-issues-cache");
+        sessionStorage.removeItem(cacheKey);
       }
     }
     setJiraLoading(true);
@@ -422,6 +455,8 @@ export default function Home() {
 
         while (!isLast) {
           const params = new URLSearchParams({ limit: "100" });
+          if (jiraFilterPreset !== "operational")
+            params.set("preset", jiraFilterPreset);
           if (cursor) params.set("cursor", cursor);
           const response = await fetch(`/api/jira/issues?${params}`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -445,7 +480,7 @@ export default function Home() {
         if (active) {
           setTickets(issues.map(toTicket));
           sessionStorage.setItem(
-            "caju-jira-issues-cache",
+            cacheKey,
             JSON.stringify({ at: Date.now(), issues }),
           );
         }
@@ -464,11 +499,17 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [jiraFilterPreset, user]);
 
   useEffect(() => {
     knownTicketIds.current = new Set(tickets.map((ticket) => ticket.id));
   }, [tickets]);
+
+  useEffect(() => {
+    // Each Jira preset represents a different queue. Do not compare the new
+    // queue with the previous one or generate false added/removed alerts.
+    knownTicketIds.current = new Set();
+  }, [jiraFilterPreset]);
 
   useEffect(() => {
     if (!operational || !user) return;
@@ -493,6 +534,8 @@ export default function Home() {
         let cursor: string | null = null;
         do {
           const params = new URLSearchParams({ limit: "100" });
+          if (jiraFilterPreset !== "operational")
+            params.set("preset", jiraFilterPreset);
           if (cursor) params.set("cursor", cursor);
           const response = await fetch(`/api/jira/issues?${params}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
           const payload = await response.json() as { issues?: JiraTicket[]; nextPageToken?: string | null };
@@ -519,7 +562,7 @@ export default function Home() {
     };
     const timer = window.setInterval(() => void refresh(), 45_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [user]);
+  }, [jiraFilterPreset, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -1185,26 +1228,59 @@ export default function Home() {
               </div>
               {showFilters && (
                 <div
-                  className="surface-panel mt-3 flex flex-wrap gap-2 rounded-xl p-3"
-                  aria-label="Filtrar por status"
+                  className="surface-panel mt-3 space-y-3 rounded-xl p-3"
+                  aria-label="Filtros de chamados"
                 >
-                  {(["Todos", ...columns] as const).map((status) => (
-                    <Button
-                      key={status}
-                      size="sm"
-                      variant={statusFilter === status ? "default" : "ghost"}
-                      onClick={() => setStatusFilter(status)}
-                    >
-                      {status}
-                    </Button>
-                  ))}
+                  <div>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Filtros do Jira
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {jiraFilterPresets.map((preset) => (
+                        <Button
+                          key={preset.value}
+                          size="sm"
+                          variant={
+                            jiraFilterPreset === preset.value
+                              ? "default"
+                              : "ghost"
+                          }
+                          title={preset.description}
+                          onClick={() => {
+                            setJiraFilterPreset(preset.value);
+                            setStatusFilter("Todos");
+                            setTicketDate(undefined);
+                          }}
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Status
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {(["Todos", ...columns] as const).map((status) => (
+                        <Button
+                          key={status}
+                          size="sm"
+                          variant={statusFilter === status ? "default" : "ghost"}
+                          onClick={() => setStatusFilter(status)}
+                        >
+                          {status}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
               {view === "kanban" ? (
                 <div
-                  className={`mt-4 grid gap-4 ${statusFilter === "Todos" ? "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5" : "grid-cols-1"}`}
+                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5" : "grid-cols-1"}`}
                 >
-                  {(statusFilter === "Todos" ? columns : [statusFilter]).map(
+                  {visibleKanbanColumns.map(
                     (column) => {
                       const items = filtered.filter(
                         (ticket) => ticket.status === column,

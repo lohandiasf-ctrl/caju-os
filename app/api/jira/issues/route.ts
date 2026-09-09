@@ -1,5 +1,5 @@
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { JiraError, searchJiraIssues } from '@/lib/server/jira';
+import { JiraError, searchJiraIssues, type JiraIssuePreset } from '@/lib/server/jira';
 import { processJiraSyncJobs } from '@/lib/server/jira-sync';
 
 export async function GET(request: Request) {
@@ -8,7 +8,8 @@ export async function GET(request: Request) {
     // Dashboard refreshes also drain a small batch from the durable outbox.
     await processJiraSyncJobs(3).catch(() => []);
     const url = new URL(request.url);
-    const data = await searchJiraIssues({ query: url.searchParams.get('q') ?? undefined, status: url.searchParams.get('status') ?? undefined, nextPageToken: url.searchParams.get('cursor') ?? undefined, maxResults: Number(url.searchParams.get('limit') ?? 50) });
+    const preset = jiraIssuePresetParam(url.searchParams.get('preset'));
+    const data = await searchJiraIssues({ query: url.searchParams.get('q') ?? undefined, status: url.searchParams.get('status') ?? undefined, preset, nextPageToken: url.searchParams.get('cursor') ?? undefined, maxResults: Number(url.searchParams.get('limit') ?? 50) });
     return Response.json(data, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
@@ -16,4 +17,8 @@ export async function GET(request: Request) {
     console.error('Falha ao consultar chamados do Jira', error);
     return Response.json({ error: 'Falha inesperada ao consultar o Jira.' }, { status: 500 });
   }
+}
+
+function jiraIssuePresetParam(value: string | null): JiraIssuePreset | undefined {
+  return value === 'assignedPartner' || value === 'spareApproved24h' ? value : undefined;
 }

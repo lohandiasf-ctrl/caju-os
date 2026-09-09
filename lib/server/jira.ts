@@ -101,6 +101,7 @@ type FinancialFieldIds = {
   billed: string[];
 };
 type FinancialIssue = { key: string; title: string; status: string; technician: string; store: string; city: string; updatedAt: string; serviceValue: number; spareValue: number; totalValue: number; billed: boolean };
+export type JiraIssuePreset = 'assignedPartner' | 'spareApproved24h';
 
 const OPERATIONAL_STATUSES = [
   'AGENDAMENTO',
@@ -143,31 +144,52 @@ async function jiraSearch(body: { jql: string; fields: string[]; maxResults: num
   }
 }
 
-export async function searchJiraIssues(options: { query?: string; status?: string; nextPageToken?: string; maxResults?: number }) {
-  const cacheKey = JSON.stringify({ q: options.query?.trim() ?? '', s: options.status?.trim() ?? '', c: options.nextPageToken ?? '', m: options.maxResults ?? 50 });
+function jiraIssuePreset(preset: JiraIssuePreset, projectKey: string) {
+  if (preset === 'assignedPartner') {
+    return {
+      clauses: [
+        `project = "${jqlString(projectKey)}"`,
+        '"parceiro-atribuido[user picker (single user)]" = currentUser()',
+      ],
+      orderBy: 'ORDER BY status ASC',
+    };
+  }
+  return {
+    clauses: [
+      `project = "${jqlString(projectKey)}"`,
+      'status = "Aguardando Spare"',
+      '"data/hora da aprovação[time stamp]" >= -1d',
+    ],
+    orderBy: 'ORDER BY "cf[15078]" ASC, "cf[14954]" ASC, "cf[11994]" ASC, key ASC',
+  };
+}
+
+export async function searchJiraIssues(options: { query?: string; status?: string; preset?: JiraIssuePreset; nextPageToken?: string; maxResults?: number }) {
+  const cacheKey = JSON.stringify({ q: options.query?.trim() ?? '', s: options.status?.trim() ?? '', p: options.preset ?? '', c: options.nextPageToken ?? '', m: options.maxResults ?? 50 });
   const cached = issuesCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
-  const clauses = [`project = "${jqlString(projectKey)}"`];
+  const preset = options.preset ? jiraIssuePreset(options.preset, projectKey) : null;
+  const clauses = preset?.clauses ?? [`project = "${jqlString(projectKey)}"`];
   const query = options.query?.trim();
   if (query) {
     if (/^[A-Z][A-Z0-9_]+-\d+$/i.test(query)) clauses.push(`key = "${jqlString(query.toUpperCase())}"`);
     else clauses.push(`text ~ "${jqlString(query)}"`);
   }
-  if (options.status?.trim()) {
+  if (!preset && options.status?.trim()) {
     clauses.push(`status = "${jqlString(options.status.trim())}"`);
-  } else {
+  } else if (!preset) {
     const operationalStatuses = await getOperationalStatusNames(projectKey);
     clauses.push(`status IN (${operationalStatuses.map((status) => `"${jqlString(status)}"`).join(', ')})`);
   }
 
   const response = await jiraSearch({
-      jql: `${clauses.join(' AND ')} ORDER BY updated DESC`,
+      jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
       fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12036', 'customfield_12278'],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
-  if (!(response.issues?.length) && !options.query?.trim() && !options.status?.trim()) {
+  if (!(response.issues?.length) && !options.query?.trim() && !options.status?.trim() && !preset) {
     throw new JiraError('A integração do Jira está autenticada, mas sem acesso aos chamados do projeto. Atualize a credencial ou a permissão da conta de integração.', 502);
   }
 

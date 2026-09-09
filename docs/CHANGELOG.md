@@ -11,6 +11,13 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Adiciona filtros prontos do Jira ao fluxo de chamados — *(este trabalho)*
+O painel de filtros ganhou presets internos para os JQLs enviados pelo Jira:
+**Meus chamados no Jira** (`parceiro-atribuido = currentUser()`) e
+**Spare aprovado 24h** (`Aguardando Spare` com aprovação nas últimas 24 horas).
+A API aceita somente esses presets conhecidos, sem expor JQL livre, e o cache
+do navegador agora separa cada filtro para não misturar filas diferentes.
+
 ### Permite arrastar e colar evidências no chamado — *(este trabalho)*
 A aba **Anexos** agora aceita três caminhos de upload no mesmo lugar: clicar
 para selecionar, arrastar arquivos para a área destacada ou colar com
