@@ -2891,7 +2891,7 @@ function IntegrationHealthPanel({
           type="button"
           variant="outline"
           className="min-h-11"
-          render={<a href="/downloads/Caju-OS-0.1.13-x64-setup.exe" download />}
+          render={<a href="/downloads/Caju-OS-0.1.14-x64-setup.exe" download />}
         >
           <Download />
           Baixar versão {latestVersion}

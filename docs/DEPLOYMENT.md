@@ -142,7 +142,7 @@ Projeto: `caju-websys`. É a chave pública do cliente; não precisa de env var.
 ## Validar produção depois do deploy
 
 ```bash
-curl -s https://operacoes.cajutech.net/api/app-version         # {"version":"0.1.13",...}
+curl -s https://operacoes.cajutech.net/api/app-version         # {"version":"0.1.14",...}
 curl -s -o /dev/null -w "%{http_code}\n" https://operacoes.cajutech.net/    # 200
 curl -s -o /dev/null -w "%{http_code}\n" https://operacoes.cajutech.net/api/technicians  # 401 (protegida)
 ```

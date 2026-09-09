@@ -11,6 +11,11 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Publica desktop 0.1.14 — *(este trabalho)*
+Versao desktop `0.1.14` publicada em `/downloads/Caju-OS-0.1.14-x64-setup.exe`
+com leitura nativa de arquivos copiados do Explorer e de dentro de ZIP aberto
+no Windows.
+
 ### Ctrl+V de arquivos copiados do Explorer no EXE — *(este trabalho)*
 O Tauri ganhou o comando nativo `read_clipboard_files`, que le o clipboard do
 Windows (`CF_HDROP`) e transforma arquivos copiados no Explorer em evidencias

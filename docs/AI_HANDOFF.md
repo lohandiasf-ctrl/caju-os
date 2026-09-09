@@ -29,7 +29,7 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 até aqui foi testado (`npm test`, `npx tsc --noEmit`, `npm run build`) e
 publicado. Não há tag de release — o histórico do `main` é a linha do tempo.
 
-Desktop: **Tauri 0.1.13** (`src-tauri/tauri.conf.json`). É uma casca fina que
+Desktop: **Tauri 0.1.14** (`src-tauri/tauri.conf.json`). É uma casca fina que
 carrega `https://operacoes.cajutech.net`; mudanças só-web chegam ao EXE atual
 após o deploy, sem recompilar.
 
