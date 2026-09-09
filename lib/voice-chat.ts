@@ -54,6 +54,7 @@ export class VoiceChatClient {
   private stream: MediaStream | null = null;
   private screenStream: MediaStream | null = null;
   private peers = new Map<string, RTCPeerConnection>();
+  private pendingCandidates = new Map<string, RTCIceCandidateInit[]>();
   private participants = new Map<string, Peer>();
   private statsTimer: number | null = null;
 
@@ -129,6 +130,7 @@ export class VoiceChatClient {
     this.socket = null;
     this.peers.forEach((peer) => peer.close());
     this.peers.clear();
+    this.pendingCandidates.clear();
     this.participants.clear();
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
@@ -165,11 +167,26 @@ export class VoiceChatClient {
       const peer = this.peers.get(from) ?? await this.createPeer(from, false);
       if ('type' in data && data.type === 'offer') {
         await peer.setRemoteDescription(data);
+        await this.flushCandidates(from, peer);
         const answer = await peer.createAnswer(); await peer.setLocalDescription(answer);
         this.socket?.emit('voice:signal', { to: from, data: peer.localDescription });
-      } else if ('type' in data && data.type === 'answer') await peer.setRemoteDescription(data);
-      else if ('candidate' in data && data.candidate) await peer.addIceCandidate(data);
-    } catch (error) { this.events.onError?.(error instanceof Error ? error : new Error('Falha na conexão de voz.')); }
+      } else if ('type' in data && data.type === 'answer') {
+        await peer.setRemoteDescription(data);
+        await this.flushCandidates(from, peer);
+      } else if ('candidate' in data && data.candidate) {
+        if (!peer.remoteDescription) {
+          const pending = this.pendingCandidates.get(from) ?? [];
+          pending.push(data);
+          this.pendingCandidates.set(from, pending);
+          return;
+        }
+        await peer.addIceCandidate(data);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (/remote description was null|addIceCandidate/i.test(message)) return;
+      this.events.onError?.(error instanceof Error ? error : new Error('Falha na conexão de voz.'));
+    }
   }
 
   private async createPeer(remoteId: string, initiator: boolean) {
@@ -207,6 +224,16 @@ export class VoiceChatClient {
       this.socket?.emit('voice:signal', { to: remoteId, data: peer.localDescription });
     }
     return peer;
+  }
+
+  private async flushCandidates(remoteId: string, peer: RTCPeerConnection) {
+    const pending = this.pendingCandidates.get(remoteId);
+    if (!pending?.length || !peer.remoteDescription) return;
+    this.pendingCandidates.delete(remoteId);
+    for (const candidate of pending) {
+      try { await peer.addIceCandidate(candidate); }
+      catch { /* stale candidate after reconnect; ignore and keep the call alive */ }
+    }
   }
 
   private emitParticipants() { this.events.onParticipantsChanged?.([...this.participants.values()]); }
