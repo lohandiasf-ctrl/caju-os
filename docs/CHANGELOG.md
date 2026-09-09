@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Limpeza de artefatos locais e pacotes antigos — *(este trabalho)*
+Removidos builds, caches, `node_modules`, targets do Tauri, pacotes `.tar.gz`,
+logs, executáveis temporários e estágios antigos do antigo fluxo Sites que
+estavam dentro da pasta do sistema. Mantidos `.env.local`, `.cloudflare.json`,
+SQLs locais, `.agents/`, `.claude/` e documentação. `.gitignore` agora cobre
+também `/tmp/` e `src-tauri/target-notification-check/`.
+**Observação:** não houve alteração funcional no sistema; dependências locais
+precisam ser reinstaladas com `npm install` antes de rodar build/teste local.
+
 ### Loading fluido da Caju em telas e painéis — *(este trabalho)*
 A animação fluida criada no thread `01a083ff-99b7-78f1-9053-7605594e0854` já
 era o asset publicado em `public/brand/caju-loading.gif/.webp` (hashes
