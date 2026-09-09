@@ -35,7 +35,7 @@ pós-migração Cloudflare.
 |---|---|---|
 | `bitmap.close()` antes de ler `width/height` → toda foto reportava 0x0 e o upload era bloqueado | **Resolvido** | `components/jira-ticket-details.tsx` — lê as dimensões antes do `close()` |
 | Chave do Google Maps com `&v=weekly` colado no valor | **Resolvido** | era o secret; irrelevante agora (mapa é Leaflet) |
-| Duas validações de foto divergentes (avisa vs. bloqueia) | **Pendente** | consolidar `lib/image-validation.ts` com a inline de `jira-ticket-details.tsx` |
+| Duas validações de foto divergentes (avisa vs. bloqueia) | **Resolvido** | `lib/image-validation.ts` virou fonte única; N1 avisa, upload ao Jira bloqueia usando o mesmo motor |
 | Histórico de `ticket_evidence` e `employee_messages` não migrou do OpenAI Sites | **Pendente (perda aceita)** | não havia endpoint de leitura na produção antiga |
 
 ## Mapa e busca de técnico

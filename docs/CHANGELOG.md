@@ -11,6 +11,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Consolidação da validação de foto — *(este trabalho)*
+`lib/image-validation.ts` virou a fonte única da validação visual de evidências:
+agora expõe validação por canvas, por `File` e por lote. A tela de detalhe do
+Jira deixou de ter `inspectImageQuality()` inline e passou a usar
+`validateEvidenceFiles()`. O fluxo N1 também usa o mesmo motor por `File`, mas
+mantém o comportamento de aviso em vez de bloqueio.
+**Validação:** `npm test`, `npx tsc --noEmit` e `npm run build` passaram.
+**Observação:** `npm run lint` global ainda falha por débitos antigos de a11y /
+React Compiler em vários arquivos; o lint restrito aos arquivos tocados também
+pega esses débitos pré-existentes nos componentes grandes.
+
 ### Estrutura de colaboração Claude + Codex — *(este trabalho)*
 Criados `docs/AI_HANDOFF.md`, `ARCHITECTURE.md`, `DEPLOYMENT.md`,
 `JIRA_FIELDS.md`, `KNOWN_BUGS.md`, `PRODUCT_REQUIREMENTS.md`, `CHANGELOG.md`,

@@ -5,6 +5,7 @@ import { Building2, Check, CircleDollarSign, Download, Eye, FileText, Image, Loa
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { validateEvidenceFiles } from '@/lib/image-validation';
 
 export type JiraOperationalFields = {
   storeCode: string | null; storeName: string | null; contactName: string | null; contactPhone: string | null; preferredServiceTime: string | null;
@@ -319,40 +320,3 @@ function formatBytes(value: number) { if (!value) return 'Tamanho não informado
 function formatAttachmentDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(date); }
 function jiraNumber(value?: string) { if (!value) return 0; const normalized = value.trim().replace(/[^\d,.-]/g, ''); const decimalComma = normalized.lastIndexOf(',') > normalized.lastIndexOf('.'); const parsed = Number(decimalComma ? normalized.replace(/\./g, '').replace(',', '.') : normalized.replace(/,/g, '')); return Number.isFinite(parsed) ? parsed : 0; }
 function formatCurrency(value: number) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); }
-async function validateEvidenceFiles(files: File[]) {
-  const warnings: string[] = [];
-  for (const file of files) {
-    if (!file.type.startsWith('image/')) continue;
-    const quality = await inspectImageQuality(file).catch(() => null);
-    if (!quality) continue;
-    if (quality.width < 700 || quality.height < 500) warnings.push(`${file.name}: resolução baixa (${quality.width}x${quality.height}).`);
-    if (quality.brightness < 38) warnings.push(`${file.name}: foto muito escura.`);
-    if (quality.contrast < 22) warnings.push(`${file.name}: contraste baixo, pode ficar ilegível.`);
-  }
-  return warnings;
-}
-async function inspectImageQuality(file: File) {
-  const bitmap = await createImageBitmap(file);
-  // Read the dimensions before close(): the spec zeroes width/height on a
-  // closed ImageBitmap, and reading them afterwards reported every photo as
-  // 0x0, which tripped the resolution check and blocked every upload.
-  const width = bitmap.width;
-  const height = bitmap.height;
-  const canvas = document.createElement('canvas');
-  const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context) { bitmap.close(); return { width, height, brightness: 100, contrast: 100 }; }
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-  let sum = 0; let sumSquares = 0; let count = 0;
-  for (let index = 0; index < data.length; index += 16) {
-    const luminance = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
-    sum += luminance; sumSquares += luminance * luminance; count += 1;
-  }
-  const brightness = sum / Math.max(1, count);
-  const variance = sumSquares / Math.max(1, count) - brightness * brightness;
-  return { width, height, brightness, contrast: Math.sqrt(Math.max(0, variance)) };
-}

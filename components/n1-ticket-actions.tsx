@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, FileText, ImagePlus, Loader2, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { validateImageQuality } from '@/lib/image-validation';
+import { validateImageFile } from '@/lib/image-validation';
 
 type Evidence = { id: number; kind: 'photo' | 'video' | 'rat'; name: string; mimeType: string; data: string; createdAt: string; uploadedBy: string };
 type Assignment = { n1Email: string; status: 'claimed' | 'validated'; claimedAt: string; validatedAt: string | null } | null;
@@ -30,21 +30,9 @@ export function N1TicketActions({ ticketKey, user }: { ticketKey: string; user: 
   // Evidence is the only proof the visit happened, and a dark or unreadable
   // photo is usually discovered long after the technician has left the store.
   // Checked here, while the file can still be retaken.
-  async function inspectPhoto(dataUrl: string): Promise<string | undefined> {
+  async function inspectPhoto(file: File): Promise<string | undefined> {
     try {
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('decode'));
-        img.src = dataUrl;
-      });
-      // Downscale before reading pixels: averages survive, cost does not.
-      const scale = Math.min(1, 240 / Math.max(image.width, image.height, 1));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
-      const result = validateImageQuality(canvas);
+      const result = await validateImageFile(file, { minWidth: 1, minHeight: 1 });
       return result.isValid ? undefined : result.message;
     } catch {
       return undefined;
@@ -59,7 +47,7 @@ export function N1TicketActions({ ticketKey, user }: { ticketKey: string; user: 
       const data = String(reader.result);
       const isImage = file.type.startsWith('image/');
       void (async () => {
-        const warning = isImage ? await inspectPhoto(data) : undefined;
+        const warning = isImage ? await inspectPhoto(file) : undefined;
         setPending((items) => [...items, { kind, name: file.name, mimeType: file.type, data, warning }]);
         if (warning) setMessage(warning);
       })();
