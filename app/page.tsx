@@ -1102,6 +1102,7 @@ export default function Home() {
               </Button>
             )}
           </div>
+          {activeView === "overview" && <BulletinBoard user={user} />}
           {activeView === "overview" && (
             <div className="mt-7 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {[
@@ -1171,10 +1172,7 @@ export default function Home() {
             </div>
           )}
           {activeView === "overview" && (
-            <>
-              <OperationalSummary data={operational} />
-              <BulletinBoard user={user} />
-            </>
+            <OperationalSummary data={operational} />
           )}
           {jiraError && (
             <div
