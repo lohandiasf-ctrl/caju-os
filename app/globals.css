@@ -493,3 +493,16 @@ button.bg-primary {
 .leaflet-control-attribution a {
   color: rgb(148 180 255 / 90%) !important;
 }
+
+/* Movimento reduzido: troca a animacao fluida pelo quadro estatico da marca.
+   Fora de @layer para o Tailwind nao remover a regra por nao achar a classe. */
+@media (prefers-reduced-motion: reduce) {
+  .caju-loading-mark img,
+  .caju-loading-mark source {
+    display: none !important;
+  }
+  .caju-loading-mark {
+    aspect-ratio: 32 / 25;
+    background: url("/brand/caju-loading-static.png") center / contain no-repeat;
+  }
+}

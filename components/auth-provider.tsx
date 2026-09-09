@@ -3,8 +3,8 @@
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { LoaderCircle } from 'lucide-react';
 import { auth } from '@/lib/firebase';
+import { CajuLoading } from '@/components/caju-loading';
 import { canAccess, isUserRole, type UserRole } from '@/lib/permissions';
 
 type AuthContextValue = { user: User | null; role: UserRole | null; loading: boolean; accessError: string };
@@ -87,12 +87,5 @@ function readCachedRole(email: string | null) {
 }
 
 function AuthLoading() {
-  return (
-    <main className="grid min-h-screen place-items-center bg-background text-foreground">
-      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-        <LoaderCircle className="size-5 animate-spin text-primary" />
-        Verificando acesso...
-      </div>
-    </main>
-  );
+  return <CajuLoading label="Verificando acesso..." />;
 }
