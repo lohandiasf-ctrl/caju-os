@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CajuLoading } from "@/components/caju-loading";
 import {
   delegatedTaskState,
   knowledgeArticles,
@@ -577,7 +578,7 @@ export function OperationWorkflowDialog({
         </DialogHeader>
         {loading ? (
           <div className="grid min-h-52 place-items-center">
-            <Loader2 className="animate-spin text-primary" />
+            <CajuLoading label="Carregando operação..." fullscreen={false} compact />
           </div>
         ) : (
           <div className="min-h-0 space-y-5 overflow-y-auto pr-1">

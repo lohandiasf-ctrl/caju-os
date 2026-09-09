@@ -6,15 +6,22 @@
  * operacional — a regra `prefers-reduced-motion` no globals.css cuida disso.
  * O WebP tem ~398 KB e fica em cache do navegador após a primeira carga.
  */
-export function CajuLoading({ label = "Carregando..." }: { label?: string }) {
+export function CajuLoading({
+  label = "Carregando...",
+  fullscreen = true,
+  compact = false,
+}: {
+  label?: string;
+  fullscreen?: boolean;
+  compact?: boolean;
+}) {
   return (
-    <div
-      role="status"
+    <output
       aria-label={`Caju Tech: ${label}`}
-      className="grid min-h-screen place-items-center bg-background text-foreground"
+      className={`${fullscreen ? "min-h-screen bg-background" : "min-h-full"} grid place-items-center text-foreground`}
     >
-      <div className="flex flex-col items-center gap-4">
-        <picture className="caju-loading-mark block w-[min(320px,60vw)]">
+      <div className={`flex flex-col items-center ${compact ? "gap-2" : "gap-4"}`}>
+        <picture className={`caju-loading-mark block ${compact ? "w-24" : "w-[min(320px,60vw)]"}`}>
           <source srcSet="/brand/caju-loading.webp" type="image/webp" />
           <img
             src="/brand/caju-loading.gif"
@@ -24,8 +31,8 @@ export function CajuLoading({ label = "Carregando..." }: { label?: string }) {
             className="block h-auto w-full"
           />
         </picture>
-        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className={`${compact ? "text-xs" : "text-sm"} text-muted-foreground`}>{label}</p>
       </div>
-    </div>
+    </output>
   );
 }
