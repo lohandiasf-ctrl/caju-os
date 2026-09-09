@@ -714,6 +714,10 @@ export function ColleaguesPanel({
           <span className="absolute right-1.5 top-1.5 size-2.5 animate-pulse rounded-full border-2 border-sidebar bg-emerald-400" />
         )}
       </button>
+      <TeamVoiceControl
+        colleagues={colleagues}
+        onHistoryChanged={loadCollaboration}
+      />
       <aside
         inert={!colleaguesOpen}
         className={`colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
@@ -736,10 +740,6 @@ export function ColleaguesPanel({
             <X className="size-4" aria-hidden="true" />
           </button>
         </div>
-        <TeamVoiceControl
-          colleagues={colleagues}
-          onHistoryChanged={loadCollaboration}
-        />
         <div className="mt-3 flex rounded-xl border border-border bg-background/50 p-1">
           {(
             [
@@ -821,10 +821,6 @@ export function ColleaguesPanel({
               Status, mensagens, grupos e chamadas.
             </DialogDescription>
           </DialogHeader>
-          <TeamVoiceControl
-            colleagues={colleagues}
-            onHistoryChanged={loadCollaboration}
-          />
           <button
             type="button"
             onClick={() => setCreateGroupOpen(true)}
@@ -1821,6 +1817,7 @@ function TeamVoiceControl({
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
   const [pickerMode, setPickerMode] = useState<"start" | "add">("start");
+  const [minimized, setMinimized] = useState(false);
   const [quality, setQuality] = useState<
     "excellent" | "good" | "poor" | "reconnecting"
   >("good");
@@ -1845,6 +1842,7 @@ function TeamVoiceControl({
     setSelectedEmails([]);
     setScreenStream(null);
     setSharingScreen(false);
+    setMinimized(false);
   }, []);
   useEffect(() => leave, [leave]);
   async function join() {
@@ -1894,6 +1892,7 @@ function TeamVoiceControl({
       setSelectedEmails([]);
       setPickerOpen(false);
       setState("connected");
+      setMinimized(false);
     } catch (reason) {
       leave();
       setError(
@@ -1916,112 +1915,84 @@ function TeamVoiceControl({
     setPickerOpen(false);
   }
   const inviteLimit = Math.max(0, 5 - invitedEmails.length);
+  const invitedNames = invitedEmails
+    .map((email) => colleagues.find((item) => item.email === email))
+    .filter((item): item is Colleague => Boolean(item))
+    .map((item) => item.displayName || item.email.split("@")[0]);
   return (
-    <div className="mt-3 rounded-xl border border-primary/25 bg-primary/[.07] p-2.5">
+    <div className="pointer-events-none fixed bottom-20 right-4 z-[65] sm:right-5">
       {state === "idle" ? (
         <button
           type="button"
           onClick={() => openPicker("start")}
-          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="pointer-events-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-4 text-sm font-bold text-primary-foreground shadow-2xl transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <Users className="size-4" aria-hidden="true" />
-          Nova reunião de voz
+          Reunião
         </button>
       ) : (
-        <div className="flex items-center gap-2">
-          <div role="status" aria-live="polite" className="min-w-0 flex-1 px-1">
-            <p className="truncate text-xs font-bold text-primary">
-              {state === "connecting"
-                ? "Conectando..."
-                : "Reunião em andamento"}
-            </p>
-            <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <Signal
-                className={`size-3 ${quality === "poor" ? "text-rose-300" : quality === "reconnecting" ? "text-amber-300" : "text-emerald-300"}`}
-              />
-              {participants
-                ? `${participants + 1} participantes · ${qualityLabel(quality)}`
-                : "Aguardando colegas"}
-            </p>
+        <section
+          aria-label="Reunião de voz em andamento"
+          className={`pointer-events-auto overflow-hidden rounded-[1.7rem] border border-emerald-400/25 bg-slate-950/95 shadow-[0_24px_90px_rgba(0,0,0,.45)] backdrop-blur-xl transition-[width,transform] motion-reduce:transition-none ${minimized ? "w-[min(19rem,calc(100vw-2rem))]" : "w-[min(44rem,calc(100vw-2rem))]"}`}
+        >
+          <div className="flex min-h-16 items-center gap-3 border-b border-white/10 bg-white/[.03] p-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-400/15 text-emerald-300">
+              <Phone className="size-5" />
+            </span>
+            <div role="status" aria-live="polite" className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black text-foreground">
+                {state === "connecting" ? "Conectando..." : "Reunião em andamento"}
+              </p>
+              <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Signal className={`size-3 ${quality === "poor" ? "text-rose-300" : quality === "reconnecting" ? "text-amber-300" : "text-emerald-300"}`} />
+                {participants ? `${participants + 1} participantes · ${qualityLabel(quality)}` : "Aguardando colegas"}
+              </p>
+            </div>
+            <button type="button" onClick={() => setMinimized((value) => !value)} className="grid size-10 place-items-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10" aria-label={minimized ? "Aumentar reunião" : "Minimizar reunião"}>
+              {minimized ? <Maximize2 className="size-4" /> : <Minimize2 className="size-4" />}
+            </button>
+            <button type="button" onClick={() => { const session = sessionRef.current; if (session) void recordCall(user, { sessionId: session.id, direction: "outgoing", kind: "group", peerNames: session.names, status: "completed", startedAt: session.startedAt, endedAt: new Date().toISOString(), durationSeconds: Math.round((Date.now() - Date.parse(session.startedAt)) / 1000) }).then(onHistoryChanged); leave(); }} className="grid size-10 place-items-center rounded-xl bg-rose-500 text-white transition hover:bg-rose-400" aria-label="Sair da reunião">
+              <PhoneOff className="size-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={state !== "connected"}
-            onClick={() => {
-              if (sharingScreen) { clientRef.current?.stopScreenShare(); setSharingScreen(false); setScreenStream(null); }
-              else void clientRef.current?.startScreenShare().then((stream) => { setSharingScreen(true); setScreenStream(stream); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Falha ao compartilhar tela."));
-            }}
-            className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50"
-            aria-label={sharingScreen ? "Parar compartilhamento de tela" : "Compartilhar tela"}
-          ><MonitorUp className="size-4" /></button>
-          <button
-            type="button"
-            disabled={state !== "connected" || !inviteLimit}
-            onClick={() => openPicker("add")}
-            className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50"
-            aria-label="Adicionar participantes"
-          >
-            <Users className="size-4" />
-          </button>
-          <button
-            type="button"
-            disabled={state !== "connected"}
-            onClick={() => {
-              const next = !muted;
-              setMuted(next);
-              clientRef.current?.setMuted(next);
-            }}
-            className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50"
-            aria-label={muted ? "Ativar microfone" : "Silenciar microfone"}
-          >
-            {muted ? <MicOff className="size-4" /> : <Mic className="size-4" />}
-          </button>
-          <button
-            type="button"
-            disabled={state !== "connected"}
-            onClick={() => {
-              const next = !remoteMuted;
-              setRemoteMuted(next);
-              audioRef.current.forEach((audio) => {
-                audio.muted = next;
-              });
-            }}
-            className="grid size-10 place-items-center rounded-lg border border-border bg-background transition hover:bg-muted disabled:opacity-50"
-            aria-label={
-              remoteMuted ? "Ouvir participantes" : "Silenciar participantes"
-            }
-          >
-            <FileAudio className="size-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const session = sessionRef.current;
-              if (session)
-                void recordCall(user, {
-                  sessionId: session.id,
-                  direction: "outgoing",
-                  kind: "group",
-                  peerNames: session.names,
-                  status: "completed",
-                  startedAt: session.startedAt,
-                  endedAt: new Date().toISOString(),
-                  durationSeconds: Math.round(
-                    (Date.now() - Date.parse(session.startedAt)) / 1000,
-                  ),
-                }).then(onHistoryChanged);
-              leave();
-            }}
-            className="grid size-10 place-items-center rounded-lg bg-rose-500 text-white transition hover:bg-rose-400"
-            aria-label="Sair da reunião"
-          >
-            <PhoneOff className="size-4" />
-          </button>
-        </div>
+          {!minimized && (
+            <>
+              <div className="grid gap-3 p-3 sm:grid-cols-[1fr_14rem]">
+                <div className="min-h-44 rounded-2xl border border-white/10 bg-black/35 p-3">
+                  {screenStream ? (
+                    <ScreenPreview stream={screenStream} label={sharingScreen ? "Sua tela compartilhada" : "Tela compartilhada"} />
+                  ) : (
+                    <div className="grid min-h-40 place-items-center text-center text-sm text-muted-foreground">
+                      <div>
+                        <Users className="mx-auto mb-3 size-10 text-emerald-300" />
+                        <p className="font-semibold text-foreground">Sala de voz ativa</p>
+                        <p className="mt-1 text-xs">Compartilhe tela quando precisar mostrar algo.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Participantes</p>
+                  <div className="mt-2 space-y-2">
+                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100">Você</div>
+                    {invitedNames.slice(0, 5).map((name) => (
+                      <div key={name} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold">{name}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-2 border-t border-white/10 p-3">
+                <button type="button" disabled={state !== "connected"} onClick={() => { if (sharingScreen) { clientRef.current?.stopScreenShare(); setSharingScreen(false); setScreenStream(null); } else void clientRef.current?.startScreenShare().then((stream) => { setSharingScreen(true); setScreenStream(stream); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Falha ao compartilhar tela.")); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${sharingScreen ? "border-emerald-300/40 bg-emerald-400/20 text-emerald-100" : "border-white/10 bg-white/5"}`} aria-label={sharingScreen ? "Parar compartilhamento de tela" : "Compartilhar tela"}><MonitorUp className="mx-auto mb-1 size-4" />Tela</button>
+                <button type="button" disabled={state !== "connected"} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${muted ? "border-rose-300/35 bg-rose-400/15 text-rose-100" : "border-white/10 bg-white/5"}`} aria-label={muted ? "Ativar microfone" : "Silenciar microfone"}>{muted ? <MicOff className="mx-auto mb-1 size-4" /> : <Mic className="mx-auto mb-1 size-4" />}{muted ? "Mudo" : "Mic"}</button>
+                <button type="button" disabled={state !== "connected"} onClick={() => { const next = !remoteMuted; setRemoteMuted(next); audioRef.current.forEach((audio) => { audio.muted = next; }); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${remoteMuted ? "border-amber-300/35 bg-amber-400/15 text-amber-100" : "border-white/10 bg-white/5"}`} aria-label={remoteMuted ? "Ouvir participantes" : "Silenciar participantes"}><FileAudio className="mx-auto mb-1 size-4" />Som</button>
+                <button type="button" disabled={state !== "connected" || !inviteLimit} onClick={() => openPicker("add")} className="min-h-12 rounded-2xl border border-white/10 bg-white/5 px-2 text-xs font-bold disabled:opacity-50" aria-label="Adicionar participantes"><UserPlus className="mx-auto mb-1 size-4" />Adicionar</button>
+              </div>
+            </>
+          )}
+        </section>
       )}
-      {screenStream && <ScreenPreview stream={screenStream} label={sharingScreen ? "Sua tela compartilhada" : "Tela compartilhada"} />}
       {error && (
-        <p role="alert" className="mt-2 text-xs text-rose-300">
+        <p role="alert" className="pointer-events-auto mt-2 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">
           {error}
         </p>
       )}

@@ -63,7 +63,15 @@ export class VoiceChatClient {
     const url = signalingUrl();
     if (!url) throw new Error('Servidor de voz ainda não foi configurado.');
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
-    this.socket = io(url, { transports: ['websocket'], autoConnect: false, timeout: 10_000 });
+    this.socket = io(url, {
+      transports: ['websocket'],
+      autoConnect: false,
+      timeout: 20_000,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 700,
+      reconnectionDelayMax: 4_000,
+    });
     this.registerHandlers();
     await new Promise<void>((resolve, reject) => {
       const socket = this.socket!;
@@ -145,6 +153,11 @@ export class VoiceChatClient {
     socket.on('voice:call-declined', () => this.events.onCallDeclined?.());
     socket.on('voice:signal', ({ from, data }: { from: string; data: Signal }) => void this.handleSignal(from, data));
     socket.on('voice:error', (message: string) => this.events.onError?.(new Error(message)));
+    socket.io.on('reconnect_attempt', () => this.events.onConnectionQuality?.('reconnecting'));
+    socket.io.on('reconnect', () => this.events.onConnectionQuality?.('good'));
+    socket.on('disconnect', (reason) => {
+      if (reason !== 'io client disconnect') this.events.onConnectionQuality?.('reconnecting');
+    });
   }
 
   private async handleSignal(from: string, data: Signal) {
@@ -174,8 +187,20 @@ export class VoiceChatClient {
     };
     peer.onicecandidate = (event) => { if (event.candidate) this.socket?.emit('voice:signal', { to: remoteId, data: event.candidate.toJSON() }); };
     peer.onconnectionstatechange = () => {
-      if (peer.connectionState === 'disconnected') { this.events.onConnectionQuality?.('reconnecting'); window.setTimeout(() => { if (peer.connectionState === 'disconnected') peer.restartIce(); }, 1_500); }
-      if (peer.connectionState === 'failed') { this.events.onConnectionQuality?.('poor'); peer.restartIce(); }
+      if (peer.connectionState === 'disconnected') {
+        this.events.onConnectionQuality?.('reconnecting');
+        window.setTimeout(() => {
+          if (peer.connectionState === 'disconnected') {
+            peer.restartIce();
+            if (initiator) void this.renegotiatePeer(remoteId, peer);
+          }
+        }, 1_500);
+      }
+      if (peer.connectionState === 'failed') {
+        this.events.onConnectionQuality?.('poor');
+        peer.restartIce();
+        if (initiator) void this.renegotiatePeer(remoteId, peer);
+      }
     };
     if (initiator) {
       const offer = await peer.createOffer(); await peer.setLocalDescription(offer);
@@ -188,9 +213,13 @@ export class VoiceChatClient {
 
   private async renegotiate() {
     for (const [remoteId, peer] of this.peers) {
-      try { const offer = await peer.createOffer(); await peer.setLocalDescription(offer); this.socket?.emit('voice:signal', { to: remoteId, data: peer.localDescription }); }
-      catch (error) { this.events.onError?.(error instanceof Error ? error : new Error('Falha ao compartilhar tela.')); }
+      await this.renegotiatePeer(remoteId, peer);
     }
+  }
+
+  private async renegotiatePeer(remoteId: string, peer: RTCPeerConnection) {
+    try { const offer = await peer.createOffer({ iceRestart: true }); await peer.setLocalDescription(offer); this.socket?.emit('voice:signal', { to: remoteId, data: peer.localDescription }); }
+      catch (error) { this.events.onError?.(error instanceof Error ? error : new Error('Falha ao compartilhar tela.')); }
   }
 
   private async measureQuality() {
@@ -215,7 +244,15 @@ export class VoiceCallReceiver {
   constructor(private email: string, private onIncoming: (invitation: VoiceInvitation) => void) {}
 
   connect() {
-    this.socket = io(signalingUrl(), { transports: ['websocket'], autoConnect: false, timeout: 10_000 });
+    this.socket = io(signalingUrl(), {
+      transports: ['websocket'],
+      autoConnect: false,
+      timeout: 20_000,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 700,
+      reconnectionDelayMax: 4_000,
+    });
     this.socket.on('connect', () => this.socket?.emit('voice:register', { email: this.email }));
     this.socket.on('voice:incoming-call', (invitation: VoiceInvitation) => this.onIncoming(invitation));
     this.socket.connect();

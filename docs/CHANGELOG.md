@@ -11,6 +11,13 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Reunião de voz em grupo mais estável — *(este trabalho)*
+A chamada em grupo saiu de dentro do painel de comunicação e virou uma janela
+flutuante persistente, para não cair quando o menu/chat fecha. O layout ficou
+mais parecido com apps de reunião: painel grande, minimizar/aumentar,
+participantes, tela compartilhada e controles claros. A conexão WebSocket
+também ganhou reconexão automática e timeout maior.
+
 ### Fila de validação na visão geral — *(este trabalho)*
 A seção de alertas do painel de inteligência foi substituída por uma lista
 simples de chamados enviados para validação. Ao clicar em **Validar**, o sistema
