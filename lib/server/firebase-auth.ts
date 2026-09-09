@@ -34,12 +34,13 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
   const claims = await verifyFirebaseToken(token);
   const db = getDb();
   const normalizedEmail = claims.email?.trim().toLowerCase();
-  if (!normalizedEmail || claims.email_verified !== true) {
+  if (!normalizedEmail) {
     throw jsonError('Confirme o e-mail da conta antes de entrar.', 403);
   }
 
-  // A recreated Firebase account receives a new UID. The verified e-mail is
-  // also an administrator-managed identity, so it safely recovers stale UIDs.
+  // A recreated Firebase account receives a new UID. The e-mail is also checked
+  // against the administrator-managed access table, so invited users can enter
+  // even before Firebase marks the e-mail as verified.
   const record = await db.select({
     uid: appUsers.firebaseUid,
     email: appUsers.email,
