@@ -485,6 +485,7 @@ export default function Home() {
     if (!user) return;
     let active = true;
     const refresh = async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const token = await user.getIdToken();
         const issues: JiraTicket[] = [];
@@ -515,7 +516,7 @@ export default function Home() {
         knownTicketIds.current = nextIds; setTickets(issues.map(toTicket));
       } catch { /* A próxima atualização tenta novamente. */ }
     };
-    const timer = window.setInterval(() => void refresh(), 20_000);
+    const timer = window.setInterval(() => void refresh(), 45_000);
     return () => { active = false; window.clearInterval(timer); };
   }, [user]);
 
@@ -523,6 +524,7 @@ export default function Home() {
     if (!user) return;
     let active = true;
     const load = async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const response = await fetch("/api/operational-dashboard", {
           headers: { Authorization: `Bearer ${await user.getIdToken()}` },
@@ -535,7 +537,7 @@ export default function Home() {
       }
     };
     void load();
-    const timer = window.setInterval(() => void load(), 30_000);
+    const timer = window.setInterval(() => void load(), 120_000);
     return () => {
       active = false;
       window.clearInterval(timer);

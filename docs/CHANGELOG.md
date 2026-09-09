@@ -11,6 +11,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Reduz consumo de leituras do D1 — *(branch claude/fix-d1-read-budget)*
+Raiz do "Falha inesperada ao consultar o Jira." + dashboard zerado: o D1 bateu
+o **limite diário de leituras do plano gratuito** (5 mi linhas/dia). Quando isso
+acontece, *toda* query do Worker falha — inclusive o lookup em `app_users` que
+todo request autenticado faz — e o erro sobe como 500 genérico em
+`/api/auth/me`, `/api/jira/issues` e `/api/messages`. Não era bug de código do
+Jira.
+
+- `app/api/operational-dashboard/route.ts`: `operationalAudit` estava sem
+  `limit` (tabela que só cresce) — agora `.limit(2000)`; `employeeActivity`
+  de 5000 → 2000. Só os 12 mais recentes e contagens por ator são usados.
+- `app/page.tsx`: polling do painel operacional 30s → 120s; refresh do Jira
+  20s → 45s; ambos agora pausam quando a aba não está visível
+  (`document.visibilityState`).
+
+**Pendente:** decidir entre habilitar o **Workers Paid** (US$5/mês, sobe leituras
+D1 para 25 bi/mês — correção definitiva) ou seguir no gratuito com o consumo
+reduzido. Enquanto o limite de hoje não zerar (00:00 UTC) o sistema segue
+retornando erro, independente do código.
+
 ### Corrige "Acesso não autorizado" indevido — *(branch claude/fix-auth-race)*
 Dois sintomas, mesma raiz: o `role` caía para `null` por um instante e `role`
 nulo = sem acesso.

@@ -14,8 +14,8 @@ export async function GET(request: Request) {
       db.select().from(operationalWorkflows).all(),
       db.select().from(n1TicketAssignments).all(),
       db.select().from(operationalVisits).all(),
-      db.select().from(operationalAudit).orderBy(desc(operationalAudit.createdAt)).all(),
-      db.select().from(employeeActivity).orderBy(desc(employeeActivity.createdAt)).limit(5000).all(),
+      db.select().from(operationalAudit).orderBy(desc(operationalAudit.createdAt)).limit(2000).all(),
+      db.select().from(employeeActivity).orderBy(desc(employeeActivity.createdAt)).limit(2000).all(),
       db.select().from(operationalTasks).all(),
       db.select().from(shipmentTracking).all(),
     ]);
