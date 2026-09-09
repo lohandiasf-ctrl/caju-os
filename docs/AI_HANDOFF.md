@@ -143,9 +143,7 @@ todos os perfis, exportação/backup administrativo.
 3. Completar o catálogo de peças (a imagem de origem estava cortada).
 4. Considerar `next/link` no lugar de `<a href>` na navegação interna (hoje
    recarrega a página inteira). ~15 pontos; verificação dedicada.
-5. Consolidar as duas validações de foto (`lib/image-validation.ts` órfão vs.
-   a inline em `jira-ticket-details.tsx`).
-6. Desativar a produção antiga no OpenAI Sites — só depois de alguns dias de
+5. Desativar a produção antiga no OpenAI Sites — só depois de alguns dias de
    estabilidade.
 
 ## Últimas decisões de produto

@@ -188,10 +188,11 @@ Pontos-chave:
 - Anexos do Jira: `/api/jira/issues/[key]/attachments` (POST),
   encaminha para `uploadJiraAttachments()`. Máx. 8 arquivos, 25 MB cada, 50 MB
   total.
-- Validação de foto: **duas implementações**. `lib/image-validation.ts`
-  (`validateImageQuality`) usada no fluxo N1 (`n1-ticket-actions.tsx`) — só
-  **avisa**. `inspectImageQuality()` inline em `jira-ticket-details.tsx` —
-  **bloqueia** o upload. Consolidar está no backlog.
+- Validação de foto: `lib/image-validation.ts` é a fonte única
+  (`validateImageQuality`, `validateImageFile`, `validateEvidenceFiles`). No
+  fluxo N1 (`n1-ticket-actions.tsx`) a foto ruim **avisa**; no upload direto ao
+  Jira (`jira-ticket-details.tsx`) a mesma validação **bloqueia** evidência
+  escura, sem contraste ou pequena demais.
 - Evidência nova deve virar comentário/observação interna no Jira quando
   possível.
 
