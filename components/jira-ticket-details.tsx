@@ -32,7 +32,7 @@ const workflowStatuses = [
   ['scheduling', 'Pendente de agendamento'], ['scheduled', 'Agendado'], ['operational_preparation', 'Direcionado'], ['in_service', 'Técnico em campo'],
   ['technical_pending', 'Pendência técnica'], ['awaiting_spare', 'Aguardando spare'], ['validated', 'Validado'], ['resolved', 'Resolvido'], ['cancelled', 'Cancelado'],
 ] as const;
-const evidenceAccept = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
+const evidenceAccept = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar';
 
 export function JiraTicketDetails({ details, user, onUpdated }: { details: Details; user: User; onUpdated: (details: Details) => void }) {
   const initial = useMemo(() => ({ ...details.operationalFields, ...parseDefect(details.operationalFields.defectSummary) }), [details]);
@@ -170,13 +170,14 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     const ignored = files.length - accepted.length;
     if (!accepted.length) {
       setFailed(true);
-      setMessage(ignored ? 'Nenhum arquivo compatível foi encontrado. Envie imagens, vídeos, PDF, documentos, planilhas, CSV ou TXT.' : 'Nenhum arquivo recebido.');
+      setMessage(ignored ? 'Nenhum arquivo compatível foi encontrado. Envie imagens, vídeos, PDF, documentos, planilhas, CSV, TXT ou pacotes ZIP/RAR.' : 'Nenhum arquivo recebido.');
       return;
     }
     setFileWarnings([]);
     setFailed(false);
     setSelectedFiles((current) => mergeEvidenceFiles(current, accepted));
-    setMessage(`${accepted.length} arquivo(s) ${source} pronto(s) para enviar ao Jira.${ignored ? ` ${ignored} arquivo(s) ignorado(s) por formato incompatível.` : ''}`);
+    const hasArchive = accepted.some((file) => /\.(zip|rar)$/i.test(file.name));
+    setMessage(`${accepted.length} arquivo(s) ${source} pronto(s) para enviar ao Jira.${hasArchive ? ' Pacote(s) ZIP/RAR serão anexados completos.' : ''}${ignored ? ` ${ignored} arquivo(s) ignorado(s) por formato incompatível.` : ''}`);
   }
 
   function handleEvidenceDrop(event: DragEvent<HTMLButtonElement>) {
@@ -386,8 +387,10 @@ function isEvidenceFile(file: File) {
     || file.type === 'application/pdf'
     || file.type === 'text/plain'
     || file.type === 'text/csv'
+    || file.type === 'application/zip'
+    || file.type === 'application/x-rar-compressed'
     || [
-      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt',
+      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.zip', '.rar',
       '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.avif',
       '.mp4', '.mov', '.avi', '.mkv', '.webm',
     ].some((extension) => name.endsWith(extension));

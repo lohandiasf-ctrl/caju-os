@@ -11,6 +11,11 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Aceita pacotes ZIP e RAR como evidência — *(este trabalho)*
+O seletor, arrastar/colar e a API de anexos agora aceitam arquivos `.zip` e
+`.rar` até 25 MB. O pacote é anexado completo ao chamado do Jira, preservando
+todos os arquivos internos para download e auditoria.
+
 ### Corrige colagem de evidências com Ctrl+V — *(este trabalho)*
 O recebimento de arquivos colados agora usa um listener no detalhe do chamado
 e também lê itens de arquivo da área de transferência quando o navegador não
