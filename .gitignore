@@ -54,3 +54,16 @@ tsconfig.tsbuildinfo
 # Espelho gerado por "npx skills add"; a fonte versionada e .agents/skills
 .claude/skills/
 .wrangler-parts.sql
+
+# artefatos e pacotes antigos (spec de colaboracao IA)
+*.tar.gz
+*.exe
+*.log
+/tmp-*
+/.publish-stage*
+/.sites-package*
+/build-*.log
+/desktop-*.log
+/voice-*.log
+/group-build-*.log
+scripts/claude-codex-collaboration-prompt.md

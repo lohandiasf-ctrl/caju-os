@@ -1,3 +1,7 @@
+> **HISTÓRICO — DESATUALIZADO.** A documentação canônica agora está em `docs/`.
+> Comece por `docs/AI_HANDOFF.md`. Este diretório fala de OpenAI Sites,
+> `.openai/hosting.json` e commits antigos que não refletem mais o projeto.
+
 # Continuidade do Caju OS
 
 Este diretório é o ponto de entrada para outra IA ou pessoa continuar o produto sem depender do histórico desta conversa.
