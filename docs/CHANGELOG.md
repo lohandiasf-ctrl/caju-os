@@ -11,6 +11,28 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Corrige "Acesso não autorizado" indevido — *(branch claude/fix-auth-race)*
+Dois sintomas, mesma raiz: o `role` caía para `null` por um instante e `role`
+nulo = sem acesso.
+
+- **Todo login mostrava /acesso-negado, e só "Voltar ao início" resolvia.**
+  `onAuthStateChanged` pode disparar em paralelo (login + hidratação de token);
+  se a chamada mais antiga terminava depois e falhava, ela sobrescrevia o
+  resultado bom com `role=null`. Agora há um `runId` — só o resultado da
+  chamada mais recente escreve no estado. E `/acesso-negado` deixou de ser
+  beco sem saída: assim que um papel válido resolve, o app sai de lá sozinho.
+- **Abrir Spares mostrava "Falha ao consultar o perfil".** Um `500` transitório
+  de `/api/auth/me` (cold start do Worker, D1) era tratado igual a um `403`:
+  limpava o papel **e o cache**. Agora `resolveProfile()` separa negação
+  definitiva (401/403 → revoga) de falha transitória (5xx/rede → mantém o
+  papel e o cache, tenta de novo 3× com backoff e refresh de token).
+- `canAccess()` ganhou `if (role === 'gerencia') return true` explícito no
+  topo — gerência é o nível mais alto da hierarquia e não depende de estar
+  listada em cada entrada de `routeRoles`.
+
+**Validação:** `npm test`, `npx tsc --noEmit`, `npm run build` passaram.
+
+
 ### Estrutura de colaboração Claude + Codex — *(este trabalho)*
 Criados `docs/AI_HANDOFF.md`, `ARCHITECTURE.md`, `DEPLOYMENT.md`,
 `JIRA_FIELDS.md`, `KNOWN_BUGS.md`, `PRODUCT_REQUIREMENTS.md`, `CHANGELOG.md`,

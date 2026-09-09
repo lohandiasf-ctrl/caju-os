@@ -22,9 +22,12 @@ export function isUserRole(value: unknown): value is UserRole {
 
 export function canAccess(role: UserRole | null, pathname: string) {
   if (!role) return false;
+  // Gerência é o topo da hierarquia: acessa tudo, sempre. Explícito aqui para
+  // não depender de estar listada em cada entrada de routeRoles.
+  if (role === 'gerencia') return true;
   if (pathname === '/acesso-negado' || pathname === '/login') return true;
   const matchedRoute = Object.keys(routeRoles)
     .sort((a, b) => b.length - a.length)
     .find((route) => route === '/' ? pathname === '/' : pathname === route || pathname.startsWith(`${route}/`));
-  return matchedRoute ? routeRoles[matchedRoute].includes(role) : role === 'gerencia';
+  return matchedRoute ? routeRoles[matchedRoute].includes(role) : false;
 }
