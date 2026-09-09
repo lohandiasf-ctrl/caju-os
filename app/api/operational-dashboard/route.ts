@@ -1,5 +1,5 @@
 import { desc } from 'drizzle-orm';
-import { employeeActivity, n1TicketAssignments, operationalAudit, operationalTasks, operationalVisits, operationalWorkflows, shipmentTracking } from '@/db/schema';
+import { employeeActivity, employeePresence, n1TicketAssignments, operationalAudit, operationalTasks, operationalVisits, operationalWorkflows, shipmentTracking } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   try {
     await requireApiUser(request);
     const db = getDb();
-    const [workflows, assignments, visits, audit, activities, tasks, shipments] = await Promise.all([
+    const [workflows, assignments, visits, audit, activities, tasks, shipments, presence] = await Promise.all([
       db.select().from(operationalWorkflows).all(),
       db.select().from(n1TicketAssignments).all(),
       db.select().from(operationalVisits).all(),
@@ -18,6 +18,7 @@ export async function GET(request: Request) {
       db.select().from(employeeActivity).orderBy(desc(employeeActivity.createdAt)).limit(2000).all(),
       db.select().from(operationalTasks).all(),
       db.select().from(shipmentTracking).all(),
+      db.select().from(employeePresence).all(),
     ]);
     const now = Date.now();
     const alerts = workflows.flatMap((workflow) => {
@@ -47,6 +48,21 @@ export async function GET(request: Request) {
     const clientCents = workflows.reduce((sum, item) => sum + (item.clientValueCents ?? 0), 0);
     const costCents = workflows.reduce((sum, item) => sum + (item.payoutCents ?? 0) + (item.partsValueCents ?? 0), 0);
     const n1ByEmail = Object.entries(assignments.reduce<Record<string, number>>((result, item) => { result[item.n1Email] = (result[item.n1Email] ?? 0) + 1; return result; }, {})).map(([email, count]) => ({ email, count }));
+    const nameByEmail = new Map(presence.map((item) => [item.email.toLowerCase(), item.displayName || item.email.split('@')[0]]));
+    const workflowByTicket = new Map(workflows.map((item) => [item.ticketKey, item]));
+    const validationByTicket = new Map<string, { ticketKey: string; submittedByEmail: string; submittedByName: string; submittedAt: string }>();
+    for (const item of audit) {
+      if (item.action !== 'Enviado para validação') continue;
+      if (validationByTicket.has(item.ticketKey)) continue;
+      const workflow = workflowByTicket.get(item.ticketKey);
+      if (workflow && closed.has(workflow.status)) continue;
+      validationByTicket.set(item.ticketKey, {
+        ticketKey: item.ticketKey,
+        submittedByEmail: item.actorEmail,
+        submittedByName: nameByEmail.get(item.actorEmail.toLowerCase()) ?? item.actorEmail.split('@')[0],
+        submittedAt: item.createdAt,
+      });
+    }
     const collaboratorMap = new Map<string, { email: string; activeSeconds: number; changes: number; tasksDone: number }>();
     const collaborator = (email: string) => { const current = collaboratorMap.get(email) ?? { email, activeSeconds: 0, changes: 0, tasksDone: 0 }; collaboratorMap.set(email, current); return current; };
     for (const item of activities) collaborator(item.email).activeSeconds += item.durationSeconds;
@@ -57,6 +73,7 @@ export async function GET(request: Request) {
       alerts: alerts.slice(0, 12),
       metrics: { active: active.length, overdue: alerts.filter((item) => item.message.startsWith('SLA')).length, scheduled: active.filter((item) => item.status === 'scheduled').length, visits: visits.length, revenueCents: clientCents, costCents, marginCents: clientCents - costCents },
       n1: n1ByEmail.sort((a, b) => b.count - a.count),
+      validationQueue: [...validationByTicket.values()],
       collaborators,
       recentAudit: audit.slice(0, 12),
     });

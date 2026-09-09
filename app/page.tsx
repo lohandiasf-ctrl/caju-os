@@ -221,6 +221,12 @@ type OperationalDashboard = {
     marginCents: number;
   };
   n1: { email: string; count: number }[];
+  validationQueue: {
+    ticketKey: string;
+    submittedByEmail: string;
+    submittedByName: string;
+    submittedAt: string;
+  }[];
   collaborators: { email: string; activeSeconds: number; changes: number; tasksDone: number; score: number }[];
   recentAudit: {
     id: number;
@@ -795,7 +801,7 @@ export default function Home() {
     Boolean(details) && validationRequirements.length === 0;
 
   async function copyJiraLinkForValidation() {
-    if (!details?.jiraUrl) return;
+    if (!details?.jiraUrl || !selected || !user) return;
     const link = details.jiraUrl;
     setValidationSending(true);
     try {
@@ -804,13 +810,46 @@ export default function Home() {
       const copied = "__TAURI_INTERNALS__" in window
         ? await (await import("@tauri-apps/api/core")).invoke<boolean>("copy_to_clipboard", { text: link })
         : await copyToClipboard(link);
+      const response = await fetch(`/api/jira/issues/${selected.id}/validation`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Não foi possível registrar a validação.");
+      const now = new Date().toISOString();
+      setOperational((current) =>
+        current
+          ? {
+              ...current,
+              validationQueue: [
+                {
+                  ticketKey: selected.id,
+                  submittedByEmail: user.email ?? "usuario",
+                  submittedByName: user.displayName || user.email?.split("@")[0] || "Você",
+                  submittedAt: now,
+                },
+                ...(current.validationQueue ?? []).filter(
+                  (item) => item.ticketKey !== selected.id,
+                ),
+              ],
+            }
+          : current,
+      );
       setValidationNotice(
         copied
-          ? "Link copiado. Envie no grupo SUP para validação."
+          ? "Link copiado e chamado entrou na fila de validação."
           : "Não foi possível copiar. Copie o link do Jira manualmente.",
       );
-    } catch {
-      setValidationNotice("Não foi possível copiar. Copie o link do Jira manualmente.");
+    } catch (error) {
+      setValidationNotice(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível registrar a validação.",
+      );
     } finally {
       setValidationSending(false);
     }
@@ -1172,7 +1211,11 @@ export default function Home() {
             </div>
           )}
           {activeView === "overview" && (
-            <OperationalSummary data={operational} />
+            <OperationalSummary
+              data={operational}
+              tickets={tickets}
+              onOpenTicket={(ticket) => void openTicket(ticket)}
+            />
           )}
           {jiraError && (
             <div
@@ -2966,13 +3009,26 @@ function Metric({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
-function OperationalSummary({ data }: { data: OperationalDashboard | null }) {
+function OperationalSummary({
+  data,
+  tickets,
+  onOpenTicket,
+}: {
+  data: OperationalDashboard | null;
+  tickets: Ticket[];
+  onOpenTicket: (ticket: Ticket) => void;
+}) {
   if (!data)
     return (
       <section className="surface-panel mt-5 grid min-h-48 place-items-center rounded-2xl p-5">
         <CajuLoading label="Carregando indicadores operacionais..." fullscreen={false} compact />
       </section>
     );
+  const ticketByKey = new Map(tickets.map((ticket) => [ticket.id, ticket]));
+  const validationQueue = (data.validationQueue ?? []).flatMap((item) => {
+    const ticket = ticketByKey.get(item.ticketKey);
+    return ticket ? [{ ...item, ticket }] : [];
+  });
   const currency = (cents: number) =>
     new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -3020,20 +3076,38 @@ function OperationalSummary({ data }: { data: OperationalDashboard | null }) {
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Alertas
+            Chamados em validação
           </h3>
           <div className="mt-2 space-y-2">
-            {data.alerts.slice(0, 4).map((alert) => (
-              <div
-                key={`${alert.ticketKey}-${alert.message}`}
-                className={`rounded-lg border px-3 py-2 text-xs ${alert.level === "critical" ? "border-red-400/25 bg-red-400/10 text-red-100" : "border-amber-400/25 bg-amber-400/10 text-amber-100"}`}
+            {validationQueue.slice(0, 6).map((item) => (
+              <button
+                key={`${item.ticketKey}-${item.submittedAt}`}
+                type="button"
+                onClick={() => onOpenTicket(item.ticket)}
+                className="w-full rounded-lg border border-emerald-400/25 bg-emerald-400/8 px-3 py-2 text-left text-xs text-emerald-100 hover:border-emerald-300/50 hover:bg-emerald-400/12"
               >
-                <b>{alert.ticketKey}</b> · {alert.message}
-              </div>
+                <span className="flex flex-wrap items-center justify-between gap-2">
+                  <b className="text-emerald-200">{item.ticketKey}</b>
+                  <span className="rounded-full border border-emerald-300/25 px-2 py-0.5 font-semibold">
+                    {relativeAge(item.submittedAt)}
+                  </span>
+                </span>
+                <span className="mt-1 block text-foreground">
+                  {item.ticket.title}
+                </span>
+                <span className="mt-1 block text-muted-foreground">
+                  Enviado por {item.submittedByName}
+                </span>
+              </button>
             ))}
-            {!data.alerts.length && (
+            {!validationQueue.length && (
               <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-                Nenhum SLA vencido ou agendamento imediato.
+                Nenhum chamado aguardando validação.
+              </p>
+            )}
+            {!!data.validationQueue?.length && !validationQueue.length && (
+              <p className="rounded-lg border border-emerald-400/20 bg-emerald-400/8 p-3 text-xs text-emerald-100">
+                Os chamados enviados já saíram da fila atual do Jira.
               </p>
             )}
           </div>
@@ -3110,6 +3184,17 @@ function formatDate(value: string) {
         timeStyle: "short",
       }).format(new Date(value))
     : "Não informado";
+}
+
+function relativeAge(value: string) {
+  const date = Date.parse(value);
+  if (!Number.isFinite(date)) return "sem data";
+  const minutes = Math.max(0, Math.floor((Date.now() - date) / 60_000));
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `há ${hours} h`;
+  return `há ${Math.floor(hours / 24)} d`;
 }
 
 function toTicket(issue: JiraTicket): Ticket {

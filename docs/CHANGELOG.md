@@ -11,6 +11,13 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Fila de validação na visão geral — *(este trabalho)*
+A seção de alertas do painel de inteligência foi substituída por uma lista
+simples de chamados enviados para validação. Ao clicar em **Validar**, o sistema
+registra quem enviou e quando; a visão geral mostra chamado, colaborador e há
+quanto tempo está aguardando. Quando o chamado sai da fila atual do Jira, ele
+some da lista.
+
 ### Bilhetes na tela inicial — *(este trabalho)*
 A visão geral ganhou um mural interno de recados rápidos. Funcionários
 autenticados podem criar e ver bilhetes; autor, gerência e coordenação podem
