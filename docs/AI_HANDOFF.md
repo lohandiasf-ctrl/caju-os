@@ -161,6 +161,11 @@ todos os perfis, exportação/backup administrativo.
 - Quadro de **feedback** aberto a todos os perfis; triagem por gerência/coordenação.
 - Catálogo de **peças** liga o preço ao campo "peça a ser trocada".
 
+## Primeira sessão do Codex
+
+`docs/CODEX_ONBOARDING.md` — guia de entrada para colar no Codex na
+primeira vez. Depois disso ele segue o `AGENTS.md`.
+
 ## Como Claude passa trabalho para Codex
 
 1. Deixe o `main` limpo: `git status --short` vazio, testes/tsc/build passando.
