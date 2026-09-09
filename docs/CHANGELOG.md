@@ -17,6 +17,9 @@ Windows (`CF_HDROP`) e transforma arquivos copiados no Explorer em evidencias
 do chamado. A web continua usando o clipboard do navegador; no desktop, quando
 o navegador nao entrega os arquivos, o sistema consulta a ponte nativa. Limites:
 8 arquivos por colagem, 25 MB por arquivo e 50 MB no total.
+Tambem cobre arquivos virtuais copiados de dentro de pastas ZIP abertas pelo
+Explorer (`FileGroupDescriptorW` + `FileContents`), caso em que nao existe
+caminho real no disco.
 
 ### Aceita pacotes ZIP e RAR como evidência — *(este trabalho)*
 O seletor, arrastar/colar e a API de anexos agora aceitam arquivos `.zip` e

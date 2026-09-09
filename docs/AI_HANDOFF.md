@@ -37,6 +37,8 @@ Exceção desktop: a colagem de arquivos copiados do Windows Explorer usa o
 comando nativo Tauri `read_clipboard_files` (`CF_HDROP`). Esse recurso so chega
 aos usuarios apos rebuild/redistribuicao do instalador; publicar apenas o Worker
 nao atualiza essa ponte nativa.
+Arquivos copiados de dentro de ZIP aberto no Explorer usam formatos virtuais do
+Windows (`FileGroupDescriptorW` + `FileContents`), tambem lidos por esse comando.
 
 ## Stack técnica
 
