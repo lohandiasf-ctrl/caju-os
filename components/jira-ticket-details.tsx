@@ -1,6 +1,6 @@
 'use client';
 
-import { type ClipboardEvent, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type ClipboardEvent as ReactClipboardEvent, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Building2, Check, CircleDollarSign, Download, Eye, FileText, Image, Loader2, Paperclip, RefreshCw, Save, Search, Upload, Video, Wrench, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,6 +99,23 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     return () => { window.removeEventListener('keydown', close); URL.revokeObjectURL(preview.url); };
   }, [preview]);
 
+  useEffect(() => {
+    // Clipboard paste events target the currently focused control. The upload
+    // button is not always focused (for example after copying a screenshot),
+    // so listen at the window level while this ticket detail is open.
+    const handlePaste = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return;
+      const clipboardEvent = event as Event & { clipboardData?: DataTransfer };
+      const files = clipboardFiles(clipboardEvent.clipboardData);
+      if (!files.length) return;
+      event.preventDefault();
+      queueEvidenceFiles(files, 'colados');
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [details.key]);
+
   async function updateJira(patch: Record<string, string>, key: string) {
     if (!user || savingKey) return;
     const normalizedPatch = { ...patch };
@@ -168,8 +185,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     queueEvidenceFiles(Array.from(event.dataTransfer.files ?? []), 'arrastados');
   }
 
-  function handleEvidencePaste(event: ClipboardEvent<HTMLButtonElement>) {
-    const files = Array.from(event.clipboardData.files ?? []);
+  function handleEvidencePaste(event: ReactClipboardEvent<HTMLButtonElement>) {
+    const files = clipboardFiles(event.clipboardData);
     if (!files.length) return;
     event.preventDefault();
     queueEvidenceFiles(files, 'colados');
@@ -320,7 +337,7 @@ ${chosen.name}` : chosen.name, equipmentTotal: String(Number((totalAtual + chose
       <TabsContent value="anexos" className="space-y-4 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="flex items-center gap-2 text-sm font-bold"><Paperclip className="size-4 text-primary" />Anexos e evidências</h3><p className="mt-1 text-xs text-muted-foreground">RAT, fotos, vídeos e documentos armazenados no chamado do Jira.</p></div><span className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground">{details.attachments?.length ?? 0} arquivo(s)</span></div>
         <div className="grid gap-3 sm:grid-cols-2">{details.attachments?.map((attachment) => <article key={attachment.id} className="min-w-0 overflow-hidden rounded-xl border border-border bg-background/55"><AttachmentThumbnail issueKey={details.key} attachment={attachment} user={user} onOpen={() => void showPreview(attachment)} /><div className="p-3"><p className="break-words text-sm font-semibold">{attachment.filename}</p><p className="mt-1 text-xs text-muted-foreground">{formatBytes(attachment.size)}{attachment.author ? ` · ${attachment.author}` : ''}{attachment.createdAt ? ` · ${formatAttachmentDate(attachment.createdAt)}` : ''}</p><div className="mt-3 flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void showPreview(attachment)} disabled={previewLoading}><Eye /> Visualizar</Button><Button type="button" size="sm" variant="ghost" onClick={() => void fetchAttachment(attachment, true)} aria-label={`Baixar ${attachment.filename}`}><Download /> Baixar</Button></div></div></article>)}{!details.attachments?.length && <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground sm:col-span-2">Nenhum anexo encontrado neste chamado.</div>}</div>
-        <div className={`rounded-xl border border-dashed p-4 transition ${dragActive ? 'border-primary bg-primary/15 shadow-[0_0_0_1px_rgba(70,120,255,0.35)]' : 'border-primary/35 bg-primary/5'}`}><button type="button" onClick={() => evidenceFileInputRef.current?.click()} onPaste={handleEvidencePaste} onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }} onDrop={handleEvidenceDrop} className={`flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border px-4 py-5 text-center text-sm font-semibold text-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${dragActive ? 'border-primary bg-primary/15' : 'border-primary/30 bg-background/70 hover:bg-primary/10'}`}><span className="inline-flex items-center gap-2"><Upload className="size-4" />Selecionar novas evidências</span><span className="text-xs font-medium text-muted-foreground">Clique, arraste arquivos para cá ou cole com Ctrl+V.</span></button><input ref={evidenceFileInputRef} type="file" multiple className="sr-only" accept={evidenceAccept} aria-label="Selecionar evidências para anexar ao Jira" onChange={(event) => { queueEvidenceFiles(Array.from(event.target.files ?? []), 'selecionados'); event.currentTarget.value = ''; }} />{selectedFiles.length > 0 && <div className="mt-3 space-y-2">{fileWarnings.length > 0 && <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-100"><b>Validação das fotos:</b><ul className="mt-1 list-disc space-y-1 pl-5">{fileWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}{selectedFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs"><Paperclip className="size-3.5 text-primary" /><span className="min-w-0 flex-1 break-words">{file.name} · {formatBytes(file.size)}</span><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-muted" aria-label={`Remover ${file.name}`} onClick={() => { setFileWarnings([]); setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}><X className="size-4" /></button></div>)}<Button type="button" className="min-h-11 w-full" onClick={() => void uploadFiles()} disabled={uploading}>{uploading ? <Loader2 className="animate-spin" /> : <Upload />} {uploading ? 'Enviando ao Jira...' : `Validar e enviar ${selectedFiles.length} arquivo(s) ao Jira`}</Button></div>}</div>
+        <div className={`rounded-xl border border-dashed p-4 transition ${dragActive ? 'border-primary bg-primary/15 shadow-[0_0_0_1px_rgba(70,120,255,0.35)]' : 'border-primary/35 bg-primary/5'}`}><button type="button" onClick={() => evidenceFileInputRef.current?.click()} onPaste={handleEvidencePaste} onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }} onDrop={handleEvidenceDrop} aria-label="Selecionar ou colar evidências" className={`flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border px-4 py-5 text-center text-sm font-semibold text-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${dragActive ? 'border-primary bg-primary/15' : 'border-primary/30 bg-background/70 hover:bg-primary/10'}`}><span className="inline-flex items-center gap-2"><Upload className="size-4" />Selecionar novas evidências</span><span className="text-xs font-medium text-muted-foreground">Clique, arraste arquivos para cá ou cole com Ctrl+V.</span></button><input ref={evidenceFileInputRef} type="file" multiple className="sr-only" accept={evidenceAccept} aria-label="Selecionar evidências para anexar ao Jira" onChange={(event) => { queueEvidenceFiles(Array.from(event.target.files ?? []), 'selecionados'); event.currentTarget.value = ''; }} />{selectedFiles.length > 0 && <div className="mt-3 space-y-2">{fileWarnings.length > 0 && <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs text-amber-100"><b>Validação das fotos:</b><ul className="mt-1 list-disc space-y-1 pl-5">{fileWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}{selectedFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs"><Paperclip className="size-3.5 text-primary" /><span className="min-w-0 flex-1 break-words">{file.name} · {formatBytes(file.size)}</span><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-muted" aria-label={`Remover ${file.name}`} onClick={() => { setFileWarnings([]); setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}><X className="size-4" /></button></div>)}<Button type="button" className="min-h-11 w-full" onClick={() => void uploadFiles()} disabled={uploading}>{uploading ? <Loader2 className="animate-spin" /> : <Upload />} {uploading ? 'Enviando ao Jira...' : `Validar e enviar ${selectedFiles.length} arquivo(s) ao Jira`}</Button></div>}</div>
       </TabsContent>
     </Tabs>
     {preview && <div className="fixed inset-0 z-[100] grid place-items-center bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Visualização de ${preview.attachment.filename}`} onMouseDown={(event) => { if (event.currentTarget === event.target) setPreview(null); }}><div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"><header className="flex items-center gap-3 border-b border-border p-3"><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{preview.attachment.filename}</p><p className="text-xs text-muted-foreground">{formatBytes(preview.attachment.size)}</p></div><Button type="button" variant="outline" size="sm" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar</Button><Button type="button" variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Fechar visualização"><X /></Button></header><div className="grid min-h-0 flex-1 place-items-center overflow-auto bg-black/40 p-3">{preview.attachment.mimeType.startsWith('image/') ? <img src={preview.url} alt={preview.attachment.filename} className="max-h-[76vh] max-w-full object-contain" /> : preview.attachment.mimeType.startsWith('video/') ? <video src={preview.url} controls autoPlay className="max-h-[76vh] max-w-full" /> : preview.attachment.mimeType === 'application/pdf' ? <iframe src={preview.url} title={preview.attachment.filename} className="h-[76vh] w-full rounded-lg bg-white" /> : <div className="max-w-md text-center"><FileText className="mx-auto size-12 text-primary" /><p className="mt-3 text-sm">Este arquivo não possui visualização no navegador.</p><Button type="button" className="mt-4" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar arquivo</Button></div>}</div></div></div>}
@@ -342,6 +359,16 @@ function AttachmentThumbnail({ issueKey, attachment, user, onOpen }: { issueKey:
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [attachment.id, image, issueKey, user]);
   return <button type="button" onClick={onOpen} className="group relative grid aspect-[16/9] w-full place-items-center overflow-hidden bg-muted/35 text-primary" aria-label={`Visualizar ${attachment.filename}`}>{url ? <img src={url} alt="" className="size-full object-cover transition duration-200 group-hover:scale-[1.02]" /> : <Icon className="size-10" />}<span className="absolute inset-0 grid place-items-center bg-black/0 opacity-0 transition group-hover:bg-black/45 group-hover:opacity-100 group-focus-visible:bg-black/45 group-focus-visible:opacity-100"><Eye className="size-7 text-white" /></span></button>;
+}
+
+function clipboardFiles(data?: DataTransfer | null) {
+  if (!data) return [];
+  const files = Array.from(data.files ?? []);
+  if (files.length) return files;
+  return Array.from(data.items ?? [])
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file));
 }
 
 function normalizeEvidenceFile(file: File, index: number) {

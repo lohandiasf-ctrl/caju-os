@@ -11,6 +11,11 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-09
 
+### Corrige colagem de evidências com Ctrl+V — *(este trabalho)*
+O recebimento de arquivos colados agora usa um listener no detalhe do chamado
+e também lê itens de arquivo da área de transferência quando o navegador não
+preenche `clipboardData.files`. A colagem de texto em campos continua intacta.
+
 ### Adiciona filtros prontos do Jira ao fluxo de chamados — *(este trabalho)*
 O painel de filtros ganhou presets internos para os JQLs enviados pelo Jira:
 **Meus chamados no Jira** (`parceiro-atribuido = currentUser()`) e
