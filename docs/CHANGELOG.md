@@ -11,6 +11,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Deploy automático a cada push na main — *(este trabalho)*
+
+Pedido do usuário: publicar produção automaticamente. `.github/workflows/deploy.yml`
+roda `npm run release` (testes, tsc, build, deploy) a cada push na `main` e
+confere se `operacoes.cajutech.net` responde 200. O `.cloudflare.json` é
+montado no CI a partir de secrets/variables do GitHub; nenhum script de deploy
+mudou. Regras atualizadas em `CLAUDE.md`, `AGENTS.md`,
+`docs/WORKFLOW_RULES.md` (15 e 17), `docs/AI_HANDOFF.md` e
+`docs/DEPLOYMENT.md`: push na `main` agora é deploy de produção.
+
+**Pendente:**
+- **Decisão/ação humana:** cadastrar no GitHub os secrets
+  `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` e as variables listadas em
+  `docs/DEPLOYMENT.md`. Até lá, cada push na `main` gera um run que falha no
+  primeiro passo, sem publicar nada.
+- Os commits `7830ac1` e `9a4665b` (ações em lote) ainda não estão em
+  produção: o deploy local foi bloqueado pelo modo automático. Publicam no
+  primeiro run com a configuração completa (ou via "Run workflow").
+- Migrations continuam manuais (`npm run db:migrate:remote`).
+
 ### Ações em lote nos chamados: agendar, técnico em campo, copiar — *(este trabalho)*
 
 Generaliza o agendamento em lote do `7830ac1` (ainda não publicado) numa

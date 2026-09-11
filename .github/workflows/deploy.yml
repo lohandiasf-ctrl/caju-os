@@ -1,0 +1,76 @@
+name: Deploy produção
+
+# Todo push na main publica em produção (operacoes.cajutech.net), desde que
+# testes, typecheck e build passem — é o mesmo `npm run release` do deploy local.
+# Configuração necessária no GitHub: ver docs/DEPLOYMENT.md, "Deploy automático".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Um deploy por vez; um push novo espera o anterior terminar em vez de cancelá-lo.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      D1_DATABASE_NAME: ${{ vars.D1_DATABASE_NAME }}
+      D1_DATABASE_ID: ${{ vars.D1_DATABASE_ID }}
+      CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN }}
+      ZONE_NAME: ${{ vars.ZONE_NAME }}
+      JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+      JIRA_EMAIL: ${{ vars.JIRA_EMAIL }}
+      JIRA_PROJECT_KEY: ${{ vars.JIRA_PROJECT_KEY }}
+    steps:
+      - name: Conferir configuração
+        run: |
+          missing=""
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID D1_DATABASE_NAME D1_DATABASE_ID CUSTOM_DOMAIN ZONE_NAME JIRA_BASE_URL JIRA_EMAIL JIRA_PROJECT_KEY; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Faltam secrets/variables do repositório:$missing. Ver docs/DEPLOYMENT.md, 'Deploy automático'. Nada foi publicado."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Mesmo formato do .cloudflare.json local (gitignored); patch-wrangler.mjs lê daqui.
+      - name: Gerar .cloudflare.json
+        run: |
+          node -e '
+            const e = process.env;
+            const config = {
+              d1_database_name: e.D1_DATABASE_NAME,
+              d1_database_id: e.D1_DATABASE_ID,
+              custom_domain: e.CUSTOM_DOMAIN,
+              zone_name: e.ZONE_NAME,
+              vars: { JIRA_BASE_URL: e.JIRA_BASE_URL, JIRA_EMAIL: e.JIRA_EMAIL, JIRA_PROJECT_KEY: e.JIRA_PROJECT_KEY },
+            };
+            require("fs").writeFileSync(".cloudflare.json", JSON.stringify(config, null, 2));
+          '
+
+      # Testes + tsc + build + deploy. Qualquer falha interrompe antes de publicar.
+      - run: npm run release
+
+      - name: Conferir produção
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "https://${CUSTOM_DOMAIN}/")
+          echo "GET https://${CUSTOM_DOMAIN}/ -> $code"
+          [ "$code" = "200" ]

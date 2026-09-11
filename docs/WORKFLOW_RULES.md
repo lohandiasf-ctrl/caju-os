@@ -50,14 +50,18 @@ pare e confirme com o usuário.
 
 14. **Produção só recebe build testado** (`npm test && npx tsc --noEmit &&
     npm run build` passando).
-15. **Nunca publicar produção sem pedido explícito do usuário.** Isso vale
-    para `npm run deploy`, `npm run release`, `wrangler deploy` e qualquer
-    variante.
+15. **Push na `main` = deploy de produção.** O workflow
+    `.github/workflows/deploy.yml` roda `npm run release` (testes, tsc, build
+    e deploy) a cada push na `main` — só envie para lá o que está pronto.
+    Deploy manual (`npm run deploy`, `npm run release`, `wrangler deploy` e
+    variantes) continua exigindo pedido explícito do usuário.
 16. Não fazer deploy que inclua `custom_domain` novo sem o usuário saber que
     o DNS de `operacoes.cajutech.net` será repontado.
 17. Migration nova: gerar (`npm run db:generate`), commitar o `.sql`, e
     **avisar no handoff** que `npm run db:migrate:remote` precisa rodar. Não
-    aplicar em produção sem pedido.
+    aplicar em produção sem pedido. O deploy automático **não** aplica
+    migration: código que depende de migration nova só entra na `main`
+    depois de `npm run db:migrate:remote`.
 
 ## Git
 

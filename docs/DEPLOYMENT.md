@@ -3,8 +3,9 @@
 Hospedagem: Cloudflare Worker `caju-os` na conta Cloudflare do usuário, servindo
 `operacoes.cajutech.net`. Não há mais OpenAI Sites no caminho de publicação.
 
-**Regra:** produção só recebe build testado, e só com pedido explícito do
-usuário.
+**Regra:** produção só recebe build testado. Push na `main` publica
+automaticamente (ver "Deploy automático"); deploy manual só com pedido
+explícito do usuário.
 
 ---
 
@@ -80,6 +81,38 @@ O que `npm run deploy` faz:
 ```
 
 Sem `custom_domain`, o deploy publica só em `caju-os.<conta>.workers.dev`.
+
+## Deploy automático (GitHub Actions)
+
+Desde 2026-09-11, todo push na `main` dispara `.github/workflows/deploy.yml`,
+que roda `npm run release` num runner Ubuntu: testes, `tsc`, build e deploy.
+Se um passo falhar, nada é publicado. No fim, o workflow confere se
+`https://operacoes.cajutech.net/` responde 200. Também dá para disparar à mão
+em Actions → "Deploy produção" → Run workflow.
+
+O workflow monta o `.cloudflare.json` a partir da configuração do repositório
+no GitHub (Settings → Secrets and variables → Actions):
+
+| Tipo | Nome | Valor |
+|---|---|---|
+| Secret | `CLOUDFLARE_API_TOKEN` | token criado com o template "Edit Cloudflare Workers" |
+| Secret | `CLOUDFLARE_ACCOUNT_ID` | ID da conta Cloudflare |
+| Variable | `D1_DATABASE_NAME` | `caju-os-prod` |
+| Variable | `D1_DATABASE_ID` | o `d1_database_id` do `.cloudflare.json` local |
+| Variable | `CUSTOM_DOMAIN` | `operacoes.cajutech.net` |
+| Variable | `ZONE_NAME` | `cajutech.net` |
+| Variable | `JIRA_BASE_URL` | igual ao `.env.local` |
+| Variable | `JIRA_EMAIL` | igual ao `.env.local` |
+| Variable | `JIRA_PROJECT_KEY` | igual ao `.env.local` |
+
+Faltando qualquer item, o workflow falha no primeiro passo dizendo o que falta,
+sem publicar nada. Os secrets do Worker (`JIRA_API_TOKEN`, `CRON_SECRET`...)
+continuam na Cloudflare; o deploy não mexe neles. Se o deploy reclamar de
+permissão no domínio, acrescente ao token *Zone → DNS: Edit* para
+`cajutech.net`.
+
+O deploy automático **não** aplica migrations. Código que depende de migration
+nova só pode chegar na `main` depois de `npm run db:migrate:remote`.
 
 ## Migrations do banco
 

@@ -39,7 +39,11 @@ andamento.
   projeto.
 - Preserve o visual premium. Não simplifique em nome de FPS.
 - Antes de commitar código: `npm test`, `npx tsc --noEmit`, `npm run build`.
-- **Não publique produção sem pedido explícito.**
+- **Push na `main` publica produção** (GitHub Actions,
+  `.github/workflows/deploy.yml`, desde 2026-09-11). Só envie para a `main` o
+  que passou em teste/tsc/build; trabalho em andamento fica na branch
+  `claude/`. Deploy manual (`npm run deploy`/`release`) continua exigindo
+  pedido explícito.
 - **Não use `git add -A` às cegas** — revise `git status` ou adicione por
   caminho. (Já aconteceu de entrar coisa não intencional.)
 - Nunca grave segredos no Git.

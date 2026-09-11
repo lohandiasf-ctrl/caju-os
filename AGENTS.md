@@ -49,8 +49,11 @@ em andamento e **preserve o trabalho do usuário**.
   versão, ícone, permissões ou comandos Rust mudarem.
 - Para mudanças de código: rode `npm test`, `npx tsc --noEmit` e
   `npm run build`. Se não passar, não commite.
-- **Não publique produção** (`npm run deploy` / `release` / `wrangler
-  deploy`) sem pedido explícito do usuário.
+- **Push na `main` publica produção.** Desde 2026-09-11, o GitHub Actions
+  (`.github/workflows/deploy.yml`) roda `npm run release` a cada push na
+  `main`. Só envie para a `main` o que já está testado; trabalho em andamento
+  fica na branch `codex/`. Deploy manual (`npm run deploy` / `release` /
+  `wrangler deploy`) continua exigindo pedido explícito do usuário.
 - Não declare "tempo real" o que depende de polling.
 - Antes de criar funcionalidade, procure se já existe (há duplicações
   conhecidas — ver `docs/WORKFLOW_RULES.md` item 25).
