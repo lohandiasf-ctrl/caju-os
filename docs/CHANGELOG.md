@@ -11,6 +11,39 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Sincronização de spares importava metade da planilha em silêncio — *(este trabalho)*
+
+A FSA-132148 estava na linha 381 da planilha e não aparecia no sistema.
+Investigando o D1 de produção: a tabela `spares` tinha **exatamente 256 linhas**,
+todas `sync_status='synced'`, nenhuma falha registrada, e a maior FSA era a
+`FSA-128845`. 256 é o tamanho de página padrão da ação **List rows present in a
+table** do Power Automate quando a paginação está desligada — o conector
+devolvia a primeira página e respondia HTTP 200, então tudo depois da linha 256
+nunca chegava.
+
+O defeito do nosso lado não era a leitura truncada (isso é configuração do
+fluxo), e sim **não perceber o truncamento**: a rota respondia
+`ok: true, imported: 256` e o botão dizia "Sincronização concluída". Foi por
+isso que o problema ficou invisível por dias.
+
+Agora `lib/spares-pull.ts` detecta uma resposta que bate exatamente num tamanho
+de página conhecido do conector, `/api/spares/sync` devolve `warnings[]` e marca
+`ok: false`, e a tela mostra "Sincronização incompleta" com a instrução do que
+ligar no Power Automate. O teto da rota subiu de 2.000 para 5.000 linhas e
+passar dele também vira aviso, em vez de descartar a cauda calado.
+
+**Pendente (fora do código):** ligar **Pagination** (Threshold 5000) na ação
+*List rows present in a table* do Fluxo 2. Enquanto isso não for feito, as
+linhas além da 256 continuam sem entrar. Depois de ligar, a próxima execução do
+cron (≤10 min) importa o restante sozinha — o upsert é por `externalKey` e não
+duplica.
+
+**Também aberto:** `SPARES_SYNC_TOKEN` não está cadastrado no Worker, embora
+este documento mande os dois fluxos conferirem o header `x-caju-sync-token`.
+Como o pull funciona sem ele, os fluxos não estão validando o token — as URLs
+do Power Automate estão efetivamente abertas a quem as tiver.
+
+
 ### Revisão de UI/UX: empilhamento, densidade e hierarquia — *(este trabalho)*
 
 Auditoria visual das 11 telas em 375/768/1024/1440 px com

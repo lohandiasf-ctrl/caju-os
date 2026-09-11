@@ -300,6 +300,7 @@ export default function Page() {
         imported?: number;
         sent?: number;
         errors?: string[];
+        warnings?: string[];
         error?: string;
       };
       if (!response.ok)
@@ -307,10 +308,14 @@ export default function Page() {
           body.error || 'Não foi possível sincronizar a planilha.',
         );
       const summary = `${body.imported ?? 0} registro(s) lido(s) e ${body.sent ?? 0} enviado(s).`;
+      // A truncated read used to report "concluída" while half the spreadsheet
+      // was missing, which is how FSA-132148 stayed invisible. Say it plainly.
       setNotice(
-        body.errors?.length
-          ? `${summary} Pendências: ${body.errors.join(' ')}`
-          : `Sincronização concluída: ${summary}`,
+        body.warnings?.length
+          ? `Sincronização incompleta: ${summary} ${body.warnings.join(' ')}`
+          : body.errors?.length
+            ? `${summary} Pendências: ${body.errors.join(' ')}`
+            : `Sincronização concluída: ${summary}`,
       );
       setAttempt((value) => value + 1);
     } catch (cause) {

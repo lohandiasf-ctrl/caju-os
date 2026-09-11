@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { looksTruncated } from '@/lib/spares-pull';
 
 export type SpareSyncRecord = {
   externalKey: string;
@@ -96,9 +97,11 @@ export async function pushSpareToSpreadsheet(spare: SpareSyncRecord) {
   return { configured: true as const };
 }
 
-export async function pullSparesFromSpreadsheet(): Promise<unknown[]> {
+export type SparePullResult = { items: unknown[]; truncated: boolean };
+
+export async function pullSparesFromSpreadsheet(): Promise<SparePullResult> {
   const url = syncEnv().SPARES_SYNC_PULL_URL?.trim();
-  if (!url) return [];
+  if (!url) return { items: [], truncated: false };
   const response = await checkedFetch(url, {
     // Power Automate's "When an HTTP request is received" trigger only
     // accepts POST. Using GET here made a correctly configured pull flow
@@ -121,7 +124,12 @@ export async function pullSparesFromSpreadsheet(): Promise<unknown[]> {
     }),
   });
   const body = (await response.json()) as { items?: unknown[] } | unknown[];
-  if (Array.isArray(body)) return body;
-  if (body && Array.isArray(body.items)) return body.items;
-  throw new Error('O conector da planilha retornou um formato inválido.');
+  const items = Array.isArray(body)
+    ? body
+    : body && Array.isArray(body.items)
+      ? body.items
+      : null;
+  if (!items)
+    throw new Error('O conector da planilha retornou um formato inválido.');
+  return { items, truncated: looksTruncated(items.length) };
 }

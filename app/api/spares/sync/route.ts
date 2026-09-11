@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import { getDb } from '@/db';
 import { spares } from '@/db/schema';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { MAX_PULL_ROWS } from '@/lib/spares-pull';
 import {
   pullSparesFromSpreadsheet,
   pushSpareToSpreadsheet,
@@ -113,11 +114,23 @@ export async function POST(request: Request) {
     let imported = 0;
     let sent = 0;
     const errors: string[] = [];
+    const warnings: string[] = [];
 
     if (settings.pull) {
       try {
-        const rows = await pullSparesFromSpreadsheet();
-        for (const value of rows.slice(0, 2000)) {
+        const { items, truncated } = await pullSparesFromSpreadsheet();
+        if (truncated)
+          warnings.push(
+            `O conector devolveu exatamente ${items.length} linhas, que e o tamanho de pagina padrao do Power Automate. ` +
+              'Ative a paginacao na acao "List rows present in a table" (Settings -> Pagination, Threshold 5000); ' +
+              'sem isso as linhas seguintes da planilha nunca chegam ao sistema.',
+          );
+        if (items.length > MAX_PULL_ROWS)
+          warnings.push(
+            `A planilha devolveu ${items.length} linhas e o limite desta rota e ${MAX_PULL_ROWS}. ` +
+              'As excedentes foram ignoradas nesta execucao.',
+          );
+        for (const value of items.slice(0, MAX_PULL_ROWS)) {
           const record = await normalizeRow(value);
           if (!record) continue;
           const now = new Date().toISOString();
@@ -206,10 +219,13 @@ export async function POST(request: Request) {
     }
 
     return Response.json({
-      ok: errors.length === 0,
+      // A truncated pull is not an error the connector reported — it answered
+      // 200 — but the sync is incomplete, so it must not read as a clean run.
+      ok: errors.length === 0 && warnings.length === 0,
       imported,
       sent,
       errors: errors.slice(0, 10),
+      warnings: warnings.slice(0, 10),
     });
   } catch (error) {
     if (error instanceof Response) return error;

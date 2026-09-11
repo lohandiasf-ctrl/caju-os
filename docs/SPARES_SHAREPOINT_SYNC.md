@@ -53,9 +53,18 @@ quando uma sincronização é repetida.
 
 1. Crie outro fluxo HTTP e confira o mesmo header secreto. O Worker chama o
    gatilho com `POST` e o corpo `{ "action": "list-spares" }`.
-2. Use **List rows present in a table** na tabela `Tabela13` e ative paginação
-   para pelo menos 2.000 linhas.
-3. Responda HTTP 200 com `{ "items": <value da ação de listar linhas> }`.
+2. Use **List rows present in a table** na tabela `Tabela13`.
+3. **Ative a paginação nessa ação** — menu `...` → **Settings** → **Pagination**
+   ligado → **Threshold** `5000`.
+
+   > Este passo não é opcional. Sem ele o conector devolve **apenas as
+   > primeiras 256 linhas** e ainda responde HTTP 200, então a sincronização
+   > parece concluída enquanto o resto da planilha nunca chega ao sistema. Foi
+   > exatamente o que aconteceu em 2026-09-11: 256 das ~381 linhas importadas, e
+   > a FSA-132148 (linha 381) invisível no sistema. A rota agora detecta esse
+   > truncamento e avisa em vez de reportar sucesso, mas quem corrige é a
+   > paginação aqui.
+4. Responda HTTP 200 com `{ "items": <value da ação de listar linhas> }`.
 
 O botão **Sincronizar planilha** chama esse fluxo, importa alterações e depois
 reenvia registros locais pendentes. Além disso, o Worker executa a mesma
