@@ -110,8 +110,10 @@ conector bidirecional configurável via Power Automate. Falhas do Excel não
 perdem o cadastro: ficam marcadas para reenvio. Instruções e contrato estão em
 `docs/SPARES_SHAREPOINT_SYNC.md`.
 
-**Pendente:** configurar os dois fluxos do Power Automate, cadastrar os três
-secrets do Worker e aplicar `drizzle/0021_spares.sql` antes de publicar.
+**Pendente:** configurar os dois fluxos do Power Automate e cadastrar os três
+secrets do Worker. A migration `drizzle/0021_spares.sql` **já foi aplicada** no
+D1 de produção — conferido em 2026-09-11 com `npm run db:migrate:remote`, que
+reportou as 23 migrations presentes.
 
 ## 2026-09-09
 
