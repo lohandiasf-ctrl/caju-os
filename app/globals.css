@@ -89,6 +89,20 @@
   --motion-fast: 150ms;
   --motion-standard: 200ms;
   --ease-ui: cubic-bezier(.2,.8,.2,1);
+
+  /* Stacking order. Anything fixed/floating must pick a step from this scale
+     instead of inventing a number — an ad-hoc z-index is how the meeting
+     launcher ended up painting over open dialogs. Only a live call (and the
+     desktop chrome) legitimately outranks a modal: the user must still be able
+     to mute or hang up while a dialog is open. */
+  --z-content: 10;      /* in-flow overlays: popovers anchored to content */
+  --z-sticky: 20;       /* sticky page header */
+  --z-float: 30;        /* idle floating launchers — must sit UNDER modals */
+  --z-sidebar: 40;      /* app sidebar and its trigger */
+  --z-modal: 50;        /* dialog / sheet / alert overlay + content */
+  --z-live-call: 70;    /* ongoing call surface — stays reachable over modals */
+  --z-incoming-call: 80;/* incoming call alert */
+  --z-window-chrome: 100;
 }
 
 @layer base {
@@ -147,7 +161,7 @@
   .app-sidebar {
     position: fixed;
     inset: .75rem auto .75rem .75rem;
-    z-index: 40;
+    z-index: var(--z-sidebar);
     display: flex;
     width: 248px;
     flex-direction: column;
@@ -212,6 +226,14 @@
   }
   [data-slot='dialog-header'] { padding-right: 2rem; }
   [data-slot='tabs-content'], [data-slot='tabs-list'], [data-slot='table-container'] { min-width: 0; }
+  /* A tab strip that cannot fit scrolls inside itself. Without this it pushes
+     the document wider and the whole page scrolls sideways on small screens. */
+  [data-slot='tabs-list'] {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  [data-slot='tabs-list']::-webkit-scrollbar { display: none; }
   [data-slot='table-head'] { background: rgb(11 18 30 / 45%); color: var(--muted-foreground); font-size: .75rem; font-weight: 600; }
   [data-slot='table-cell'] { font-variant-numeric: tabular-nums; }
   .metric-glow { position: relative; overflow: hidden; }
@@ -246,7 +268,7 @@
 
 /* Leaflet supplies its own stylesheet at runtime; these stay unlayered. */
 .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.75); }
-.leaflet-container { background: #17201c; }
+.leaflet-container.leaflet-container { background: #0f1720; }
 .leaflet-control-attribution { background: rgb(12 16 25 / 78%) !important; color: #cbd5e1 !important; }
 .leaflet-control-attribution a { color: #a4beff !important; }
 

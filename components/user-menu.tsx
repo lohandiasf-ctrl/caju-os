@@ -708,7 +708,7 @@ export function ColleaguesPanel({
               : "Abrir colegas"
         }
         aria-expanded={colleaguesOpen}
-        className="fixed bottom-5 right-5 z-40 hidden size-11 place-items-center rounded-xl border border-primary/30 bg-sidebar text-primary shadow-xl transition hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:grid"
+        className="fixed bottom-5 right-5 z-(--z-sidebar) hidden size-11 place-items-center rounded-xl border border-primary/30 bg-sidebar text-primary shadow-xl transition hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:grid"
       >
         <Users className="size-5" aria-hidden="true" />
         {messageDot && (
@@ -721,7 +721,7 @@ export function ColleaguesPanel({
       />
       <aside
         inert={!colleaguesOpen}
-        className={`colleagues-sidebar fixed inset-y-0 right-0 z-30 hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
+        className={`colleagues-sidebar fixed inset-y-0 right-0 z-(--z-float) hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
         aria-label="Colegas"
         aria-hidden={!colleaguesOpen}
       >
@@ -804,7 +804,7 @@ export function ColleaguesPanel({
           setMobileOpen(true);
           setMessageDot(false);
         }}
-        className="fixed bottom-4 right-4 z-30 grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden"
+        className="fixed bottom-4 right-4 z-(--z-float) grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden"
         aria-label={
           messageDot ? "Abrir colegas, nova atividade no chat" : "Abrir colegas"
         }
@@ -910,7 +910,7 @@ export function ColleaguesPanel({
       {notice && (
         <div
           aria-live="assertive"
-          className="fixed right-4 top-4 z-[80] flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10"
+          className="fixed right-4 top-4 z-(--z-incoming-call) flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10"
         >
           <button
             type="button"
@@ -1597,7 +1597,7 @@ function ChatDialog({
       </DialogContent>
     </Dialog>
     {colleague && callActive && chatMinimized && (
-      <button type="button" onClick={() => setChatMinimized(false)} className="fixed bottom-4 right-4 z-[70] inline-flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-400/30 bg-card px-4 text-left shadow-2xl" aria-label="Restaurar chamada em andamento">
+      <button type="button" onClick={() => setChatMinimized(false)} className="fixed bottom-4 right-4 z-(--z-live-call) inline-flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-400/30 bg-card px-4 text-left shadow-2xl" aria-label="Restaurar chamada em andamento">
         <span className="grid size-9 place-items-center rounded-xl bg-emerald-400/12 text-emerald-300"><Phone className="size-4" /></span>
         <span><strong className="block text-sm">Chamada em andamento</strong><small className="text-muted-foreground">Clique para restaurar</small></span>
       </button>
@@ -1921,7 +1921,12 @@ function TeamVoiceControl({
     .filter((item): item is Colleague => Boolean(item))
     .map((item) => item.displayName || item.email.split("@")[0]);
   return (
-    <div className="pointer-events-none fixed bottom-20 right-4 z-[65] sm:right-5">
+    // Idle, this is just a launcher and must stay under dialogs; once a call is
+    // live the surface has to outrank them so mute/hang-up stay reachable.
+    <div
+      className="pointer-events-none fixed bottom-20 right-4 sm:right-5"
+      style={{ zIndex: state === "idle" ? "var(--z-float)" : "var(--z-live-call)" }}
+    >
       {state === "idle" ? (
         <button
           type="button"
@@ -2267,7 +2272,7 @@ function IncomingVoiceCall({
       {active && (
         <section
           aria-label="Chamada de voz em andamento"
-          className={`fixed bottom-4 right-4 z-[70] rounded-2xl border border-emerald-400/30 bg-card/95 shadow-2xl backdrop-blur-xl transition-[width] motion-reduce:transition-none ${minimized ? "w-56" : "w-[min(25rem,calc(100vw-2rem))]"}`}
+          className={`fixed bottom-4 right-4 z-(--z-live-call) rounded-2xl border border-emerald-400/30 bg-card/95 shadow-2xl backdrop-blur-xl transition-[width] motion-reduce:transition-none ${minimized ? "w-56" : "w-[min(25rem,calc(100vw-2rem))]"}`}
         >
           <div className="flex min-h-14 items-center gap-3 p-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-400/12 text-emerald-300">

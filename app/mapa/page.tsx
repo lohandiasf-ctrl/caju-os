@@ -295,7 +295,7 @@ export default function Page() {
             Diretório operacional · {data.length} cidades
           </Badge>
         </header>
-        <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
+        <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-4 pb-36 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-primary">

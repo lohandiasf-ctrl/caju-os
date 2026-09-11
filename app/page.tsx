@@ -1050,7 +1050,7 @@ export default function Home() {
             </div>
           )}
         </header>
-        <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-6 pb-36 sm:px-6 lg:px-8 lg:pt-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-primary">
@@ -1081,7 +1081,7 @@ export default function Home() {
           </div>
           {activeView === "overview" && <BulletinBoard user={user} />}
           {activeView === "overview" && (
-            <div className="mt-7 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {[
                 [
                   "Chamados relevantes",
@@ -1196,7 +1196,7 @@ export default function Home() {
             activeView === "tickets" ||
             activeView === "central") && (
             <>
-              <div className="mt-8 flex flex-wrap items-center gap-2">
+              <div className="mt-6 flex flex-wrap items-center gap-2">
                 <div className="mr-auto">
                   <h2 className="text-lg font-bold">Fluxo de chamados</h2>
                   <p className="text-xs text-muted-foreground">
@@ -1285,7 +1285,7 @@ export default function Home() {
               )}
               {view === "kanban" ? (
                 <div
-                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-5" : "grid-cols-1"}`}
+                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1920px]:grid-cols-5" : "grid-cols-1"}`}
                 >
                   {visibleKanbanColumns.map(
                     (column) => {
@@ -1336,7 +1336,7 @@ export default function Home() {
                       type="button"
                       onClick={() => void openTicket(ticket)}
                       key={ticket.id}
-                      className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 lg:grid-cols-[100px_minmax(0,1fr)_140px_120px] sm:items-center"
+                      className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 lg:grid-cols-[100px_minmax(0,1fr)_140px_120px] lg:items-center"
                     >
                       <span className="font-mono text-xs font-bold text-primary">
                         {ticket.id}
@@ -1738,12 +1738,12 @@ function TicketCard({
           </p>
         )}
       </div>
-      <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
-        <span className="text-xs text-muted-foreground">
+      <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3">
+        <span className="truncate text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">
           {ticket.rawStatus}
         </span>
         {ticket.technician && (
-          <span className="text-xs font-semibold">{ticket.technician}</span>
+          <span className="truncate text-xs font-semibold">{ticket.technician}</span>
         )}
       </div>
     </button>
@@ -1913,7 +1913,7 @@ function AgendaView({
     return <EmptyState label="Nenhum atendimento aguardando agenda." />;
   return (
     <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
-      <div className="hidden border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_140px]">
+      <div className="hidden border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_180px]">
         <span>Data</span>
         <span>Chamado</span>
         <span>Responsável</span>
@@ -1924,7 +1924,7 @@ function AgendaView({
           type="button"
           key={ticket.id}
           onClick={() => onOpen(ticket)}
-          className="grid w-full gap-2 border-b border-border px-4 py-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[130px_1fr_160px_140px] sm:items-center"
+          className="grid w-full gap-2 border-b border-border px-4 py-4 text-left transition hover:bg-white/[.035] last:border-0 lg:grid-cols-[130px_minmax(0,1fr)_160px_180px] lg:items-center"
         >
           <span className="text-sm font-semibold text-blue-200">
             {ticket.schedule || "A definir"}
@@ -3008,7 +3008,7 @@ function OperationalSummary({
 }) {
   if (!data)
     return (
-      <section className="surface-panel mt-5 grid min-h-48 place-items-center rounded-2xl p-5">
+      <section className="surface-panel mt-6 grid min-h-48 place-items-center rounded-2xl p-5">
         <CajuLoading label="Carregando indicadores operacionais..." fullscreen={false} compact />
       </section>
     );
@@ -3023,7 +3023,7 @@ function OperationalSummary({
       currency: "BRL",
     }).format(cents / 100);
   return (
-    <section className="surface-panel mt-5 rounded-2xl p-5">
+    <section className="surface-panel mt-6 rounded-2xl p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold">Inteligência operacional</h2>

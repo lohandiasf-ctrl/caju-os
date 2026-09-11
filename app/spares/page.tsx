@@ -423,7 +423,7 @@ export default function Page() {
         <div
           id="main-content"
           tabIndex={-1}
-          className="app-main mx-auto max-w-[1600px] p-4 lg:p-8"
+          className="app-main mx-auto max-w-[1600px] px-4 pt-4 pb-36 lg:px-8 lg:pt-8"
         >
           <p className="text-xs font-bold uppercase tracking-widest text-primary">
             Peças e equipamentos
@@ -442,11 +442,15 @@ export default function Page() {
                 aria-label="Seções da Central de Spares"
                 className="w-full sm:w-auto"
               >
-                <TabsTrigger value="list" className="min-h-11 px-4">
-                  <Box aria-hidden="true" /> Acompanhar spares
+                <TabsTrigger value="list" className="min-h-11 flex-1 px-3 sm:flex-none sm:px-4">
+                  <Box aria-hidden="true" />
+                  <span className="sm:hidden">Acompanhar</span>
+                  <span className="hidden sm:inline">Acompanhar spares</span>
                 </TabsTrigger>
-                <TabsTrigger value="create" className="min-h-11 px-4">
-                  <Plus aria-hidden="true" /> Cadastrar novo spare
+                <TabsTrigger value="create" className="min-h-11 flex-1 px-3 sm:flex-none sm:px-4">
+                  <Plus aria-hidden="true" />
+                  <span className="sm:hidden">Cadastrar</span>
+                  <span className="hidden sm:inline">Cadastrar novo spare</span>
                 </TabsTrigger>
               </TabsList>
               <div className="flex flex-col gap-2 sm:flex-row">

@@ -186,7 +186,7 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
     attendance.ownerEmail.toLowerCase() === user?.email?.toLowerCase();
 
   return (
-    <section className="surface-panel mt-6 rounded-2xl p-4 sm:mt-7 sm:p-5" aria-labelledby="active-attendances-title">
+    <section className="surface-panel mt-6 rounded-2xl p-4 sm:p-5" aria-labelledby="active-attendances-title">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">

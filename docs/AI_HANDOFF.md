@@ -147,7 +147,15 @@ todos os perfis, exportação/backup administrativo.
 - A navegação visual compartilhada está em `components/app-navigation.tsx` e
   suas regras de papel em `lib/navigation.ts`. O script `scripts/ui-review.mjs`
   usa o Playwright disponível no ambiente para revisão visual local; ele exige
-  `PLAYWRIGHT_MODULE` e um servidor vinext disponível na porta 3000.
+  `PLAYWRIGHT_MODULE` e um servidor vinext disponível na porta 3000. Ele usa
+  dados sintéticos e não faz login nem escreve no Jira — rode-o antes de
+  entregar mudança visual; ele falha se alguma tela rolar de lado.
+- **Z-index tem escala nomeada** em `app/globals.css` (`--z-content`,
+  `--z-sticky`, `--z-float`, `--z-sidebar`, `--z-modal`, `--z-live-call`,
+  `--z-incoming-call`, `--z-window-chrome`). Elemento fixo ou flutuante novo
+  escolhe um degrau — não invente um número. Foi assim que o botão de reunião
+  acabou pintando por cima dos diálogos. Só a chamada ativa e a moldura do
+  desktop passam acima de um modal.
 
 1. **Testar salvar um chamado real com transição no Jira** no ambiente novo —
    único fluxo crítico ainda não exercitado em produção pós-migração.

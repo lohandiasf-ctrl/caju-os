@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Loader2, Megaphone, Pin, Plus, Send, StickyNote } from "lucide-react";
+import { Archive, Loader2, Pin, Plus, Send, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -111,25 +111,25 @@ export function BulletinBoard({
 
   return (
     <section
-      className="relative mt-6 overflow-hidden rounded-3xl border-2 border-amber-300/45 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,.22),transparent_30%),linear-gradient(135deg,rgba(30,41,59,.96),rgba(15,23,42,.98))] p-4 shadow-[0_0_38px_rgba(251,191,36,.12)] sm:p-5"
+      className="relative mt-6 overflow-hidden rounded-2xl border border-amber-300/25 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,.10),transparent_34%),linear-gradient(135deg,rgba(30,41,59,.96),rgba(15,23,42,.98))] p-4 shadow-[0_10px_30px_rgba(0,0,0,.18)] sm:p-5"
       aria-labelledby="bulletin-title"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/80 to-transparent" />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <span className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-300/35 bg-amber-300/10 px-3 py-1 text-[11px] font-black uppercase tracking-[.18em] text-amber-100">
-            <Megaphone className="size-3.5" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/50 to-transparent" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id="bulletin-title" className="flex flex-wrap items-center gap-2 font-semibold">
+            <StickyNote className="size-[18px] shrink-0 text-amber-200" aria-hidden="true" />
             Mural da equipe
-          </span>
-          <h2 id="bulletin-title" className="flex items-center gap-2 font-semibold">
-            <StickyNote className="size-5 text-amber-200" aria-hidden="true" />
-            Bilhetes
+            <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-100">
+              {notes.length}
+              <span className="sr-only"> {notes.length === 1 ? "bilhete ativo" : "bilhetes ativos"}</span>
+            </span>
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Recados importantes aparecem aqui no início para ninguém perder.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2"><span className="text-xs text-amber-100">{notes.length} {notes.length === 1 ? "bilhete ativo" : "bilhetes ativos"}</span><Button variant="outline" aria-expanded={composing} aria-controls="bulletin-compose" onClick={() => setComposing((current) => !current)} className="border-amber-300/30 text-amber-100"><Plus />{composing ? "Fechar formulário" : "Novo bilhete"}</Button></div>
+        <Button variant="outline" aria-expanded={composing} aria-controls="bulletin-compose" onClick={() => setComposing((current) => !current)} className="border-amber-300/30 text-amber-100"><Plus />{composing ? "Fechar formulário" : "Novo bilhete"}</Button>
       </div>
 
       <div className={`mt-4 grid gap-3 ${composing ? "xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]" : ""}`}>

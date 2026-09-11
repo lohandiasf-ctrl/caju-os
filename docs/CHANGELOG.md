@@ -9,6 +9,58 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-11
+
+### Revisão de UI/UX: empilhamento, densidade e hierarquia — *(este trabalho)*
+
+Auditoria visual das 11 telas em 375/768/1024/1440 px com
+`scripts/ui-review.mjs`. As correções abaixo saíram de defeitos observados nas
+capturas, não de preferência estética.
+
+**Empilhamento (bug funcional).** O lançador de reunião usava `z-[65]` e
+pintava **por cima de diálogos abertos** (`z-50`) — visível ao abrir um chamado.
+`app/globals.css` agora define uma escala nomeada (`--z-content` … 
+`--z-window-chrome`) e os elementos fixos passaram a referenciá-la. O lançador
+fica sob os modais quando ocioso; durante uma chamada a superfície sobe para
+`--z-live-call`, porque mutar/desligar precisa continuar alcançável com um
+diálogo aberto.
+
+**Estouro horizontal em `/spares` (375 px).** As abas não cabiam e empurravam o
+documento, fazendo a página inteira rolar de lado. As abas ganharam rótulo curto
+no mobile e `[data-slot='tabs-list']` passou a rolar dentro de si — guarda
+global contra a mesma classe de defeito em qualquer tab strip.
+
+**Densidade.** O Kanban abria só 2 colunas até 1536 px: em 1440 px (largura mais
+comum) os 5 status ocupavam 3 fileiras. Agora são 3 colunas a partir de `xl` e 4
+em `2xl`. Os KPIs do Financeiro seguiam a mesma regra e viravam 2×2 — agora são
+4 em linha a partir de `xl`, o que traz o painel "Regra de repasse" para dentro
+da primeira dobra.
+
+**Hierarquia da visão geral.** O mural da equipe tinha borda de 2 px, brilho
+âmbar e três níveis de título (pílula + `h2` + contador), superando visualmente
+os indicadores operacionais. Virou um painel de 1 px com um único título e o
+contador como chip — mantém a identidade âmbar e a posição no topo (é
+deliberado que ninguém perca um recado), sem competir com os dados da operação.
+
+**Acabamento.**
+- Ritmo vertical das seções de topo unificado em `mt-6` (era `mt-5/6/7/8`).
+- Agenda: coluna de status de 140→180 px, porque "Pendente de agendamento"
+  quebrava em duas linhas e deixava as fileiras irregulares; as linhas passaram
+  a virar grade em `lg`, o mesmo ponto em que o cabeçalho aparece.
+- Status do chamado no cartão renderiza como token maiúsculo uniforme. O valor
+  do Jira é preservado — "TEC-CAMPO" continua "TEC-CAMPO".
+- Gráfico do Financeiro usa `--chart-*` em vez de laranja fora da paleta.
+- Período (7/30/90 dias) virou controle segmentado; antes o selecionado era
+  indistinguível do não selecionado no tema escuro.
+- `.leaflet-container` com especificidade dobrada: o CSS do Leaflet entra em
+  runtime e vencia por ordem, deixando o mapa cinza-claro enquanto os tiles
+  carregam.
+- Conteúdo ganhou `pb-36` para não ficar preso sob os botões flutuantes.
+
+Verificado: `npm test` (8), `npx tsc --noEmit`, `npm run build`,
+`scripts/ui-review.mjs` (44 checagens, 0 estouros, 0 erros de runtime).
+`npm run lint` continua com os mesmos 66 achados pré-existentes — nenhum novo.
+
 ## 2026-09-10
 
 ### Preserva horário final do atendimento no Jira — *(este trabalho)*

@@ -79,6 +79,10 @@ pós-migração Cloudflare.
 | Navegação entre páginas próprias recarrega o documento | **Resolvido (decisão)** | fallback intencional para contornar o dead-end do roteador cliente do vinext; abas do dashboard continuam sem recarga |
 | Render loop no mapa (marcadores recriados a cada render) | **Resolvido** | `fallbackTechnicians` memoizado |
 | Lint passava sem rodar (plugin type-aware crashava, exit 0) | **Resolvido** | regras type-aware desligadas; `npm run lint` agora falha de verdade |
+| Botão de reunião pintava por cima de diálogos abertos | **Resolvido** | `z-[65]` acima do modal (`z-50`); escala nomeada em `app/globals.css` e lançador sob os modais quando ocioso |
+| `/spares` rolava de lado em 375 px | **Resolvido** | abas não cabiam e empurravam o documento; rótulo curto no mobile + `tabs-list` rolando dentro de si |
+| Kanban e KPIs do Financeiro só abriam 2 colunas até 1536 px | **Resolvido** | 3 colunas em `xl`, 4 em `2xl`; 1440 px deixou de desperdiçar largura |
+| Mapa piscava cinza-claro enquanto os tiles carregavam | **Resolvido** | o CSS do Leaflet entra em runtime e vencia por ordem; especificidade dobrada |
 
 ## Segurança / dados
 
