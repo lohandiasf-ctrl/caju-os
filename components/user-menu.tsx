@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/components/auth-provider";
 import { roleLabels } from "@/lib/permissions";
 import {
@@ -3235,91 +3236,27 @@ export function UserMenu() {
   }, [syncPresence, user]);
   const label = name || user?.email?.slice(0, 2).toUpperCase() || "US";
   return (
-    <div
-      className="relative mt-2 rounded-xl border border-border/70 bg-card/40 p-2 group-hover/sidebar:p-3"
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button
-        type="button"
-        className="flex min-h-10 w-full items-center gap-3 text-left"
-        onClick={() => setOpen((value) => !value)}
-        onFocus={() => setOpen(true)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        <div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">
-          {photo ? (
-            <img
-              src={photo}
-              alt="Foto do perfil"
-              className="size-full object-cover"
-            />
-          ) : (
-            label.slice(0, 2).toUpperCase()
-          )}
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<button type="button" aria-label="Minha conta e disponibilidade" className="mt-2 flex min-h-14 w-full items-center gap-3 rounded-xl border border-border bg-card/50 p-2 text-left hover:bg-muted" />}>
+        <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">
+          {photo ? <img src={photo} alt="" className="size-full object-cover" /> : label.slice(0, 2).toUpperCase()}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-semibold">{name || user?.email}</span>
+          <span className="block truncate text-xs text-muted-foreground">{role ? roleLabels[role] : "Sem perfil"} · <span className="text-emerald-300">{status}</span></span>
+        </span>
+        <ChevronUp aria-hidden="true" className={`size-4 shrink-0 transition-transform ${open ? "" : "rotate-180"}`} />
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" className="max-h-[min(30rem,calc(100dvh-7rem))] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Meu status</p>
+        <div className="mt-2 grid gap-1">
+          {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => void updateStatus(item)} className={`flex min-h-11 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${status === item ? "border-primary/50 bg-primary/15 font-semibold text-foreground" : "border-transparent hover:bg-muted"}`}>{item}{status === item && <Check aria-hidden="true" className="size-4 text-primary" />}</button>)}
         </div>
-        <div className="min-w-0 flex-1 opacity-0 transition-opacity group-hover/sidebar:opacity-100">
-          <p className="truncate text-xs font-semibold">
-            {name || user?.email}
-          </p>
-          <p className="truncate text-xs text-muted-foreground">
-            {role ? roleLabels[role] : "Sem perfil"} ·{" "}
-            <span className="font-semibold text-emerald-300">{status}</span>
-          </p>
-        </div>
-        <ChevronUp
-          className={`size-4 shrink-0 opacity-0 transition group-hover/sidebar:opacity-100 ${open ? "" : "rotate-180"}`}
-        />
-      </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 max-h-[calc(100vh-1.5rem)] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-border bg-card p-4 shadow-2xl"
-        >
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            Meu status
-          </p>
-          <div className="mt-2 grid gap-1">
-            {statuses.map((item) => (
-              <button
-                key={item}
-                type="button"
-                role="menuitem"
-                onClick={() => void updateStatus(item)}
-                className={`flex min-h-11 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition ${status === item ? "border-primary/50 bg-primary/15 font-bold text-primary" : "border-transparent hover:bg-muted"}`}
-              >
-                {item}
-                {status === item && <Check className="size-4 text-primary" />}
-              </button>
-            ))}
-          </div>
-          <a
-            href="/?view=settings"
-            onClick={() => setOpen(false)}
-            className="mt-3 flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-semibold text-primary transition hover:bg-muted"
-          >
-            Editar perfil em Configurações
-          </a>
-          {feedback && (
-            <p
-              role="status"
-              aria-live="polite"
-              className="mt-2 text-xs text-muted-foreground"
-            >
-              {feedback}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={() => void signOut(auth)}
-            className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted"
-          >
-            <LogOut className="size-4" />
-            Sair da conta
-          </button>
-        </div>
-      )}
-    </div>
+        <a href="/?view=settings" onClick={() => setOpen(false)} className="mt-3 flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted">Editar perfil em Configurações</a>
+        {feedback && <p role="status" className="mt-2 text-xs text-muted-foreground">{feedback}</p>}
+        <button type="button" onClick={() => void signOut(auth)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-destructive/20 text-sm text-destructive hover:bg-destructive/10"><LogOut aria-hidden="true" className="size-4" />Sair da conta</button>
+      </PopoverContent>
+    </Popover>
   );
 }
 

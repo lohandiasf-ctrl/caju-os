@@ -141,6 +141,27 @@
       "when": 1788920482232,
       "tag": "0019_rich_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788960666000,
+      "tag": "0020_bulletin_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1789048988613,
+      "tag": "0021_spares",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1789049800000,
+      "tag": "0022_active_attendances",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Loader2, Megaphone, Pin, Send, StickyNote } from "lucide-react";
+import { Archive, Loader2, Megaphone, Pin, Plus, Send, StickyNote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,7 @@ export function BulletinBoard({
 }: {
   user: { getIdToken: () => Promise<string> } | null;
 }) {
+  const [composing, setComposing] = useState(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [canArchiveAny, setCanArchiveAny] = useState(false);
   const [targetName, setTargetName] = useState("");
@@ -79,6 +80,7 @@ export function BulletinBoard({
       setTargetName("");
       setTitle("");
       setNote("");
+      setComposing(false);
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Não foi possível salvar o bilhete.");
@@ -127,29 +129,30 @@ export function BulletinBoard({
             Recados importantes aparecem aqui no início para ninguém perder.
           </p>
         </div>
-        <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-bold text-amber-100">
-          {notes.length} ativo(s)
-        </span>
+        <div className="flex flex-wrap items-center gap-2"><span className="text-xs text-amber-100">{notes.length} {notes.length === 1 ? "bilhete ativo" : "bilhetes ativos"}</span><Button variant="outline" aria-expanded={composing} aria-controls="bulletin-compose" onClick={() => setComposing((current) => !current)} className="border-amber-300/30 text-amber-100"><Plus />{composing ? "Fechar formulário" : "Novo bilhete"}</Button></div>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(19rem,25rem)_1fr]">
-        <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+      <div className={`mt-4 grid gap-3 ${composing ? "xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]" : ""}`}>
+        {composing && <div id="bulletin-compose" className="rounded-2xl border border-white/10 bg-black/25 p-3">
           <div className="grid gap-2">
-            <Input
+            <label htmlFor="note-target" className="text-xs font-medium text-muted-foreground">Para quem</label>
+            <Input id="note-target"
               value={targetName}
               onChange={(event) => setTargetName(event.target.value)}
               placeholder="Para quem? Ex.: Aiã"
               maxLength={80}
               className="min-h-11 border-white/10 bg-black/30"
             />
-            <Input
+            <label htmlFor="note-title" className="text-xs font-medium text-muted-foreground">Assunto <span className="font-normal">(opcional)</span></label>
+            <Input id="note-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Assunto opcional"
               maxLength={100}
               className="min-h-11 border-white/10 bg-black/30"
             />
-            <Textarea
+            <label htmlFor="note-body" className="text-xs font-medium text-muted-foreground">Recado</label>
+            <Textarea id="note-body"
               value={note}
               onChange={(event) => setNote(event.target.value)}
               placeholder="Ex.: lembrar de procurar o técnico de Jaguaquara"
@@ -160,17 +163,18 @@ export function BulletinBoard({
               type="button"
               onClick={() => void submit()}
               disabled={sending || note.trim().length < 6}
+              variant="secondary"
               className="min-h-11 bg-amber-300 text-slate-950 hover:bg-amber-200"
             >
               {sending ? <Loader2 className="animate-spin" /> : <Send />}
               Deixar bilhete
             </Button>
           </div>
-        </div>
+        </div>}
 
-        <div className="min-h-40 space-y-2">
+        <div className="min-w-0 space-y-2">
           {loading ? (
-            <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
+            <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
               Carregando bilhetes...
             </div>
           ) : notes.length ? (

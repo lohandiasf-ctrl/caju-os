@@ -9,7 +9,7 @@ export default {
     return handler.fetch(request, env, ctx);
   },
   async scheduled(event, env, ctx) {
-    const run = handler.fetch(
+    const sweep = handler.fetch(
       new Request('https://cron.internal/api/tasks/sweep', {
         method: 'POST',
         headers: { 'x-cron-secret': env.CRON_SECRET ?? '' },
@@ -17,6 +17,15 @@ export default {
       env,
       ctx,
     );
+    const spareSync = handler.fetch(
+      new Request('https://cron.internal/api/spares/sync', {
+        method: 'POST',
+        headers: { 'x-cron-secret': env.CRON_SECRET ?? '' },
+      }),
+      env,
+      ctx,
+    );
+    const run = Promise.all([sweep, spareSync]);
     ctx.waitUntil(run);
     await run;
   },

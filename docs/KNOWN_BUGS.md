@@ -68,13 +68,15 @@ pós-migração Cloudflare.
 |---|---|---|
 | Botão WhatsApp dependia da sessão aberta no Chrome | **Resolvido (mudança de fluxo)** | "Validar" agora copia o link do Jira para envio manual no grupo SUP; não abre mais o WhatsApp automaticamente |
 | Link de WhatsApp por chamado (`jira_issue_links`) não migrou | **Pendente (perda aceita)** | funcionalidade volta a gravar; histórico se foi |
+| Planilha de Spares era um CSV estático | **Parcial** | cadastro persistente e conector bidirecional implementados; falta configurar os fluxos Power Automate/secrets e migrar o D1 |
 
 ## Desempenho / UI
 
 | Item | Estado | Nota |
 |---|---|---|
+| Mapa operacional, Spares e Financeiro não abriam pelo menu compartilhado | **Resolvido** | páginas próprias agora usam navegação de documento; abas `?view=` preservam troca local |
 | "60 FPS" removeu blur/transparência/transições | **Resolvido** | o usuário **rejeitou** a simplificação; visual premium restaurado. Otimize lógica, não o design |
-| Navegação interna recarrega a página inteira (`<a href>`) | **Pendente** | migrar para `next/link` (shim do vinext); ~15 pontos; verificação dedicada |
+| Navegação entre páginas próprias recarrega o documento | **Resolvido (decisão)** | fallback intencional para contornar o dead-end do roteador cliente do vinext; abas do dashboard continuam sem recarga |
 | Render loop no mapa (marcadores recriados a cada render) | **Resolvido** | `fallbackTechnicians` memoizado |
 | Lint passava sem rodar (plugin type-aware crashava, exit 0) | **Resolvido** | regras type-aware desligadas; `npm run lint` agora falha de verdade |
 

@@ -1,6 +1,7 @@
 "use client";
 import "leaflet/dist/leaflet.css";
 import type * as L from "leaflet";
+import { AppNavigation } from "@/components/app-navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -267,56 +268,15 @@ export default function Page() {
     vehicles = show.reduce((s, x) => s + x.vehicles, 0);
   return (
     <main className="min-h-screen text-foreground">
-      <aside
-        className={`cockpit-sidebar fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col overflow-hidden border-r border-sidebar-border px-4 py-5 transition-transform lg:translate-x-0 ${menu ? "translate-x-0" : "-translate-x-full"}`}
-      >
-        <a href="/?view=overview" className="flex h-12 shrink-0 items-center gap-3 px-2">
-          <span className="cockpit-brand grid size-10 place-items-center overflow-hidden rounded-xl"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></span>
-          <div>
-            <b>Caju OS</b>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              Comando operacional
-            </p>
-          </div>
-        </a>
-        <nav className="mt-8 min-h-0 flex-1 space-y-1 overflow-y-auto pb-4">
-          <p className="px-3 text-[10px] font-bold uppercase text-muted-foreground">
-            Cobertura técnica
-          </p>
-          <a
-            href="/?view=overview"
-            className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground"
-          >
-            <LayoutDashboard className="size-4" />
-            Visão geral
-          </a>
-          <div className="flex h-10 items-center gap-3 rounded-lg bg-sidebar-accent px-3 text-sm shadow-[inset_3px_0_0_var(--primary)]">
-            <Map className="size-4 text-primary" />
-            Mapa operacional
-          </div>
-          <a href="/?view=technicians" className="flex h-10 items-center gap-3 px-3 text-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
-            <Users className="size-4" />
-            Técnicos
-          </a>
-        </nav>
-        <a href="/?view=settings" className="flex shrink-0 items-center gap-3 border-t border-sidebar-border px-3 pt-4 text-sm text-muted-foreground hover:text-foreground">
-          <Settings className="size-4" />
-          Configurações
-        </a>
-      </aside>
-      {menu && (
-        <button
-          aria-label="Fechar menu"
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
-          onClick={() => setMenu(false)}
-        />
-      )}
-      <section className="lg:pl-[252px]">
+      <AppNavigation active="map" open={menu} onOpenChange={setMenu} />
+      <section className="app-content">
         <header className="flex h-[68px] items-center border-b border-border px-4 lg:px-8">
           <Button
             variant="ghost"
             size="icon"
             className="lg:hidden"
+            aria-label="Abrir menu"
+            aria-expanded={menu}
             onClick={() => setMenu(true)}
           >
             <Menu />
@@ -332,33 +292,35 @@ export default function Page() {
             variant="outline"
             className="ml-auto border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
           >
-            Diretório operacional · {data.length || 425} cidades
+            Diretório operacional · {data.length} cidades
           </Badge>
         </header>
-        <div className="p-4 lg:p-6">
+        <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] p-4 sm:p-6 lg:p-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-primary">
                 Distribuição nacional
               </p>
-              <h1 className="mt-1 text-3xl font-extrabold">
+              <h1 className="mt-1 text-3xl font-semibold">
                 Mapa operacional de técnicos
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
                 Cobertura cruzada com cadastro e qualificação.
               </p>
             </div>
-            <div className="flex gap-2">
-              <div className="relative">
+            <div className="flex w-full gap-2 sm:w-auto">
+              <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  className="w-64 pl-9"
+                  aria-label="Buscar cidade"
+                  className="w-full pl-9 sm:w-64"
                   placeholder="Buscar cidade..."
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
               </div>
               <select
+                aria-label="Filtrar por estado"
                 className="rounded-md border border-input bg-background px-3 text-sm"
                 value={uf}
                 onChange={(e) => setUf(e.target.value)}
@@ -504,7 +466,7 @@ function Card({ t, v, i: I }: { t: string; v: number; i: typeof Users }) {
         {t}
         <I className="size-4 text-primary" />
       </div>
-      <p className="mt-3 text-2xl font-black">{v}</p>
+      <p className="mt-3 text-2xl font-semibold">{v}</p>
     </div>
   );
 }

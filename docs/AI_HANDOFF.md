@@ -64,7 +64,7 @@ Windows (`FileGroupDescriptorW` + `FileContents`), tambem lidos por esse comando
 | Páginas | `app/**/page.tsx` — 7 páginas: `/`, `/login`, `/acesso-negado`, `/mapa`, `/central-n1`, `/spares`, `/financeiro` |
 | Rotas de API | `app/api/**/route.ts` — 36 rotas; exportam `GET`/`POST`/`PUT`/`PATCH`/`DELETE` |
 | Schema do banco | `db/schema.ts` (Drizzle) |
-| Migrations | `drizzle/*.sql` — 20 arquivos (0000–0019); geradas por `npm run db:generate` |
+| Migrations | `drizzle/*.sql` — até `0021_spares.sql`; geradas por `npm run db:generate` |
 | Bootstrap do D1 | `db/index.ts` (`getDb()`, binding `DB`) |
 | Auth (servidor) | `lib/server/firebase-auth.ts` — `requireApiUser(request, roles?)` |
 | Auth (cliente) | `lib/firebase.ts`, `components/auth-provider.tsx` |
@@ -118,6 +118,7 @@ npm run db:migrate:remote   # se houver migration nova (pede confirmação)
 | Serviço | Uso | Config |
 |---|---|---|
 | **Jira Cloud** (Delfia) | fonte da verdade dos chamados; REST API v3 | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY` |
+| **SharePoint / Power Automate** | espelho bidirecional do cadastro de spares | secrets `SPARES_SYNC_PUSH_URL`, `SPARES_SYNC_PUSH_URL_ORIGINAL`, `SPARES_SYNC_PULL_URL`, `SPARES_SYNC_TOKEN`; ver `docs/SPARES_SHAREPOINT_SYNC.md` |
 | **Firebase** (`caju-websys`) | autenticação; convite cria conta + reset por e-mail | config do cliente hardcoded em `lib/firebase.ts` (não é segredo) |
 | **Cloudflare Workers/D1/AI** | runtime, banco, OCR da RAT | binding `DB`, binding `AI`, secrets via `wrangler secret put` |
 | **Cloudflare Realtime (TURN)** | relay de voz; credenciais efêmeras | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` |
@@ -143,13 +144,18 @@ todos os perfis, exportação/backup administrativo.
 
 ## Próximas prioridades
 
+- A navegação visual compartilhada está em `components/app-navigation.tsx` e
+  suas regras de papel em `lib/navigation.ts`. O script `scripts/ui-review.mjs`
+  usa o Playwright disponível no ambiente para revisão visual local; ele exige
+  `PLAYWRIGHT_MODULE` e um servidor vinext disponível na porta 3000.
+
 1. **Testar salvar um chamado real com transição no Jira** no ambiente novo —
    único fluxo crítico ainda não exercitado em produção pós-migração.
 2. Cadastrar `GOOGLE_MAPS_API_KEY`? **Não** — obsoleto após Leaflet. Pode
    remover o secret órfão.
 3. Completar o catálogo de peças (a imagem de origem estava cortada).
-4. Considerar `next/link` no lugar de `<a href>` na navegação interna (hoje
-   recarrega a página inteira). ~15 pontos; verificação dedicada.
+4. Navegação compartilhada usa `next/link`; páginas próprias têm fallback por
+   `window.location.assign()` para evitar dead-end do roteador vinext/WebView.
 5. Desativar a produção antiga no OpenAI Sites — só depois de alguns dias de
    estabilidade.
 

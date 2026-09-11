@@ -48,461 +48,210 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-body {
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
-}
-
+/* One shared graphite-glass foundation. Component utilities remain overridable. */
 :root {
-  --background: #090b12;
-  --foreground: #f5f7ff;
-  --card: #151923;
-  --card-foreground: #f4f5f8;
-  --popover: #151923;
-  --popover-foreground: #f4f5f8;
+  color-scheme: dark;
+  --background: #0b0f18;
+  --foreground: #f3f6fc;
+  --card: #151c29;
+  --card-foreground: #f3f6fc;
+  --popover: #182130;
+  --popover-foreground: #f3f6fc;
   --primary: #4f7dff;
   --primary-foreground: #ffffff;
-  --secondary: #222938;
-  --secondary-foreground: #f0f1f5;
-  --muted: #1d2431;
-  --muted-foreground: #aab3c7;
-  --accent: #242c3b;
-  --accent-foreground: #f8f8fb;
-  --destructive: #ff6b7a;
-  --border: rgb(182 198 255 / 12%);
-  --input: rgb(182 198 255 / 17%);
-  --ring: #7d9cff;
+  --secondary: #253249;
+  --secondary-foreground: #eff4ff;
+  --muted: #1c2637;
+  --muted-foreground: #b2bed1;
+  --accent: #26344b;
+  --accent-foreground: #f3f6fc;
+  --destructive: #ff8c9a;
+  --border: rgb(179 199 232 / 15%);
+  --input: rgb(179 199 232 / 32%);
+  --ring: #a4beff;
   --chart-1: #a99cff;
   --chart-2: #5eead4;
   --chart-3: #7dd3fc;
   --chart-4: #c084fc;
   --chart-5: #fbbf74;
-  --radius: 1.15rem;
-  --sidebar: #10151f;
-  --sidebar-foreground: #f4f5f8;
+  --radius: .875rem;
+  --sidebar: #111927;
+  --sidebar-foreground: #f3f6fc;
   --sidebar-primary: #4f7dff;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #20293a;
+  --sidebar-accent: #24344f;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(182 198 255 / 10%);
-  --sidebar-ring: #7d9cff;
-}
-
-.dark {
-  color-scheme: dark;
+  --sidebar-border: rgb(179 199 232 / 13%);
+  --sidebar-ring: #a4beff;
+  --surface-glass: linear-gradient(135deg, rgb(255 255 255 / 4%), transparent 42%), linear-gradient(145deg, rgb(24 33 48 / 94%), rgb(15 22 34 / 97%));
+  --shadow-panel: 0 12px 32px rgb(0 0 0 / 18%), inset 0 1px 0 rgb(255 255 255 / 4%);
+  --shadow-overlay: 0 24px 80px rgb(0 0 0 / 48%), inset 0 1px 0 rgb(255 255 255 / 5%);
+  --motion-fast: 150ms;
+  --motion-standard: 200ms;
+  --ease-ui: cubic-bezier(.2,.8,.2,1);
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
+  * { @apply border-border; scrollbar-color: #53627c transparent; scrollbar-width: thin; }
+  html { @apply font-sans; scroll-padding-top: 6rem; }
   body {
     @apply bg-background text-foreground;
     min-width: 320px;
-    background-image:
-      radial-gradient(circle at 70% 15%, rgb(32 43 57 / 22%), transparent 32rem),
-      radial-gradient(circle at 20% 90%, rgb(21 38 58 / 18%), transparent 28rem),
-      radial-gradient(circle at 78% 8%, rgb(58 92 190 / 14%), transparent 26rem),
-      linear-gradient(145deg, #090b12, #101522 58%, #07090f);
+    font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+    line-height: 1.5;
+    background-image: radial-gradient(ellipse at 75% 0%, rgb(61 99 179 / 15%), transparent 52rem), radial-gradient(ellipse at 10% 80%, rgb(25 68 86 / 10%), transparent 38rem);
     background-attachment: fixed;
   }
-  html {
-    @apply font-sans;
+  h1, h2, h3 { text-wrap: balance; }
+  h1 { line-height: 1.2; }
+  button, a, input, select, textarea, [tabindex] { scroll-margin-block: 6rem; }
+  button, a, input, select, textarea {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-ui);
   }
-  button {
-    cursor: pointer;
+  button, [role='button'] { cursor: pointer; touch-action: manipulation; }
+  button:disabled { cursor: not-allowed; }
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
   }
+  :where(input, select, textarea):disabled { cursor: not-allowed; }
+  :where(textarea) { resize: vertical; }
+  ::selection { background: #3154a0; color: white; }
+}
 
-  ::selection {
-    background: rgb(155 140 255 / 35%);
+@layer components {
+  .surface-panel, .cockpit-stat, main .rounded-xl.border-border.bg-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-glass);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(18px) saturate(120%);
+  }
+  /* Map renderers must not inherit a backdrop-filter compositing layer. */
+  main .rounded-xl.border-border.bg-card.map-surface { backdrop-filter: none; }
+  .cockpit-inset { border: 1px solid var(--border); background: rgb(6 12 22 / 36%); }
+  .cockpit-brand {
+    border: 1px solid rgb(115 152 255 / 30%);
+    background: rgb(79 125 255 / 10%);
+    color: var(--ring);
+    box-shadow: 0 8px 24px rgb(47 98 216 / 14%);
+  }
+  .caju-sidebar, .cockpit-sidebar, main > aside.fixed {
+    background: var(--surface-glass);
+    border-color: var(--sidebar-border);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(20px) saturate(120%);
+  }
+  .app-sidebar {
+    position: fixed;
+    inset: .75rem auto .75rem .75rem;
+    z-index: 40;
+    display: flex;
+    width: 248px;
+    flex-direction: column;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 1.25rem;
+    padding: 1rem .75rem;
+  }
+  .app-content { min-width: 0; min-height: 100dvh; }
+  .app-content > header, main > section > header {
+    background: rgb(14 22 36 / 86%);
+    backdrop-filter: blur(22px) saturate(130%);
+    border-color: var(--border);
+  }
+  .app-main { min-width: 0; outline: none; }
+  .app-nav-link {
+    display: flex;
+    min-height: 42px;
+    align-items: center;
+    gap: .75rem;
+    border-radius: .625rem;
+    padding: .625rem .75rem;
+    color: var(--muted-foreground);
+    font-size: .875rem;
+    font-weight: 500;
+  }
+  .app-nav-link:hover { background: rgb(148 177 224 / 8%); color: var(--foreground); }
+  .app-nav-link[aria-current='page'] {
+    background: linear-gradient(100deg, rgb(79 125 255 / 23%), rgb(79 125 255 / 8%));
+    color: #e4edff;
+    box-shadow: inset 3px 0 0 #8caeff;
+  }
+  .field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'], [data-slot='native-select'] {
+    min-width: 0;
+    border: 1px solid var(--input);
+    border-radius: .625rem;
+    background: rgb(7 13 24 / 65%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+    color: var(--foreground);
+  }
+  .field { width: 100%; min-height: 2.5rem; padding: .625rem .75rem; font-size: .875rem; }
+  :where(.field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):hover:not(:disabled) { border-color: #7187ab; }
+  :where(input, select, textarea):focus-visible { border-color: var(--ring); }
+  [data-slot='button'][data-variant='default'] {
+    background: linear-gradient(135deg, #356bdc, #274fb9);
     color: white;
+    box-shadow: 0 6px 18px rgb(35 83 194 / 23%), inset 0 1px 0 rgb(255 255 255 / 14%);
   }
-}
-
-/* Caju OS visual foundation — graphite glass, compact operations density. */
-@layer components {
-  .surface-panel,
-  main .rounded-xl.border-border.bg-card {
-    border-color: rgb(188 203 255 / 11%);
-    background:
-      linear-gradient(135deg, rgb(255 255 255 / 5%), transparent 34%),
-      linear-gradient(145deg, rgb(23 28 40 / 94%), rgb(12 16 25 / 97%));
-    box-shadow: 0 18px 46px rgb(0 0 0 / 24%), inset 0 1px 0 rgb(255 255 255 / 5%);
-    backdrop-filter: blur(20px) saturate(125%);
+  [data-slot='button'][data-variant='default']:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3c73e5, #2c59c8);
+    box-shadow: 0 8px 22px rgb(35 83 194 / 30%), inset 0 1px 0 rgb(255 255 255 / 16%);
   }
-
-  /* Google Maps renders into its own compositing layer and paints nothing when
-     an ancestor has backdrop-filter. The map fills this panel edge to edge, so
-     the blur behind it was never visible anyway. */
-  main .rounded-xl.border-border.bg-card.map-surface {
-    backdrop-filter: none;
+  [data-slot='dialog-content'], [data-slot='sheet-content'] {
+    border: 1px solid rgb(179 199 232 / 22%);
+    background: linear-gradient(145deg, #1a2537, #101825);
+    box-shadow: var(--shadow-overlay);
   }
-
-  .caju-sidebar,
-  main > aside.fixed {
-    background:
-      linear-gradient(180deg, rgb(255 255 255 / 6%), transparent 18%),
-      linear-gradient(145deg, rgb(23 28 40 / 98%), rgb(10 13 21 / 99%));
-    box-shadow: 0 28px 80px rgb(0 0 0 / 48%), inset 0 1px 0 rgb(255 255 255 / 6%);
+  [data-slot='dialog-content'] {
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100dvh - 2rem);
+    overscroll-behavior: contain;
+    overflow-wrap: anywhere;
   }
-
-  main > section > header {
-    background: rgb(14 19 30 / 76%);
-    backdrop-filter: blur(22px) saturate(135%);
-  }
-}
-
-button, a, input, select, textarea {
-  transition-duration: 180ms;
-  transition-timing-function: cubic-bezier(.2,.8,.2,1);
-}
-
-button:not(:disabled):active,
-a:active {
-  transform: translateY(1px) scale(.985);
-}
-
-main input,
-main select,
-main textarea,
-main .field {
-  background: linear-gradient(145deg, rgb(5 8 14 / 82%), rgb(20 26 38 / 76%));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
-}
-
-button[data-slot='button'][data-variant='default'],
-button.bg-primary {
-  background: linear-gradient(135deg, #5c87ff, #2d62e5 72%, #234dcb);
-  box-shadow: 0 10px 26px rgb(45 98 229 / 28%), inset 0 1px 0 rgb(255 255 255 / 22%);
-}
-
-.caju-sidebar nav a[aria-current='page'],
-main > aside.fixed nav a[aria-current='page'] {
-  background: linear-gradient(100deg, rgb(79 125 255 / 28%), rgb(79 125 255 / 8%));
-  box-shadow: inset 3px 0 0 #76a0ff, 0 10px 28px rgb(0 0 0 / 20%), inset 0 1px 0 rgb(255 255 255 / 6%);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
-}
-
-@layer components {
-  .surface-panel {
-    background: linear-gradient(145deg, rgb(28 31 34 / 97%), rgb(18 20 22 / 99%));
-    border: 1px solid rgb(255 255 255 / 8%);
-    border-radius: 1rem;
-    box-shadow: 0 20px 60px -20px rgb(0 0 0 / 70%), 0 0 0 1px rgb(255 255 255 / 2%), inset 0 1px 0 rgb(255 255 255 / 3%);
-    backdrop-filter: blur(18px);
-  }
-
-  .metric-glow {
-    position: relative;
-    overflow: hidden;
-  }
-
-.metric-glow::after {
-    content: '';
-    position: absolute;
-    inset: auto -2rem -3.5rem auto;
-    width: 8rem;
-    height: 8rem;
-    border-radius: 999px;
-    background: rgb(47 125 255 / 12%);
-    filter: blur(18px);
+  [data-slot='dialog-header'] { padding-right: 2rem; }
+  [data-slot='tabs-content'], [data-slot='tabs-list'], [data-slot='table-container'] { min-width: 0; }
+  [data-slot='table-head'] { background: rgb(11 18 30 / 45%); color: var(--muted-foreground); font-size: .75rem; font-weight: 600; }
+  [data-slot='table-cell'] { font-variant-numeric: tabular-nums; }
+  .metric-glow { position: relative; overflow: hidden; }
+  .metric-glow::after {
+    content: ''; position: absolute; inset: auto -1.5rem -4rem auto;
+    width: 9rem; height: 9rem; border-radius: 50%;
+    background: radial-gradient(circle, rgb(79 125 255 / 12%), transparent 70%);
     pointer-events: none;
   }
-}
-
-/* Shared cockpit language across every operational module. */
-.cockpit-sidebar {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
-    var(--sidebar);
-}
-
-/* Reference navigation: a floating graphite dock that expands over the canvas. */
-.caju-sidebar {
-  border-color: rgb(255 255 255 / 9%);
-  border-radius: 1.4rem;
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 4%), transparent 22%),
-    linear-gradient(145deg, #202326 0%, #17191b 52%, #111315 100%);
-  box-shadow:
-    0 28px 80px rgb(0 0 0 / 62%),
-    0 0 0 1px rgb(255 255 255 / 2%),
-    inset 0 1px 0 rgb(255 255 255 / 5%);
-}
-
-.caju-sidebar > div:first-child {
-  border-bottom: 1px solid rgb(255 255 255 / 8%);
-  padding-bottom: 1rem;
-}
-
-.caju-sidebar nav a,
-.caju-sidebar nav button,
-.caju-sidebar [href*='settings'] {
-  border-radius: 0.7rem;
-  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-.caju-sidebar nav a:hover,
-.caju-sidebar nav button:hover,
-.caju-sidebar [href*='settings']:hover {
-  background: rgb(255 255 255 / 7%);
-  color: #f5f7fa;
-}
-
-.caju-sidebar nav a[aria-current='page'],
-.caju-sidebar [href*='settings'][aria-current='page'] {
-  background: linear-gradient(100deg, rgb(47 125 255 / 24%), rgb(47 125 255 / 9%));
-  color: #f6f9ff;
-  box-shadow: inset 3px 0 0 #2f7dff, 0 8px 24px rgb(0 0 0 / 16%);
-}
-
-.caju-sidebar .sidebar-label {
-  transition: opacity 170ms ease;
-}
-
-@media (min-width: 640px) {
-  .caju-sidebar {
-    top: 0.75rem;
-    bottom: 0.75rem;
-    left: 0.75rem;
-    height: calc(100vh - 1.5rem);
+  .skip-link {
+    position: fixed; top: .5rem; left: 1rem; z-index: 100;
+    transform: translateY(-180%); border-radius: .5rem;
+    padding: .75rem 1rem; background: var(--foreground); color: var(--background);
+    font-weight: 600;
   }
-
-  .caju-sidebar:hover {
-    box-shadow: 0 30px 90px rgb(0 0 0 / 68%), 0 0 0 1px rgb(255 255 255 / 3%), inset 0 1px 0 rgb(255 255 255 / 5%);
+  .skip-link:focus { transform: translateY(0); }
+  @media (min-width: 1024px) {
+    .app-content { padding-left: 272px; }
+    .app-content > header { margin: .75rem .75rem 0 0; border: 1px solid var(--border); border-radius: 1rem; top: .75rem; }
+    main > aside.fixed.colleagues-sidebar { right: 1rem; left: auto; }
   }
-
-  .caju-sidebar nav {
-    margin-top: 1.25rem;
-  }
-
-  .caju-sidebar nav a[aria-current='page'] {
-    box-shadow: inset 3px 0 0 #2f7dff, 0 8px 24px rgb(0 0 0 / 18%);
+  @media (max-width: 639px) {
+    :where(input:not([type='checkbox']):not([type='radio']), textarea, select) { font-size: 1rem; }
+    [data-slot='button']:not([data-size='xs']):not([data-size='icon-xs']), .app-nav-link { min-height: 44px; }
+    [data-slot='button'][data-size^='icon'] { min-width: 44px; }
+    [data-slot='dialog-content'] { max-width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
   }
 }
 
-/* Flow UI: floating slate surfaces, compact rhythm, one blue-violet active state. */
-main > aside.fixed {
-  background: linear-gradient(180deg, rgb(255 255 255 / 2.5%), transparent 28%), #161e29;
-  border-color: rgb(255 255 255 / 6%);
-  border-radius: 1rem;
-  box-shadow: 0 20px 60px -20px rgb(0 0 0 / 70%), 0 0 0 1px rgb(255 255 255 / 2%);
-}
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
 
-main > aside.fixed nav a,
-main > aside.fixed nav button {
-  border-radius: 0.625rem;
-  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease;
-}
+/* Leaflet supplies its own stylesheet at runtime; these stay unlayered. */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.75); }
+.leaflet-container { background: #17201c; }
+.leaflet-control-attribution { background: rgb(12 16 25 / 78%) !important; color: #cbd5e1 !important; }
+.leaflet-control-attribution a { color: #a4beff !important; }
 
-main > aside.fixed nav a:hover,
-main > aside.fixed nav button:hover {
-  background: rgb(255 255 255 / 7%);
-}
-
-main > aside.fixed nav a[aria-current='page'] {
-  background: rgb(91 140 255 / 14%);
-  color: #dce6ff;
-  box-shadow: inset 3px 0 0 #5b8cff;
-}
-
-main > section > header {
-  background: rgb(16 25 35 / 88%);
-  border-color: rgb(255 255 255 / 6%);
-  box-shadow: 0 18px 48px rgb(0 0 0 / 24%);
-}
-
-main input,
-main select,
-main textarea,
-main .field {
-  border-radius: 0.625rem;
-  background-color: rgb(7 10 15 / 62%);
-}
-
-main input:hover,
-main select:hover,
-main textarea:hover,
-main .field:hover {
-  border-color: rgb(139 124 255 / 42%);
-}
-
-button[data-slot='button'] {
-  border-radius: 0.625rem;
-}
-
-button[data-slot='button'][data-variant='default'],
-button.bg-primary {
-  background: linear-gradient(135deg, #2f7dff, #1769e8);
-  box-shadow: 0 8px 22px rgb(24 105 232 / 24%);
-}
-
-[data-slot='dialog-content'] {
-  border: 1px solid rgb(255 255 255 / 8%);
-  border-radius: 1rem;
-  background: linear-gradient(150deg, rgb(22 30 41 / 98%), rgb(13 20 29 / 99%));
-  box-shadow: 0 24px 70px rgb(0 0 0 / 70%), 0 0 0 1px rgb(255 255 255 / 2%);
-}
-
-.cockpit-brand {
-  border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
-  background: color-mix(in oklab, var(--primary) 11%, transparent);
-  color: var(--primary);
-  box-shadow: 0 12px 34px color-mix(in oklab, var(--primary) 17%, transparent);
-}
-
-.cockpit-stat {
-  border: 1px solid var(--border);
-  background:
-    radial-gradient(circle at 92% 8%, rgba(155, 140, 255, 0.1), transparent 32%),
-    linear-gradient(145deg, rgba(28, 29, 39, 0.94), rgba(16, 17, 23, 0.98));
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.2);
-}
-
-.cockpit-inset {
-  border: 1px solid rgba(216, 218, 255, 0.1);
-  background: rgba(3, 4, 8, 0.3);
-}
-
-::selection {
-  background: color-mix(in oklab, var(--primary) 60%, transparent);
-  color: white;
-}
-
-* {
-  scrollbar-color: rgba(112, 151, 160, 0.4) transparent;
-  scrollbar-width: thin;
-}
-
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-main > aside.fixed {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
-    var(--sidebar);
-}
-
-main > aside.fixed > a > .bg-primary,
-main > aside.fixed > a > b.bg-primary {
-  border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
-  background: color-mix(in oklab, var(--primary) 11%, transparent);
-  color: var(--primary);
-  box-shadow: 0 12px 34px color-mix(in oklab, var(--primary) 17%, transparent);
-}
-
-main .rounded-xl.border-border.bg-card {
-  border-color: var(--border);
-  background:
-    radial-gradient(circle at 100% 0%, rgba(155, 140, 255, 0.07), transparent 28%),
-    linear-gradient(145deg, rgba(28, 29, 39, 0.94), rgba(16, 17, 23, 0.98));
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
-}
-
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  border-color: color-mix(in oklab, var(--primary) 70%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 16%, transparent);
-}
-
-.field {
-  width: 100%;
-  border: 1px solid var(--input);
-  border-radius: 0.75rem;
-  background: var(--background);
-  padding: 0.5rem 0.75rem;
-  color: var(--foreground);
-  font-size: 0.875rem;
-}
-
-@media (min-width: 1024px) {
-  main > aside.fixed {
-    top: 1rem;
-    bottom: 1rem;
-    left: 1rem;
-    border-radius: 1.5rem;
-    box-shadow: 0 24px 70px rgb(0 0 0 / 32%);
-  }
-
-  main > aside.fixed.colleagues-sidebar {
-    right: 1rem;
-    left: auto;
-  }
-
-  main > section > header {
-    margin: 1rem 1rem 0;
-    border: 1px solid var(--border);
-    border-radius: 1.25rem;
-    background: rgb(17 18 24 / 88%);
-    box-shadow: 0 18px 48px rgb(0 0 0 / 18%);
-  }
-}
-
-/* Final cascade: shared reference treatment for all existing modules. */
-main > aside.fixed {
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 6%), transparent 18%),
-    linear-gradient(145deg, rgb(23 28 40 / 98%), rgb(10 13 21 / 99%));
-  box-shadow: 0 28px 80px rgb(0 0 0 / 48%), inset 0 1px 0 rgb(255 255 255 / 6%);
-}
-
-main .rounded-xl.border-border.bg-card {
-  border-color: rgb(188 203 255 / 11%);
-  background:
-    linear-gradient(135deg, rgb(255 255 255 / 5%), transparent 34%),
-    linear-gradient(145deg, rgb(23 28 40 / 94%), rgb(12 16 25 / 97%));
-  box-shadow: 0 18px 46px rgb(0 0 0 / 24%), inset 0 1px 0 rgb(255 255 255 / 5%);
-}
-
-button[data-slot='button'][data-variant='default'],
-button.bg-primary {
-  background: linear-gradient(135deg, #5c87ff, #2d62e5 72%, #234dcb);
-  box-shadow: 0 10px 26px rgb(45 98 229 / 28%), inset 0 1px 0 rgb(255 255 255 / 22%);
-}
-
-/* Outside @layer on purpose: Tailwind drops layered rules whose selectors never
-   appear in the source, and .leaflet-tile is generated by Leaflet at runtime.
-   Dark basemap without a keyed provider: invert the standard OSM raster and
-   rotate the hue back so water and land keep plausible colours. The filter goes
-   on the tile *pane*, not on .leaflet-tile, because Leaflet's own stylesheet
-   loads later and sets `.leaflet-tile { filter: inherit }` — which both beats a
-   rule of equal specificity and makes tiles inherit whatever the pane has.
-   Markers live in a sibling pane and stay untouched. */
-.leaflet-tile-pane {
-  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.75);
-}
-
-.leaflet-container {
-  background: #17201c;
-}
-
-.leaflet-control-attribution {
-  background: rgb(12 16 25 / 78%) !important;
-  color: rgb(203 213 225 / 85%) !important;
-}
-
-.leaflet-control-attribution a {
-  color: rgb(148 180 255 / 90%) !important;
-}
-
-/* Movimento reduzido: troca a animacao fluida pelo quadro estatico da marca.
-   Fora de @layer para o Tailwind nao remover a regra por nao achar a classe. */
 @media (prefers-reduced-motion: reduce) {
-  .caju-loading-mark img,
-  .caju-loading-mark source {
-    display: none !important;
-  }
-  .caju-loading-mark {
-    aspect-ratio: 32 / 25;
-    background: url("/brand/caju-loading-static.png") center / contain no-repeat;
-  }
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  .caju-loading-mark img, .caju-loading-mark source { display: none !important; }
+  .caju-loading-mark { aspect-ratio: 32 / 25; background: url("/brand/caju-loading-static.png") center / contain no-repeat; }
 }

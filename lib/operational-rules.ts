@@ -5,6 +5,8 @@ export type ValidationInput = {
   identifiedProblem?: string | null;
   testsPerformed?: string | null;
   partToReplace?: string | null;
+  serviceStartedAt?: string | null;
+  serviceEndedAt?: string | null;
   pendingSync?: number;
 };
 
@@ -21,6 +23,15 @@ export function validationRequirements(input: ValidationInput) {
   if (!input.identifiedProblem?.trim()) missing.push('problema identificado');
   if (!input.testsPerformed?.trim()) missing.push('testes feitos');
   if (!input.partToReplace?.trim()) missing.push('peça a ser trocada');
+  if (!input.serviceStartedAt?.trim()) missing.push('data/hora de início');
+  if (!input.serviceEndedAt?.trim()) missing.push('data/hora de término');
+  if (input.serviceStartedAt?.trim() && input.serviceEndedAt?.trim()) {
+    const startedAt = new Date(input.serviceStartedAt).getTime();
+    const endedAt = new Date(input.serviceEndedAt).getTime();
+    if (Number.isFinite(startedAt) && Number.isFinite(endedAt) && endedAt <= startedAt) {
+      missing.push('término posterior ao início');
+    }
+  }
   if ((input.pendingSync ?? 0) > 0) missing.push('sincronização pendente com o Jira');
   return missing;
 }

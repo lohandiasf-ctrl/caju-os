@@ -9,7 +9,86 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-10
+
+### Preserva horário final do atendimento no Jira — *(este trabalho)*
+Os campos de início e término não são mais convertidos silenciosamente para UTC
+ao salvar. A tela preserva o horário local mostrado pelo Jira e envia o offset
+do dispositivo, evitando que o término volte deslocado e bloqueie a validação.
+
+### Spares: abertura no executável e repetição automática — *(este trabalho)*
+Os botões da planilha original e da cópia agora usam a abertura externa do
+Tauri, em vez de depender de `window.open` no WebView. O Worker também chama a
+sincronização de spares a cada dez minutos, além da tentativa imediata no
+cadastro e do botão manual.
+
+### Atendimentos ativos agrupados por FSA — *(este trabalho)*
+A dashboard agora tem a área **Atendimentos em andamento**. Um colaborador
+inicia uma sessão selecionando pelo menu ou colando uma ou mais FSAs; os códigos
+são normalizados e confirmados no Jira antes de serem aceitos. A mesma sessão
+pode conter vários chamados e recebe destaque visual de atendimento agrupado.
+
+As sessões ficam em `active_attendances` e seus chamados em
+`active_attendance_tickets`. A criação e o encerramento geram trilha em
+`operational_audit`; uma FSA já presente numa sessão ativa não pode ser iniciada
+por outra pessoa. A migration `0022_active_attendances.sql` foi aplicada no D1
+de produção.
+
+### Datas reais do atendimento obrigatórias para validação — *(este trabalho)*
+O detalhe do chamado agora lê e salva diretamente no Jira os campos **Data/Hora
+– Início** (`customfield_10702`) e **Data/Hora – Término**
+(`customfield_10703`). Os campos são exibidos juntos do resumo técnico, têm
+rótulo e ajuda visíveis e o término não aceita data anterior ao início.
+
+A validação foi reforçada no cliente **e no servidor**: não é possível incluir
+um chamado na fila sem as duas datas persistidas no Jira, mesmo que alguém
+tente chamar a API diretamente.
+
+## 2026-09-10
+
+### Cadastro de Spares com sincronização SharePoint — *(este trabalho)*
+A Central de Spares ganhou abas de acompanhamento e cadastro, formulário com os
+11 campos da planilha de envios, estados claros de salvamento/sincronização e
+ação manual de sincronizar. Os registros agora são persistidos no D1 na tabela
+`spares`; o CSV legado continua como leitura histórica enquanto os dados são
+migrados.
+
+Foram criadas as rotas autenticadas `/api/spares` e `/api/spares/sync` e um
+conector bidirecional configurável via Power Automate. Falhas do Excel não
+perdem o cadastro: ficam marcadas para reenvio. Instruções e contrato estão em
+`docs/SPARES_SHAREPOINT_SYNC.md`.
+
+**Pendente:** configurar os dois fluxos do Power Automate, cadastrar os três
+secrets do Worker e aplicar `drizzle/0021_spares.sql` antes de publicar.
+
 ## 2026-09-09
+
+### Exibe o defeito alegado no resumo do chamado — *(este trabalho)*
+O bloco principal de detalhes agora mostra o campo real **Defeito alegado** do
+Jira (`operationalFields.allegedDefect`), em largura completa e com quebra de
+texto. A auditoria visual sintética passou a conferir esse dado e os textos dos
+atalhos do chamado foram ajustados para não causar overflow no celular.
+
+### Corrige destinos das áreas Mapa, Spares e Financeiro — *(este trabalho)*
+O menu compartilhado agora força navegação de documento quando o destino é
+uma página própria. As trocas internas por `?view=` continuam instantâneas na
+tela inicial. Isso evita o dead-end do roteador cliente do vinext no navegador
+e no WebView do executável, em que o clique tinha um `href` válido mas a tela
+permanecia no painel atual.
+
+### Revisão visual e responsiva do produto — *(este trabalho)*
+Unificou a linguagem visual graphite-glass em todas as áreas, com tokens de
+superfície, foco de teclado, alvos maiores para toque, campos com rótulos e
+diálogos/folhas que respeitam a altura da tela. A navegação agora usa um único
+componente compartilhado, com nomes visíveis no desktop e menu acessível no
+celular. O mural de bilhetes pode ser recolhido, anexos têm preview sem
+overflow e as telas de Spares, Mapa e Financeiro têm estados vazios/erro e
+controles responsivos.
+
+Foi adicionado `scripts/ui-review.mjs`, uma auditoria local com dados sintéticos
+que percorre as vistas em 375/768/1024/1440 px, valida overflow, menu móvel,
+preview de anexo e salvamento do fluxo operacional. Também foram adicionados
+testes de autorização da navegação em `tests/navigation.test.ts`.
 
 ### Reunião de voz em grupo mais estável — *(este trabalho)*
 A chamada em grupo saiu de dentro do painel de comunicação e virou uma janela

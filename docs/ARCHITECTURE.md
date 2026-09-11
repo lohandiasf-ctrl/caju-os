@@ -20,8 +20,11 @@ financeiro, auditoria).
   ("Gerir operação"), `jira-ticket-details.tsx` (detalhe do chamado),
   `user-menu.tsx` (perfil, presença, voz), `feedback-board.tsx`,
   `n1-ticket-actions.tsx`, `caju-loading.tsx`.
-- Navegação interna hoje usa `<a href>` → recarrega a página. Migrar para
-  `next/link` (shim do vinext) está no backlog.
+- A navegação compartilhada usa `next/link`. As abas `?view=` são tratadas
+  localmente pela página raiz; destinos com página própria (`/mapa`, `/spares`
+  e `/financeiro`) usam `window.location.assign()` como fallback intencional,
+  pois o roteador cliente do vinext pode manter o usuário na tela anterior no
+  navegador e no WebView do executável.
 - Visual "premium": blur, transparência, transições. O usuário **rejeitou**
   a simplificação feita em nome de "60 FPS". Otimize lógica, não o design.
 
@@ -61,6 +64,7 @@ Grupos de rotas:
 | `/api/n1-tickets/[key]` | fluxo N1 (claim, validate, evidências) |
 | `/api/finance/rules` | regras financeiras (só gerência) |
 | `/api/parts` | catálogo de peças |
+| `/api/spares`, `/api/spares/sync` | cadastro de spares + sincronização bidirecional com Excel/SharePoint |
 | `/api/feedback` | quadro de feedback |
 | `/api/rat/extract`, `/api/rat/agree` | OCR da RAT via Workers AI |
 | `/api/tasks/sweep` | varredura de tarefas delegadas (chamada pelo cron) |
@@ -81,13 +85,17 @@ Grupos de tabelas:
 - **Jira / cache:** `tickets`, `ticket_history`, `jira_issue_links`,
   `jira_sync_jobs` (outbox durável de escritas no Jira).
 - **Operação:** `operational_stores`, `operational_workflows`,
-  `operational_visits`, `n1_ticket_assignments`, `ticket_evidence`.
+  `operational_visits`, `n1_ticket_assignments`, `ticket_evidence`,
+  `active_attendances` e `active_attendance_tickets` (sessões de trabalho em
+  curso, inclusive grupos de FSAs).
 - **Governança:** `operational_audit` (append-only, nunca editar/apagar),
   `ticket_snapshots`, `requester_history`, `employee_activity`.
 - **Comunicação:** `employee_messages`, `chat_groups`, `chat_group_members`,
   `chat_group_messages`, `chat_group_reads`, `chat_typing`, `voice_call_history`.
 - **Logística e tarefas:** `shipment_tracking`, `operational_tasks`
   (tem `escalated_at` — o cron só escala uma vez).
+- **Spares:** `spares` (registro operacional e estado de sincronização com a
+  planilha; o D1 impede perda quando o Excel está indisponível).
 - **Financeiro:** `finance_settings`.
 - **Técnicos:** `technicians`, `technician_reviews`.
 - **Catálogo:** `parts_catalog` (preço de peça, em centavos).

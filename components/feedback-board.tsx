@@ -193,14 +193,16 @@ export function FeedbackBoard({
               </button>
             ))}
           </div>
-          <Input
+          <label htmlFor="feedback-title" className="text-sm font-medium">Assunto</label>
+          <Input id="feedback-title"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Resuma em uma linha"
             maxLength={160}
             className="min-h-11"
           />
-          <textarea
+          <label htmlFor="feedback-body" className="text-sm font-medium">Descrição</label>
+          <textarea id="feedback-body"
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Descreva o que acontece hoje e o que melhoraria. Se for um problema, diga em qual tela."

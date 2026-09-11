@@ -7,7 +7,6 @@ import {
   Building2,
   CalendarClock,
   CalendarDays,
-  CircleDollarSign,
   ClipboardList,
   DatabaseBackup,
   Download,
@@ -15,26 +14,23 @@ import {
   Eye,
   Filter,
   Headphones,
-  LayoutDashboard,
   List,
   Loader2,
-  Map as MapIcon,
   MapPin,
   Menu,
   MessageCircle,
-  MessageSquarePlus,
-  PackageOpen,
   Plus,
   RefreshCw,
   Save,
   Search,
-  Settings,
   ShieldCheck,
   Star,
   Users,
   Wrench,
   X,
 } from "lucide-react";
+import { AppNavigation } from "@/components/app-navigation";
+import { canUseDashboardView, isDashboardView, type DashboardView } from "@/lib/navigation";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,13 +51,13 @@ import {
 import {
   ColleaguesPanel,
   ProfileSettings,
-  UserMenu,
 } from "@/components/user-menu";
 import { CajuLoading } from "@/components/caju-loading";
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
 import { BulletinBoard } from "@/components/bulletin-board";
 import { FeedbackBoard } from "@/components/feedback-board";
+import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { notifyDesktop } from "@/lib/desktop-notifications";
 import {
@@ -74,6 +70,7 @@ import {
   ticketActivities,
   type DatedTicketActivity,
 } from "@/lib/ticket-activities";
+import { validationRequirements as getValidationRequirements } from "@/lib/operational-rules";
 
 type Status =
   | "Pendente de agendamento"
@@ -103,24 +100,6 @@ const jiraFilterPresets: Array<{
     description: "Aguardando spare com aprovação nas últimas 24 horas.",
   },
 ];
-// Uma lista só. Quando havia o tipo de um lado e listas literais de validação
-// do outro, adicionar uma view compilava sem erro e o clique no menu não fazia
-// nada, porque a URL era rejeitada e caía na view padrão.
-const DASHBOARD_VIEWS = [
-  "overview",
-  "tickets",
-  "central",
-  "agenda",
-  "technicians",
-  "projects",
-  "feedback",
-  "settings",
-] as const;
-type DashboardView = (typeof DASHBOARD_VIEWS)[number];
-
-function isDashboardView(value: string | null): value is DashboardView {
-  return DASHBOARD_VIEWS.includes((value ?? "") as DashboardView);
-}
 type Ticket = {
   id: string;
   title: string;
@@ -167,6 +146,21 @@ type JiraDetails = JiraTicket & {
     author: string | null;
   }>;
   internalComments?: Array<{ id: string; body: string; author: string | null; createdAt: string }>;
+};
+type LinkedSpare = {
+  ticketKey: string;
+  status: string;
+  city: string;
+  equipment: string;
+  tracking: string;
+  delivery: string;
+  technician: string;
+  service: string;
+  note: string;
+  address: string;
+  supplier: string;
+  updatedAt: string;
+  source: 'system' | 'spreadsheet' | 'csv';
 };
 type N1User = { email: string; role: "n1" };
 type FieldTechnician = {
@@ -243,18 +237,6 @@ const columns: Status[] = [
   "Direcionado",
   "Técnico em campo",
 ];
-const nav = [
-  ["Visão geral", LayoutDashboard, "/?view=overview", "overview"],
-  ["Chamados", ClipboardList, "/?view=tickets", "tickets"],
-  ["Mapa operacional", MapIcon, "/mapa", "map"],
-  ["Agenda", CalendarClock, "/?view=agenda", "agenda"],
-  ["Central N1", Headphones, "/?view=central", "central"],
-  ["Equipe", Users, "/?view=technicians", "technicians"],
-  ["Projetos e lojas", Building2, "/?view=projects", "projects"],
-  ["Spares", PackageOpen, "/spares", "spares"],
-  ["Financeiro", CircleDollarSign, "/financeiro", "finance"],
-  ["Feedback", MessageSquarePlus, "/?view=feedback", "feedback"],
-] as const;
 const dots: Record<Status, string> = {
   "Pendente de agendamento": "bg-violet-400",
   Agendado: "bg-blue-400",
@@ -269,7 +251,7 @@ const viewCopy: Record<DashboardView, [string, string, string]> = {
     "Registre o que atrapalha, proponha melhorias e apoie as ideias dos colegas.",
   ],
   overview: [
-    "Operação em tempo real",
+    "Central de operações",
     "Visão geral dos chamados",
     "Fila, prioridade e execução em uma única visão.",
   ],
@@ -335,6 +317,7 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [activeView, user]);
   const [selected, setSelected] = useState<Ticket | null>(null);
+  const [linkedSpare, setLinkedSpare] = useState<LinkedSpare | null>(null);
   const [ticketToShare, setTicketToShare] = useState<{
     id: string;
     title: string;
@@ -360,6 +343,7 @@ export default function Home() {
   );
   const [ticketDate, setTicketDate] = useState<Date | undefined>();
   const knownTicketIds = useRef<Set<string>>(new Set());
+  const openedTicketFromUrl = useRef<string | null>(null);
   const seenOperationalAlerts = useRef<Set<string>>(new Set());
   const [removedTicketAlerts, setRemovedTicketAlerts] = useState<string[]>([]);
   const [newTicketAlerts, setNewTicketAlerts] = useState<string[]>([]);
@@ -507,6 +491,32 @@ export default function Home() {
       active = false;
     };
   }, [jiraFilterPreset, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const ticketKey = new URLSearchParams(window.location.search).get('ticket')?.trim().toUpperCase();
+    if (!ticketKey || !/^FSA-\d+$/.test(ticketKey) || openedTicketFromUrl.current === ticketKey) return;
+    openedTicketFromUrl.current = ticketKey;
+    try {
+      const saved = sessionStorage.getItem(`caju-linked-spare:${ticketKey}`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as LinkedSpare;
+        if (parsed.ticketKey === ticketKey) setLinkedSpare(parsed);
+      }
+    } catch {
+      sessionStorage.removeItem(`caju-linked-spare:${ticketKey}`);
+    }
+    const ticket = tickets.find((item) => item.id === ticketKey) ?? {
+      id: ticketKey,
+      title: 'Carregando chamado do Jira…',
+      store: '',
+      city: '',
+      status: 'Aguardando spare' as Status,
+      rawStatus: 'Consultando Jira',
+      priority: 'Media' as const,
+    };
+    void openTicket(ticket);
+  }, [tickets, user]);
 
   useEffect(() => {
     knownTicketIds.current = new Set(tickets.map((ticket) => ticket.id));
@@ -682,6 +692,7 @@ export default function Home() {
           linkPayload.error || "Não foi possível carregar o grupo.",
         );
       setDetails(detailsPayload);
+      setSelected(toTicket(detailsPayload));
       setWhatsappUrl(linkPayload.whatsappUrl ?? "");
     } catch (error) {
       setDialogError(
@@ -692,6 +703,15 @@ export default function Home() {
     } finally {
       setDialogLoading(false);
     }
+  }
+
+  function closeTicketDialog() {
+    setSelected(null);
+    setLinkedSpare(null);
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('ticket')) return;
+    params.delete('ticket');
+    window.history.replaceState(null, '', `/?${params.toString()}`);
   }
 
   async function refreshTicketDetails(ticketKey: string) {
@@ -773,29 +793,17 @@ export default function Home() {
   }
 
   const validationRequirements = useMemo(() => {
-    const missing: string[] = [];
-    if (!isInServiceStatus(details?.status ?? selected?.rawStatus ?? ""))
-      missing.push("status Técnico em campo");
-    if (
-      !(
-        Number(
-          String(details?.operationalFields.ticketTotal ?? "").replace(
-            ",",
-            ".",
-          ),
-        ) > 0
-      )
-    )
-      missing.push("valores salvos");
-    if (!(details?.attachments?.length ?? 0))
-      missing.push("ao menos uma evidência");
     const summary = parseDefectSummary(
       details?.operationalFields.defectSummary ?? "",
     );
-    if (!summary.identifiedProblem) missing.push("problema identificado");
-    if (!summary.testsPerformed) missing.push("testes feitos");
-    if (!summary.partToReplace) missing.push("peça a ser trocada");
-    return missing;
+    return getValidationRequirements({
+      status: details?.status ?? selected?.rawStatus ?? "",
+      ticketTotal: details?.operationalFields.ticketTotal,
+      attachmentCount: details?.attachments?.length ?? 0,
+      serviceStartedAt: details?.operationalFields.serviceStartedAt,
+      serviceEndedAt: details?.operationalFields.serviceEndedAt,
+      ...summary,
+    });
   }, [details, selected]);
   const validationReady =
     Boolean(details) && validationRequirements.length === 0;
@@ -880,6 +888,7 @@ export default function Home() {
     setMenu(false);
     setNotificationsOpen(false);
     window.scrollTo({ top: 0, behavior: "auto" });
+    requestAnimationFrame(() => document.getElementById("main-content")?.focus({ preventScroll: true }));
   }
 
   useEffect(() => {
@@ -949,97 +958,26 @@ export default function Home() {
 
   return (
     <main className="min-h-screen text-foreground">
-      <aside
-        className={`caju-sidebar group/sidebar fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col overflow-visible border border-sidebar-border bg-sidebar px-4 py-5 transition-[width,transform] duration-200 min-[360px]:inset-y-3 min-[360px]:left-3 min-[360px]:w-[76px] min-[360px]:translate-x-0 min-[360px]:hover:w-[272px] motion-reduce:transition-none ${menu ? "translate-x-0" : "-translate-x-full"}`}
-      >
-        <div className="flex h-12 items-center gap-3 px-2">
-          <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-primary/30 bg-black shadow-[0_10px_30px_rgba(240,122,63,.18)]">
-            <img
-              src="/caju-tech-emblem.png"
-              alt="Caju Tech"
-              className="size-9 object-contain"
-            />
-          </div>
-          <div className="sidebar-label whitespace-nowrap opacity-100 transition-opacity min-[360px]:opacity-0 min-[360px]:group-hover/sidebar:opacity-100">
-            <div className="text-[15px] font-extrabold tracking-tight">
-              Caju OS
-            </div>
-            <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-muted-foreground">
-              Comando operacional
-            </div>
-          </div>
-        </div>
-        <nav
-          className="no-scrollbar mt-5 min-h-0 flex-1 space-y-0.5 overflow-x-hidden overflow-y-auto overscroll-contain pb-3"
-          aria-label="Navegação principal"
-        >
-          <p className="sidebar-label mb-3 whitespace-nowrap px-3 text-[10px] font-bold uppercase tracking-[.15em] text-muted-foreground opacity-100 transition-opacity min-[360px]:opacity-0 min-[360px]:group-hover/sidebar:opacity-100">
-            Operação
-          </p>
-          {nav
-            .filter(([, , , key]) => canUseNavItem(role, key))
-            .map(([label, Icon, href, key]) => {
-              const isActive = key === activeView;
-              return (
-                <a
-                  href={href}
-                  onClick={(event) => navigate(event, href)}
-                  key={label}
-                  aria-label={label}
-                  aria-current={isActive ? "page" : undefined}
-                  className={`flex min-h-10 w-full items-center gap-3 overflow-hidden rounded-xl px-3 text-left text-sm font-medium transition ${isActive ? "bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary),0_8px_24px_rgba(0,0,0,.12)]" : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground"}`}
-                >
-                  <Icon
-                    aria-hidden="true"
-                    className={`size-[18px] shrink-0 ${isActive ? "text-primary" : ""}`}
-                  />
-                  <span className="sidebar-label whitespace-nowrap opacity-100 transition-opacity min-[360px]:opacity-0 min-[360px]:group-hover/sidebar:opacity-100">
-                    {label}
-                  </span>
-                </a>
-              );
-            })}
-        </nav>
-        <div className="shrink-0 border-t border-sidebar-border pt-3">
-          <a
-            href="/?view=settings"
-            onClick={(event) => navigate(event, "/?view=settings")}
-            aria-label="Configurações"
-            aria-current={activeView === "settings" ? "page" : undefined}
-            className={`flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-xl px-3 text-sm transition ${activeView === "settings" ? "bg-sidebar-accent text-foreground shadow-[inset_3px_0_0_var(--primary)]" : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"}`}
-          >
-            <Settings aria-hidden="true" className="size-[18px] shrink-0" />
-            <span className="sidebar-label whitespace-nowrap opacity-100 transition-opacity min-[360px]:opacity-0 min-[360px]:group-hover/sidebar:opacity-100">
-              Configurações
-            </span>
-          </a>
-          <UserMenu />
-        </div>
-      </aside>
-      {menu && (
-        <button
-          aria-label="Fechar menu"
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
-          onClick={() => setMenu(false)}
-        />
-      )}
-      <section className="min-h-screen min-[360px]:pl-[92px] xl:pr-8">
+      <AppNavigation active={activeView} open={menu} onOpenChange={setMenu} onNavigate={navigate} />
+      <section className="app-content">
         <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-5">
           <Button
             variant="ghost"
             size="icon"
-            className="min-[360px]:hidden"
+            className="lg:hidden"
+            aria-expanded={menu}
             aria-label="Abrir menu"
             onClick={() => setMenu(true)}
           >
             <Menu />
           </Button>
-          <div className="relative max-w-[440px] flex-1">
+          <div className="relative min-w-0 max-w-[440px] flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar chamado, loja ou tecnico..."
+              aria-label="Buscar chamado, loja ou técnico"
+              placeholder="Buscar chamado, loja ou técnico..."
               className="h-10 bg-card pl-9"
             />
           </div>
@@ -1070,7 +1008,7 @@ export default function Home() {
             )}
           </Button>
           {notificationsOpen && (
-            <div className="surface-panel absolute right-4 top-[60px] z-50 w-[min(360px,calc(100vw-2rem))] rounded-2xl p-4 shadow-2xl">
+            <div className="surface-panel absolute right-4 top-[60px] z-50 max-h-[calc(100dvh-6rem)] overflow-y-auto w-[min(360px,calc(100vw-2rem))] rounded-2xl p-4 shadow-2xl">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Central de alertas</h2>
                 <Badge variant="outline">
@@ -1112,7 +1050,7 @@ export default function Home() {
             </div>
           )}
         </header>
-        <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-primary">
@@ -1211,6 +1149,27 @@ export default function Home() {
             </div>
           )}
           {activeView === "overview" && (
+            <ActiveAttendances
+              availableTickets={tickets.map((ticket) => ({
+                key: ticket.id,
+                summary: ticket.title,
+                store: ticket.store,
+                city: ticket.city,
+              }))}
+              onOpenTicket={(attendanceTicket: ActiveAttendanceTicket) => {
+                void openTicket({
+                  id: attendanceTicket.ticketKey,
+                  title: attendanceTicket.summary,
+                  store: attendanceTicket.store ?? "Loja não informada",
+                  city: attendanceTicket.city ?? "",
+                  status: "Técnico em campo",
+                  rawStatus: "Técnico em campo",
+                  priority: "Media",
+                });
+              }}
+            />
+          )}
+          {activeView === "overview" && (
             <OperationalSummary
               data={operational}
               tickets={tickets}
@@ -1258,6 +1217,7 @@ export default function Home() {
                   <Button
                     variant={view === "kanban" ? "secondary" : "ghost"}
                     size="sm"
+                    aria-pressed={view === "kanban"}
                     onClick={() => setView("kanban")}
                   >
                     <Wrench /> Kanban
@@ -1265,6 +1225,7 @@ export default function Home() {
                   <Button
                     variant={view === "list" ? "secondary" : "ghost"}
                     size="sm"
+                    aria-pressed={view === "list"}
                     onClick={() => setView("list")}
                   >
                     <List /> Lista
@@ -1312,6 +1273,7 @@ export default function Home() {
                           key={status}
                           size="sm"
                           variant={statusFilter === status ? "default" : "ghost"}
+                          aria-pressed={statusFilter === status}
                           onClick={() => setStatusFilter(status)}
                         >
                           {status}
@@ -1323,7 +1285,7 @@ export default function Home() {
               )}
               {view === "kanban" ? (
                 <div
-                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5" : "grid-cols-1"}`}
+                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "md:grid-cols-2 2xl:grid-cols-3 min-[1920px]:grid-cols-5" : "grid-cols-1"}`}
                 >
                   {visibleKanbanColumns.map(
                     (column) => {
@@ -1374,7 +1336,7 @@ export default function Home() {
                       type="button"
                       onClick={() => void openTicket(ticket)}
                       key={ticket.id}
-                      className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 sm:grid-cols-[120px_1fr_150px_140px] sm:items-center"
+                      className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 lg:grid-cols-[100px_minmax(0,1fr)_140px_120px] sm:items-center"
                     >
                       <span className="font-mono text-xs font-bold text-primary">
                         {ticket.id}
@@ -1446,7 +1408,7 @@ export default function Home() {
       <Dialog
         open={Boolean(selected)}
         onOpenChange={(open) => {
-          if (!open) setSelected(null);
+          if (!open) closeTicketDialog();
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -1481,7 +1443,7 @@ export default function Home() {
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
                   onClick={() => setDetailsVisible((value) => !value)}
                   disabled={!details}
                 >
@@ -1499,7 +1461,7 @@ export default function Home() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
+                    className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
                     onClick={() => void openJira()}
                   >
                     <ExternalLink className="size-5 shrink-0 text-primary" />
@@ -1513,7 +1475,7 @@ export default function Home() {
                 )}
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
                   render={
                     <a
                       href={whatsappUrl || "#"}
@@ -1535,7 +1497,7 @@ export default function Home() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50"
                   onClick={() => void copyJiraLinkForValidation()}
                   disabled={!validationReady || validationSending}
                   aria-describedby="validation-requirements"
@@ -1552,7 +1514,7 @@ export default function Home() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
+                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
                   onClick={() =>
                     selected &&
                     setTicketToShare({
@@ -1575,7 +1537,7 @@ export default function Home() {
                 {role !== "n1" && (
                   <Button
                     variant="outline"
-                    className="h-auto min-h-16 min-w-0 justify-start gap-3 p-3 text-left"
+                    className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
                     onClick={() => setOperationOpen(true)}
                     disabled={!selected}
                   >
@@ -1602,6 +1564,27 @@ export default function Home() {
               {role === "n1" && selected && (
                 <N1TicketActions ticketKey={selected.id} user={user} />
               )}
+              {linkedSpare && (
+                <section className="rounded-xl border border-primary/25 bg-primary/5 p-4" aria-label="Dados do spare vinculados à planilha">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-primary">Spare vinculado à planilha</p>
+                      <h3 className="mt-1 text-sm font-bold">{linkedSpare.equipment || 'Peça não informada'}</h3>
+                    </div>
+                    <Badge variant="outline">{linkedSpare.status || 'Sem status'}</Badge>
+                  </div>
+                  <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                    <Detail label="Fornecedor" value={linkedSpare.supplier || 'Não informado'} />
+                    <Detail label="Técnico" value={linkedSpare.technician || 'Não informado'} />
+                    <Detail label="Cidade" value={linkedSpare.city || 'Não informada'} />
+                    <Detail label="Rastreio" value={linkedSpare.tracking || 'Não informado'} />
+                    <Detail label="Previsão de entrega" value={linkedSpare.delivery || 'Sem previsão'} />
+                    <Detail label="Previsão de atendimento" value={linkedSpare.service || 'Sem agendamento'} />
+                    {linkedSpare.address && <Detail className="sm:col-span-2" label="Endereço de entrega" value={linkedSpare.address} />}
+                    {linkedSpare.note && <Detail className="sm:col-span-2" label="Observação da planilha" value={linkedSpare.note} />}
+                  </div>
+                </section>
+              )}
               {detailsVisible && details && (
                 <>
                   <section className="rounded-xl border border-border bg-muted/30 p-4">
@@ -1623,6 +1606,11 @@ export default function Home() {
                       <Detail
                         label="Criado em"
                         value={formatDate(details.createdAt)}
+                      />
+                      <Detail
+                        className="sm:col-span-2"
+                        label="Defeito alegado"
+                        value={details.operationalFields.allegedDefect || "Não informado"}
                       />
                     </div>
                   </section>
@@ -1925,7 +1913,7 @@ function AgendaView({
     return <EmptyState label="Nenhum atendimento aguardando agenda." />;
   return (
     <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
-      <div className="grid border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[130px_1fr_160px_140px]">
+      <div className="hidden border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_140px]">
         <span>Data</span>
         <span>Chamado</span>
         <span>Responsável</span>
@@ -2533,7 +2521,7 @@ function ProjectsView({
     return <EmptyState label="Nenhuma loja encontrada nos chamados atuais." />;
   return (
     <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
-      <div className="grid border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground sm:grid-cols-[1fr_220px_120px]">
+      <div className="grid border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid-cols-[minmax(0,1fr)_220px_120px]">
         <span>Loja</span>
         <span>Cidade</span>
         <span>Chamados</span>
@@ -3168,11 +3156,11 @@ function whatsappLink(phone: string | null) {
   return `https://wa.me/${digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`}`;
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
+function Detail({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
-    <div>
+    <div className={className}>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-medium">{value}</p>
+      <p className="mt-1 whitespace-pre-wrap font-medium [overflow-wrap:anywhere]">{value}</p>
     </div>
   );
 }
@@ -3362,25 +3350,6 @@ function dashboardViewFromHref(href: string) {
   return isDashboardView(value) ? value : null;
 }
 
-function canUseDashboardView(role: string | null, view: DashboardView) {
-  if (role === "gerencia" || role === "coordenador") return true;
-  if (role === "n1")
-    return !["projects"].includes(view);
-  if (role === "tecnico")
-    return ["overview", "agenda", "technicians", "feedback", "settings"].includes(view);
-  if (role === "analista")
-    return !["central", "projects"].includes(view);
-  return view === "overview" || view === "feedback";
-}
-
 function defaultDashboardView(role: string | null): DashboardView {
   return canUseDashboardView(role, "overview") ? "overview" : "tickets";
-}
-
-function canUseNavItem(role: string | null, key: string) {
-  if (["map", "spares", "finance"].includes(key)) {
-    if (key === "spares" || key === "finance") return role === "gerencia";
-    return Boolean(role);
-  }
-  return canUseDashboardView(role, key as DashboardView);
 }

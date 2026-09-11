@@ -54,6 +54,8 @@ type JiraIssue = {
     customfield_14954?: unknown;
     customfield_11994?: unknown;
     customfield_12036?: unknown;
+    customfield_10702?: unknown;
+    customfield_10703?: unknown;
     customfield_12279?: unknown;
     customfield_12316?: unknown;
     customfield_16237?: unknown;
@@ -232,6 +234,11 @@ export async function getJiraIssue(key: string) {
     additionalCosts: value('Detalhes de custos adicionais'),
     technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos') ?? customFieldText(issue.fields.customfield_12279) ?? technicianFieldsToText(issue.fields),
     scheduledDateTime: value('Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento') ?? customFieldText(issue.fields.customfield_12036),
+    // These names occur more than once in the Jira configuration. Always read
+    // the confirmed IDs first; otherwise a duplicate field can overwrite the
+    // time shown after a successful save and incorrectly block validation.
+    serviceStartedAt: customFieldText(issue.fields.customfield_10702) ?? value('Data/Hora - Início', 'Data/Hora - Inicio', 'Data Hora - Início', 'Data Hora - Inicio'),
+    serviceEndedAt: customFieldText(issue.fields.customfield_10703) ?? value('Data/Hora - Término', 'Data/Hora - Termino', 'Data Hora - Término', 'Data Hora - Termino'),
     defectSummary: value('Resumo do defeito'),
   };
   const attachments: JiraAttachmentSummary[] = (issue.fields.attachment ?? []).flatMap((attachment) => attachment.id && attachment.filename ? [{ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType ?? 'application/octet-stream', size: attachment.size ?? 0, createdAt: attachment.created ?? '', author: attachment.author?.displayName ?? null }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -254,6 +261,8 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     ['ticketTotal', ['Total do Tickt', 'Total do Ticket']], ['visitNumber', ['Numero de Visita', 'Número de Visita']], ['additionalCosts', ['Detalhes de custos adicionais']],
     ['technicianData', ['Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos']],
     ['scheduledDateTime', ['Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento']],
+    ['serviceStartedAt', ['Data/Hora - Início', 'Data/Hora - Inicio', 'Data Hora - Início', 'Data Hora - Inicio']],
+    ['serviceEndedAt', ['Data/Hora - Término', 'Data/Hora - Termino', 'Data Hora - Término', 'Data Hora - Termino']],
     ['technicianName', ['Nome do Técnico', 'Nome do Tecnico']], ['technicianPhone', ['Telefone do Técnico', 'Telefone do Tecnico']],
     ['technicianRg', ['RG']], ['technicianCpf', ['CPF/CNPJ Técnico', 'CPF/CNPJ Tecnico']], ['technicianContact', ['Número Contato', 'Numero Contato']],
   ];
@@ -261,6 +270,7 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     if (input[inputKey] === undefined) continue;
     const fixedIds: Record<string, string> = {
       scheduledDateTime: 'customfield_12036', technicianData: 'customfield_12279', technicianName: 'customfield_12316',
+      serviceStartedAt: 'customfield_10702', serviceEndedAt: 'customfield_10703',
       technicianPhone: 'customfield_16237', technicianRg: 'customfield_11956', technicianCpf: 'customfield_16238', technicianContact: 'customfield_11963',
     };
     const fixedId = fixedIds[inputKey];
@@ -268,7 +278,7 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     if (id) {
       const value = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
         ? numericJiraValue(input[inputKey])
-        : inputKey === 'scheduledDateTime' ? jiraDateTimeValue(input[inputKey]) : cleanJiraValue(input[inputKey]);
+        : ['scheduledDateTime', 'serviceStartedAt', 'serviceEndedAt'].includes(inputKey) ? jiraDateTimeValue(input[inputKey]) : cleanJiraValue(input[inputKey]);
       const requiresAdf = inputKey === 'technicianData' || isAdfDocument(issue.fields[id]);
       fields[id] = requiresAdf && typeof value === 'string' ? textToAdf(value) : value;
     }
@@ -536,8 +546,17 @@ function numericJiraValue(value: unknown) {
 
 function jiraDateTimeValue(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value.trim().slice(0, 100) : parsed.toISOString();
+  const raw = value.trim().slice(0, 100);
+  // A date/time field represents an appointment in local civil time. Keep the
+  // incoming offset instead of serializing it again as UTC, otherwise a browser
+  // in a different timezone can make Jira appear to move the saved time.
+  const withOffset = raw.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?([+-]\d{2}:?\d{2}|Z)$/);
+  if (withOffset) {
+    const offset = withOffset[4] === 'Z' ? '+0000' : withOffset[4].replace(':', '');
+    return `${withOffset[1]}:${withOffset[2] ?? '00'}.${(withOffset[3] ?? '000').padEnd(3, '0')}${offset}`;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString();
 }
 
 function parseTechnicianData(value: string | number | null) {

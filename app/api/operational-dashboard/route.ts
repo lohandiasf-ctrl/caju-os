@@ -55,7 +55,11 @@ export async function GET(request: Request) {
       if (item.action !== 'Enviado para validação') continue;
       if (validationByTicket.has(item.ticketKey)) continue;
       const workflow = workflowByTicket.get(item.ticketKey);
-      if (workflow && closed.has(workflow.status)) continue;
+      // A validation request is only actionable while the ticket remains in
+      // "Técnico em campo" (normalized as `in_service`). Once Jira moves it
+      // to any other workflow status, it has left the validation queue and
+      // must disappear even if the destination status is still active.
+      if (!workflow || workflow.status !== 'in_service') continue;
       validationByTicket.set(item.ticketKey, {
         ticketKey: item.ticketKey,
         submittedByEmail: item.actorEmail,

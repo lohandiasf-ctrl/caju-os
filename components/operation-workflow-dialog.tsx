@@ -581,8 +581,9 @@ export function OperationWorkflowDialog({
             <CajuLoading label="Carregando operação..." fullscreen={false} compact />
           </div>
         ) : (
-          <div className="min-h-0 space-y-5 overflow-y-auto pr-1">
-            <section className="sticky top-0 z-10 grid gap-3 rounded-xl border border-primary/25 bg-background p-4 shadow-lg sm:grid-cols-3">
+          <>
+          <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain pr-2 pb-2">
+            <section className="grid gap-3 rounded-xl border border-primary/25 bg-background p-4 shadow-lg sm:grid-cols-3">
               <Field label="Etapa">
                 <select
                   value={String(form.status ?? "triage")}
@@ -649,7 +650,7 @@ export function OperationWorkflowDialog({
               </Field>
             </section>
             <section
-              className={`flex items-center justify-between gap-4 rounded-xl border p-4 ${margin <= 0 ? "border-amber-400/30 bg-amber-400/10" : "border-emerald-400/30 bg-emerald-400/10"}`}
+              className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4 ${margin <= 0 ? "border-amber-400/30 bg-amber-400/10" : "border-emerald-400/30 bg-emerald-400/10"}`}
             >
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-bold">
@@ -1362,7 +1363,8 @@ ${chosen.name}` : chosen.name);
                 placeholder="Ex.: agendamento confirmado com gerente, ajuste vindo do Jira, correção de valor"
               />
             </Field>
-            <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+            </div>
+            <div className="shrink-0 flex flex-wrap items-center gap-3 border-t border-border pt-4">
               <Button
                 type="button"
                 onClick={() => void save()}
@@ -1388,7 +1390,7 @@ ${chosen.name}` : chosen.name);
                 </p>
               )}
             </div>
-          </div>
+          </>
         )}
       </DialogContent>
     </Dialog>
