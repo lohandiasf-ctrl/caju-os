@@ -1,4 +1,5 @@
 "use client";
+import { carrierLabel } from "@/lib/tracking";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -1101,7 +1102,7 @@ export function OperationWorkflowDialog({
                   >
                     <span>
                       <b>{item.source}</b> · {item.trackingCode}
-                      {item.carrier ? ` · ${item.carrier}` : ""}
+                      {item.carrier ? ` · ${carrierLabel(item.carrier)}` : ""}
                     </span>
                     <span className="text-muted-foreground">
                       {item.status}

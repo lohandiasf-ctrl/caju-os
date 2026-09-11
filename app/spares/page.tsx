@@ -1,4 +1,5 @@
 'use client';
+import { carrierLabel, CLOSED_SPARE_STATUSES } from '@/lib/tracking';
 import { AppNavigation } from '@/components/app-navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -43,6 +44,9 @@ type S = {
   syncError?: string | null;
   updatedAt?: string;
   sourceOrder?: number;
+  trackingStatus?: string;
+  trackingCarrier?: string;
+  trackingCheckedAt?: string;
 };
 
 type SpareForm = {
@@ -72,6 +76,24 @@ const EMPTY_FORM: SpareForm = {
   address: '',
   supplier: 'DELFIA',
 };
+// Status consultado na TrackingMore, que GET /api/spares anexa a cada spare.
+function trackingFields(
+  value: unknown,
+): Pick<S, 'trackingStatus' | 'trackingCarrier' | 'trackingCheckedAt'> {
+  if (!value || typeof value !== 'object') return {};
+  const tracking = value as Record<string, unknown>;
+  return {
+    trackingStatus:
+      typeof tracking.status === 'string' ? tracking.status : undefined,
+    trackingCarrier:
+      typeof tracking.carrier === 'string'
+        ? carrierLabel(tracking.carrier)
+        : undefined,
+    trackingCheckedAt:
+      typeof tracking.updatedAt === 'string' ? tracking.updatedAt : undefined,
+  };
+}
+
 const SPARES_COPY_URL =
   'https://cajutechsolucoesemimformati.sharepoint.com/:x:/r/sites/CAJUTECH-SOLUCOESEMIMFORMATICA441/_layouts/15/doc2.aspx?sourcedoc=%7BBA726016-2EAF-40CD-B3E3-50C4D507FBF7%7D&file=CAJU%20TECH%20-%20Envio%20de%20Equipamentos%20-%20AMERICANAS%20-%20Copiar.xlsx&action=default';
 type SyncConfiguration = {
@@ -106,7 +128,7 @@ function parse(t: string) {
   return a;
 }
 const c = (x = '') => x.trim().replace(/\s+/g, ' '),
-  done = ['FINALIZADO', 'ENCERRADO', 'FECHADO', 'CANCELADO'];
+  done = [...CLOSED_SPARE_STATUSES] as string[];
 export default function Page() {
   const { user } = useAuth();
   const detailRef = useRef<HTMLElement>(null);
@@ -199,6 +221,7 @@ export default function Page() {
               syncError:
                 typeof row.syncError === 'string' ? row.syncError : null,
               updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : undefined,
+              ...trackingFields(row.tracking),
             }));
           }
         }
@@ -662,6 +685,15 @@ export default function Page() {
                                 Sincronização pendente
                               </Badge>
                             )}
+                            {x.trackingStatus && (
+                              <Badge
+                                variant="outline"
+                                className="border-sky-400/20 text-sky-200"
+                              >
+                                <Truck aria-hidden="true" className="size-3" />
+                                {x.trackingStatus}
+                              </Badge>
+                            )}
                             <span className="text-[10px] text-muted-foreground">
                               {x.supplier}
                             </span>
@@ -715,6 +747,12 @@ export default function Page() {
                           l="Código de rastreio"
                           v={selected.tracking || 'Ainda não informado'}
                         />
+                        {selected.trackingStatus && (
+                          <D
+                            l="Status do rastreio"
+                            v={`${selected.trackingStatus}${selected.trackingCarrier ? ` · ${selected.trackingCarrier}` : ''}${selected.trackingCheckedAt ? ` · consultado em ${new Date(selected.trackingCheckedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`}
+                          />
+                        )}
                         <D
                           l="Previsão de entrega"
                           v={selected.delivery || 'Sem previsão'}

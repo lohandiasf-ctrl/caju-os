@@ -1,14 +1,14 @@
 import { desc, eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { shipmentTracking, spares } from '@/db/schema';
-import { normalizeTrackingCode } from '@/lib/tracking';
+import { trackingKey } from '@/lib/tracking';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import {
   pushSpareToSpreadsheet,
   spareSyncConfiguration,
   type SpareSyncRecord,
 } from '@/lib/server/spares-sync';
-import { trackShipment } from '@/lib/server/trackingmore';
+import { recordSpareTracking } from '@/lib/server/spare-tracking';
 
 const WRITE_ROLES = ['gerencia'] as const;
 
@@ -25,14 +25,33 @@ function ticketKey(value: unknown) {
 export async function GET(request: Request) {
   try {
     await requireApiUser(request, [...WRITE_ROLES]);
-    const items = await getDb()
-      .select()
-      .from(spares)
-      .orderBy(desc(spares.updatedAt))
-      .limit(1000)
-      .all();
+    const db = getDb();
+    const [items, tracked] = await Promise.all([
+      db.select().from(spares).orderBy(desc(spares.updatedAt)).limit(1000).all(),
+      db.select().from(shipmentTracking).all(),
+    ]);
+    // Status consultado na TrackingMore, casado por chamado + código.
+    const byKey = new Map(
+      tracked.map((row) => [trackingKey(row.ticketKey, row.trackingCode), row]),
+    );
+    const withTracking = items.map((item) => {
+      const row = item.trackingCode
+        ? byKey.get(trackingKey(item.ticketKey, item.trackingCode))
+        : undefined;
+      return {
+        ...item,
+        tracking: row
+          ? {
+              status: row.status,
+              carrier: row.carrier,
+              expectedAt: row.expectedAt,
+              updatedAt: row.updatedAt,
+            }
+          : null,
+      };
+    });
     return Response.json(
-      { items, sync: spareSyncConfiguration() },
+      { items: withTracking, sync: spareSyncConfiguration() },
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (error) {
@@ -129,7 +148,7 @@ export async function POST(request: Request) {
     }
 
     const tracking = created.trackingCode
-      ? await trackNewSpare(created, user.email)
+      ? await recordSpareTracking(created, user.email)
       : null;
 
     return Response.json(
@@ -142,66 +161,5 @@ export async function POST(request: Request) {
       { error: 'Não foi possível cadastrar o spare.' },
       { status: 500 },
     );
-  }
-}
-
-// Consulta o código informado no cadastro e grava no mesmo registro que o fluxo
-// do chamado ("Rastreios e entregas") exibe. Uma falha aqui nunca desfaz o
-// cadastro: o spare já está salvo, só fica sem o status automático.
-async function trackNewSpare(
-  spare: typeof spares.$inferSelect,
-  actorEmail: string,
-) {
-  try {
-    const trackingCode = normalizeTrackingCode(spare.trackingCode ?? '');
-    const snapshot = await trackShipment(trackingCode);
-    if (!snapshot) return { configured: false as const };
-
-    const now = new Date().toISOString();
-    // Meio-dia de Brasília, como o diálogo do chamado grava: meia-noite UTC
-    // apareceria como o dia anterior no fuso do Brasil.
-    const expectedAt = snapshot.expectedAt
-      ? `${snapshot.expectedAt}T15:00:00.000Z`
-      : null;
-    await getDb()
-      .insert(shipmentTracking)
-      .values({
-        ticketKey: spare.ticketKey,
-        source: spare.supplier.includes('DELFIA') ? 'Delfia' : 'Caju',
-        trackingCode,
-        carrier: snapshot.carrier,
-        status: snapshot.status,
-        expectedAt,
-        createdBy: actorEmail,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [shipmentTracking.ticketKey, shipmentTracking.trackingCode],
-        set: {
-          carrier: snapshot.carrier,
-          status: snapshot.status,
-          ...(expectedAt ? { expectedAt } : {}),
-          updatedAt: now,
-        },
-      });
-
-    if (snapshot.expectedAt && !spare.expectedDelivery) {
-      await getDb()
-        .update(spares)
-        .set({ expectedDelivery: snapshot.expectedAt, updatedAt: now })
-        .where(eq(spares.id, spare.id));
-      spare.expectedDelivery = snapshot.expectedAt;
-    }
-    return { configured: true as const, ...snapshot };
-  } catch (error) {
-    console.error('Falha ao consultar o rastreio do spare', error);
-    return {
-      configured: true as const,
-      error:
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível consultar o rastreio.',
-    };
   }
 }

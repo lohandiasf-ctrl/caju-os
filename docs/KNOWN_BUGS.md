@@ -24,7 +24,7 @@ pós-migração Cloudflare.
 
 | Item | Estado | Nota |
 |---|---|---|
-| Diálogo do chamado diz "Rastreio salvo e monitorado", mas nada consulta esse rastreio | **Pendente** | só o cadastro de spare consulta a TrackingMore (`lib/server/trackingmore.ts`); o salvamento manual em "Rastreios e entregas" e a atualização periódica ainda não chamam a API |
+| Diálogo do chamado diz "Rastreio salvo e monitorado", mas só parte desses rastreios é consultada | **Parcial** | códigos ligados a um spare ativo são consultados pelo cron (`/api/spares/tracking`, a cada 6 h por código até "Entregue"); código digitado só no diálogo, sem spare correspondente, continua sem consulta |
 
 ## Jira
 

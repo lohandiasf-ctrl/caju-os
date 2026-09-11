@@ -25,7 +25,15 @@ export default {
       env,
       ctx,
     );
-    const run = Promise.all([sweep, spareSync]);
+    const spareTracking = handler.fetch(
+      new Request('https://cron.internal/api/spares/tracking', {
+        method: 'POST',
+        headers: { 'x-cron-secret': env.CRON_SECRET ?? '' },
+      }),
+      env,
+      ctx,
+    );
+    const run = Promise.all([sweep, spareSync, spareTracking]);
     ctx.waitUntil(run);
     await run;
   },

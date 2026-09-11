@@ -11,6 +11,36 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Rastreio também para os spares já cadastrados — *(este trabalho, branch `claude/rastreio-spares-existentes`)*
+
+Pedido do usuário: os spares que já estavam no sistema também devem mostrar o
+rastreio, não só os cadastrados depois da integração com a TrackingMore.
+
+- `lib/server/spare-tracking.ts`: `recordSpareTracking` (antes inline em
+  `POST /api/spares`) passa a ser usada pelo cadastro e pelo cron;
+  `refreshSpareTracking` faz uma rodada.
+- Cron (`scripts/worker-entry.js`): `POST /api/spares/tracking` a cada 10 min,
+  8 spares por rodada. Universo: spares ativos (fora de FINALIZADO, ENCERRADO,
+  FECHADO e CANCELADO) com código, uma vez por chamado + código — em produção,
+  no máximo 33 códigos distintos. Nunca consultados primeiro; depois reconsulta
+  a cada 6 h até "Entregue". Erro de conta (401, 429, 4190) interrompe a rodada;
+  código problemático vira "Rastreio indisponível" e só volta 6 h depois.
+  Gerente logado também pode chamar a rota.
+- `GET /api/spares` anexa o status consultado (`tracking`) a cada spare. Tela
+  de spares: etiqueta do status na lista e "Status do rastreio" no detalhe, com
+  a transportadora pelo nome; o diálogo do chamado também mostra "Correios" /
+  "Shopee Express" em vez do `courier_code`.
+- `lib/tracking.ts`: `pickDueTrackings` (puro, testado) e
+  `CLOSED_SPARE_STATUSES`, que a tela de spares passa a usar no lugar da sua
+  própria lista.
+
+**Pendente:**
+- Custo: cada código novo consome 1 crédito da TrackingMore; reconsultar o
+  mesmo código não. Segundo fontes de busca, o plano grátis não inclui API —
+  confirmar no painel da TrackingMore se a chave não é só de teste.
+- Ainda não exercitado com sucesso contra a API real.
+- Códigos digitados só no diálogo do chamado, sem spare, continuam sem consulta.
+
 ### Rastreio automático de spares pela TrackingMore — *(este trabalho, branch `claude/rastreio-trackingmore`)*
 
 Pedido do usuário: ao cadastrar um spare com código de rastreio, consultar o

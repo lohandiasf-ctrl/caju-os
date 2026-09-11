@@ -1,6 +1,6 @@
 // Rastreio de envios pela TrackingMore (Correios e Shopee Express Brasil).
-// Módulo puro: interpreta códigos e respostas da API v4. A chamada HTTP fica em
-// lib/server/trackingmore.ts.
+// Módulo puro: interpreta códigos e respostas da API v4 e decide quais spares
+// consultar. A chamada HTTP fica em lib/server/trackingmore.ts.
 
 export type TrackingSnapshot = {
   /** courier_code da TrackingMore, ex.: brazil-correios, spx-br. */
@@ -16,6 +16,14 @@ export type TrackingSnapshot = {
 
 export const CORREIOS = 'brazil-correios';
 
+/** Status de spare que encerram o acompanhamento (mesma lista da tela de spares). */
+export const CLOSED_SPARE_STATUSES = ['FINALIZADO', 'ENCERRADO', 'FECHADO', 'CANCELADO'] as const;
+/** Status de rastreio que não mudam mais; não vale reconsultar. */
+export const FINAL_TRACKING_STATUSES = ['Entregue', 'Rastreio expirado'];
+export const UNAVAILABLE_STATUS = 'Rastreio indisponível';
+/** Intervalo mínimo entre duas consultas do mesmo código. */
+export const REFRESH_AFTER_MS = 6 * 60 * 60 * 1000;
+
 const STATUS_LABEL: Record<string, string> = {
   pending: 'Aguardando informações',
   notfound: 'Não encontrado',
@@ -28,6 +36,11 @@ const STATUS_LABEL: Record<string, string> = {
   expired: 'Rastreio expirado',
 };
 
+const CARRIER_LABEL: Record<string, string> = {
+  'brazil-correios': 'Correios',
+  'spx-br': 'Shopee Express',
+};
+
 const ERROR_MESSAGE: Record<number, string> = {
   401: 'A chave da TrackingMore é inválida.',
   429: 'Muitas consultas à TrackingMore em sequência; tente de novo em instantes.',
@@ -37,8 +50,39 @@ const ERROR_MESSAGE: Record<number, string> = {
   4190: 'A cota do plano da TrackingMore acabou.',
 };
 
+export class TrackingApiError extends Error {
+  // Campo declarado à parte: `node --experimental-strip-types` (usado nos
+  // testes) não aceita parameter properties no construtor.
+  readonly code: number;
+
+  constructor(code: number, message: string) {
+    super(message);
+    this.name = 'TrackingApiError';
+    this.code = code;
+  }
+}
+
+/** Erro da conta, não do código: vale para qualquer consulta, então a rodada deve parar. */
+export function isAccountError(code: number) {
+  return code === 401 || code === 429 || code === 4190;
+}
+
 export function normalizeTrackingCode(value: string) {
   return value.replace(/\s+/g, '').toUpperCase();
+}
+
+export function trackingKey(ticketKey: string, trackingCode: string) {
+  return `${ticketKey.trim().toUpperCase()}|${normalizeTrackingCode(trackingCode)}`;
+}
+
+export function carrierLabel(code: string | null | undefined) {
+  if (!code) return '';
+  return CARRIER_LABEL[code] ?? code;
+}
+
+/** Só courier_codes gravados pela integração servem de atalho; texto livre não. */
+export function looksLikeCourierCode(value: string | null | undefined): value is string {
+  return Boolean(value && /^[a-z0-9][a-z0-9-]*$/.test(value));
 }
 
 // Padrão S10 da UPU usado pelos Correios em envios nacionais: 2 letras, 9
@@ -82,6 +126,35 @@ export function toSnapshot(item: Record<string, unknown>, courier: string): Trac
     latestEvent: typeof item.latest_event === 'string' && item.latest_event.trim() ? item.latest_event.trim() : null,
     expectedAt: dateOnly(item.scheduled_delivery_date),
   };
+}
+
+type SpareRef = { ticketKey: string; trackingCode: string | null; status: string };
+type TrackedRef = { ticketKey: string; trackingCode: string; status: string; carrier: string | null; updatedAt: string };
+
+/**
+ * Quais spares consultar nesta rodada: ativos, com código, uma vez por chamado +
+ * código, sem os já entregues e sem os consultados há menos de REFRESH_AFTER_MS.
+ * Nunca consultados primeiro, depois os mais antigos.
+ */
+export function pickDueTrackings<T extends SpareRef>(spareRows: T[], tracked: TrackedRef[], now: number, limit: number) {
+  const byKey = new Map(tracked.map((row) => [trackingKey(row.ticketKey, row.trackingCode), row]));
+  const closed: readonly string[] = CLOSED_SPARE_STATUSES;
+  const seen = new Set<string>();
+  const due: Array<{ spare: T; courierHint: string | null; lastUpdate: number }> = [];
+  for (const spare of spareRows) {
+    const code = normalizeTrackingCode(spare.trackingCode ?? '');
+    if (!code || closed.includes(spare.status.trim().toUpperCase())) continue;
+    const key = trackingKey(spare.ticketKey, code);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const row = byKey.get(key);
+    if (row && FINAL_TRACKING_STATUSES.includes(row.status)) continue;
+    const lastUpdate = row ? Date.parse(row.updatedAt) || 0 : 0;
+    if (row && now - lastUpdate < REFRESH_AFTER_MS) continue;
+    due.push({ spare, courierHint: looksLikeCourierCode(row?.carrier) ? row.carrier : null, lastUpdate });
+  }
+  due.sort((a, b) => a.lastUpdate - b.lastUpdate);
+  return { batch: due.slice(0, limit), remaining: Math.max(0, due.length - limit) };
 }
 
 function dateOnly(value: unknown) {
