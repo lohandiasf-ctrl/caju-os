@@ -59,6 +59,7 @@ import { BulletinBoard } from "@/components/bulletin-board";
 import { FeedbackBoard } from "@/components/feedback-board";
 import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
+import { BulkScheduleDialog } from "@/components/bulk-schedule-dialog";
 import { notifyDesktop } from "@/lib/desktop-notifications";
 import {
   JiraTicketDetails,
@@ -347,6 +348,10 @@ export default function Home() {
   const seenOperationalAlerts = useRef<Set<string>>(new Set());
   const [removedTicketAlerts, setRemovedTicketAlerts] = useState<string[]>([]);
   const [newTicketAlerts, setNewTicketAlerts] = useState<string[]>([]);
+  const [batchScheduleKeys, setBatchScheduleKeys] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [batchScheduleOpen, setBatchScheduleOpen] = useState(false);
 
   useEffect(() => {
     const syncView = () => {
@@ -383,6 +388,34 @@ export default function Home() {
       );
     });
   }, [activeView, archivedKeys, query, statusFilter, ticketDate, tickets]);
+  const selectableScheduleTickets = useMemo(
+    () => filtered.filter((ticket) => ticket.status === "Pendente de agendamento"),
+    [filtered],
+  );
+  const batchScheduleTickets = useMemo(
+    () => tickets.filter((ticket) => batchScheduleKeys.has(ticket.id) && ticket.status === "Pendente de agendamento"),
+    [batchScheduleKeys, tickets],
+  );
+
+  function toggleBatchScheduleTicket(ticketKey: string) {
+    setBatchScheduleKeys((current) => {
+      const next = new Set(current);
+      if (next.has(ticketKey)) next.delete(ticketKey);
+      else next.add(ticketKey);
+      return next;
+    });
+  }
+
+  function toggleAllVisibleScheduleTickets() {
+    setBatchScheduleKeys((current) => {
+      const visibleKeys = selectableScheduleTickets.map((ticket) => ticket.id);
+      const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => current.has(key));
+      const next = new Set(current);
+      if (allVisibleSelected) visibleKeys.forEach((key) => next.delete(key));
+      else visibleKeys.forEach((key) => next.add(key));
+      return next;
+    });
+  }
   const visibleKanbanColumns = useMemo(() => {
     if (statusFilter !== "Todos") return [statusFilter];
     if (jiraFilterPreset === "operational") return columns;
@@ -1205,6 +1238,23 @@ export default function Home() {
                       : `${filtered.length} chamados exibidos${activeView === "tickets" && ticketDate ? ` em ${formatDay(ticketDate)}` : ""}`}
                   </p>
                 </div>
+                {selectableScheduleTickets.length > 0 && (
+                  <Button
+                    variant="outline"
+                    className="h-9"
+                    aria-pressed={selectableScheduleTickets.every((ticket) => batchScheduleKeys.has(ticket.id))}
+                    onClick={toggleAllVisibleScheduleTickets}
+                  >
+                    {selectableScheduleTickets.every((ticket) => batchScheduleKeys.has(ticket.id))
+                      ? "Limpar seleção"
+                      : "Selecionar para agendar"}
+                  </Button>
+                )}
+                {batchScheduleTickets.length > 0 && (
+                  <Button className="h-9" onClick={() => setBatchScheduleOpen(true)}>
+                    <CalendarClock /> Agendar {batchScheduleTickets.length}
+                  </Button>
+                )}
                 <Button
                   variant={showFilters ? "secondary" : "outline"}
                   className="h-9"
@@ -1316,6 +1366,9 @@ export default function Home() {
                                 key={ticket.id}
                                 ticket={ticket}
                                 onOpen={() => void openTicket(ticket)}
+                                selectable={ticket.status === "Pendente de agendamento"}
+                                selected={batchScheduleKeys.has(ticket.id)}
+                                onToggleSelect={() => toggleBatchScheduleTicket(ticket.id)}
                               />
                             ))}
                             {!items.length && (
@@ -1332,26 +1385,18 @@ export default function Home() {
               ) : (
                 <div className="surface-panel mt-4 overflow-hidden rounded-2xl">
                   {filtered.map((ticket) => (
-                    <button
-                      type="button"
-                      onClick={() => void openTicket(ticket)}
+                    <div
                       key={ticket.id}
-                      className="grid w-full gap-3 border-b border-border p-4 text-left transition hover:bg-white/[.035] last:border-0 lg:grid-cols-[100px_minmax(0,1fr)_140px_120px] lg:items-center"
+                      className={`grid w-full gap-3 border-b border-border p-2 text-left last:border-0 lg:grid-cols-[36px_100px_minmax(0,1fr)_140px_120px] lg:items-center ${batchScheduleKeys.has(ticket.id) ? "bg-violet-400/8" : ""}`}
                     >
-                      <span className="font-mono text-xs font-bold text-primary">
-                        {ticket.id}
-                      </span>
-                      <div>
-                        <p className="text-sm font-semibold">{ticket.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {ticket.store} · {ticket.city}
-                        </p>
-                      </div>
-                      <Badge variant="outline">{ticket.status}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {ticket.technician || "Não atribuído"}
-                      </span>
-                    </button>
+                      {ticket.status === "Pendente de agendamento" ? <label className="grid min-h-11 place-items-center rounded-lg hover:bg-violet-400/10"><input type="checkbox" checked={batchScheduleKeys.has(ticket.id)} onChange={() => toggleBatchScheduleTicket(ticket.id)} aria-label={`Selecionar ${ticket.id} para agendamento em lote`} className="size-4 accent-violet-400" /></label> : <span aria-hidden="true" />}
+                      <button type="button" onClick={() => void openTicket(ticket)} className="col-span-1 grid min-h-11 gap-3 rounded-lg p-2 text-left transition hover:bg-white/[.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:col-span-4 lg:grid-cols-[100px_minmax(0,1fr)_140px_120px] lg:items-center">
+                        <span className="font-mono text-xs font-bold text-primary">{ticket.id}</span>
+                        <div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div>
+                        <Badge variant="outline">{ticket.status}</Badge>
+                        <span className="text-xs text-muted-foreground">{ticket.technician || "Não atribuído"}</span>
+                      </button>
+                    </div>
                   ))}
                   {!filtered.length && (
                     <EmptyState label="Nenhum chamado encontrado" />
@@ -1681,6 +1726,21 @@ export default function Home() {
           onSaved={(ticketKey) => void refreshTicketDetails(ticketKey)}
         />
       )}
+      <BulkScheduleDialog
+        open={batchScheduleOpen}
+        tickets={batchScheduleTickets}
+        user={user}
+        onOpenChange={setBatchScheduleOpen}
+        onScheduled={(keys, scheduledAt) => {
+          const when = new Date(scheduledAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+          setTickets((current) => current.map((ticket) => keys.includes(ticket.id) ? { ...ticket, status: "Agendado", rawStatus: "Agendado", scheduledAt, schedule: when } : ticket));
+          setBatchScheduleKeys((current) => {
+            const next = new Set(current);
+            keys.forEach((key) => next.delete(key));
+            return next;
+          });
+        }}
+      />
     </main>
   );
 }
@@ -1688,16 +1748,20 @@ export default function Home() {
 function TicketCard({
   ticket,
   onOpen,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   ticket: Ticket;
   onOpen: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full rounded-xl border border-white/[.07] bg-black/15 p-4 text-left shadow-[0_14px_32px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 hover:border-primary/40 hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-    >
+    <article className={`relative rounded-xl border bg-black/15 shadow-[0_14px_32px_rgba(0,0,0,.12)] transition ${selected ? "border-violet-300/60 ring-1 ring-violet-400/30" : "border-white/[.07] hover:border-primary/40"}`}>
+      {selectable && <label className="absolute right-3 top-3 z-10 grid min-h-11 min-w-11 place-items-center rounded-lg bg-background/70 backdrop-blur hover:bg-violet-400/15"><input type="checkbox" checked={Boolean(selected)} onChange={onToggleSelect} aria-label={`Selecionar ${ticket.id} para agendamento em lote`} className="size-4 accent-violet-400" /></label>}
+      <button type="button" onClick={onOpen} className="w-full rounded-xl p-4 text-left transition hover:-translate-y-0.5 hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
       <div className="flex justify-between gap-3">
         <span className="font-mono text-xs font-bold text-primary">
           {ticket.id}
@@ -1746,7 +1810,8 @@ function TicketCard({
           <span className="truncate text-xs font-semibold">{ticket.technician}</span>
         )}
       </div>
-    </button>
+      </button>
+    </article>
   );
 }
 

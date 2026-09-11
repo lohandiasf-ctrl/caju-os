@@ -11,6 +11,37 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Agendamento em lote de chamados no Jira — *(este trabalho)*
+
+Chamados em **Pendente de agendamento** agora podem ser selecionados (checkbox
+no card do Kanban e na lista) e agendados de uma vez: mesmo técnico e mesma
+data/hora aplicados a todas as FSAs selecionadas.
+
+- `app/api/jira/issues/batch-schedule/route.ts` (nova): `POST` com `keys`,
+  `technicianData` e `scheduledDateTime`. Perfis `gerencia`, `coordenador`,
+  `analista` e `n1`; máximo de 40 FSAs por chamada. Para cada FSA, em
+  sequência: snapshot em `ticket_snapshots`, `updateJiraIssue` (técnico +
+  data), `transitionJiraIssue(..., 'scheduled')` e registro em
+  `operational_audit` com antes/depois. Falha em uma FSA não interrompe as
+  outras — a resposta traz o resultado por chamado.
+- `components/bulk-schedule-dialog.tsx` (novo): busca de técnico em
+  `/api/technicians`, texto editável dos dados enviados ao Jira, data/hora
+  (convertida para `-0300`) e lista de resultado por FSA.
+- `app/page.tsx`: seleção por chamado, "Selecionar para agendar" para os
+  visíveis, botão "Agendar N" e atualização local para "Agendado" nas FSAs
+  que tiveram sucesso.
+
+Respeita a regra 2 de `WORKFLOW_RULES.md` (técnico + data preenchidos antes
+da transição para Agendado).
+
+**Pendente:**
+- Não testado contra o Jira real — validar com 2–3 FSAs antes de usar em
+  volume.
+- Cada FSA faz ~6 chamadas ao Jira; um lote de 40 passa de 200 subrequests
+  numa única requisição do Worker. Confirmar o limite do plano Cloudflare ou
+  reduzir `MAX_BATCH_SIZE`.
+- Sem teste automatizado para a rota.
+
 ### Sincronização de spares importava metade da planilha em silêncio — *(este trabalho)*
 
 A FSA-132148 estava na linha 381 da planilha e não aparecia no sistema.
