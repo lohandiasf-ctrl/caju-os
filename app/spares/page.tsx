@@ -258,6 +258,12 @@ export default function Page() {
           pushTargets?: number;
           pull?: boolean;
         };
+        tracking?: {
+          configured: boolean;
+          status?: string;
+          expectedAt?: string | null;
+          error?: string;
+        } | null;
       };
       if (!response.ok)
         throw new Error(body.error || 'Não foi possível cadastrar o spare.');
@@ -268,10 +274,20 @@ export default function Page() {
         pushTargets: Number(body.sync?.pushTargets ?? 0),
         pull: Boolean(body.sync?.pull),
       });
+      const tracking = body.tracking;
+      const trackingText = !tracking
+        ? ''
+        : !tracking.configured
+          ? ' A consulta automática de rastreio ainda não foi configurada.'
+          : tracking.error
+            ? ` Rastreio não consultado: ${tracking.error}`
+            : ` Rastreio: ${tracking.status}${tracking.expectedAt ? `, previsão ${tracking.expectedAt.split('-').reverse().join('/')}` : ''}.`;
       setNotice(
-        synced
-          ? 'Spare cadastrado e enviado para a planilha.'
-          : 'Spare cadastrado no sistema. A sincronização ficará pendente até o conector da planilha ser configurado.',
+        `${
+          synced
+            ? 'Spare cadastrado e enviado para a planilha.'
+            : 'Spare cadastrado no sistema. A sincronização ficará pendente até o conector da planilha ser configurado.'
+        }${trackingText}`,
       );
       setForm(EMPTY_FORM);
       setAttempt((value) => value + 1);

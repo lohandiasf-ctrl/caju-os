@@ -20,6 +20,12 @@ pós-migração Cloudflare.
 | Fullscreen não funciona em mobile | **Pendente** | `setFullscreen` do Tauri; comportamento inconsistente em WebView mobile |
 | Quadrado branco no WebView durante carga | **Resolvido** | tela de loading da marca substituiu o vazio (`components/caju-loading.tsx`) |
 
+## Spares e rastreio
+
+| Item | Estado | Nota |
+|---|---|---|
+| Diálogo do chamado diz "Rastreio salvo e monitorado", mas nada consulta esse rastreio | **Pendente** | só o cadastro de spare consulta a TrackingMore (`lib/server/trackingmore.ts`); o salvamento manual em "Rastreios e entregas" e a atualização periódica ainda não chamam a API |
+
 ## Jira
 
 | Item | Estado | Nota |

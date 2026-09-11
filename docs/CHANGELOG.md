@@ -11,6 +11,35 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Rastreio automático de spares pela TrackingMore — *(este trabalho, branch `claude/rastreio-trackingmore`)*
+
+Pedido do usuário: ao cadastrar um spare com código de rastreio, consultar o
+status e o prazo automaticamente, sem redigitar o código. Serviço escolhido:
+TrackingMore (único com API confirmada para Correios e Shopee Express Brasil).
+
+- `lib/tracking.ts` (puro, com `tests/tracking.test.ts`): código dos Correios
+  reconhecido pelo padrão `AA123456789BR` sem gastar chamada; demais códigos
+  (ex.: Shopee Express, `spx-br`) vão para `POST /couriers/detect`. Traduz o
+  `delivery_status` para português e extrai `scheduled_delivery_date`.
+- `lib/server/trackingmore.ts`: API v4 (`Tracking-Api-Key`), `POST
+  /trackings/create` — que já devolve o resultado — e, se o código já existia
+  lá (4101), `GET /trackings/get`. Timeout de 10 s; sem chave, não faz nada.
+- `POST /api/spares`: depois de gravar o spare, consulta o código e grava
+  transportadora, status e previsão em `shipment_tracking` — a mesma tabela
+  que "Rastreios e entregas" do chamado já exibe; **sem migration**. Preenche
+  a "Previsão de entrega" do spare quando estiver vazia. Falha na consulta não
+  desfaz o cadastro; o aviso da tela diz o que aconteceu.
+
+**Pendente:**
+- **Ação humana:** criar a conta na TrackingMore, gerar a API key e cadastrar
+  como secret `TRACKINGMORE_API_KEY` no Worker `caju-os`. Sem ela, o
+  cadastro segue igual e a tela avisa que a consulta não está configurada.
+- Não exercitado contra a API real (sem chave durante o desenvolvimento). O
+  campo `data` da resposta é tratado como objeto ou lista.
+- Só o cadastro consulta. Rastreios digitados no diálogo do chamado e a
+  atualização periódica dos spares em trânsito ficaram de fora (decisão
+  pendente do usuário) — ver `docs/KNOWN_BUGS.md`.
+
 ### Deploy automático a cada push na main — *(este trabalho)*
 
 Pedido do usuário: publicar produção automaticamente. O Worker `caju-os` já

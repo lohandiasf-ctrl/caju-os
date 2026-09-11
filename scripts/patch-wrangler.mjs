@@ -22,6 +22,7 @@ const SECRET_ONLY = [
   'SPARES_SYNC_PUSH_URL_ORIGINAL',
   'SPARES_SYNC_PULL_URL',
   'SPARES_SYNC_TOKEN',
+  'TRACKINGMORE_API_KEY',
 ];
 
 const cfg = loadCfConfig();
