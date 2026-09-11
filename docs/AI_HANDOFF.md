@@ -111,8 +111,8 @@ npm run deploy          # patch-wrangler + wrangler deploy
 npm run db:migrate:remote   # se houver migration nova (pede confirmação)
 ```
 
-**Deploy automático:** todo push na `main` publica produção via GitHub
-Actions (`.github/workflows/deploy.yml`). Deploy manual continua só com pedido
+**Deploy automático:** todo push na `main` publica produção via Cloudflare
+Workers Builds (ver `docs/DEPLOYMENT.md`). Deploy manual continua só com pedido
 explícito do usuário. O deploy automático não aplica migrations.
 
 ## Integrações externas

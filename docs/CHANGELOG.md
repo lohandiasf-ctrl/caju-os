@@ -13,23 +13,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ### Deploy automático a cada push na main — *(este trabalho)*
 
-Pedido do usuário: publicar produção automaticamente. `.github/workflows/deploy.yml`
-roda `npm run release` (testes, tsc, build, deploy) a cada push na `main` e
-confere se `operacoes.cajutech.net` responde 200. O `.cloudflare.json` é
-montado no CI a partir de secrets/variables do GitHub; nenhum script de deploy
-mudou. Regras atualizadas em `CLAUDE.md`, `AGENTS.md`,
-`docs/WORKFLOW_RULES.md` (15 e 17), `docs/AI_HANDOFF.md` e
-`docs/DEPLOYMENT.md`: push na `main` agora é deploy de produção.
+Pedido do usuário: publicar produção automaticamente. O Worker `caju-os` já
+estava ligado ao repositório pelo Cloudflare Workers Builds, mas o build
+falhava: o deploy command era `npx wrangler deploy --config
+dist/server/wrangler.json`, que pula o `patch-wrangler.mjs` (subiria com o D1
+placeholder e o nome `sites-project`). O `1442228` tinha criado um workflow
+no GitHub Actions para o mesmo fim; foi removido para não haver dois deploys e
+porque exigiria um token de API mantido à mão.
+
+- `scripts/cf-config.mjs`: sem `.cloudflare.json`, lê os valores das build
+  variables — todas obrigatórias, para o deploy nunca derrubar o domínio nem
+  apagar as vars do Jira. Teste em `tests/cf-config.test.ts`.
+- Workers Builds (painel): build command `npm test && npx tsc --noEmit && npm
+  run build`, deploy command `npm run deploy`, 7 build variables cadastradas,
+  builds de outras branches desligados.
+- Regras atualizadas em `CLAUDE.md`, `AGENTS.md`, `docs/WORKFLOW_RULES.md`
+  (15 e 17), `docs/AI_HANDOFF.md` e `docs/DEPLOYMENT.md`: push na `main` é
+  deploy de produção.
 
 **Pendente:**
-- **Decisão/ação humana:** cadastrar no GitHub os secrets
-  `CLOUDFLARE_API_TOKEN` e `CLOUDFLARE_ACCOUNT_ID` e as variables listadas em
-  `docs/DEPLOYMENT.md`. Até lá, cada push na `main` gera um run que falha no
-  primeiro passo, sem publicar nada.
-- Os commits `7830ac1` e `9a4665b` (ações em lote) ainda não estão em
-  produção: o deploy local foi bloqueado pelo modo automático. Publicam no
-  primeiro run com a configuração completa (ou via "Run workflow").
 - Migrations continuam manuais (`npm run db:migrate:remote`).
+- As variables `D1_DATABASE_NAME` e `JIRA_BASE_URL` cadastradas no GitHub
+  (Settings → Secrets and variables → Actions) ficaram sem uso; podem ser
+  apagadas.
 
 ### Ações em lote nos chamados: agendar, técnico em campo, copiar — *(este trabalho)*
 

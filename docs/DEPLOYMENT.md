@@ -82,34 +82,27 @@ O que `npm run deploy` faz:
 
 Sem `custom_domain`, o deploy publica só em `caju-os.<conta>.workers.dev`.
 
-## Deploy automático (GitHub Actions)
+## Deploy automático (Cloudflare Workers Builds)
 
-Desde 2026-09-11, todo push na `main` dispara `.github/workflows/deploy.yml`,
-que roda `npm run release` num runner Ubuntu: testes, `tsc`, build e deploy.
-Se um passo falhar, nada é publicado. No fim, o workflow confere se
-`https://operacoes.cajutech.net/` responde 200. Também dá para disparar à mão
-em Actions → "Deploy produção" → Run workflow.
+Desde 2026-09-11, o Worker `caju-os` está ligado ao repositório
+`lohandiasf-ctrl/caju-os` pelo Workers Builds (painel → Workers & Pages →
+caju-os → Settings → Builds). Todo push na `main` roda, na Cloudflare:
 
-O workflow monta o `.cloudflare.json` a partir da configuração do repositório
-no GitHub (Settings → Secrets and variables → Actions):
+- Build command: `npm test && npx tsc --noEmit && npm run build`
+- Deploy command: `npm run deploy` (`patch-wrangler.mjs` + `wrangler deploy`)
 
-| Tipo | Nome | Valor |
-|---|---|---|
-| Secret | `CLOUDFLARE_API_TOKEN` | token criado com o template "Edit Cloudflare Workers" |
-| Secret | `CLOUDFLARE_ACCOUNT_ID` | ID da conta Cloudflare |
-| Variable | `D1_DATABASE_NAME` | `caju-os-prod` |
-| Variable | `D1_DATABASE_ID` | o `d1_database_id` do `.cloudflare.json` local |
-| Variable | `CUSTOM_DOMAIN` | `operacoes.cajutech.net` |
-| Variable | `ZONE_NAME` | `cajutech.net` |
-| Variable | `JIRA_BASE_URL` | igual ao `.env.local` |
-| Variable | `JIRA_EMAIL` | igual ao `.env.local` |
-| Variable | `JIRA_PROJECT_KEY` | igual ao `.env.local` |
+Se um passo falhar, nada é publicado. A autenticação é o "caju-os build token"
+que a própria integração mantém — não há token de API para renovar à mão.
+Builds de outras branches estão desligados.
 
-Faltando qualquer item, o workflow falha no primeiro passo dizendo o que falta,
-sem publicar nada. Os secrets do Worker (`JIRA_API_TOKEN`, `CRON_SECRET`...)
-continuam na Cloudflare; o deploy não mexe neles. Se o deploy reclamar de
-permissão no domínio, acrescente ao token *Zone → DNS: Edit* para
-`cajutech.net`.
+No build não existe `.cloudflare.json`, então `scripts/cf-config.mjs` lê os
+mesmos valores das **build variables** (Settings → Builds → Variables and
+secrets): `D1_DATABASE_NAME`, `D1_DATABASE_ID`, `CUSTOM_DOMAIN`, `ZONE_NAME`,
+`JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_PROJECT_KEY`. Todas são obrigatórias:
+faltando uma, o deploy para — sem o domínio a rota de `operacoes.cajutech.net`
+cairia, e sem as vars do Jira o `wrangler deploy` as apagaria do Worker. Os
+secrets do Worker (`JIRA_API_TOKEN`, `CRON_SECRET`...) não passam pelo build e
+não são alterados.
 
 O deploy automático **não** aplica migrations. Código que depende de migration
 nova só pode chegar na `main` depois de `npm run db:migrate:remote`.

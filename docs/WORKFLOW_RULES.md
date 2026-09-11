@@ -50,9 +50,9 @@ pare e confirme com o usuário.
 
 14. **Produção só recebe build testado** (`npm test && npx tsc --noEmit &&
     npm run build` passando).
-15. **Push na `main` = deploy de produção.** O workflow
-    `.github/workflows/deploy.yml` roda `npm run release` (testes, tsc, build
-    e deploy) a cada push na `main` — só envie para lá o que está pronto.
+15. **Push na `main` = deploy de produção.** O Cloudflare Workers Builds
+    roda testes, tsc, build e deploy a cada push na `main` — só envie para
+    lá o que está pronto.
     Deploy manual (`npm run deploy`, `npm run release`, `wrangler deploy` e
     variantes) continua exigindo pedido explícito do usuário.
 16. Não fazer deploy que inclua `custom_domain` novo sem o usuário saber que

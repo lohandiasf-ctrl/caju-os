@@ -39,8 +39,8 @@ andamento.
   projeto.
 - Preserve o visual premium. Não simplifique em nome de FPS.
 - Antes de commitar código: `npm test`, `npx tsc --noEmit`, `npm run build`.
-- **Push na `main` publica produção** (GitHub Actions,
-  `.github/workflows/deploy.yml`, desde 2026-09-11). Só envie para a `main` o
+- **Push na `main` publica produção** (Cloudflare Workers Builds, desde
+  2026-09-11 — ver `docs/DEPLOYMENT.md`). Só envie para a `main` o
   que passou em teste/tsc/build; trabalho em andamento fica na branch
   `claude/`. Deploy manual (`npm run deploy`/`release`) continua exigindo
   pedido explícito.

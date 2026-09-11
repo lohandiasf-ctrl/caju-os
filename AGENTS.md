@@ -49,9 +49,9 @@ em andamento e **preserve o trabalho do usuário**.
   versão, ícone, permissões ou comandos Rust mudarem.
 - Para mudanças de código: rode `npm test`, `npx tsc --noEmit` e
   `npm run build`. Se não passar, não commite.
-- **Push na `main` publica produção.** Desde 2026-09-11, o GitHub Actions
-  (`.github/workflows/deploy.yml`) roda `npm run release` a cada push na
-  `main`. Só envie para a `main` o que já está testado; trabalho em andamento
+- **Push na `main` publica produção.** Desde 2026-09-11, o Cloudflare
+  Workers Builds roda testes, `tsc`, build e deploy a cada push na `main`
+  (ver `docs/DEPLOYMENT.md`). Só envie para a `main` o que já está testado; trabalho em andamento
   fica na branch `codex/`. Deploy manual (`npm run deploy` / `release` /
   `wrangler deploy`) continua exigindo pedido explícito do usuário.
 - Não declare "tempo real" o que depende de polling.
