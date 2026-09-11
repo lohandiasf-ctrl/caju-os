@@ -11,6 +11,45 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Ações em lote nos chamados: agendar, técnico em campo, copiar — *(este trabalho)*
+
+Generaliza o agendamento em lote do `7830ac1` (ainda não publicado) numa
+seleção de chamados com barra de ações.
+
+- Qualquer chamado do Kanban ou da lista pode ser selecionado: caixa no canto
+  do card, "selecionar todos" no cabeçalho de cada coluna e no topo da lista.
+  A caixa não cobre mais o selo de prioridade (no `7830ac1` ela ficava por
+  cima dele).
+- Barra flutuante com a seleção: **Copiar** (só as FSAs / resumo para
+  mensagem / planilha em colunas), **Agendar N** (só os que estão em Pendente
+  de agendamento, mesmo técnico e horário), **Técnico em campo N** (só os
+  Agendados, com confirmação) e limpar. Selecionados fora da etapa exigida
+  ficam de fora e o diálogo diz quantos.
+- `app/api/jira/issues/batch/route.ts` substitui `batch-schedule`:
+  `POST { status: 'scheduled' | 'in_service', keys, technicianData?, scheduledDateTime? }`.
+  Confere no servidor a etapa atual de cada FSA antes de transicionar
+  (WORKFLOW_RULES, regra 2), grava snapshot e auditoria por chamado, processa
+  4 por vez e, com o Jira fora do ar, enfileira em `jira_sync_jobs`
+  (regra 5) — só depois de a etapa ter sido conferida.
+- `lib/bulk-actions.ts`: regras puras (elegibilidade por etapa, papéis que
+  podem transicionar, formatos do clipboard), cobertas por
+  `tests/bulk-actions.test.ts`.
+- `lib/clipboard.ts`: `copyToClipboard` saiu de `app/page.tsx` para ser
+  reutilizado pela barra.
+- Depois da ação, o cache de 5 min da fila (`caju-jira-issues-cache:*`) é
+  invalidado, para um recarregamento não trazer a etapa antiga de volta. Os
+  chamados alterados continuam selecionados (dá para agendar e logo em
+  seguida copiar o resumo para mandar ao técnico).
+
+**Pendente:**
+- Não testado contra o Jira real — validar cada ação com 2–3 FSAs antes de
+  usar em volume.
+- Limite de subrequests do Worker por requisição ainda não confirmado: são
+  ~6 chamadas ao Jira por FSA, até 40 FSAs por lote.
+- Outras transições em lote (Direcionado, Aguardando spare, validação) ficaram
+  de fora de propósito: têm requisitos próprios (spare, evidências, valores)
+  que precisam de regra definida antes.
+
 ### Agendamento em lote de chamados no Jira — *(este trabalho)*
 
 Chamados em **Pendente de agendamento** agora podem ser selecionados (checkbox
