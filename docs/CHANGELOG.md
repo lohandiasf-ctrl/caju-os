@@ -9,6 +9,35 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-12
+
+### APK Android para teste em campo — *(este trabalho, branch `claude/sistema-apk-testes-eot4ah`)*
+
+Pedido do usuário: transformar o sistema num APK para testar. Feito como shell
+WebView em `android/`, na mesma linha do app desktop (Tauri), que também só
+abre `https://operacoes.cajutech.net` — o APK não empacota o frontend, então
+acompanha a produção sem novo build a cada deploy.
+
+- `android/`: projeto Gradle (Kotlin, minSdk 26, targetSdk 35, applicationId
+  `net.cajutech.operacoes`, mesmo do desktop), com `MainActivity` cuidando do
+  que o WebView não faz sozinho: upload de foto com captura pela câmera,
+  permissões de câmera/microfone/localização, tela cheia de vídeo, botão
+  voltar navegando no histórico, pull-to-refresh, tela de "sem conexão" e link
+  externo abrindo no app do sistema.
+- Ícones reaproveitados de `src-tauri/icons/android/`.
+- `.github/workflows/android-apk.yml`: build manual pelo Actions, APK sai como
+  artifact `caju-os-apk`.
+- `android/README.md`: build, instalação no celular e limites.
+
+Verificado: `./gradlew assembleRelease` gera o APK (2,9 MB, versionName
+0.1.15). Não foi instalado em aparelho — sem device nesta sessão.
+
+**Pendente:** o release está assinado com a chave de debug (serve para teste,
+não para Play Store); `versionCode` fixo em 1, subir a cada APK distribuído;
+sem push nativo (notificação só com o app aberto).
+
+---
+
 ## 2026-09-11
 
 ### Kanban: as quatro etapas que a operação acompanha na mesma tela — *(este trabalho, branch `claude/kanban-quatro-colunas`)*
