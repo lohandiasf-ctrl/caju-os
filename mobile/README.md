@@ -49,6 +49,10 @@ APK em `mobile/android/app/build/outputs/apk/release/app-release.apk`.
 `arm64-v8a` cobre praticamente todo celular atual e deixa o APK ~4x menor.
 Para um APK universal, rode sem o `-PreactNativeArchitectures`.
 
+O release usa R8 (`enableProguardInReleaseBuilds`) e remoção de recursos não
+usados, configurados via `expo-build-properties` no `app.json` — o
+`android/gradle.properties` é gerado, então não adianta editar lá.
+
 Pelo CI: workflow `APK Android`, execução manual em Actions, artifact
 `caju-os-apk`.
 
@@ -76,8 +80,8 @@ release, guarde fora do Git e ajuste `signingConfigs` no
   nativo, e o mapa nativo exigiria chave do Google Maps, que o projeto não tem.
   A tela mostra a cobertura por cidade e abre o app de mapas do aparelho. Com
   uma chave, dá para trocar por `react-native-maps`.
-- **Sem push nativo ainda.** `expo-notifications` está instalado, mas não há
-  registro de token nem envio pelo servidor.
+- **Sem push nativo ainda.** Nada de notificação com o app fechado; quando for
+  implementado, entram `expo-notifications` e o envio no servidor.
 - **Financeiro sem gráfico de 6 meses** e sem edição da regra de repasse — as
   duas coisas continuam na web.
 - **Sem modo offline.** Toda tela depende da API; sem rede, mostra erro.

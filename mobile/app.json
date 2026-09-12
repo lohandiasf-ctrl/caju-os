@@ -22,10 +22,8 @@
       },
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "POST_NOTIFICATIONS"
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
       ]
     },
     "ios": {
@@ -34,10 +32,24 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store",
-      ["expo-image-picker", { "cameraPermission": "O Caju OS usa a câmera para registrar as fotos de evidência do atendimento." }],
-      ["expo-location", { "locationAlwaysAndWhenInUsePermission": "O Caju OS usa sua localização para registrar o atendimento em campo." }]
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "O Caju OS usa a câmera para registrar as fotos de evidência do atendimento."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ]
     ],
-    "experiments": { "typedRoutes": true }
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }
