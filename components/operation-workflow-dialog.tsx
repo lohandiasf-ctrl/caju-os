@@ -3,15 +3,12 @@ import { carrierLabel } from "@/lib/tracking";
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  BookOpen,
-  Brain,
   CalendarClock,
   CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
   History,
   Loader2,
-  MapPin,
   PackageOpen,
   Save,
   ShieldCheck,
@@ -32,8 +29,6 @@ import { Input } from "@/components/ui/input";
 import { CajuLoading } from "@/components/caju-loading";
 import {
   delegatedTaskState,
-  knowledgeArticles,
-  recommendTechnicians,
   type DispatchTechnician,
 } from "@/lib/operational-intelligence";
 
@@ -552,19 +547,6 @@ export function OperationWorkflowDialog({
   const selectedTechnician = technicians.find(
     (tech) => tech.id === Number(form.technicianId),
   );
-  const recommendedTechnicians = recommendTechnicians(technicians, {
-    city: String(form.city ?? ticket.city ?? ""),
-    state: String(form.state ?? ""),
-    category: String(form.category ?? ticket.title ?? ""),
-    priority:
-      margin > 0 && margin >= Number(form.clientValueCents ?? 0) * 0.35
-        ? "alta"
-        : margin <= 0
-          ? "baixa"
-          : "normal",
-    marginCents: margin,
-  }).slice(0, 3);
-  const articles = knowledgeArticles(String(form.category ?? ""), ticket.title);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[92vh] flex-col overflow-hidden sm:max-w-4xl">
@@ -669,83 +651,7 @@ export function OperationWorkflowDialog({
                 }).format(margin / 100)}
               </output>
             </section>
-            <Section icon={Brain} title="Central inteligente do chamado">
-              <p className="text-xs text-muted-foreground">
-                O sistema calcula automaticamente o melhor técnico usando distância, cidade/região, disponibilidade, especialidade, histórico de desempenho, ferramentas necessárias, custo de deslocamento, prioridade e lucro.
-              </p>
-              <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Melhor técnico calculado
-                    </h4>
-                    {selectedTechnician && (
-                      <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-primary">
-                        Selecionado: {selectedTechnician.name}
-                      </span>
-                    )}
-                  </div>
-                  {recommendedTechnicians.map((item, index) => (
-                    <button
-                      key={item.tech.id}
-                      type="button"
-                      onClick={() => {
-                        set("technicianId", item.tech.id);
-                        setTechnicianQuery(item.tech.name);
-                      }}
-                      className="w-full rounded-xl border border-border bg-background/45 p-3 text-left transition hover:border-primary/50 hover:bg-primary/5"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold">
-                            {index === 0 ? "⭐ " : ""}
-                            {item.tech.name}
-                          </p>
-                          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <MapPin className="size-3.5" />
-                            {item.tech.city}/{item.tech.state}
-                            {item.tech.status ? ` · ${item.tech.status}` : ""}
-                          </p>
-                        </div>
-                        <span className="rounded-full bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">
-                          {item.score}/100
-                        </span>
-                      </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {item.reasons.join(" · ")}
-                      </p>
-                    </button>
-                  ))}
-                  {!recommendedTechnicians.length && (
-                    <p className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground">
-                      Cadastre/importe técnicos para ativar a recomendação automática.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                    Artigos e checklists sugeridos
-                  </h4>
-                  {articles.map((article) => (
-                    <details
-                      key={article.title}
-                      className="rounded-xl border border-border bg-background/45 p-3"
-                    >
-                      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-bold">
-                        <BookOpen className="size-4 text-primary" />
-                        {article.title}
-                      </summary>
-                      <ul className="mt-2 space-y-1 pl-6 text-xs text-muted-foreground">
-                        {article.steps.map((step) => (
-                          <li key={step} className="list-disc">
-                            {step}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  ))}
-                </div>
-              </div>
+            <Section icon={ShieldCheck} title="Auditoria do chamado">
               <div className="mt-4 rounded-xl border border-border bg-background/35 p-3">
                 <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   <ShieldCheck className="size-4 text-primary" />

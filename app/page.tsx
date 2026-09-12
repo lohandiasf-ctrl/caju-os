@@ -55,7 +55,6 @@ import {
 import { CajuLoading } from "@/components/caju-loading";
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
-import { BulletinBoard } from "@/components/bulletin-board";
 import { FeedbackBoard } from "@/components/feedback-board";
 import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
@@ -1126,7 +1125,6 @@ export default function Home() {
               </Button>
             )}
           </div>
-          {activeView === "overview" && <BulletinBoard user={user} />}
           {activeView === "overview" && (
             <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {[

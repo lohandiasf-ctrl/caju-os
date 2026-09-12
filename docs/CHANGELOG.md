@@ -9,6 +9,39 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-12
+
+### Retirada da UI: mural da equipe e recomendacao automatica de tecnico
+
+Pedido do usuario: aposentar o "Mural da equipe" e a "Inteligencia
+operacional". Escopo escolhido: **somente a UI**. Nada foi removido do banco
+nem da camada de API.
+
+- `app/page.tsx`: o `BulletinBoard` nao e mais renderizado na visao "overview".
+  O componente `components/bulletin-board.tsx`, a rota `app/api/bilhetes` e a
+  tabela `bulletin_notes` continuam no repositorio/banco, agora sem ponto de
+  entrada na interface.
+- `components/operation-workflow-dialog.tsx`: a secao "Central inteligente do
+  chamado" perdeu a lista ranqueada de tecnicos (`recommendTechnicians`) e os
+  artigos sugeridos (`knowledgeArticles`). O que sobrou da secao e a auditoria
+  detalhada, e ela foi renomeada para "Auditoria do chamado". A atribuicao de
+  tecnico continua disponivel pelo campo de busca manual.
+- `lib/operational-intelligence.ts` permanece; o dialogo ainda usa
+  `delegatedTaskState` e o tipo `DispatchTechnician`. `recommendTechnicians`,
+  `knowledgeArticles`, `KNOWLEDGE_ARTICLES` e os helpers de score
+  (`estimatedDistanceKm`, `travelCostCents`, `matchesSpecialty`,
+  `matchesTools`) ficaram sem nenhum consumidor.
+
+Verificado: `npm test` (36/36), `npx tsc --noEmit`, `npm run build`.
+
+**Pendente:** decidir, com o usuario, o destino final do que ficou orfao — o
+componente do mural + rota + tabela, e as funcoes de recomendacao em
+`lib/operational-intelligence.ts`. Docs (`AI_HANDOFF.md`, `ARCHITECTURE.md`,
+`PRODUCT_REQUIREMENTS.md`) ainda descrevem a recomendacao automatica como ativa
+e devem ser corrigidas quando essa decisao sair.
+
+---
+
 ## 2026-09-11
 
 ### Kanban: as quatro etapas que a operação acompanha na mesma tela — *(este trabalho, branch `claude/kanban-quatro-colunas`)*
