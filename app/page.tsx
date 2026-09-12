@@ -62,6 +62,7 @@ import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
 import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
+import { openExternalUrl } from "@/lib/open-external";
 import { notifyDesktop } from "@/lib/desktop-notifications";
 import {
   JiraTicketDetails,
@@ -828,13 +829,13 @@ export default function Home() {
     if (!selected) return;
     const url =
       details?.jiraUrl || `https://delfia.atlassian.net/browse/${selected.id}`;
-    try {
-      if ("__TAURI_INTERNALS__" in window) {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("open_external_url", { url });
-      } else window.open(url, "_blank", "noopener,noreferrer");
-    } catch {
-      window.location.href = url;
+    if ((await openExternalUrl(url)) === "blocked") {
+      const copied = await copyToClipboard(url).catch(() => false);
+      setJiraError(
+        copied
+          ? "Não foi possível abrir o Jira aqui. O link foi copiado: cole no navegador."
+          : "Não foi possível abrir o Jira aqui. Abra o chamado pelo navegador.",
+      );
     }
   }
 

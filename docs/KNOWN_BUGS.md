@@ -24,6 +24,7 @@ pós-migração Cloudflare.
 
 | Item | Estado | Nota |
 |---|---|---|
+| "Abrir planilha" no app desktop abria dentro do WebView e prendia o usuário | **Resolvido (web)** | `lib/open-external.ts` nunca navega a janela atual; abrir direto pelo app ainda exige liberar o host do SharePoint em `open_external_url` (Rust) e gerar EXE novo |
 | Diálogo do chamado diz "Rastreio salvo e monitorado", mas só parte desses rastreios é consultada | **Parcial** | códigos ligados a um spare ativo são consultados pelo cron (`/api/spares/tracking`, a cada 6 h por código até "Entregue"); código digitado só no diálogo, sem spare correspondente, continua sem consulta |
 
 ## Jira

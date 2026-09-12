@@ -1,5 +1,7 @@
 'use client';
 import { carrierLabel, CLOSED_SPARE_STATUSES } from '@/lib/tracking';
+import { copyToClipboard } from '@/lib/clipboard';
+import { openExternalUrl } from '@/lib/open-external';
 import { AppNavigation } from '@/components/app-navigation';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -369,16 +371,13 @@ export default function Page() {
   }
 
   async function openWorkbook(url: string) {
-    try {
-      if ('__TAURI_INTERNALS__' in window) {
-        const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('open_external_url', { url });
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-    } catch {
-      window.location.href = url;
-    }
+    if ((await openExternalUrl(url)) === 'opened') return;
+    const copied = await copyToClipboard(url).catch(() => false);
+    setNotice(
+      copied
+        ? 'O aplicativo não abre a planilha diretamente. O link foi copiado: cole no navegador.'
+        : 'O aplicativo não abre a planilha diretamente. Abra a planilha compartilhada pelo navegador.',
+    );
   }
   function openLinkedTicket(spare: S) {
     const ticketKey = spare.fsa.trim().toUpperCase().replace(/^FSA-?/, 'FSA-');

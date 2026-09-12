@@ -11,6 +11,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### "Abrir planilha" prendia o usuário dentro do app desktop — *(este trabalho, branch `claude/abrir-planilha`)*
+
+Relato do usuário: clicar em "Abrir planilha compartilhada" no desktop abria a
+planilha dentro do WebView, em proporção estranha e sem como voltar ao sistema.
+
+Causa: `open_external_url` (Rust) só libera `*.atlassian.net` e
+`chat.whatsapp.com`. A planilha é do SharePoint, o comando recusa, e o
+`catch` das telas fazia `window.location.href = url` — trocando o Caju OS
+pela planilha na mesma janela, sem barra de endereço nem voltar.
+
+- `lib/open-external.ts`: `openExternalUrl` tenta o comando do desktop, cai
+  para janela nova do navegador e devolve `'blocked'` em vez de navegar a
+  janela atual. Nunca mais substitui o sistema pela página.
+- Tela de spares e botão "Abrir chamado" do Jira usam o utilitário; quando
+  bloqueia, o link é copiado e o aviso diz para colar no navegador.
+
+**Pendente:**
+- Para a planilha abrir direto pelo app, `open_external_url` precisa liberar o
+  host do SharePoint — muda `src-tauri/`, exige EXE novo (`npm run
+  desktop:build`), publicação do instalador e bump em
+  `app/api/app-version/route.ts`. Não feito: aguarda pedido do usuário.
+- Quem já está preso na planilha precisa fechar o app (Alt+F4) e reabrir.
+
 ### Rastreio: ignora texto no lugar do código e corrige a Shopee — *(este trabalho, branch `claude/rastreio-ajustes`)*
 
 Achados da primeira rodada real em produção (61 códigos consultados: 32
