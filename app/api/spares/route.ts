@@ -44,6 +44,7 @@ export async function GET(request: Request) {
           ? {
               status: row.status,
               carrier: row.carrier,
+              lastEvent: row.lastEvent,
               expectedAt: row.expectedAt,
               updatedAt: row.updatedAt,
             }

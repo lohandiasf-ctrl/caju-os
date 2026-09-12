@@ -55,6 +55,7 @@ export async function recordSpareTracking(
         trackingCode,
         carrier: snapshot.carrier,
         status: snapshot.status,
+        lastEvent: snapshot.latestEvent,
         expectedAt,
         createdBy: actorEmail,
         createdAt: now,
@@ -62,7 +63,13 @@ export async function recordSpareTracking(
       })
       .onConflictDoUpdate({
         target: [shipmentTracking.ticketKey, shipmentTracking.trackingCode],
-        set: { carrier: snapshot.carrier, status: snapshot.status, ...(expectedAt ? { expectedAt } : {}), updatedAt: now },
+        set: {
+          carrier: snapshot.carrier,
+          status: snapshot.status,
+          lastEvent: snapshot.latestEvent,
+          ...(expectedAt ? { expectedAt } : {}),
+          updatedAt: now,
+        },
       });
 
     if (snapshot.expectedAt && !spare.expectedDelivery) {

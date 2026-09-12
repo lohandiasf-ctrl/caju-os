@@ -49,6 +49,7 @@ type S = {
   trackingStatus?: string;
   trackingCarrier?: string;
   trackingCheckedAt?: string;
+  trackingLastEvent?: string;
 };
 
 type SpareForm = {
@@ -81,12 +82,19 @@ const EMPTY_FORM: SpareForm = {
 // Status consultado na TrackingMore, que GET /api/spares anexa a cada spare.
 function trackingFields(
   value: unknown,
-): Pick<S, 'trackingStatus' | 'trackingCarrier' | 'trackingCheckedAt'> {
+): Pick<
+  S,
+  'trackingStatus' | 'trackingCarrier' | 'trackingCheckedAt' | 'trackingLastEvent'
+> {
   if (!value || typeof value !== 'object') return {};
   const tracking = value as Record<string, unknown>;
   return {
     trackingStatus:
       typeof tracking.status === 'string' ? tracking.status : undefined,
+    trackingLastEvent:
+      typeof tracking.lastEvent === 'string' && tracking.lastEvent
+        ? tracking.lastEvent
+        : undefined,
     trackingCarrier:
       typeof tracking.carrier === 'string'
         ? carrierLabel(tracking.carrier)
@@ -750,6 +758,12 @@ export default function Page() {
                           <D
                             l="Status do rastreio"
                             v={`${selected.trackingStatus}${selected.trackingCarrier ? ` · ${selected.trackingCarrier}` : ''}${selected.trackingCheckedAt ? ` · consultado em ${new Date(selected.trackingCheckedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`}
+                          />
+                        )}
+                        {selected.trackingLastEvent && (
+                          <D
+                            l="Última movimentação"
+                            v={selected.trackingLastEvent}
                           />
                         )}
                         <D

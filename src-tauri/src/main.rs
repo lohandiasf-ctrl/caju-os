@@ -34,8 +34,13 @@ fn open_external_url(url: String) -> Result<(), String> {
     let host = parsed.host_str().unwrap_or_default();
     let is_jira = host.ends_with(".atlassian.net");
     let is_whatsapp_group = host == "chat.whatsapp.com";
-    if parsed.scheme() != "https" || (!is_jira && !is_whatsapp_group) {
-        return Err("Somente links seguros do Jira ou grupos do WhatsApp são permitidos".into());
+    // Planilha de envio de equipamentos, aberta pela tela de spares.
+    let is_sharepoint = host.ends_with(".sharepoint.com");
+    if parsed.scheme() != "https" || (!is_jira && !is_whatsapp_group && !is_sharepoint) {
+        return Err(
+            "Somente links seguros do Jira, do SharePoint ou grupos do WhatsApp são permitidos"
+                .into(),
+        );
     }
     #[cfg(target_os = "windows")]
     if is_whatsapp_group {

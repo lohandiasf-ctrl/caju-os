@@ -11,6 +11,34 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Última movimentação do rastreio e planilha abrindo pelo app (0.1.15) — *(este trabalho, branch `claude/rastreio-evento-e-planilha`)*
+
+Dois pedidos do usuário no mesmo lote.
+
+**Última movimentação (banco):** `shipment_tracking.last_event` guarda o
+`latest_event` da TrackingMore, gravado junto com o status pelo cadastro e
+pelo cron. A tela de spares mostra "Última movimentação" no detalhe, abaixo do
+status. Migration `drizzle/0023_spotty_cargill.sql`.
+
+**Planilha no app desktop:** `open_external_url` (Rust) passa a aceitar
+`*.sharepoint.com` além do Jira e dos grupos do WhatsApp, então "Abrir
+planilha compartilhada" abre no navegador do sistema em vez de ser recusado.
+Versão 0.1.15 em `tauri.conf.json`, `Cargo.toml` e
+`app/api/app-version/route.ts`.
+
+**Cuidado com a migration gerada:** `npm run db:generate` produziu, junto da
+coluna, um `CREATE TABLE` das tabelas de `active_attendances` — o snapshot
+do drizzle estava defasado porque a `0022` foi escrita à mão. O `.sql` foi
+recortado para conter só o `ALTER TABLE`; o snapshot novo já reflete o banco
+real. Conferido em produção: `0022` consta aplicada em 2026-09-10.
+
+**Pendente:**
+- `npm run db:migrate:remote` precisa rodar **antes** do deploy: sem a coluna,
+  a gravação do rastreio falha.
+- Instalador 0.1.15 precisa ser gerado (`npm run desktop:build`), publicado em
+  `public/downloads/` e distribuído aos usuários — quem ficar no 0.1.14
+  continua sem abrir a planilha pelo app (mas não trava mais: o link é copiado).
+
 ### "Abrir planilha" prendia o usuário dentro do app desktop — *(este trabalho, branch `claude/abrir-planilha`)*
 
 Relato do usuário: clicar em "Abrir planilha compartilhada" no desktop abria a

@@ -646,6 +646,8 @@ export const shipmentTracking = sqliteTable(
     trackingCode: text('tracking_code').notNull(),
     carrier: text('carrier'),
     status: text('status').notNull().default('Postado'),
+    /** Última movimentação informada pela transportadora (TrackingMore). */
+    lastEvent: text('last_event'),
     expectedAt: text('expected_at'),
     createdBy: text('created_by').notNull(),
     createdAt: text('created_at').notNull(),
