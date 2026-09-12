@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Camera,
   Check,
-  CheckCheck,
   ChevronUp,
   ClipboardList,
   ExternalLink,
@@ -964,6 +963,33 @@ export function ColleaguesPanel({
   );
 }
 
+// Bolhas no estilo iOS: dentro de uma sequencia do mesmo remetente os cantos
+// internos ficam quadrados e so a ultima bolha ganha a cauda curva.
+const EMOJI_ONLY =
+  /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\uFE0F|\u200D|\s){1,3}$/u;
+
+function bubbleClass(
+  mine: boolean,
+  runStart: boolean,
+  runContinues: boolean,
+  jumbo = false,
+) {
+  return [
+    "chat-bubble",
+    mine ? "chat-bubble--out" : "chat-bubble--in",
+    runStart ? "chat-bubble--run-start" : "",
+    runContinues ? "chat-bubble--run-cont" : "chat-bubble--tail",
+    jumbo ? "chat-bubble--jumbo" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function sameSender(a?: { senderEmail: string }, b?: { senderEmail: string }) {
+  if (!a || !b) return false;
+  return a.senderEmail.toLowerCase() === b.senderEmail.toLowerCase();
+}
+
 function ColleagueList({
   colleagues,
   loading,
@@ -1404,7 +1430,7 @@ function ChatDialog({
           {colleague && <VoiceCallControl colleague={colleague} onActiveChange={setCallActive} />}
         </DialogHeader>
         <div
-          className="min-h-0 overflow-y-auto bg-black/10 p-4"
+          className="chat-thread min-h-0 overflow-y-auto p-4"
           aria-live="polite"
         >
           {loading ? (
@@ -1412,19 +1438,26 @@ function ChatDialog({
               <Loader2 className="size-5 animate-spin" />
             </div>
           ) : messages.length ? (
-            <div className="space-y-2">
-              {messages.map((message) => {
+            <div>
+              {messages.map((message, index) => {
                 const mine =
                   message.senderEmail.toLowerCase() ===
                   user?.email?.toLowerCase();
                 const parsed = parseTicketMessage(message.body, tickets);
+                const runStart = sameSender(messages[index - 1], message);
+                const runContinues = sameSender(messages[index + 1], message);
+                const jumbo =
+                  !!parsed.text &&
+                  !parsed.ticketId &&
+                  !message.attachmentData &&
+                  EMOJI_ONLY.test(parsed.text.trim());
                 return (
                   <div
                     key={message.id}
-                    className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                    className={`flex ${runStart ? "mt-0.5" : "mt-2"} ${mine ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[82%] rounded-2xl px-3 py-2 ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border border-border bg-card"}`}
+                      className={bubbleClass(mine, runStart, runContinues, jumbo)}
                     >
                       {parsed.text && (
                         <p className="whitespace-pre-wrap break-words text-sm">
@@ -1440,32 +1473,11 @@ function ChatDialog({
                         />
                       )}
                       <MessageAttachment message={message} mine={mine} />
-                      <p
-                        className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-primary-foreground/65" : "text-muted-foreground"}`}
-                      >
-                        {new Intl.DateTimeFormat("pt-BR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }).format(new Date(message.createdAt))}
-                        {mine &&
-                          (message.readAt ? (
-                            <CheckCheck
-                              className="size-3 text-sky-200"
-                              aria-label="Lida"
-                            />
-                          ) : message.deliveredAt ? (
-                            <CheckCheck
-                              className="size-3"
-                              aria-label="Entregue"
-                            />
-                          ) : (
-                            <Check className="size-3" aria-label="Enviada" />
-                          ))}
-                      </p>
                     </div>
                   </div>
                 );
               })}
+              <ChatReceipt messages={messages} userEmail={user?.email} />
               {otherTyping && (
                 <p className="text-xs text-muted-foreground">
                   {name} está digitando<span className="animate-pulse">…</span>
@@ -2897,10 +2909,10 @@ function GroupChatDialog({
               {group?.members.length} participantes
             </button>
           </DialogHeader>
-          <div className="min-h-0 overflow-y-auto bg-black/10 p-4">
+          <div className="chat-thread min-h-0 overflow-y-auto p-4">
             {messages.length ? (
-              <div className="space-y-2">
-                {messages.map((message) => {
+              <div>
+                {messages.map((message, index) => {
                   const mine =
                     message.senderEmail.toLowerCase() ===
                     user?.email?.toLowerCase();
@@ -2910,15 +2922,22 @@ function GroupChatDialog({
                   const selectedTicket = tickets.find(
                     (item) => item.id === message.ticketId,
                   );
+                  const runStart = sameSender(messages[index - 1], message);
+                  const runContinues = sameSender(messages[index + 1], message);
+                  const jumbo =
+                    !!message.body &&
+                    !message.ticketId &&
+                    !message.attachmentData &&
+                    EMOJI_ONLY.test(message.body.trim());
                   return (
                     <div
                       key={message.id}
-                      className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                      className={`flex ${runStart ? "mt-0.5" : "mt-2"} ${mine ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[84%] rounded-2xl px-3 py-2 ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md border border-border bg-card"}`}
+                        className={bubbleClass(mine, runStart, runContinues, jumbo)}
                       >
-                        {!mine && (
+                        {!mine && !runStart && (
                           <p className="mb-1 text-[10px] font-bold text-primary">
                             {sender?.displayName ||
                               message.senderEmail.split("@")[0]}
@@ -2945,16 +2964,11 @@ function GroupChatDialog({
                           />
                         )}
                         <MessageAttachment message={message} mine={mine} />
-                        <p className="mt-1 text-right text-[10px] opacity-65">
-                          {new Intl.DateTimeFormat("pt-BR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }).format(new Date(message.createdAt))}
-                        </p>
                       </div>
                     </div>
                   );
                 })}
+                <ChatReceipt messages={messages} userEmail={user?.email} />
                 <div ref={bottomRef} />
               </div>
             ) : (
@@ -3547,6 +3561,43 @@ function CommunicationSettings() {
         </p>
       )}
     </section>
+  );
+}
+
+// Um unico recibo no fim da conversa, como no iOS, em vez de horario e ticks
+// repetidos em cada bolha.
+function ChatReceipt({
+  messages,
+  userEmail,
+}: {
+  messages: {
+    senderEmail: string;
+    createdAt: string | number;
+    readAt?: string | number | null;
+    deliveredAt?: string | number | null;
+  }[];
+  userEmail?: string | null;
+}) {
+  const last = messages[messages.length - 1];
+  if (!last) return null;
+  const mine = last.senderEmail.toLowerCase() === userEmail?.toLowerCase();
+  const time = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(last.createdAt));
+  const state = !mine
+    ? time
+    : last.readAt
+      ? `Lida ${time}`
+      : last.deliveredAt
+        ? `Entregue ${time}`
+        : `Enviada ${time}`;
+  return (
+    <p
+      className={`mt-1 px-1 text-[11px] font-semibold tracking-wide text-muted-foreground ${mine ? "text-right" : "text-left"}`}
+    >
+      {state}
+    </p>
   );
 }
 

@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-12
 
+### Chat: bolhas no estilo iMessage, adaptadas ao tema do app
+
+Pedido do usuario, com referencia visual (demo iMessage). Escopo escolhido: so o
+visual das bolhas, cores do tema atual.
+
+- `app/globals.css`: classes `.chat-thread` / `.chat-bubble*` (cauda curva na
+  ultima bolha da sequencia, cantos internos quadrados dentro da sequencia,
+  emoji sozinho em tamanho grande). Superficie solida `--chat-thread`, que a
+  cauda precisa para o recorte.
+- `components/user-menu.tsx`: conversa direta e de grupo usam as classes; no
+  grupo o nome do remetente aparece so no inicio da sequencia. Horario e ticks
+  por bolha deram lugar a um recibo unico no fim (`Enviada/Entregue/Lida HH:MM`).
+- Fora do escopo: reacoes (tapback), que exigiriam tabela e API novas.
+
+Verificado: `npm test` (36/36), `npx tsc --noEmit`, `npm run build`.
+
 ### Retirada da UI: mural da equipe e recomendacao automatica de tecnico
 
 Pedido do usuario: aposentar o "Mural da equipe" e a "Inteligencia

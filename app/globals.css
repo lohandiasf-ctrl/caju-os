@@ -277,3 +277,73 @@
   .caju-loading-mark img, .caju-loading-mark source { display: none !important; }
   .caju-loading-mark { aspect-ratio: 32 / 25; background: url("/brand/caju-loading-static.png") center / contain no-repeat; }
 }
+
+/* ── Chat bubbles (iOS-style tail + run grouping), unlayered so the tail
+   pseudo-elements are not reordered by Tailwind's cascade layers. ── */
+.chat-thread {
+  --chat-thread: #141b27;
+  --chat-in: #232c3d;
+  --chat-out: var(--primary);
+  background: var(--chat-thread);
+}
+.chat-bubble {
+  position: relative;
+  max-inline-size: min(20rem, 82%);
+  padding: .5rem .85rem;
+  border-radius: 1.35rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+.chat-bubble--in { background: var(--chat-in); color: var(--card-foreground); }
+.chat-bubble--out { background: var(--chat-out); color: var(--primary-foreground); }
+/* squared inner corner while the run continues */
+.chat-bubble--in.chat-bubble--run-start { border-start-start-radius: .45rem; }
+.chat-bubble--in.chat-bubble--run-cont { border-end-start-radius: .45rem; }
+.chat-bubble--out.chat-bubble--run-start { border-start-end-radius: .45rem; }
+.chat-bubble--out.chat-bubble--run-cont { border-end-end-radius: .45rem; }
+/* the curved tail, only on the last bubble of a run */
+.chat-bubble--tail::before,
+.chat-bubble--tail::after {
+  content: '';
+  position: absolute;
+  inset-block-end: 0;
+  inline-size: 20px;
+  block-size: 22px;
+  pointer-events: none;
+}
+.chat-bubble--in.chat-bubble--tail::before {
+  background: var(--chat-in);
+  inset-inline-start: -7px;
+  border-end-end-radius: 18px 15px;
+}
+.chat-bubble--in.chat-bubble--tail::after {
+  background: var(--chat-thread);
+  inset-inline-start: -21px;
+  inline-size: 22px;
+  border-end-end-radius: 12px;
+}
+.chat-bubble--out.chat-bubble--tail::before {
+  background: var(--chat-out);
+  inset-inline-end: -7px;
+  border-end-start-radius: 18px 15px;
+}
+.chat-bubble--out.chat-bubble--tail::after {
+  background: var(--chat-thread);
+  inset-inline-end: -21px;
+  inline-size: 22px;
+  border-end-start-radius: 12px;
+}
+/* a message that is only emoji drops the bubble and grows */
+.chat-bubble--jumbo {
+  background: none;
+  padding: .2rem .3rem;
+  font-size: 2.4rem;
+  line-height: 1.1;
+}
+.chat-bubble--jumbo::before,
+.chat-bubble--jumbo::after { display: none; }
+@media (forced-colors: active) {
+  .chat-bubble { border: 1px solid CanvasText; }
+  .chat-bubble::before, .chat-bubble::after { forced-color-adjust: none; }
+}
