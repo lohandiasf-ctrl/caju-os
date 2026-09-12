@@ -211,7 +211,7 @@ npm run desktop:build
 ```
 
 Só recompile o EXE quando mudar `src-tauri/`, a versão, ícone, permissões ou
-comandos Rust. Mudanças só-web chegam ao 0.1.13 pelo deploy — ele carrega
+comandos Rust. Mudanças só-web chegam ao 0.1.15 pelo deploy — ele carrega
 `https://operacoes.cajutech.net`. O artefato NSIS sai em
 `src-tauri/target/release/bundle/nsis/`; publique em
 `public/downloads/Caju-OS-<versão>-x64-setup.exe` e atualize
