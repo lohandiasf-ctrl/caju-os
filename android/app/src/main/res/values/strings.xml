@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">Caju OS</string>
-    <string name="offline_title">Sem conexão</string>
-    <string name="offline_message">Não foi possível carregar o Caju OS. Verifique sua internet.</string>
-    <string name="retry">Tentar de novo</string>
-    <string name="choose_file">Selecionar arquivo</string>
-</resources>

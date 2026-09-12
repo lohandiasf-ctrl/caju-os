@@ -11,30 +11,49 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-12
 
-### APK Android para teste em campo — *(este trabalho, branch `claude/sistema-apk-testes-eot4ah`)*
+### App nativo Android (React Native/Expo), substituindo o shell WebView — *(este trabalho, branch `claude/sistema-apk-testes-eot4ah`)*
 
-Pedido do usuário: transformar o sistema num APK para testar. Feito como shell
-WebView em `android/`, na mesma linha do app desktop (Tauri), que também só
-abre `https://operacoes.cajutech.net` — o APK não empacota o frontend, então
-acompanha a produção sem novo build a cada deploy.
+Primeira versão deste trabalho entregou um APK com WebView de
+`operacoes.cajutech.net`. O usuário recusou: quer app nativo. O WebView
+(`android/`) foi removido e no lugar entrou `mobile/`, um app React Native com
+Expo — telas nativas consumindo as **mesmas 44 rotas** de API, com o mesmo
+login Firebase. Nenhum endpoint novo; o app é mais um cliente do backend que
+já existe.
 
-- `android/`: projeto Gradle (Kotlin, minSdk 26, targetSdk 35, applicationId
-  `net.cajutech.operacoes`, mesmo do desktop), com `MainActivity` cuidando do
-  que o WebView não faz sozinho: upload de foto com captura pela câmera,
-  permissões de câmera/microfone/localização, tela cheia de vídeo, botão
-  voltar navegando no histórico, pull-to-refresh, tela de "sem conexão" e link
-  externo abrindo no app do sistema.
-- Ícones reaproveitados de `src-tauri/icons/android/`.
-- `.github/workflows/android-apk.yml`: build manual pelo Actions, APK sai como
-  artifact `caju-os-apk`.
-- `android/README.md`: build, instalação no celular e limites.
+Telas portadas (paridade com as 7 rotas da web, decisão do usuário):
 
-Verificado: `./gradlew assembleRelease` gera o APK (2,9 MB, versionName
-0.1.15). Não foi instalado em aparelho — sem device nesta sessão.
+- **Operação**: as cinco etapas do kanban viram abas roláveis (coluna lado a
+  lado não cabe em tela de celular), com métricas e alertas de SLA.
+- **Detalhe do chamado**: dados do Jira, anexos, comentários internos e envio
+  de evidência pela câmera ou galeria (`POST /api/jira/issues/:key/attachments`,
+  o mesmo endpoint da web).
+- **Central N1**: fila, carga por atendente, fila de validação e "assumir
+  chamado" (`PUT /api/n1-tickets/:key`, restrito ao perfil n1).
+- **Spares**: peças com busca e rastreio expandível.
+- **Financeiro**: faturamento, repasses e margem por técnico, com o mesmo
+  cálculo de faixa de repasse de `app/financeiro/page.tsx`.
+- **Cobertura (mapa)**: técnicos por cidade, filtro por UF, abre o app de mapas
+  do aparelho.
+- **Perfil**: conta, troca de senha e sair.
 
-**Pendente:** o release está assinado com a chave de debug (serve para teste,
-não para Play Store); `versionCode` fixo em 1, subir a cada APK distribuído;
-sem push nativo (notificação só com o app aberto).
+A lógica de domínio foi portada, não reinventada: `toTicket`, `relativeAge` e
+o cálculo de repasse saíram da web; `src/domain/permissions.ts` repete
+`lib/permissions.ts`. Se um dos lados mudar, o outro precisa acompanhar — isso
+é duplicação consciente, não descuido.
+
+`mobile/android/` é gerado pelo `expo prebuild` e não é versionado.
+`.github/workflows/android-apk.yml` passou a construir o app Expo.
+
+Verificado: `npx tsc --noEmit` limpo e `assembleRelease` gerando APK
+instalável. **Não rodou em aparelho nem em emulador nesta sessão** — nenhuma
+tela foi vista funcionando contra a API real. O teste em campo é o próximo
+passo, e é onde os erros de contrato vão aparecer.
+
+**Pendente:** mapa embutido (precisa de chave do Google Maps; a web usa
+Leaflet, que não roda em nativo); push nativo (biblioteca instalada, sem
+registro de token nem envio no servidor); gráfico de 6 meses e edição da regra
+de repasse no financeiro; modo offline; chat, voz e administração de usuários.
+Release assinado com chave de debug — para Play Store falta keystore própria.
 
 ---
 

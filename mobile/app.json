@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Caju OS",
+    "slug": "caju-os",
+    "scheme": "cajuos",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0B0F"
+    },
+    "android": {
+      "package": "net.cajutech.operacoes",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0B0B0F"
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "net.cajutech.operacoes"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-image-picker", { "cameraPermission": "O Caju OS usa a câmera para registrar as fotos de evidência do atendimento." }],
+      ["expo-location", { "locationAlwaysAndWhenInUsePermission": "O Caju OS usa sua localização para registrar o atendimento em campo." }]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}
