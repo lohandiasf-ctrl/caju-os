@@ -21,15 +21,21 @@ da lista.
 - Ordem das colunas: Pendente de agendamento, Agendado, Técnico em campo,
   Aguardando spare, Direcionado (era Aguardando spare e Direcionado antes de
   Técnico em campo).
-- Grade: quatro colunas a partir de 1200px (`min-[1200px]:grid-cols-4`), três
-  em `lg`, cinco acima de 1800px.
+- Grade: `sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5` —
+  quatro colunas a partir de 1280px. **Não use `min-[...]` junto com faixas
+  padrão aqui:** no CSS que o Tailwind gera, as medidas personalizadas vêm
+  antes de todas as faixas nomeadas, então `lg:grid-cols-3` vencia
+  `min-[1200px]:grid-cols-4` e a tela continuava com três colunas. Medido na
+  produção: `lg:3 + min-[1200px]:4` → 3 colunas; `lg:3 + xl:4` → 4. Pelo
+  mesmo motivo, o `min-[1920px]:grid-cols-5` que existia antes nunca teve
+  efeito.
 - Densidade do cartão, para caber sem espremer: padding `p-4` → `p-3`,
   espaçamentos internos menores, lista da coluna `space-y-3` → `space-y-2` e
   título da coluna em `text-[11px]` com `truncate` em vez de quebrar em duas
   linhas.
 
-**Pendente:** não validado visualmente — a tela exige login, então quem confere
-é o usuário. Se a janela dele for menor que 1200px, continuam três colunas.
+**Verificado** na produção, com o usuário logado no Chrome (1366px): as quatro
+colunas aparecem na ordem pedida. Abaixo de 1280px voltam três.
 
 ### Última movimentação do rastreio e planilha abrindo pelo app (0.1.15) — *(este trabalho, branch `claude/rastreio-evento-e-planilha`)*
 

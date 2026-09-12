@@ -1332,7 +1332,7 @@ export default function Home() {
               )}
               {view === "kanban" ? (
                 <div
-                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "sm:grid-cols-2 lg:grid-cols-3 min-[1200px]:grid-cols-4 min-[1800px]:grid-cols-5" : "grid-cols-1"}`}
+                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" : "grid-cols-1"}`}
                 >
                   {visibleKanbanColumns.map(
                     (column) => {
