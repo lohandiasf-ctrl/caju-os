@@ -11,6 +11,30 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Rastreio: ignora texto no lugar do código e corrige a Shopee — *(este trabalho, branch `claude/rastreio-ajustes`)*
+
+Achados da primeira rodada real em produção (61 códigos consultados: 32
+entregues, 14 aguardando informações, 5 em trânsito, 10 indisponíveis):
+
+- **Texto no lugar do código.** Os 10 "Rastreio indisponível" eram
+  `SEM INFORMAÇÕES` (8), `VIA TÉCNICO` e `AGUARDANDO CÓDIGO`, vindos da
+  planilha. `looksLikeTrackingCode` (mínimo 8 caracteres e 6 dígitos) passa a
+  barrar esses valores no cadastro, na função compartilhada e na seleção do
+  cron — sem consulta e sem registro.
+- **Detecção errada da Shopee.** 4 códigos `BR` + 12 dígitos + letra foram
+  detectados como "followmont"/"northline" (transportadoras australianas).
+  `knownCourier` reconhece esse padrão como `spx-br` localmente, e
+  `courierFor` dá prioridade ao formato conhecido sobre a transportadora
+  guardada numa consulta anterior — então os 4 se corrigem na próxima rodada.
+  Também economiza a chamada de detecção nos códigos da Shopee.
+
+**Pendente:**
+- Os 10 registros com texto continuam gravados em `shipment_tracking` e
+  aparecem como "Rastreio indisponível" na tela; não são mais atualizados.
+  Apagar exige decisão do usuário (dado de produção).
+- Correios e Shopee não devolvem `scheduled_delivery_date` pela TrackingMore:
+  a previsão segue vazia. Guardar a última movimentação exigiria coluna nova.
+
 ### Rastreio também para os spares já cadastrados — *(este trabalho, branch `claude/rastreio-spares-existentes`)*
 
 Pedido do usuário: os spares que já estavam no sistema também devem mostrar o

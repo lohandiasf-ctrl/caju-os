@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
 import {
   apiErrorMessage,
+  courierFor,
   detectedCourier,
-  knownCourier,
   metaCode,
   normalizeTrackingCode,
   toSnapshot,
@@ -48,7 +48,7 @@ export async function trackShipment(rawCode: string, courierHint: string | null 
   if (!apiKey()) return null;
   const trackingNumber = normalizeTrackingCode(rawCode);
 
-  let courier = courierHint ?? knownCourier(trackingNumber);
+  let courier = courierFor(trackingNumber, courierHint);
   if (!courier) {
     const detected = await call('couriers/detect', { method: 'POST', body: JSON.stringify({ tracking_number: trackingNumber }) });
     courier = detectedCourier(detected.payload);

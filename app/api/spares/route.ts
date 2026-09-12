@@ -1,7 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { shipmentTracking, spares } from '@/db/schema';
-import { trackingKey } from '@/lib/tracking';
+import { looksLikeTrackingCode, trackingKey } from '@/lib/tracking';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import {
   pushSpareToSpreadsheet,
@@ -147,7 +147,8 @@ export async function POST(request: Request) {
       created.syncError = message;
     }
 
-    const tracking = created.trackingCode
+    // Campo com texto no lugar do código ("SEM INFORMAÇÕES") não vira consulta.
+    const tracking = looksLikeTrackingCode(created.trackingCode)
       ? await recordSpareTracking(created, user.email)
       : null;
 

@@ -3,6 +3,7 @@ import { getDb } from '@/db';
 import { shipmentTracking, spares } from '@/db/schema';
 import {
   isAccountError,
+  looksLikeTrackingCode,
   normalizeTrackingCode,
   pickDueTrackings,
   TrackingApiError,
@@ -36,6 +37,9 @@ export async function recordSpareTracking(
   const trackingCode = normalizeTrackingCode(spare.trackingCode ?? '');
   const source = spare.supplier.toUpperCase().includes('DELFIA') ? 'Delfia' : 'Caju';
   const now = new Date().toISOString();
+  if (!looksLikeTrackingCode(trackingCode)) {
+    return { configured: true, error: 'O campo de rastreio não tem um código válido.', accountError: false };
+  }
   try {
     const snapshot = await trackShipment(trackingCode, courierHint);
     if (!snapshot) return { configured: false };

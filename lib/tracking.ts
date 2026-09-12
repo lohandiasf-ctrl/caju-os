@@ -15,6 +15,7 @@ export type TrackingSnapshot = {
 };
 
 export const CORREIOS = 'brazil-correios';
+export const SHOPEE = 'spx-br';
 
 /** Status de spare que encerram o acompanhamento (mesma lista da tela de spares). */
 export const CLOSED_SPARE_STATUSES = ['FINALIZADO', 'ENCERRADO', 'FECHADO', 'CANCELADO'] as const;
@@ -85,10 +86,33 @@ export function looksLikeCourierCode(value: string | null | undefined): value is
   return Boolean(value && /^[a-z0-9][a-z0-9-]*$/.test(value));
 }
 
-// Padrão S10 da UPU usado pelos Correios em envios nacionais: 2 letras, 9
-// dígitos e BR. Evita gastar uma chamada de detecção no caso mais comum.
+// Transportadoras reconhecidas pelo formato, sem gastar uma chamada de
+// detecção: S10 da UPU nos Correios (2 letras, 9 dígitos, BR) e o padrão da
+// Shopee Express (BR, 12 dígitos, 1 letra).
 export function knownCourier(trackingCode: string) {
-  return /^[A-Z]{2}\d{9}BR$/.test(normalizeTrackingCode(trackingCode)) ? CORREIOS : null;
+  const code = normalizeTrackingCode(trackingCode);
+  if (/^[A-Z]{2}\d{9}BR$/.test(code)) return CORREIOS;
+  if (/^BR\d{12}[A-Z]$/.test(code)) return SHOPEE;
+  return null;
+}
+
+/**
+ * O formato conhecido vem antes da dica guardada: a detecção da API já
+ * confundiu código da Shopee com transportadora estrangeira, e a dica vinha
+ * dessa consulta errada.
+ */
+export function courierFor(trackingCode: string, hint: string | null = null) {
+  return knownCourier(trackingCode) ?? (looksLikeCourierCode(hint) ? hint : null);
+}
+
+/**
+ * Campo de rastreio costuma vir com texto no lugar do código ("SEM
+ * INFORMAÇÕES", "VIA TÉCNICO"). Sem dígitos suficientes, não é código e não
+ * vale gastar consulta.
+ */
+export function looksLikeTrackingCode(value: string | null | undefined) {
+  const code = normalizeTrackingCode(value ?? '');
+  return code.length >= 8 && (code.match(/\d/g) ?? []).length >= 6;
 }
 
 export function metaCode(payload: unknown) {
@@ -143,7 +167,7 @@ export function pickDueTrackings<T extends SpareRef>(spareRows: T[], tracked: Tr
   const due: Array<{ spare: T; courierHint: string | null; lastUpdate: number }> = [];
   for (const spare of spareRows) {
     const code = normalizeTrackingCode(spare.trackingCode ?? '');
-    if (!code || closed.includes(spare.status.trim().toUpperCase())) continue;
+    if (!looksLikeTrackingCode(code) || closed.includes(spare.status.trim().toUpperCase())) continue;
     const key = trackingKey(spare.ticketKey, code);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -151,7 +175,7 @@ export function pickDueTrackings<T extends SpareRef>(spareRows: T[], tracked: Tr
     if (row && FINAL_TRACKING_STATUSES.includes(row.status)) continue;
     const lastUpdate = row ? Date.parse(row.updatedAt) || 0 : 0;
     if (row && now - lastUpdate < REFRESH_AFTER_MS) continue;
-    due.push({ spare, courierHint: looksLikeCourierCode(row?.carrier) ? row.carrier : null, lastUpdate });
+    due.push({ spare, courierHint: courierFor(code, row?.carrier ?? null), lastUpdate });
   }
   due.sort((a, b) => a.lastUpdate - b.lastUpdate);
   return { batch: due.slice(0, limit), remaining: Math.max(0, due.length - limit) };
