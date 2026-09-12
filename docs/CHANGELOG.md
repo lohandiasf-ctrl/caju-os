@@ -11,6 +11,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-11
 
+### Kanban: as quatro etapas que a operação acompanha na mesma tela — *(este trabalho, branch `claude/kanban-quatro-colunas`)*
+
+Pedido do usuário: ver "Pendente de agendamento", "Agendado", "Técnico em campo"
+e "Aguardando spare" juntas, sem rolar. Em 1366px apareciam três, porque a
+quarta coluna só entrava a partir de 1536px, e "Técnico em campo" era a quinta
+da lista.
+
+- Ordem das colunas: Pendente de agendamento, Agendado, Técnico em campo,
+  Aguardando spare, Direcionado (era Aguardando spare e Direcionado antes de
+  Técnico em campo).
+- Grade: quatro colunas a partir de 1200px (`min-[1200px]:grid-cols-4`), três
+  em `lg`, cinco acima de 1800px.
+- Densidade do cartão, para caber sem espremer: padding `p-4` → `p-3`,
+  espaçamentos internos menores, lista da coluna `space-y-3` → `space-y-2` e
+  título da coluna em `text-[11px]` com `truncate` em vez de quebrar em duas
+  linhas.
+
+**Pendente:** não validado visualmente — a tela exige login, então quem confere
+é o usuário. Se a janela dele for menor que 1200px, continuam três colunas.
+
 ### Última movimentação do rastreio e planilha abrindo pelo app (0.1.15) — *(este trabalho, branch `claude/rastreio-evento-e-planilha`)*
 
 Dois pedidos do usuário no mesmo lote.

@@ -237,9 +237,9 @@ type OperationalDashboard = {
 const columns: Status[] = [
   "Pendente de agendamento",
   "Agendado",
+  "Técnico em campo",
   "Aguardando spare",
   "Direcionado",
-  "Técnico em campo",
 ];
 const dots: Record<Status, string> = {
   "Pendente de agendamento": "bg-violet-400",
@@ -1332,7 +1332,7 @@ export default function Home() {
               )}
               {view === "kanban" ? (
                 <div
-                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1920px]:grid-cols-5" : "grid-cols-1"}`}
+                  className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "sm:grid-cols-2 lg:grid-cols-3 min-[1200px]:grid-cols-4 min-[1800px]:grid-cols-5" : "grid-cols-1"}`}
                 >
                   {visibleKanbanColumns.map(
                     (column) => {
@@ -1342,14 +1342,14 @@ export default function Home() {
                       return (
                         <section
                           key={column}
-                          className="surface-panel min-h-[280px] rounded-2xl p-3"
+                          className="surface-panel min-h-[280px] rounded-2xl p-2.5"
                         >
                           <div className="mb-3 flex items-center justify-between px-1">
                             <div className="flex items-center gap-2">
                               <span
                                 className={`size-2 rounded-full ${dots[column]}`}
                               />
-                              <h3 className="text-xs font-bold uppercase tracking-[.08em]">
+                              <h3 className="truncate text-[11px] font-bold uppercase tracking-[.04em]">
                                 {column}
                               </h3>
                             </div>
@@ -1371,7 +1371,7 @@ export default function Home() {
                               </span>
                             </div>
                           </div>
-                          <div className="space-y-3">
+                          <div className="space-y-2">
                             {items.map((ticket) => (
                               <TicketCard
                                 key={ticket.id}
@@ -1821,7 +1821,7 @@ function TicketCard({
           className="absolute left-1 top-1 z-10"
         />
       )}
-      <button type="button" onClick={onOpen} className="w-full rounded-xl p-4 text-left transition hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <button type="button" onClick={onOpen} className="w-full rounded-xl p-3 text-left transition hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
       <div className="flex justify-between gap-3">
         <span className={`font-mono text-xs font-bold text-primary ${onToggleSelect ? "pl-8" : ""}`}>
           {ticket.id}
@@ -1837,10 +1837,10 @@ function TicketCard({
           {ticket.priority}
         </Badge>
       </div>
-      <h4 className="mt-3 text-sm font-semibold leading-snug">
+      <h4 className="mt-2 text-sm font-semibold leading-snug">
         {ticket.title}
       </h4>
-      <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+      <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
         <p className="flex items-center gap-1.5">
           <Building2 className="size-3.5" />
           {ticket.store}
@@ -1862,7 +1862,7 @@ function TicketCard({
           </p>
         )}
       </div>
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2">
         <span className="truncate text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">
           {ticket.rawStatus}
         </span>
