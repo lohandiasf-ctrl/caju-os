@@ -9,17 +9,21 @@ Não há outro projeto — todos os `package.json`, `vite.config.ts` e
 
 ## Antes de começar
 
-Leia, nesta ordem:
+Leia primeiro `docs/CURRENT_STATE_SHORT.md`. Ele é o resumo canônico para
+reduzir contexto e evitar reler documentos grandes em tarefas simples.
 
-1. `docs/AI_HANDOFF.md` — estado atual, stack, onde ficam as coisas.
-2. `docs/ARCHITECTURE.md` — como o sistema é montado.
-3. `docs/WORKFLOW_RULES.md` — o que não pode ser quebrado.
-4. `docs/KNOWN_BUGS.md` — o que já é conhecido.
-5. `docs/JIRA_FIELDS.md` — se a tarefa toca o Jira.
-6. `docs/DEPLOYMENT.md` — se a tarefa toca build/deploy/env.
+Depois rode `git status --short` e `git log -8 --oneline`. Entenda o que já
+está em andamento e **preserve o trabalho do usuário**.
 
-Depois: `git status --short` e `git log -8 --oneline`. Entenda o que já está
-em andamento e **preserve o trabalho do usuário**.
+Leia os docs grandes somente quando a tarefa tocar aquela área:
+
+- Arquitetura geral: `docs/ARCHITECTURE.md`.
+- Fluxos, status, validação, Jira operacional: `docs/WORKFLOW_RULES.md`.
+- Bugs conhecidos: `docs/KNOWN_BUGS.md`.
+- Campos/escrita no Jira: `docs/JIRA_FIELDS.md` e
+  `docs/jira-custom-fields.md`.
+- Build, deploy, env, Cloudflare e migrations: `docs/DEPLOYMENT.md`.
+- Histórico completo entre IAs: `docs/AI_HANDOFF.md`.
 
 ## Regras obrigatórias
 

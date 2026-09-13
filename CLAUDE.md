@@ -7,17 +7,21 @@ Raiz real do app: **esta pasta** (`caju-os-web`).
 
 ## Antes de começar
 
-Leia, nesta ordem:
+Leia primeiro `AGENTS.md`, este `CLAUDE.md` e `docs/CURRENT_STATE_SHORT.md`.
+Esse resumo curto é a fonte inicial para reduzir contexto.
 
-1. `AGENTS.md` e este `CLAUDE.md`.
-2. `docs/AI_HANDOFF.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/KNOWN_BUGS.md`
-5. `docs/WORKFLOW_RULES.md`
-6. `docs/JIRA_FIELDS.md` / `docs/DEPLOYMENT.md` conforme a tarefa.
+Depois rode `git status --short`, `git log -8 --oneline`. Entenda o que está
+em andamento.
 
-Depois: `git status --short`, `git log -8 --oneline`. Entenda o que está em
-andamento.
+Leia os docs grandes somente quando a tarefa tocar aquela área:
+
+- Arquitetura geral: `docs/ARCHITECTURE.md`.
+- Fluxos, status, validação, Jira operacional: `docs/WORKFLOW_RULES.md`.
+- Bugs conhecidos: `docs/KNOWN_BUGS.md`.
+- Campos/escrita no Jira: `docs/JIRA_FIELDS.md` e
+  `docs/jira-custom-fields.md`.
+- Build, deploy, env, Cloudflare e migrations: `docs/DEPLOYMENT.md`.
+- Histórico completo entre IAs: `docs/AI_HANDOFF.md`.
 
 ## Regras
 

@@ -3,6 +3,10 @@
 Ponto de entrada para qualquer IA (Claude ou Codex) ou pessoa continuar o
 trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
+> Para tarefas pequenas, leia antes `docs/CURRENT_STATE_SHORT.md`. Este arquivo
+> continua como histórico completo, mas não precisa ser carregado inteiro em
+> toda sessão.
+
 > A pasta `.ai-handoff/` é histórica e está **desatualizada** (fala em OpenAI
 > Sites, `.openai/hosting.json`, etc.). A fonte canônica é `docs/`.
 
@@ -10,9 +14,18 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
-- **Branch em desenvolvimento `codex/ticket-history`:** adiciona o histórico permanente de FSAs em `ticket_archives`, a tela **Histórico de chamados** e as APIs `/api/ticket-history`. Toda gravação operacional, edição direta do Jira, alteração em lote e validação N1 passa a preservar a última cópia completa do chamado, mesmo se ele desaparecer do Jira. A migração `drizzle/0025_ticket_history.sql` também importa `operational_workflows` já existentes. **Aplicar `npm run db:migrate:remote` antes de levar a branch à `main`.**
+- **Produção em `main`:** histórico permanente de FSAs está implementado em
+  `ticket_archives`, com tela **Histórico de chamados** e APIs
+  `/api/ticket-history`. Toda gravação operacional, edição direta do Jira,
+  alteração em lote e validação N1 preserva uma cópia do chamado mesmo se ele
+  desaparecer do Jira. A migração `drizzle/0025_ticket_history.sql` foi aplicada
+  no D1 remoto em 2026-09-13.
 
-- **Branch em desenvolvimento `codex/technician-dispatch-and-contacts`:** busca de técnicos por cidade/UF, exportação Google Contatos TCP, link/equipe por FSA, fila do técnico por ID e nome/valor de grupo no atendimento ativo. Criou rotas `app/api/ticket-team/[key]` e `app/api/technicians/[id]/tickets`; adicionou migração `drizzle/0024_overrated_whizzer.sql` (`operational_workflows.scheduled_by_email`, `active_attendances.whatsapp_group_name`, `active_attendances.group_value_cents`). **Não levar à main/publicar antes de aplicar `npm run db:migrate:remote`.** O valor do grupo ainda não entra nos totais de financeiro.
+- **Também em `main`:** busca de técnicos por cidade/UF, exportação Google
+  Contatos TCP, link/equipe por FSA, fila do técnico por ID e nome/valor de
+  grupo no atendimento ativo. A migração `drizzle/0024_overrated_whizzer.sql`
+  foi aplicada remotamente. O valor do grupo ainda não entra nos totais de
+  financeiro.
 
 - **Segurança pré-lançamento (branch `codex/video-prelaunch-hardening`):**
   `scripts/worker-entry.js` envolve as respostas com cabeçalhos definidos em
@@ -75,7 +88,7 @@ Windows (`FileGroupDescriptorW` + `FileContents`), tambem lidos por esse comando
 | Páginas | `app/**/page.tsx` — 7 páginas: `/`, `/login`, `/acesso-negado`, `/mapa`, `/central-n1`, `/spares`, `/financeiro` |
 | Rotas de API | `app/api/**/route.ts` — 36 rotas; exportam `GET`/`POST`/`PUT`/`PATCH`/`DELETE` |
 | Schema do banco | `db/schema.ts` (Drizzle) |
-| Migrations | `drizzle/*.sql` — até `0021_spares.sql`; geradas por `npm run db:generate` |
+| Migrations | `drizzle/*.sql` — até `0025_ticket_history.sql`; geradas por `npm run db:generate` |
 | Bootstrap do D1 | `db/index.ts` (`getDb()`, binding `DB`) |
 | Auth (servidor) | `lib/server/firebase-auth.ts` — `requireApiUser(request, roles?)` |
 | Auth (cliente) | `lib/firebase.ts`, `components/auth-provider.tsx` |
@@ -102,7 +115,7 @@ mapa é Leaflet e não usa mais essa chave.
 ## Como testar
 
 ```bash
-npm test            # 3 testes unitários (validação de chamado, retry, requisitos)
+npm test            # suite node:test em tests/*.test.ts
 npx tsc --noEmit    # precisa ficar limpo
 npm run lint        # oxlint
 npm run build       # build de produção

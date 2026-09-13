@@ -60,6 +60,7 @@ tsconfig.tsbuildinfo
 *.exe
 *.log
 /tmp-*
+/tmp/
 /.publish-stage*
 /.sites-package*
 /build-*.log

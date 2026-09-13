@@ -1,1 +1,0 @@
-ALTER TABLE `technicians` ADD `source_status` text;
