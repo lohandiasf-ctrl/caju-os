@@ -1396,6 +1396,8 @@ function ChatDialog({
   return (
     <>
     <Dialog
+      modal={false}
+      disablePointerDismissal
       open={Boolean(colleague) && !chatMinimized}
       onOpenChange={(open) => {
         if (!open) {
@@ -1410,6 +1412,7 @@ function ChatDialog({
     >
       <DialogContent
         keepMounted
+        overlayClassName="pointer-events-none bg-transparent backdrop-blur-none"
         className="chat-shell chat-float-window !fixed !top-auto !right-4 !bottom-4 !left-auto grid h-[min(560px,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] !max-w-none !translate-x-0 !translate-y-0 grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:!max-w-none max-sm:!right-3 max-sm:!bottom-3 max-sm:!left-3 max-sm:h-[min(620px,calc(100dvh-1.5rem))] max-sm:w-auto"
       >
         <DialogHeader className="chat-header border-b border-border/60 p-4 pr-14">
@@ -2893,12 +2896,17 @@ function GroupChatDialog({
   return (
     <>
       <Dialog
+        modal={false}
+        disablePointerDismissal
         open={Boolean(group)}
         onOpenChange={(value) => {
           if (!value) onClose();
         }}
       >
-        <DialogContent className="chat-shell grid h-[min(680px,92dvh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
+        <DialogContent
+          overlayClassName="pointer-events-none bg-transparent backdrop-blur-none"
+          className="chat-shell chat-float-window !fixed !top-auto !right-4 !bottom-4 !left-auto grid h-[min(560px,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] !max-w-none !translate-x-0 !translate-y-0 grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:!max-w-none max-sm:!right-3 max-sm:!bottom-3 max-sm:!left-3 max-sm:h-[min(620px,calc(100dvh-1.5rem))] max-sm:w-auto"
+        >
           <DialogHeader className="chat-header border-b border-border/60 p-4 pr-14">
             <DialogTitle>{group?.name}</DialogTitle>
             <button
