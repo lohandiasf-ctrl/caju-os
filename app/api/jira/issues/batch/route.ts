@@ -5,6 +5,7 @@ import { bulkIneligibleReason, BULK_STATUS_LABEL, canBulkTransition, isBulkEligi
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { getJiraIssue, JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
 import { enqueueJiraSync, shouldQueueJiraError } from '@/lib/server/jira-sync';
+import { captureTicketArchive } from '@/lib/server/ticket-archive';
 
 // Chamados processados ao mesmo tempo: agiliza um lote de 40 sem estourar o rate limit do Jira.
 const CONCURRENCY = 4;
@@ -88,6 +89,19 @@ export async function POST(request: Request) {
           }),
           createdAt: now,
         });
+        const workflow = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, key)).get();
+        await captureTicketArchive(db, {
+          ticketKey: key,
+          title: after.summary,
+          jiraStatus: after.status,
+          operationalStatus: workflow?.status ?? status,
+          storeName: after.store ?? workflow?.storeName,
+          city: after.city ?? workflow?.city,
+          snapshot: { jira: after, workflow: workflow ?? null, bulk: { status, keys, technicianId: Number.isSafeInteger(technicianId) ? technicianId : null } },
+          actorEmail: user.email,
+          reason: `Jira alterado em lote: ${label}`,
+          capturedAt: now,
+        }).catch(() => undefined);
         return { key, ok: true };
       } catch (error) {
         // Jira fora do ar não trava o fluxo (WORKFLOW_RULES, regra 5) — mas só

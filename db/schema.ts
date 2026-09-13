@@ -767,6 +767,31 @@ export const ticketSnapshots = sqliteTable(
   ],
 );
 
+// Last known durable copy of a ticket. This is intentionally separate from the
+// append-only audit trail: the audit explains changes, while this table keeps a
+// practical, searchable record after the issue leaves the Jira queue.
+export const ticketArchives = sqliteTable(
+  'ticket_archives',
+  {
+    ticketKey: text('ticket_key').primaryKey(),
+    title: text('title').notNull(),
+    jiraStatus: text('jira_status'),
+    operationalStatus: text('operational_status'),
+    storeName: text('store_name'),
+    city: text('city'),
+    snapshot: text('snapshot').notNull(),
+    capturedAt: text('captured_at').notNull(),
+    capturedBy: text('captured_by').notNull(),
+    captureReason: text('capture_reason').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_ticket_archives_captured_at').on(table.capturedAt),
+    index('idx_ticket_archives_status').on(table.operationalStatus, table.capturedAt),
+  ],
+);
+
 // Coordenadas de cidades que não têm técnico e por isso não estão em
 // technician-map.json. Resolvidas sob demanda no Nominatim e guardadas aqui
 // para não repetir a chamada — a política de uso deles pede cache.

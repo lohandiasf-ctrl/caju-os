@@ -1,9 +1,10 @@
 import { asc, eq } from 'drizzle-orm';
-import { n1TicketAssignments, operationalAudit, ticketEvidence } from '@/db/schema';
+import { n1TicketAssignments, operationalAudit, operationalWorkflows, ticketEvidence } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { addJiraInternalEvidence, transitionJiraIssue } from '@/lib/server/jira';
+import { addJiraInternalEvidence, getJiraIssue, transitionJiraIssue } from '@/lib/server/jira';
 import { isSafeDataUrl } from '@/lib/safe-data-url';
+import { captureTicketArchive } from '@/lib/server/ticket-archive';
 
 const validKinds = new Set(['photo', 'video', 'rat']);
 
@@ -53,6 +54,22 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
       await db.update(n1TicketAssignments).set({ status: 'validated', validatedAt: now, updatedAt: now }).where(eq(n1TicketAssignments.ticketKey, ticketKey));
       await transitionJiraIssue(ticketKey, 'validated');
       await db.insert(operationalAudit).values({ ticketKey, action: 'Chamado validado com evidências e RAT', actorEmail: user.email, details: null, createdAt: now });
+      const [jira, workflow] = await Promise.all([
+        getJiraIssue(ticketKey).catch(() => null),
+        db.select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, ticketKey)).get(),
+      ]);
+      await captureTicketArchive(db, {
+        ticketKey,
+        title: jira?.summary,
+        jiraStatus: jira?.status ?? 'Validado',
+        operationalStatus: workflow?.status ?? 'validated',
+        storeName: jira?.store ?? workflow?.storeName,
+        city: jira?.city ?? workflow?.city,
+        snapshot: { jira, workflow: workflow ?? null, n1: { validatedBy: user.email, validatedAt: now, evidenceKinds: [...kinds] } },
+        actorEmail: user.email,
+        reason: 'Chamado validado com evidências e RAT',
+        capturedAt: now,
+      }).catch(() => undefined);
     } else return bad('Ação inválida.');
     const [assignment, evidence] = await Promise.all([
       db.select().from(n1TicketAssignments).where(eq(n1TicketAssignments.ticketKey, ticketKey)).get(),

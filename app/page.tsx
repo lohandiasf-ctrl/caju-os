@@ -57,6 +57,7 @@ import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
 import { FeedbackBoard } from "@/components/feedback-board";
 import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
+import { TicketHistory } from "@/components/ticket-history";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
@@ -265,6 +266,11 @@ const viewCopy: Record<DashboardView, [string, string, string]> = {
     "Central de atendimento",
     "Chamados operacionais",
     "Consulte, filtre e abra cada chamado sem perder contexto.",
+  ],
+  history: [
+    "Memória operacional",
+    "Histórico de chamados",
+    "Chamados direcionados, validados ou finalizados continuam disponíveis com os dados salvos pelo sistema.",
   ],
   central: [
     "Atendimento N1",
@@ -1452,6 +1458,7 @@ export default function Home() {
             <ProjectsView stores={stores} loading={jiraLoading} />
           )}
           {activeView === "feedback" && <FeedbackBoard user={user} />}
+          {activeView === "history" && <TicketHistory user={user} />}
           {activeView === "settings" && (
             <>
               <SettingsView

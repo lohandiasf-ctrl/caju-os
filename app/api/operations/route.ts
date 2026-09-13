@@ -4,6 +4,7 @@ import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
 import { enqueueJiraSync, shouldQueueJiraError } from '@/lib/server/jira-sync';
+import { captureTicketArchive } from '@/lib/server/ticket-archive';
 
 const statuses = new Set(['triage', 'scheduling', 'scheduled', 'operational_preparation', 'in_service', 'technical_pending', 'validated', 'awaiting_approval', 'awaiting_spare', 'spare_validated', 'awaiting_payment', 'resolved', 'archived', 'cancelled']);
 const purchaseStatuses = new Set(['Agendado', 'Cancelado', 'Comprado', 'Delfia', 'Direcionado', 'Encerrado', 'Enviado', 'Fechado', 'Finalizado', 'Indisponível', 'Parceiro Delfia', 'Pendente', 'Recebido', 'Reenviado']);
@@ -117,6 +118,21 @@ export async function PUT(request: Request) {
     }
     const workflow = await db.select().from(operationalWorkflows).where(eq(operationalWorkflows.id, workflowId)).get();
     const visits = await db.select().from(operationalVisits).where(eq(operationalVisits.workflowId, workflowId)).orderBy(asc(operationalVisits.visitNumber)).all();
+    // The operational record must survive a later Jira removal. Saving this
+    // snapshot never depends on Jira being available and does not block the
+    // workflow if the history write has a transient failure.
+    if (workflow) await captureTicketArchive(db, {
+      ticketKey,
+      title: clean(body.ticketTitle, 500),
+      jiraStatus: clean(body.jiraStatus, 160),
+      operationalStatus: workflow.status,
+      storeName: workflow.storeName,
+      city: workflow.city,
+      snapshot: { workflow, visits, jira: cleanObject(body.jiraSnapshot) },
+      actorEmail: user.email,
+      reason: `Operação salva: ${workflow.status}`,
+      capturedAt: now,
+    }).catch(() => undefined);
     return Response.json({ workflow, visits, jiraQueued, notice: jiraQueued ? 'Operação salva. O Jira será atualizado pela fila assim que voltar.' : 'Operação e Jira atualizados.' }, { status: jiraQueued ? 202 : 200 });
   } catch (error) {
     if (error instanceof Response) return error;
@@ -172,3 +188,4 @@ function validDate(value: unknown) { return typeof value === 'string' && value &
 function clean(value: unknown, max: number) { return typeof value === 'string' ? value.trim().slice(0, max) || null : null; }
 function present(value: unknown) { return typeof value === 'string' && Boolean(value.trim()); }
 function bad(error: string) { return Response.json({ error }, { status: 400 }); }
+function cleanObject(value: unknown) { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null; }

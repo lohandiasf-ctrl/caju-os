@@ -364,6 +364,16 @@ export function OperationWorkflowDialog({
       const token = await user.getIdToken();
       const payload = {
         ...form,
+        ticketTitle: ticket.title,
+        jiraStatus: ticket.rawStatus,
+        jiraSnapshot: {
+          key: ticket.id,
+          summary: ticket.title,
+          store: ticket.store,
+          city: ticket.city,
+          status: ticket.rawStatus,
+          priority: ticket.priority,
+        },
         technicianId: Number(form.technicianId) || null,
         scheduledAt: toIso(form.scheduledAt),
         expectedReturnAt: toIso(form.expectedReturnAt),
