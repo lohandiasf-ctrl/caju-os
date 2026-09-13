@@ -46,6 +46,7 @@ Verificado: `npm test` (35/35), `npx tsc --noEmit`, `npm run build`.
 - O indicador de digitação usa três pontos animados ligados ao estado real da conversa. Movimento reduzido desativa as animações.
 - O envio, histórico, anexos, compartilhamento de chamados e chamadas permanecem ligados aos dados reais; a reprodução e as respostas fictícias do componente de demonstração não foram incorporadas.
 - Campo e envio do chat em grupo ganharam rótulos acessíveis e estado desabilitado quando não há conteúdo para enviar.
+- Conversas individuais abrem como uma janela flutuante no canto inferior direito, no padrão Messenger; em telas pequenas usam a largura disponível sem ocupar a altura inteira.
 
 ## 2026-09-12
 
