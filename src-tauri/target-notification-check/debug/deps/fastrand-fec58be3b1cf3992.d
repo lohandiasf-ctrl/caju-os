@@ -1,7 +1,0 @@
-C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\fastrand-fec58be3b1cf3992.d: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fastrand-2.5.0\src\lib.rs
-
-C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\libfastrand-fec58be3b1cf3992.rlib: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fastrand-2.5.0\src\lib.rs
-
-C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\libfastrand-fec58be3b1cf3992.rmeta: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fastrand-2.5.0\src\lib.rs
-
-C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\fastrand-2.5.0\src\lib.rs:

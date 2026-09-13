@@ -1,8 +1,0 @@
-C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\serde_with_macros-0c32a94e5ff9ad65.d: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\lib.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\apply.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\lazy_bool.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\utils.rs
-
-C:\Users\Lohan Dias\Downloads\Caju_Monitor_v2\caju-os-web\src-tauri\target-notification-check\debug\deps\serde_with_macros-0c32a94e5ff9ad65.dll: C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\lib.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\apply.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\lazy_bool.rs C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\utils.rs
-
-C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\lib.rs:
-C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\apply.rs:
-C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\lazy_bool.rs:
-C:\Users\Lohan\ Dias\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_with_macros-3.22.0\src\utils.rs:
