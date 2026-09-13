@@ -48,6 +48,8 @@ pós-migração Cloudflare.
 
 ## Mapa e busca de técnico
 
+Na branch `codex/technician-dispatch-and-contacts`, há uma busca nova por centros de cidades. Ela mostra distância geográfica aproximada; técnicos sem cidade encontrada no mapa local não aparecem no ranking. Validar cobertura com a base real antes da publicação.
+
 | Item | Estado | Nota |
 |---|---|---|
 | Mapa (Google) não renderizava tiles, sem erro | **Resolvido** | migrado para **Leaflet + OpenStreetMap**; sem chave/cota |

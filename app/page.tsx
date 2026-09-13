@@ -58,6 +58,7 @@ import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog"
 import { FeedbackBoard } from "@/components/feedback-board";
 import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
+import { TicketTeamCard } from "@/components/ticket-team-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
 import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -74,6 +75,7 @@ import {
   type DatedTicketActivity,
 } from "@/lib/ticket-activities";
 import { validationRequirements as getValidationRequirements } from "@/lib/operational-rules";
+import { brazilPhone, googleContactsCsv } from "@/lib/google-contacts";
 
 type Status =
   | "Pendente de agendamento"
@@ -192,6 +194,7 @@ type FieldTechnician = {
   availableTools: string | null;
   specialtiesCount: string | null;
   specialties: string | null;
+  distanceKm?: number;
 };
 type TechnicianReview = {
   id: number;
@@ -1511,6 +1514,7 @@ export default function Home() {
                   {dialogError}
                 </div>
               )}
+              {selected && <TicketTeamCard key={selected.id} ticketKey={selected.id} user={user} />}
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 <Button
                   variant="outline"
@@ -2089,6 +2093,14 @@ function TechniciansView({
   const [query, setQuery] = useState("");
   const [cityOnly, setCityOnly] = useState("");
   const [selected, setSelected] = useState<FieldTechnician | null>(null);
+  const [nearCity, setNearCity] = useState("");
+  const [nearLimit, setNearLimit] = useState(5);
+  const [nearby, setNearby] = useState<FieldTechnician[] | null>(null);
+  const [nearLabel, setNearLabel] = useState("");
+  const [nearLoading, setNearLoading] = useState(false);
+  const [nearError, setNearError] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [lastTcpNumber, setLastTcpNumber] = useState("");
   useEffect(() => {
     if (tab !== "field" || !user || fieldTechnicians.length) return;
     let active = true;
@@ -2138,6 +2150,40 @@ function TechniciansView({
       ) &&
       (!cityOnly || normalizeText(tech.city) === normalizeText(cityOnly)),
   );
+  async function searchNearby(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user || nearCity.trim().length < 2) return;
+    setNearLoading(true);
+    setNearError("");
+    setNearby(null);
+    try {
+      const params = new URLSearchParams({ near: nearCity.trim(), limit: String(nearLimit) });
+      const response = await fetch(`/api/technicians?${params}`, {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: "no-store",
+      });
+      const payload = await response.json() as { city?: string; technicians?: FieldTechnician[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Não foi possível buscar técnicos próximos.");
+      setNearby(payload.technicians ?? []);
+      setNearLabel(payload.city ?? nearCity.trim());
+    } catch (reason) {
+      setNearError(reason instanceof Error ? reason.message : "Não foi possível buscar técnicos próximos.");
+    } finally {
+      setNearLoading(false);
+    }
+  }
+  function exportContacts() {
+    const last = Number(lastTcpNumber);
+    if (!/^\d+$/.test(lastTcpNumber.trim()) || !Number.isSafeInteger(last)) return;
+    const csv = googleContactsCsv(fieldTechnicians, last);
+    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `tecnicos-google-contatos-tcp-${String(last + 1).padStart(4, "0")}.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    setExportOpen(false);
+  }
   return (
     <div className="mt-6 space-y-5">
       <div
@@ -2197,6 +2243,19 @@ function TechniciansView({
         )
       ) : (
         <>
+          <section className="surface-panel max-w-4xl rounded-2xl p-4 sm:p-5" aria-labelledby="nearby-technicians-title">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div><h2 id="nearby-technicians-title" className="font-semibold">Buscar técnicos próximos</h2><p className="mt-1 text-sm text-muted-foreground">Distância aproximada em linha reta entre os centros das cidades.</p></div>
+              <Button type="button" variant="outline" onClick={() => setExportOpen(true)} disabled={!fieldTechnicians.some((tech) => brazilPhone(tech.phone))}><Download aria-hidden="true" /> Exportar Google Contatos</Button>
+            </div>
+            <form onSubmit={(event) => void searchNearby(event)} className="mt-4 flex flex-wrap items-end gap-2">
+              <div className="min-w-48 flex-1"><label htmlFor="near-city" className="mb-1 block text-sm font-medium">Cidade e UF</label><Input id="near-city" value={nearCity} onChange={(event) => setNearCity(event.target.value)} placeholder="Ex.: Salvador/BA" /></div>
+              <div><label htmlFor="near-limit" className="mb-1 block text-sm font-medium">Mostrar</label><select id="near-limit" value={nearLimit} onChange={(event) => setNearLimit(Number(event.target.value))} className="h-11 rounded-md border border-input bg-background px-3 text-sm">{[2, 5, 10, 20].map((limit) => <option key={limit} value={limit}>{limit} técnicos</option>)}</select></div>
+              <Button type="submit" disabled={nearLoading || nearCity.trim().length < 2}>{nearLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Search aria-hidden="true" />}Buscar</Button>
+            </form>
+            {nearError && <p role="alert" className="mt-3 text-sm text-rose-200">{nearError}</p>}
+            {nearby && <div className="mt-4"><p className="mb-2 text-sm text-muted-foreground">{nearby.length ? `${nearby.length} técnico(s) mais próximo(s) de ${nearLabel}` : `Nenhum técnico com cidade mapeada perto de ${nearLabel}. Tente outra cidade/UF.`}</p><ol className="space-y-2">{nearby.map((tech) => <li key={tech.id}><button type="button" onClick={() => setSelected(tech)} className="flex min-h-14 w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background/40 px-3 py-2 text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span><b className="block text-sm">{tech.name}</b><span className="text-xs text-muted-foreground">{tech.phone || "Sem telefone"} · {tech.city}/{tech.state}</span></span><span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-xs font-bold tabular-nums text-primary">{tech.distanceKm} km</span></button></li>)}</ol></div>}
+          </section>
           <div className="flex max-w-2xl flex-col gap-2 sm:flex-row">
             <div className="flex-1">
               <label htmlFor="field-tech-search" className="sr-only">
@@ -2275,6 +2334,9 @@ function TechniciansView({
             user={user}
             onClose={() => setSelected(null)}
           />
+          <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+            <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Exportar contatos TCP</DialogTitle><DialogDescription>Informe o número do último técnico salvo no Google Contatos. A exportação começa no número seguinte.</DialogDescription></DialogHeader><label htmlFor="last-tcp-number" className="text-sm font-medium">Último número TCP salvo</label><Input id="last-tcp-number" type="number" min="0" step="1" value={lastTcpNumber} onChange={(event) => setLastTcpNumber(event.target.value)} placeholder="Ex.: 125" /><p className="text-xs text-muted-foreground">Serão exportados {fieldTechnicians.filter((tech) => brazilPhone(tech.phone)).length} contatos com telefone válido. Confira o CSV antes de importar para evitar duplicatas.</p><Button onClick={exportContacts} disabled={!/^\d+$/.test(lastTcpNumber.trim())}><Download aria-hidden="true" /> Baixar CSV</Button></DialogContent>
+          </Dialog>
         </>
       )}
     </div>
@@ -2293,6 +2355,8 @@ function TechnicianDetailsDialog({
   onClose: () => void;
 }) {
   const [reviews, setReviews] = useState<TechnicianReview[]>([]);
+  const [assignedTickets, setAssignedTickets] = useState<Array<{ ticketKey: string; status: string; scheduledAt: string | null; storeName: string | null; city: string | null }>>([]);
+  const [assignedForId, setAssignedForId] = useState<number | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
@@ -2335,6 +2399,19 @@ function TechnicianDetailsDialog({
       active = false;
     };
   }, [technician, user]);
+  useEffect(() => {
+    if (!technician || !user) return;
+    let active = true;
+    void user.getIdToken().then((token) => fetch(`/api/technicians/${technician.id}/tickets`, {
+      headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    })).then(async (response) => {
+      const payload = await response.json() as { tickets?: typeof assignedTickets; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Falha ao carregar fila do técnico.");
+      if (active) { setAssignedTickets(payload.tickets ?? []); setAssignedForId(technician.id); }
+    }).catch((reason) => { if (active) setMessage(reason instanceof Error ? reason.message : "Falha ao carregar fila do técnico."); });
+    return () => { active = false; };
+  }, [technician, user]);
+  const visibleAssignedTickets = technician?.id === assignedForId ? assignedTickets : [];
   const attendance = technician
     ? tickets.filter((ticket) => {
         const candidate = normalizePerson(ticket.technician ?? "");
@@ -2471,6 +2548,13 @@ function TechnicianDetailsDialog({
                       )}
                     </div>
                   ))}
+                </div>
+              </section>
+              <section className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+                <h3 className="text-sm font-semibold">Fila vinculada ao técnico ({visibleAssignedTickets.length})</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Vínculos pelo cadastro do técnico, sem comparação aproximada de nomes.</p>
+                <div className="mt-3 space-y-2">
+                  {visibleAssignedTickets.length ? visibleAssignedTickets.map((item) => <a key={item.ticketKey} href={`/?ticket=${encodeURIComponent(item.ticketKey)}`} className="flex min-h-11 items-center justify-between gap-2 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm hover:border-primary/50"><span><b className="font-mono text-primary">{item.ticketKey}</b><span className="ml-2 text-xs text-muted-foreground">{item.storeName || item.city || 'Sem loja'}</span></span><Badge variant="outline">{item.status}</Badge></a>) : <p className="text-sm text-muted-foreground">Nenhuma FSA vinculada pela gestão operacional.</p>}
                 </div>
               </section>
               <section>

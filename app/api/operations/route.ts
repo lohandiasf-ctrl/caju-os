@@ -69,7 +69,12 @@ export async function PUT(request: Request) {
       await enqueueJiraSync(ticketKey, 'update', jiraFields, user.email);
       await enqueueJiraSync(ticketKey, 'transition', { status, scheduledDateTime: scheduledAt, technicianData }, user.email);
     }
-    const fields = workflowFields(body, { status, technicianId, scheduledAt, now });
+    const fields = {
+      ...workflowFields(body, { status, technicianId, scheduledAt, now }),
+      scheduledByEmail: scheduledAt && (scheduledAt !== existing?.scheduledAt || technicianId !== existing?.technicianId)
+        ? user.email
+        : existing?.scheduledByEmail ?? null,
+    };
     const changeReason = clean(body.changeReason, 500) ?? 'Alteração operacional';
     const origin = body.changeOrigin === 'Jira' ? 'Jira' : 'sistema';
     const changedFields = diffWorkflow(existing, fields);

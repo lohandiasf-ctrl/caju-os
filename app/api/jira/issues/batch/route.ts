@@ -1,5 +1,6 @@
 import { getDb } from '@/db';
-import { operationalAudit, ticketSnapshots } from '@/db/schema';
+import { operationalAudit, operationalWorkflows, technicians, ticketSnapshots } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { bulkIneligibleReason, BULK_STATUS_LABEL, canBulkTransition, isBulkEligible, MAX_BULK_TICKETS, type BulkStatus } from '@/lib/bulk-actions';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { getJiraIssue, JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
@@ -26,6 +27,7 @@ export async function POST(request: Request) {
         .filter((value) => /^FSA-\d+$/.test(value)),
     ));
     const technicianData = typeof body.technicianData === 'string' ? body.technicianData.trim() : '';
+    const technicianId = Number(body.technicianId);
     const scheduledDateTime = typeof body.scheduledDateTime === 'string' ? body.scheduledDateTime.trim() : '';
 
     if (!status) return Response.json({ error: 'Ação em lote inválida.' }, { status: 400 });
@@ -39,6 +41,11 @@ export async function POST(request: Request) {
     const fields = status === 'scheduled' ? { technicianData, scheduledDateTime } : {};
     const label = BULK_STATUS_LABEL[status];
     const db = getDb();
+    if (status === 'scheduled') {
+      if (!Number.isSafeInteger(technicianId) || technicianId < 1) return Response.json({ error: 'Selecione um técnico cadastrado.' }, { status: 400 });
+      const technician = await db.select({ id: technicians.id }).from(technicians).where(eq(technicians.id, technicianId)).get();
+      if (!technician) return Response.json({ error: 'Técnico cadastrado não encontrado.' }, { status: 400 });
+    }
 
     const results = await mapWithConcurrency(keys, CONCURRENCY, async (key): Promise<BatchResult> => {
       let eligible = false;
@@ -58,6 +65,15 @@ export async function POST(request: Request) {
         await transitionJiraIssue(key, status, fields);
         const after = await getJiraIssue(key);
         const now = new Date().toISOString();
+        if (status === 'scheduled') {
+          await db.insert(operationalWorkflows).values({
+            ticketKey: key, status: 'scheduled', technicianId, scheduledAt: new Date(scheduledDateTime).toISOString(),
+            scheduledByEmail: user.email, createdBy: user.email, createdAt: now, updatedAt: now,
+          }).onConflictDoUpdate({ target: operationalWorkflows.ticketKey, set: {
+            status: 'scheduled', technicianId, scheduledAt: new Date(scheduledDateTime).toISOString(),
+            scheduledByEmail: user.email, updatedAt: now,
+          } });
+        }
         await db.insert(operationalAudit).values({
           ticketKey: key,
           action: `Jira alterado em lote para ${label}`,

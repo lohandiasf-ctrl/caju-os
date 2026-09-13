@@ -1,7 +1,8 @@
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { getJiraIssue, JiraError, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
 import { getDb } from '@/db';
-import { operationalAudit, ticketSnapshots } from '@/db/schema';
+import { operationalAudit, operationalWorkflows, technicians, ticketSnapshots } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 import { enqueueJiraSync, shouldQueueJiraError } from '@/lib/server/jira-sync';
 
 export async function GET(request: Request, context: { params: Promise<{ key: string }> }) {
@@ -37,6 +38,23 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
     if (typeof status !== 'string' && !Object.keys(fields).length) throw new JiraError('Nenhuma alteração foi informada.', 400);
     const after = await getJiraIssue(key);
     const now = new Date().toISOString();
+    if (status === 'scheduled' || typeof fields.scheduledDateTime === 'string') {
+      const date = after.operationalFields?.scheduledDateTime;
+      const scheduledAt = typeof date === 'string' && Number.isFinite(Date.parse(date)) ? new Date(date).toISOString() : null;
+      if (scheduledAt) {
+        const existing = await getDb().select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, key)).get();
+        const technicianText = String(after.operationalFields?.technicianData ?? '');
+        const cpf = technicianText.match(/CPF:\s*([0-9.\-]+)/i)?.[1].replace(/\D/g, '') ?? '';
+        const name = technicianText.match(/(?:Nome completo|Nome):\s*([^\r\n]+)/i)?.[1].trim().toLocaleLowerCase('pt-BR') ?? '';
+        const candidates = await getDb().select({ id: technicians.id, name: technicians.name, cpf: technicians.cpf }).from(technicians).all();
+        const matches = candidates.filter((item) => cpf
+          ? String(item.cpf ?? '').replace(/\D/g, '') === cpf
+          : name && item.name.trim().toLocaleLowerCase('pt-BR') === name);
+        const technicianId = matches.length === 1 ? matches[0].id : existing?.technicianId ?? null;
+        if (existing) await getDb().update(operationalWorkflows).set({ scheduledAt, scheduledByEmail: user.email, technicianId, updatedAt: now }).where(eq(operationalWorkflows.id, existing.id));
+        else await getDb().insert(operationalWorkflows).values({ ticketKey: key, status: 'scheduled', scheduledAt, scheduledByEmail: user.email, technicianId, createdBy: user.email, createdAt: now, updatedAt: now });
+      }
+    }
     await getDb().insert(operationalAudit).values({
       ticketKey: key,
       action: typeof status === 'string' ? `Jira alterado para ${status}` : 'Campos do Jira atualizados',

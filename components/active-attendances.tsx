@@ -34,6 +34,8 @@ type ActiveAttendance = {
   id: number;
   ownerEmail: string;
   ownerName: string;
+  whatsappGroupName: string | null;
+  groupValueCents: number | null;
   startedAt: string;
   endedAt: string | null;
   tickets: ActiveAttendanceTicket[];
@@ -58,6 +60,8 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
   const [error, setError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [whatsappGroupName, setWhatsappGroupName] = useState("");
+  const [groupValue, setGroupValue] = useState("");
   const [selected, setSelected] = useState<TicketSuggestion[]>([]);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -139,6 +143,11 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
 
   const start = async () => {
     if (!user || !selected.length) return;
+    const groupValueCents = groupValue.trim() ? Math.round(Number(groupValue.replace(',', '.')) * 100) : null;
+    if (groupValueCents !== null && (!Number.isSafeInteger(groupValueCents) || groupValueCents < 0)) {
+      setError("Informe um valor válido para o grupo.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -148,13 +157,15 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
           Authorization: `Bearer ${await user.getIdToken()}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ticketKeys: selected.map((item) => item.key) }),
+        body: JSON.stringify({ ticketKeys: selected.map((item) => item.key), whatsappGroupName, groupValueCents }),
       });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Não foi possível iniciar o atendimento.");
       setDialogOpen(false);
       setDraft("");
       setSelected([]);
+      setWhatsappGroupName("");
+      setGroupValue("");
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível iniciar o atendimento.");
@@ -218,12 +229,14 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
                       {grouped ? <Layers3 className="size-4 text-cyan-300" aria-hidden="true" /> : <TicketCheck className="size-4 text-emerald-300" aria-hidden="true" />}
                       <p className={`text-xs font-bold uppercase tracking-wide ${grouped ? "text-cyan-200" : "text-emerald-200"}`}>{grouped ? `Atendimento agrupado · ${attendance.tickets.length} FSAs` : "Em atendimento"}</p>
                     </div>
+                    {attendance.whatsappGroupName && <p className="mt-2 text-sm font-bold text-cyan-100">{attendance.whatsappGroupName}</p>}
                     <p className="mt-2 truncate text-sm font-bold">{grouped ? attendance.tickets.map((ticket) => ticket.ticketKey).join(" · ") : attendance.tickets[0]?.ticketKey}</p>
                     <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{grouped ? `${attendance.tickets[0]?.summary ?? ""}${attendance.tickets.length > 1 ? ` e mais ${attendance.tickets.length - 1}` : ""}` : attendance.tickets[0]?.summary}</p>
                   </div>
                   <span className="shrink-0 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-1 text-xs font-bold tabular-nums text-emerald-100"><Clock3 className="mr-1 inline size-3" aria-hidden="true" />{elapsedLabel(attendance.startedAt, now ?? Date.parse(attendance.startedAt))}</span>
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3 text-xs text-muted-foreground"><span className="min-w-0 truncate"><UsersRound className="mr-1 inline size-3" aria-hidden="true" />{attendance.ownerName}</span><span>{isOwner(attendance) ? "Seu atendimento" : "Em execução"}</span></div>
+                {role === "gerencia" && attendance.groupValueCents !== null && <p className="mt-2 text-xs font-semibold text-emerald-200">Valor do grupo: {(attendance.groupValueCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>}
                 {grouped && (
                   <div className="mt-3">
                     <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setExpanded((current) => { const next = new Set(current); if (next.has(attendance.id)) next.delete(attendance.id); else next.add(attendance.id); return next; })} aria-expanded={open}>
@@ -244,9 +257,10 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
         )}
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setDraft(""); setSelected([]); setError(""); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setDraft(""); setSelected([]); setWhatsappGroupName(""); setGroupValue(""); setError(""); } }}>
         <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle>Iniciar atendimento</DialogTitle><DialogDescription>Busque uma FSA no menu ou cole vários códigos. Só chamados reais do Jira poderão ser adicionados.</DialogDescription></DialogHeader>
+          {error && <p role="alert" className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{error}</p>}
           <div className="mt-2 space-y-3">
             <label htmlFor="attendance-fsa" className="text-sm font-semibold">FSAs do atendimento</label>
             <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" /><Input id="attendance-fsa" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void verifyAndAdd(normalizeFsaKeys(draft)); } }} placeholder="Ex.: FSA-132074, FSA-132073" className="min-h-11 pl-9" aria-describedby="attendance-fsa-help" /></div>
@@ -254,7 +268,12 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
             {suggestions.length > 0 && <div className="rounded-xl border border-border bg-background/60 p-1" aria-label="Chamados encontrados"><p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Chamados encontrados na fila</p>{suggestions.map((ticket) => <button key={ticket.key} type="button" className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary" onClick={() => void verifyAndAdd([ticket.key])}><TicketCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" /><span className="min-w-0"><b className="text-sm">{ticket.key}</b><span className="ml-1 text-xs text-muted-foreground">· {ticket.summary}</span></span></button>)}</div>}
             <Button variant="outline" className="w-full" onClick={() => void verifyAndAdd(normalizeFsaKeys(draft))} disabled={checking || !normalizeFsaKeys(draft).length}>{checking ? <Loader2 className="animate-spin" aria-hidden="true" /> : <TicketCheck aria-hidden="true" />}Adicionar e verificar FSAs</Button>
             <div aria-live="polite" className="min-h-8">{selected.length ? <div className="flex flex-wrap gap-2">{selected.map((ticket) => <span key={ticket.key} className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-100">{ticket.key}<button type="button" onClick={() => setSelected((current) => current.filter((item) => item.key !== ticket.key))} className="grid size-4 place-items-center rounded-full hover:bg-emerald-100/20" aria-label={`Remover ${ticket.key}`}><X className="size-3" /></button></span>)}</div> : <p className="text-xs text-muted-foreground">Nenhuma FSA confirmada ainda.</p>}</div>
-            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end"><Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={submitting}>Cancelar</Button><Button onClick={() => void start()} disabled={!selected.length || submitting}>{submitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />}Iniciar {selected.length > 1 ? `atendimento com ${selected.length} FSAs` : "atendimento"}</Button></div>
+            <div className="grid gap-3 rounded-xl border border-border bg-background/40 p-3 sm:grid-cols-2">
+              <div><label htmlFor="attendance-whatsapp-group" className="mb-1 block text-sm font-semibold">Grupo do WhatsApp {selected.length > 1 && <span className="text-amber-300">*</span>}</label><Input id="attendance-whatsapp-group" maxLength={120} value={whatsappGroupName} onChange={(event) => setWhatsappGroupName(event.target.value)} placeholder="Nome digitado manualmente" /></div>
+              {role === "gerencia" && <div><label htmlFor="attendance-group-value" className="mb-1 block text-sm font-semibold">Valor total do grupo (R$)</label><Input id="attendance-group-value" type="number" min="0" step="0.01" inputMode="decimal" value={groupValue} onChange={(event) => setGroupValue(event.target.value)} placeholder="0,00" /></div>}
+              <p className="text-xs text-muted-foreground sm:col-span-2">O valor pertence ao grupo inteiro, não é somado novamente em cada FSA.</p>
+            </div>
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end"><Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={submitting}>Cancelar</Button><Button onClick={() => void start()} disabled={!selected.length || (selected.length > 1 && !whatsappGroupName.trim()) || submitting}>{submitting ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />}Iniciar {selected.length > 1 ? `atendimento com ${selected.length} FSAs` : "atendimento"}</Button></div>
           </div>
         </DialogContent>
       </Dialog>

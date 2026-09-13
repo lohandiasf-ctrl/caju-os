@@ -10,6 +10,8 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
+- **Branch em desenvolvimento `codex/technician-dispatch-and-contacts`:** busca de técnicos por cidade/UF, exportação Google Contatos TCP, link/equipe por FSA, fila do técnico por ID e nome/valor de grupo no atendimento ativo. Criou rotas `app/api/ticket-team/[key]` e `app/api/technicians/[id]/tickets`; adicionou migração `drizzle/0024_overrated_whizzer.sql` (`operational_workflows.scheduled_by_email`, `active_attendances.whatsapp_group_name`, `active_attendances.group_value_cents`). **Não levar à main/publicar antes de aplicar `npm run db:migrate:remote`.** O valor do grupo ainda não entra nos totais de financeiro.
+
 - **Segurança pré-lançamento (branch `codex/video-prelaunch-hardening`):**
   `scripts/worker-entry.js` envolve as respostas com cabeçalhos definidos em
   `scripts/security-headers.mjs`; `scripts/patch-wrangler.mjs` copia os dois

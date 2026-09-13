@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Busca de técnicos, contatos CSV e vínculos de atendimento (branch `codex/technician-dispatch-and-contacts`)
+
+- A aba Técnicos de campo agora busca 2/5/10/20 técnicos mais próximos de uma cidade/UF, mostrando nome, telefone, cidade/UF e distância aproximada em linha reta. A busca usa centros das cidades do mapa local e geocodificação Nominatim/cache quando necessário; não representa trajeto rodoviário.
+- Exportação de contatos em CSV com o cabeçalho do Google Contatos, prefixo TCP, nomes capitulares reduzidos aos dois primeiros nomes próprios (preservando partículas), telefone brasileiro normalizado e numeração a partir do último TCP informado antes de cada exportação. Técnicos sem telefone válido são omitidos.
+- Cada FSA pode ser compartilhada pelo link direto `/?ticket=FSA-...`; o painel mostra N1 que assumiu, analista que marcou (gestão operacional, detalhe do Jira ou lote) e técnico de campo cadastrado. A ficha do técnico mostra sua fila por ID, sem aproximação de nomes. O lote agora exige a seleção de um técnico da base para gravar os vínculos em todas as FSAs. A edição direta no Jira tenta identificar o técnico por CPF ou nome exato; se houver ambiguidade, não cria vínculo novo.
+- Atendimentos com múltiplas FSAs exigem nome do grupo de WhatsApp digitado manualmente. A gerência pode registrar um valor único do grupo, sem repeti-lo nas FSAs; esse valor não é somado automaticamente ao financeiro atual. A migração `0024_overrated_whizzer.sql` adiciona os campos necessários.
+
+**Pendente:** aplicar a migração no D1 antes de qualquer deploy; validar os fluxos com contas reais de gerência/N1/analista e dados reais do Jira. A lista por proximidade só inclui técnicos cuja cidade de origem existe no mapa local; não calcula tempo/custo de viagem.
+
+Verificado localmente: 42 testes, TypeScript e build. Lint global ainda apresenta erros preexistentes em diversos arquivos.
+
+---
+
 ### Volta a lista ranqueada de tecnicos no dialogo de operacao
 
 O usuario pediu de volta a recomendacao automatica que o commit `98a254f` tinha

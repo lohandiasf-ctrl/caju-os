@@ -37,6 +37,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [technicianQuery, setTechnicianQuery] = useState('');
   const [technicianData, setTechnicianData] = useState('');
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<number | null>(null);
   const [scheduledAt, setScheduledAt] = useState('');
   const [loadingTechnicians, setLoadingTechnicians] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -77,11 +78,12 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
     const eligible = status === 'scheduled' ? toSchedule : toField;
     setTargets(eligible);
     setSkipped(tickets.length - eligible.length);
-    setTechnicianQuery(''); setTechnicianData(''); setScheduledAt(''); setError(''); setResults(null);
+    setTechnicianQuery(''); setTechnicianData(''); setSelectedTechnicianId(null); setScheduledAt(''); setError(''); setResults(null);
     setMode(status);
   }
 
   function selectTechnician(technician: Technician) {
+    setSelectedTechnicianId(technician.id);
     setTechnicianQuery(technician.name);
     setTechnicianData(`Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}`);
   }
@@ -93,8 +95,8 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
 
   async function submit() {
     if (!user || !mode || saving) return;
-    if (mode === 'scheduled' && (!technicianData.trim() || !scheduledAt)) {
-      setError('Selecione um técnico e informe a data/hora que será aplicada a todos os chamados.');
+    if (mode === 'scheduled' && (!selectedTechnicianId || !technicianData.trim() || !scheduledAt)) {
+      setError('Selecione um técnico cadastrado na lista e informe a data/hora que será aplicada a todos os chamados.');
       return;
     }
     setSaving(true); setError(''); setResults(null);
@@ -105,7 +107,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
         body: JSON.stringify({
           status: mode,
           keys: targets.map((ticket) => ticket.id),
-          ...(mode === 'scheduled' ? { technicianData, scheduledDateTime: toJiraDateTime(scheduledAt) } : {}),
+          ...(mode === 'scheduled' ? { technicianId: selectedTechnicianId, technicianData, scheduledDateTime: toJiraDateTime(scheduledAt) } : {}),
         }),
       });
       const payload = await response.json() as { error?: string; results?: Result[] };
@@ -183,7 +185,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
         {mode === 'scheduled' && !results && <div className="space-y-4">
           <div className="relative">
             <label className="text-xs font-semibold text-muted-foreground" htmlFor="bulk-technician-search">Técnico responsável</label>
-            <div className="relative mt-1.5"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="bulk-technician-search" type="search" value={technicianQuery} onChange={(event) => setTechnicianQuery(event.target.value)} placeholder={loadingTechnicians ? 'Carregando técnicos...' : 'Digite nome, cidade, CPF ou código'} className="min-h-11 pl-9" autoComplete="off" disabled={saving} /></div>
+            <div className="relative mt-1.5"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="bulk-technician-search" type="search" value={technicianQuery} onChange={(event) => { setTechnicianQuery(event.target.value); setSelectedTechnicianId(null); }} placeholder={loadingTechnicians ? 'Carregando técnicos...' : 'Digite nome, cidade, CPF ou código'} className="min-h-11 pl-9" autoComplete="off" disabled={saving} /></div>
             {matches.length > 0 && <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-2xl">{matches.map((technician) => <button key={technician.id} type="button" onClick={() => selectTechnician(technician)} className="block min-h-11 w-full rounded-lg px-3 py-2 text-left transition hover:bg-primary/10 focus-visible:bg-primary/10"><span className="flex items-center gap-2 text-sm font-semibold"><UserRound className="size-3.5 text-primary" />{technician.name}</span><span className="block pl-5 text-xs text-muted-foreground">{technician.city}/{technician.state}{technician.technicianCode ? ` · ${technician.technicianCode}` : ''}</span></button>)}</div>}
           </div>
           <label className="block text-xs font-semibold text-muted-foreground" htmlFor="bulk-technician-data">Dados que serão enviados ao Jira<textarea id="bulk-technician-data" rows={4} value={technicianData} onChange={(event) => setTechnicianData(event.target.value)} className="field mt-1.5 min-h-24 w-full text-foreground" disabled={saving} /><span className="mt-1 block text-[11px] font-normal text-muted-foreground">Nome, CPF, RG e telefone são aplicados igualmente em todos os chamados.</span></label>

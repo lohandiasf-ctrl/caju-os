@@ -448,6 +448,7 @@ export const operationalWorkflows = sqliteTable(
     status: text('status').notNull().default('triage'),
     technicianId: integer('technician_id').references(() => technicians.id),
     scheduledAt: text('scheduled_at'),
+    scheduledByEmail: text('scheduled_by_email'),
     expectedReturnAt: text('expected_return_at'),
     validationStatus: text('validation_status'),
     spareSource: text('spare_source'),
@@ -555,6 +556,8 @@ export const activeAttendances = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     ownerEmail: text('owner_email').notNull(),
+    whatsappGroupName: text('whatsapp_group_name'),
+    groupValueCents: integer('group_value_cents'),
     startedAt: text('started_at').notNull(),
     endedAt: text('ended_at'),
     endedBy: text('ended_by'),

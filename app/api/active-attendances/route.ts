@@ -14,7 +14,7 @@ const MAX_TICKETS_PER_ATTENDANCE = 20;
 
 export async function GET(request: Request) {
   try {
-    await requireApiUser(request);
+    const user = await requireApiUser(request);
     const db = getDb();
     const attendances = await db
       .select()
@@ -46,6 +46,7 @@ export async function GET(request: Request) {
     return Response.json({
       attendances: attendances.map((attendance) => ({
         ...attendance,
+        groupValueCents: user.role === 'gerencia' ? attendance.groupValueCents : null,
         ownerName:
           displayNames.get(attendance.ownerEmail.toLowerCase()) ??
           attendance.ownerEmail.split('@')[0],
@@ -61,10 +62,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireApiUser(request);
-    const body = (await request.json()) as { ticketKeys?: unknown };
+    const body = (await request.json()) as { ticketKeys?: unknown; whatsappGroupName?: unknown; groupValueCents?: unknown };
     const ticketKeys = normalizeFsaKeys(body.ticketKeys);
     if (!ticketKeys.length) return invalid('Informe pelo menos uma FSA no formato FSA-12345.');
     if (ticketKeys.length > MAX_TICKETS_PER_ATTENDANCE) return invalid(`Um atendimento pode ter até ${MAX_TICKETS_PER_ATTENDANCE} FSAs.`);
+    const whatsappGroupName = typeof body.whatsappGroupName === 'string' ? body.whatsappGroupName.trim() : '';
+    if (whatsappGroupName.length > 120) return invalid('O nome do grupo pode ter até 120 caracteres.');
+    if (ticketKeys.length > 1 && !whatsappGroupName) return invalid('Informe o nome do grupo de WhatsApp para este atendimento agrupado.');
+    const groupValueCents = body.groupValueCents === null || body.groupValueCents === undefined ? null : Number(body.groupValueCents);
+    if (groupValueCents !== null && (!Number.isSafeInteger(groupValueCents) || groupValueCents < 0)) return invalid('Valor do grupo inválido.');
+    if (groupValueCents !== null && user.role !== 'gerencia') return Response.json({ error: 'Somente a gerência pode definir valores do grupo.' }, { status: 403 });
 
     const db = getDb();
     const knownTickets = await db
@@ -97,7 +104,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const attendance = await db
       .insert(activeAttendances)
-      .values({ ownerEmail: user.email, startedAt: now, createdAt: now, updatedAt: now })
+      .values({ ownerEmail: user.email, whatsappGroupName: whatsappGroupName || null, groupValueCents, startedAt: now, createdAt: now, updatedAt: now })
       .returning()
       .get();
     await db.insert(activeAttendanceTickets).values(
@@ -115,7 +122,7 @@ export async function POST(request: Request) {
         ticketKey: issue.key,
         action: 'Atendimento iniciado',
         actorEmail: user.email,
-        details: JSON.stringify({ attendanceId: attendance.id, ticketKeys, startedAt: now, origin: 'sistema' }),
+        details: JSON.stringify({ attendanceId: attendance.id, ticketKeys, whatsappGroupName, groupValueCents, startedAt: now, origin: 'sistema' }),
         createdAt: now,
       })),
     );
