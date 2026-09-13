@@ -42,8 +42,8 @@ Não implica certificação de segurança nem substitui revisão jurídica.
 | 8. Favicon | Já presente. |
 | 9. Sitemap/robots | `robots.txt` e metadados noindex agora bloqueiam indexação; sitemap público não se aplica ao painel interno. |
 | 10. Texto alternativo | Parcial; auditar imagens de todo o app com leitor de tela. |
-| 11–12. Compressão/velocidade | Pendente auditoria Lighthouse com perfil autenticado e rede móvel. |
-| 13–14. Contraste/mobile | Pendente revisão completa com testes visuais e aparelhos reais. |
+| 11–12. Compressão/velocidade | Marca no login usa `next/image`; pendente auditoria Lighthouse com perfil autenticado e rede móvel. |
+| 13–14. Contraste/mobile | Corrigido o par principal azul/texto (3,68:1 → 5,21:1) e mantido o chat branco/azul em 4,56:1. Login não corta o formulário em tela baixa/landscape e o rótulo de senha foi corrigido. Pendente revisão completa das demais cores e testes em aparelhos reais. |
 | 15. Página 404 | Criada página de erro com caminho de volta. |
 | 16. Links quebrados | Pendente varredura autenticada por papel e links externos. |
 | 17. Validação de formulários | Parcial; servidor valida mensagens e anexos. Revisar cada formulário. |

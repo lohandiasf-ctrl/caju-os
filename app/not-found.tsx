@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 export default function NotFound() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+    <main className="flex min-h-dvh items-center justify-center bg-background px-5 py-8 text-foreground sm:px-6">
       <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-xl">
         <p className="text-sm font-semibold tracking-widest text-primary">CAJU OS · 404</p>
         <h1 className="mt-4 text-2xl font-bold">Página não encontrada</h1>

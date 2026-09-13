@@ -20,6 +20,11 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 - Worker aplica cabeçalhos básicos de segurança. O cookie de preferência da
   barra lateral usa SameSite e Secure em HTTPS.
 - Painel interno marcado noindex, com `robots.txt` restritivo e página 404.
+- Login agora pode rolar na vertical em telas baixas/landscape e não contém
+  rótulos HTML aninhados; imagens da marca usam otimização do framework e o
+  aviso de sucesso tem semântica de status. 404 usa altura dinâmica da viewport.
+- Contraste do azul principal corrigido para texto escuro (5,2:1); bolhas do
+  chat mantêm texto branco com azul ligeiramente mais profundo (4,56:1).
 - Checklist completo e pendências deliberadas: `docs/PRELAUNCH_AUDIT.md`.
 
 **Pendente:** auditoria de autorização, segredos no histórico Git, WAF,
