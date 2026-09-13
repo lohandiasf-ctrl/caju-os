@@ -9,6 +9,35 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-13
+
+### Volta a lista ranqueada de tecnicos no dialogo de operacao
+
+O usuario pediu de volta a recomendacao automatica que o commit `98a254f` tinha
+retirado da UI. Como a camada de calculo nunca saiu do repositorio, a volta foi
+so de interface.
+
+- `components/operation-workflow-dialog.tsx`: nova secao "Melhor tecnico
+  calculado" (icone `Brain`), acima de "Auditoria do chamado". Volta a chamada a
+  `recommendTechnicians`, com os tres primeiros colocados, o card clicavel que
+  preenche `technicianId`, a estrela no primeiro, o selo `score/100`, a
+  cidade/estado com status e a linha de motivos.
+- Diferenca em relacao ao que existia antes de `98a254f`: a secao agora ocupa a
+  largura toda (era um grid de duas colunas) porque o painel "Artigos e
+  checklists sugeridos" **nao** foi restaurado — o usuario pediu de volta so a
+  lista de tecnicos. `knowledgeArticles` segue em
+  `lib/operational-intelligence.ts`, sem consumidor de UI.
+- O "Mural da equipe" (`BulletinBoard`) continua fora da home, como em `98a254f`.
+
+**Pendente:** quando os tecnicos nao tem dados proprios de geolocalizacao, todos
+caem na distancia padrao e saem com a mesma nota (ex.: tres com `49/100` e os
+mesmos motivos). E o comportamento atual do `estimatedDistanceKm`, nao uma
+regressao desta mudanca; melhorar isso exige decidir a fonte de distancia.
+
+Verificado: `npm test` (35/35), `npx tsc --noEmit`, `npm run build`.
+
+---
+
 ## 2026-09-12
 
 ### Chat: bolhas no estilo iMessage, adaptadas ao tema do app
