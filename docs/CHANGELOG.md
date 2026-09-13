@@ -24,9 +24,11 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
   coordenação, N1 e analistas.
 - `docs/SECURITY_READINESS.md` registra o que entrou e o plano de backup /
   recuperação.
+- GitHub Actions ganhou backup diário do D1 via `wrangler d1 export`, com
+  retenção de 30 dias, além do script `npm run backup:d1:remote`.
 
-**Pendente:** ativar retenção/alerta de logs no Cloudflare, automatizar
-`wrangler d1 export`, criar staging e rodar auditoria externa LGPD/segurança.
+**Pendente:** confirmar secrets de backup no GitHub, ativar alerta dos logs no
+Cloudflare, criar staging e rodar auditoria externa LGPD/segurança.
 
 ---
 

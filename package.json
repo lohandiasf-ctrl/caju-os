@@ -14,6 +14,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate:remote": "node scripts/db-migrate-remote.mjs",
+    "backup:d1:remote": "node scripts/backup-d1-remote.mjs",
     "deploy": "node scripts/patch-wrangler.mjs && wrangler deploy -c dist/server/wrangler.json",
     "release": "npm test && npx tsc --noEmit && npm run build && npm run deploy",
     "desktop:dev": "tauri dev",
