@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Primeira camada de segurança para venda
+
+- `requireApiUser` agora aplica rate limit por IP e por usuário/método em todas
+  as APIs autenticadas.
+- Recuperação de senha tem rate limit próprio sem login.
+- Negativas por cargo, convites e uploads de anexo geram `security_audit` nos
+  logs, com tokens/senhas/cookies removidos.
+- Upload de evidências para o Jira passa a validar MIME, tamanho, extensão e
+  assinatura binária antes de enviar para a Atlassian.
+- APIs gerais de detalhe/anexo do Jira ficam restritas a gerência,
+  coordenação, N1 e analistas.
+- `docs/SECURITY_READINESS.md` registra o que entrou e o plano de backup /
+  recuperação.
+
+**Pendente:** ativar retenção/alerta de logs no Cloudflare, automatizar
+`wrangler d1 export`, criar staging e rodar auditoria externa LGPD/segurança.
+
+---
+
 ### Histórico permanente de chamados (branch `codex/ticket-history`)
 
 - Chamados que recebem atualização operacional, direcionamento, agendamento em lote, validação N1 ou alteração direta no Jira agora têm uma cópia persistente no D1. A cópia conserva a última situação conhecida, o responsável pela captura e a razão da alteração, sem depender de o chamado continuar na fila do Jira.

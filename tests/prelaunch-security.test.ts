@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hasSafeDataUrlType, isSafeDataUrl, isSafeUpload } from '../lib/safe-data-url.ts';
+import { hasSafeDataUrlType, isAllowedUploadMime, isSafeDataUrl, isSafeUpload } from '../lib/safe-data-url.ts';
+import { enforceRateLimit } from '../lib/server/rate-limit.ts';
 import { withSecurityHeaders } from '../scripts/security-headers.mjs';
 
 const dataUrl = (mime: string, bytes: number[]) => `data:${mime};base64,${btoa(String.fromCharCode(...bytes))}`;
@@ -22,6 +23,14 @@ test('accepts only matching media data URLs with real signatures', () => {
 test('checks uploaded file bytes independently from its claimed type', async () => {
   assert.equal(await isSafeUpload(new File([Uint8Array.from([37, 80, 68, 70, 45, 49])], 'rat.pdf', { type: 'application/pdf' }), 100), true);
   assert.equal(await isSafeUpload(new File(['<script>'], 'rat.pdf', { type: 'application/pdf' }), 100), false);
+  assert.equal(await isSafeUpload(new File([Uint8Array.from([0x50, 0x4b, 0x03, 0x04])], 'evidencias.zip', { type: 'application/zip' }), 100), true);
+  assert.equal(isAllowedUploadMime('application/x-msdownload'), false);
+});
+
+test('rate limit returns 429 after the configured window count', () => {
+  const request = new Request('https://operacoes.cajutech.net/api/test', { headers: { 'cf-connecting-ip': crypto.randomUUID() } });
+  enforceRateLimit(request, 'test-rate', { limit: 1, windowMs: 60_000 });
+  assert.throws(() => enforceRateLimit(request, 'test-rate', { limit: 1, windowMs: 60_000 }), (error) => error instanceof Response && error.status === 429);
 });
 
 test('security headers protect HTTPS responses without forcing localhost HTTP', () => {

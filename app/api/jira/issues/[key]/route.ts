@@ -6,9 +6,11 @@ import { eq } from 'drizzle-orm';
 import { enqueueJiraSync, shouldQueueJiraError } from '@/lib/server/jira-sync';
 import { captureTicketArchive } from '@/lib/server/ticket-archive';
 
+const JIRA_ACCESS_ROLES = ['gerencia', 'coordenador', 'n1', 'analista'] as const;
+
 export async function GET(request: Request, context: { params: Promise<{ key: string }> }) {
   try {
-    await requireApiUser(request);
+    await requireApiUser(request, [...JIRA_ACCESS_ROLES]);
     const { key } = await context.params;
     return Response.json(await getJiraIssue(key), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
@@ -23,7 +25,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
   let queueActor = '';
   let queueBody: Record<string, unknown> = {};
   try {
-    const user = await requireApiUser(request);
+    const user = await requireApiUser(request, [...JIRA_ACCESS_ROLES]);
     queueActor = user.email;
     const { key } = await context.params;
     const body = await request.json() as Record<string, unknown>;

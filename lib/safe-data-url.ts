@@ -21,6 +21,21 @@ const signatures: Record<string, (bytes: Uint8Array) => boolean> = {
   'video/webm': (b) => startsWith(b, [0x1a, 0x45, 0xdf, 0xa3]),
 };
 
+const uploadSignatures: Record<string, (bytes: Uint8Array) => boolean> = {
+  ...signatures,
+  'image/heic': (b) => ascii(b, 4, 'ftyp'),
+  'image/heif': (b) => ascii(b, 4, 'ftyp'),
+  'application/zip': (b) => startsWith(b, [0x50, 0x4b, 0x03, 0x04]) || startsWith(b, [0x50, 0x4b, 0x05, 0x06]) || startsWith(b, [0x50, 0x4b, 0x07, 0x08]),
+  'application/x-zip-compressed': (b) => uploadSignatures['application/zip'](b),
+  'application/x-rar-compressed': (b) => ascii(b, 0, 'Rar!'),
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': (b) => uploadSignatures['application/zip'](b),
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': (b) => uploadSignatures['application/zip'](b),
+  'application/msword': (b) => startsWith(b, [0xd0, 0xcf, 0x11, 0xe0]),
+  'application/vnd.ms-excel': (b) => startsWith(b, [0xd0, 0xcf, 0x11, 0xe0]),
+  'text/plain': (b) => !startsWith(b, [0x4d, 0x5a]) && !ascii(b, 0, '<!DOCTYPE') && !ascii(b, 0, '<html') && !ascii(b, 0, '<script'),
+  'text/csv': (b) => uploadSignatures['text/plain'](b),
+};
+
 function startsWith(bytes: Uint8Array, signature: number[]) {
   return signature.every((byte, index) => bytes[index] === byte);
 }
@@ -53,6 +68,10 @@ export function hasSafeDataUrlType(data: string, mimeType: string): boolean {
 }
 
 export function isSafeUpload(file: File, maxBytes: number): Promise<boolean> {
-  if (!file.size || file.size > maxBytes || !signatures[file.type]) return Promise.resolve(false);
-  return file.slice(0, 16).arrayBuffer().then((buffer) => signatures[file.type](new Uint8Array(buffer)));
+  if (!file.size || file.size > maxBytes || !uploadSignatures[file.type]) return Promise.resolve(false);
+  return file.slice(0, 16).arrayBuffer().then((buffer) => uploadSignatures[file.type](new Uint8Array(buffer)));
+}
+
+export function isAllowedUploadMime(mimeType: string) {
+  return Boolean(uploadSignatures[mimeType]);
 }

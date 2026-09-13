@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-
-const FIREBASE_API_KEY = 'AIzaSyBOiiBRwuN8VKZ-l2MFqaqQJ8sOc8zAXP4';
+import { enforceRateLimit } from '@/lib/server/rate-limit';
+import { logSecurityEvent } from '@/lib/server/security-log';
+import { firebaseConfig } from '@/lib/firebase-config';
 
 type FirebaseResetResponse = {
   error?: { message?: string };
@@ -14,6 +15,12 @@ type FirebaseResetResponse = {
  */
 export async function POST(request: Request) {
   let email = '';
+  try {
+    enforceRateLimit(request, 'password-reset', { limit: 5, windowMs: 15 * 60_000 });
+  } catch (error) {
+    if (error instanceof Response) return error;
+    throw error;
+  }
 
   try {
     const body = await request.json() as { email?: unknown };
@@ -28,7 +35,7 @@ export async function POST(request: Request) {
 
   try {
     const firebaseResponse = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_API_KEY}`,
+      `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseConfig.apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -48,13 +55,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true });
       }
 
-      console.error('Firebase recusou a recuperação de senha', { code, status: firebaseResponse.status });
+      logSecurityEvent({ request, action: 'password_reset_firebase_rejected', outcome: 'failed', details: { code, status: firebaseResponse.status } });
       return NextResponse.json({ error: 'Não foi possível enviar o e-mail agora. Tente novamente em instantes.' }, { status: 502 });
     }
 
+    logSecurityEvent({ request, action: 'password_reset_requested', outcome: 'allowed', details: { email } });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('Falha ao solicitar recuperação de senha', error);
+    logSecurityEvent({ request, action: 'password_reset_failed', outcome: 'failed', details: error });
     return NextResponse.json({ error: 'Não foi possível conectar ao serviço de e-mail. Tente novamente.' }, { status: 503 });
   }
 }

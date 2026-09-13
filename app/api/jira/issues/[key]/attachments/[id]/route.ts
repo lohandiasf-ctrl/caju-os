@@ -3,7 +3,7 @@ import { getJiraAttachmentContent, JiraError } from '@/lib/server/jira';
 
 export async function GET(request: Request, context: { params: Promise<{ key: string; id: string }> }) {
   try {
-    await requireApiUser(request);
+    await requireApiUser(request, ['gerencia', 'coordenador', 'n1', 'analista']);
     const { key, id } = await context.params;
     const url = new URL(request.url);
     const thumbnail = url.searchParams.get('thumbnail') === '1';
