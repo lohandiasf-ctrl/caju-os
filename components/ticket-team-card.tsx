@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ClipboardCopy, RefreshCw, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { copyToClipboard } from "@/lib/clipboard";
+import { sharedTicketUrl } from "@/lib/ticket-links";
 
 type Team = {
   n1: { email: string; status: string } | null;
@@ -34,7 +35,7 @@ export function TicketTeamCard({ ticketKey, user }: {
 
   const copyLink = async () => {
     try {
-      const link = `${window.location.origin}/?ticket=${encodeURIComponent(ticketKey)}`;
+      const link = sharedTicketUrl(ticketKey);
       const copied = await copyToClipboard(link);
       setMessage(copied ? "Link do chamado copiado." : "Não foi possível copiar o link. Tente novamente.");
     } catch {
