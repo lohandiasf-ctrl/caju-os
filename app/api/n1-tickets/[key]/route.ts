@@ -3,6 +3,7 @@ import { n1TicketAssignments, operationalAudit, ticketEvidence } from '@/db/sche
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { addJiraInternalEvidence, transitionJiraIssue } from '@/lib/server/jira';
+import { isSafeDataUrl } from '@/lib/safe-data-url';
 
 const validKinds = new Set(['photo', 'video', 'rat']);
 
@@ -40,6 +41,7 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
     } else if (action === 'validate') {
       if (!current || current.n1Email.toLowerCase() !== user.email.toLowerCase()) return Response.json({ error: 'Assuma chamado antes de validar.' }, { status: 403 });
       const attachments = parseEvidence(body.evidence);
+      if (!attachments) return bad('Evidência inválida, incompatível com o tipo declarado ou muito grande.');
       if (attachments.length) {
         await addJiraInternalEvidence(ticketKey, attachments, user.email);
         await db.insert(ticketEvidence).values(attachments.map((item) => ({ ticketKey, ...item, uploadedBy: user.email, createdAt: now })));
@@ -64,20 +66,22 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
 }
 
 function parseEvidence(value: unknown) {
-  if (!Array.isArray(value) || value.length > 6) return [];
-  return value.flatMap((item) => {
-    if (!item || typeof item !== 'object') return [];
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 6) return null;
+  const parsed = value.map((item) => {
+    if (!item || typeof item !== 'object') return null;
     const record = item as Record<string, unknown>;
     const kind = record.kind;
     const name = typeof record.name === 'string' ? record.name.trim().slice(0, 180) : '';
     const mimeType = typeof record.mimeType === 'string' ? record.mimeType.slice(0, 100) : '';
     const data = typeof record.data === 'string' ? record.data : '';
-    if (!validKinds.has(String(kind)) || !name || !mimeType || !data.startsWith('data:') || data.length > 1_800_000) return [];
-    if (kind === 'photo' && !mimeType.startsWith('image/')) return [];
-    if (kind === 'video' && !mimeType.startsWith('video/')) return [];
-    if (kind === 'rat' && !(mimeType === 'application/pdf' || mimeType.startsWith('image/'))) return [];
-    return [{ kind: kind as 'photo' | 'video' | 'rat', name, mimeType, data }];
+    if (!validKinds.has(String(kind)) || !name || !mimeType || !isSafeDataUrl(data, mimeType, 1_800_000)) return null;
+    if (kind === 'photo' && !mimeType.startsWith('image/')) return null;
+    if (kind === 'video' && !mimeType.startsWith('video/')) return null;
+    if (kind === 'rat' && !(mimeType === 'application/pdf' || mimeType.startsWith('image/'))) return null;
+    return { kind: kind as 'photo' | 'video' | 'rat', name, mimeType, data };
   });
+  return parsed.some((item) => item === null) ? null : parsed as Array<NonNullable<(typeof parsed)[number]>>;
 }
 function safeKey(value: unknown) { return typeof value === 'string' && /^[A-Z][A-Z0-9]+-\d+$/i.test(value) ? value.toUpperCase() : null; }
 function bad(error: string) { return Response.json({ error }, { status: 400 }); }

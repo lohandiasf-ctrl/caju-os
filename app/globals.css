@@ -58,7 +58,8 @@
   --popover: #182130;
   --popover-foreground: #f3f6fc;
   --primary: #4f7dff;
-  --primary-foreground: #ffffff;
+  /* 5.2:1 on the brand blue; white was only 3.7:1. */
+  --primary-foreground: #0b0f18;
   --secondary: #253249;
   --secondary-foreground: #eff4ff;
   --muted: #1c2637;
@@ -78,7 +79,7 @@
   --sidebar: #111927;
   --sidebar-foreground: #f3f6fc;
   --sidebar-primary: #4f7dff;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-foreground: #0b0f18;
   --sidebar-accent: #24344f;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgb(179 199 232 / 13%);
@@ -283,7 +284,8 @@
 .chat-thread {
   --chat-thread: #141b27;
   --chat-in: #232c3d;
-  --chat-out: var(--primary);
+  /* Keep the familiar white-on-blue chat bubble at AA contrast (4.56:1). */
+  --chat-out: #426fe2;
   background: var(--chat-thread);
 }
 .chat-bubble {
@@ -296,7 +298,7 @@
   text-wrap: pretty;
 }
 .chat-bubble--in { background: var(--chat-in); color: var(--card-foreground); }
-.chat-bubble--out { background: var(--chat-out); color: var(--primary-foreground); }
+.chat-bubble--out { background: var(--chat-out); color: #fff; }
 /* squared inner corner while the run continues */
 .chat-bubble--in.chat-bubble--run-start { border-start-start-radius: .45rem; }
 .chat-bubble--in.chat-bubble--run-cont { border-end-start-radius: .45rem; }

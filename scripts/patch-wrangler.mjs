@@ -107,6 +107,10 @@ copyFileSync(
   join(REPO_ROOT, 'scripts', 'worker-entry.js'),
   join(distDir, 'worker-entry.js'),
 );
+copyFileSync(
+  join(REPO_ROOT, 'scripts', 'security-headers.mjs'),
+  join(distDir, 'security-headers.mjs'),
+);
 wrangler.main = 'worker-entry.js';
 wrangler.triggers = { crons: ['*/10 * * * *'] };
 console.log('patch-wrangler: scheduled handler wired (cron */10 * * * *).');

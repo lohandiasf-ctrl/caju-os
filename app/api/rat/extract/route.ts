@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { isSafeUpload } from '@/lib/safe-data-url';
 
 const MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -73,6 +74,9 @@ export async function POST(request: Request) {
     }
     if (!ALLOWED_MIME.includes(file.type)) {
       return Response.json(empty(`Formato não suportado (${file.type || 'desconhecido'}). Use PNG, JPG ou WebP.`));
+    }
+    if (!(await isSafeUpload(file, MAX_BYTES))) {
+      return Response.json(empty('O conteúdo da imagem não corresponde ao formato informado. Envie uma foto PNG, JPG ou WebP válida.'));
     }
     if (!env.AI) return Response.json(empty('Leitura automática indisponível: binding AI ausente.'));
 

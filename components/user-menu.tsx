@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { hasSafeDataUrlType } from "@/lib/safe-data-url";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/components/auth-provider";
 import { roleLabels } from "@/lib/permissions";
@@ -2417,6 +2418,8 @@ function MessageAttachment({
   if (!message.attachmentData) return null;
   const name = message.attachmentName || "Anexo";
   const type = message.attachmentType || "";
+  if (!hasSafeDataUrlType(message.attachmentData, type))
+    return <p className="mt-2 text-xs text-muted-foreground">Anexo antigo com formato não verificado.</p>;
   if (type.startsWith("image/"))
     return (
       <a
@@ -2433,7 +2436,7 @@ function MessageAttachment({
           loading="lazy"
         />
         <span
-          className={`block truncate px-2 py-1.5 text-[11px] ${mine ? "text-white/75" : "text-muted-foreground"}`}
+          className={`block truncate px-2 py-1.5 text-[11px] ${mine ? "text-white" : "text-muted-foreground"}`}
         >
           {name}
         </span>
@@ -3616,7 +3619,7 @@ function TicketShareCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`mt-2 flex w-full min-w-0 items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${mine ? "border-white/25 bg-white/10 hover:bg-white/15" : "border-primary/30 bg-primary/10 hover:bg-primary/20"}`}
+      className={`mt-2 flex w-full min-w-0 items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${mine ? "border-white/25 bg-black/15 hover:bg-black/25" : "border-primary/30 bg-primary/10 hover:bg-primary/20"}`}
       aria-label={`Abrir chamado ${ticketId}`}
     >
       <span
@@ -3625,12 +3628,12 @@ function TicketShareCard({
         <ClipboardList className="size-4" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-semibold uppercase tracking-[.08em] opacity-75">
+        <span className="block text-[10px] font-semibold uppercase tracking-[.08em]">
           Chamado compartilhado
         </span>
         <span className="mt-0.5 block text-xs font-bold">{ticketId}</span>
         <span
-          className={`mt-0.5 block break-words text-[11px] leading-snug [overflow-wrap:anywhere] ${mine ? "text-white/75" : "text-muted-foreground"}`}
+          className={`mt-0.5 block break-words text-[11px] leading-snug [overflow-wrap:anywhere] ${mine ? "text-white" : "text-muted-foreground"}`}
         >
           {label || "Abrir detalhes do chamado"}
         </span>

@@ -40,6 +40,7 @@ pós-migração Cloudflare.
 
 | Item | Estado | Nota |
 |---|---|---|
+| Chat/N1 aceitava MIME declarado sem conferir os bytes do anexo | **Resolvido no código; validar em produção** | Imagens, áudios, vídeos e PDF em data URL agora precisam de assinatura coerente; RAT também valida a foto antes da IA. Anexos legados não foram alterados. |
 | `bitmap.close()` antes de ler `width/height` → toda foto reportava 0x0 e o upload era bloqueado | **Resolvido** | `components/jira-ticket-details.tsx` — lê as dimensões antes do `close()` |
 | Chave do Google Maps com `&v=weekly` colado no valor | **Resolvido** | era o secret; irrelevante agora (mapa é Leaflet) |
 | Duas validações de foto divergentes (avisa vs. bloqueia) | **Resolvido** | `lib/image-validation.ts` virou fonte única; N1 avisa, upload ao Jira bloqueia usando o mesmo motor |

@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useRef, useState } from 'react';
+import Image from 'next/image';
 import { FirebaseError } from 'firebase/app';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
@@ -60,11 +61,11 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative grid min-h-dvh overflow-hidden text-foreground lg:grid-cols-[1.08fr_.92fr]">
+    <main className="relative grid min-h-dvh overflow-x-hidden text-foreground lg:grid-cols-[1.08fr_.92fr]">
       <section className="relative hidden border-r border-border bg-sidebar lg:m-4 lg:flex lg:flex-col lg:justify-between lg:rounded-[28px] lg:border lg:p-14 lg:shadow-2xl">
         <div className="absolute inset-0 rounded-[inherit] bg-[radial-gradient(circle_at_22%_20%,rgba(240,122,63,.2),transparent_34%),radial-gradient(circle_at_78%_78%,rgba(95,219,184,.13),transparent_32%)]" />
         <div className="relative flex items-center gap-3">
-          <div className="cockpit-brand grid size-11 place-items-center overflow-hidden rounded-xl"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-10 object-contain" /></div>
+          <div className="cockpit-brand grid size-11 place-items-center overflow-hidden rounded-xl"><Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 object-contain" /></div>
           <div><p className="font-extrabold">Caju OS</p><p className="text-xs font-semibold uppercase tracking-[.18em] text-muted-foreground">Comando operacional</p></div>
         </div>
         <div className="relative max-w-xl">
@@ -78,7 +79,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center px-5 py-10 sm:px-10">
         <div className="surface-panel w-full max-w-[440px] rounded-[28px] p-6 sm:p-9">
           <div className="mb-9 flex items-center gap-3 lg:hidden">
-            <div className="cockpit-brand grid size-10 place-items-center overflow-hidden rounded-xl"><img src="/caju-tech-emblem.png" alt="Caju Tech" className="size-9 object-contain" /></div>
+            <div className="cockpit-brand grid size-10 place-items-center overflow-hidden rounded-xl"><Image src="/caju-tech-emblem.png" alt="" width={36} height={36} className="size-9 object-contain" /></div>
             <div><p className="font-extrabold">Caju OS</p><p className="text-xs uppercase tracking-[.16em] text-muted-foreground">Comando operacional</p></div>
           </div>
           <p className="text-xs font-bold uppercase tracking-[.14em] text-primary">Acesso interno</p>
@@ -90,12 +91,12 @@ export default function LoginPage() {
               <label htmlFor="login-email" className="mb-2 block text-sm font-medium">E-mail</label>
               <span className="relative block"><Mail className="absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" /><Input ref={emailRef} id="login-email" name="email" className="h-11 pl-10" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@cajutech.net" required /></span>
             </div>
-            <label className="block">
+            <div className="block">
               <label htmlFor="login-password" className="mb-2 block text-sm font-medium">Senha</label>
               <span className="relative block"><LockKeyhole className="absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="login-password" name="password" className="h-11 px-10" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" minLength={6} required /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-pressed={showPassword} className="absolute right-0 top-0 z-10 grid size-11 place-items-center rounded-lg text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></span>
-            </label>
+            </div>
             {error && <p role="alert" className="rounded-lg border border-red-400/20 bg-red-400/8 p-3 text-xs text-red-200">{error}</p>}
-            {message && <p role="status" className="rounded-lg border border-emerald-400/20 bg-emerald-400/8 p-3 text-xs text-emerald-200">{message}</p>}
+            {message && <output className="block rounded-lg border border-emerald-400/20 bg-emerald-400/8 p-3 text-xs text-emerald-200">{message}</output>}
             <Button className="h-11 w-full font-bold" type="submit" disabled={loading || resetting}>{loading ? <><LoaderCircle className="animate-spin" />Entrando...</> : 'Entrar'}</Button>
             <button type="button" disabled={loading || resetting} onClick={() => void resetPassword()} className="min-h-11 w-full rounded-lg text-center text-sm font-semibold text-muted-foreground transition hover:text-primary">{resetting ? 'Enviando recuperação...' : 'Esqueci minha senha'}</button>
           </form>
