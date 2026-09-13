@@ -35,6 +35,7 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { hasSafeDataUrlType } from "@/lib/safe-data-url";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ChatMessageRow, ChatTypingIndicator } from "@/components/ui/chat-message-row";
 import { useAuth } from "@/components/auth-provider";
 import { roleLabels } from "@/lib/permissions";
 import {
@@ -1407,8 +1408,8 @@ function ChatDialog({
         }
       }}
     >
-      <DialogContent keepMounted className="grid h-[min(620px,88vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
-        <DialogHeader className="border-b border-border p-4 pr-14">
+      <DialogContent keepMounted className="chat-shell grid h-[min(680px,92dvh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="chat-header border-b border-border/60 p-4 pr-14">
           <div className="flex items-center gap-3">
             <span className="grid size-10 place-items-center overflow-hidden rounded-full bg-muted text-xs font-bold">
               {colleague?.photoUrl ? (
@@ -1432,7 +1433,8 @@ function ChatDialog({
         </DialogHeader>
         <div
           className="chat-thread min-h-0 overflow-y-auto p-4"
-          aria-live="polite"
+          role="log"
+          aria-label={`Conversa com ${name}`}
         >
           {loading ? (
             <div className="grid h-full place-items-center text-muted-foreground">
@@ -1453,10 +1455,7 @@ function ChatDialog({
                   !message.attachmentData &&
                   EMOJI_ONLY.test(parsed.text.trim());
                 return (
-                  <div
-                    key={message.id}
-                    className={`flex ${runStart ? "mt-0.5" : "mt-2"} ${mine ? "justify-end" : "justify-start"}`}
-                  >
+                  <ChatMessageRow key={message.id} mine={mine} grouped={runStart} animate={index === messages.length - 1}>
                     <div
                       className={bubbleClass(mine, runStart, runContinues, jumbo)}
                     >
@@ -1475,15 +1474,11 @@ function ChatDialog({
                       )}
                       <MessageAttachment message={message} mine={mine} />
                     </div>
-                  </div>
+                  </ChatMessageRow>
                 );
               })}
               <ChatReceipt messages={messages} userEmail={user?.email} />
-              {otherTyping && (
-                <p className="text-xs text-muted-foreground">
-                  {name} está digitando<span className="animate-pulse">…</span>
-                </p>
-              )}
+              {otherTyping && <ChatTypingIndicator name={name} />}
               <div ref={bottomRef} />
             </div>
           ) : (
@@ -1499,7 +1494,7 @@ function ChatDialog({
         </div>
         <form
           onSubmit={sendMessage}
-          className="border-t border-border bg-card p-3"
+          className="chat-composer border-t border-border/60 p-3"
         >
           {recording && (
             <div
@@ -1514,7 +1509,7 @@ function ChatDialog({
               </span>
             </div>
           )}
-          <div className="flex gap-2">
+          <div className="chat-compose-line flex gap-2 rounded-2xl border border-border/70 p-1.5 focus-within:border-primary/70">
             <label htmlFor="chat-message" className="sr-only">
               Mensagem
             </label>
@@ -1533,10 +1528,10 @@ function ChatDialog({
               }}
               maxLength={2000}
               placeholder="Escreva uma mensagem..."
-              className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-11 min-w-0 flex-1 rounded-xl border-0 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
             />
             <label
-              className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl border border-input bg-background hover:bg-muted"
+              className="grid size-11 shrink-0 cursor-pointer place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-within:ring-2 focus-within:ring-primary"
               aria-label="Anexar imagem, áudio ou PDF"
             >
               <Paperclip className="size-4" />
@@ -1556,7 +1551,7 @@ function ChatDialog({
               onClick={() =>
                 recording ? stopRecording() : void startRecording()
               }
-              className={`grid size-11 shrink-0 place-items-center rounded-xl border transition ${recording ? "border-rose-400/50 bg-rose-400/15 text-rose-300" : "border-input bg-background hover:bg-muted"}`}
+              className={`grid size-11 shrink-0 place-items-center rounded-xl transition-colors ${recording ? "bg-rose-400/15 text-rose-300" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               aria-label={recording ? "Parar gravação" : "Gravar áudio"}
             >
               {recording ? (
@@ -1572,7 +1567,7 @@ function ChatDialog({
                 sending ||
                 recording
               }
-              className="grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="chat-send-button grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Enviar mensagem"
             >
               {sending ? (
@@ -2900,8 +2895,8 @@ function GroupChatDialog({
           if (!value) onClose();
         }}
       >
-        <DialogContent className="grid h-[min(640px,90vh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
-          <DialogHeader className="border-b border-border p-4 pr-14">
+        <DialogContent className="chat-shell grid h-[min(680px,92dvh)] grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="chat-header border-b border-border/60 p-4 pr-14">
             <DialogTitle>{group?.name}</DialogTitle>
             <button
               type="button"
@@ -2912,7 +2907,7 @@ function GroupChatDialog({
               {group?.members.length} participantes
             </button>
           </DialogHeader>
-          <div className="chat-thread min-h-0 overflow-y-auto p-4">
+          <div className="chat-thread min-h-0 overflow-y-auto p-4" role="log" aria-label={`Conversa do grupo ${group?.name || ""}`}>
             {messages.length ? (
               <div>
                 {messages.map((message, index) => {
@@ -2933,10 +2928,7 @@ function GroupChatDialog({
                     !message.attachmentData &&
                     EMOJI_ONLY.test(message.body.trim());
                   return (
-                    <div
-                      key={message.id}
-                      className={`flex ${runStart ? "mt-0.5" : "mt-2"} ${mine ? "justify-end" : "justify-start"}`}
-                    >
+                    <ChatMessageRow key={message.id} mine={mine} grouped={runStart} animate={index === messages.length - 1}>
                       <div
                         className={bubbleClass(mine, runStart, runContinues, jumbo)}
                       >
@@ -2968,7 +2960,7 @@ function GroupChatDialog({
                         )}
                         <MessageAttachment message={message} mine={mine} />
                       </div>
-                    </div>
+                    </ChatMessageRow>
                   );
                 })}
                 <ChatReceipt messages={messages} userEmail={user?.email} />
@@ -2985,15 +2977,17 @@ function GroupChatDialog({
               </p>
             )}
           </div>
-          <form onSubmit={send} className="border-t border-border bg-card p-3">
-            <div className="flex gap-2">
+          <form onSubmit={send} className="chat-composer border-t border-border/60 p-3">
+            <div className="chat-compose-line flex gap-2 rounded-2xl border border-border/70 p-1.5 focus-within:border-primary/70">
+              <label htmlFor="group-chat-message" className="sr-only">Mensagem para o grupo</label>
               <input
+                id="group-chat-message"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder="Mensagem para o grupo..."
-                className="h-11 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-11 min-w-0 flex-1 rounded-xl border-0 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-0"
               />
-              <label className="grid size-11 cursor-pointer place-items-center rounded-xl border border-input">
+              <label className="grid size-11 cursor-pointer place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-within:ring-2 focus-within:ring-primary">
                 <Paperclip className="size-4" />
                 <span className="sr-only">Anexar arquivo</span>
                 <input
@@ -3008,13 +3002,15 @@ function GroupChatDialog({
               </label>
               <button
                 type="submit"
-                className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground"
-                aria-label="Enviar"
+                disabled={!draft.trim() && !ticketId && !attachment}
+                className="chat-send-button grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Enviar mensagem ao grupo"
               >
                 <Send className="size-4" />
               </button>
             </div>
             <select
+              aria-label="Anexar chamado ao grupo"
               value={ticketId}
               onChange={(event) => setTicketId(event.target.value)}
               className="mt-2 h-10 w-full rounded-xl border border-input bg-background px-3 text-xs"

@@ -38,6 +38,15 @@ Verificado: `npm test` (35/35), `npx tsc --noEmit`, `npm run build`.
 
 ---
 
+## 2026-09-13
+
+### Chat: visual inspirado na referência animada
+
+- Conversas individuais e em grupo receberam superfície escura com gradiente sutil, cabeçalho e composição integrados, bolhas com profundidade e entrada suave.
+- O indicador de digitação usa três pontos animados ligados ao estado real da conversa. Movimento reduzido desativa as animações.
+- O envio, histórico, anexos, compartilhamento de chamados e chamadas permanecem ligados aos dados reais; a reprodução e as respostas fictícias do componente de demonstração não foram incorporadas.
+- Campo e envio do chat em grupo ganharam rótulos acessíveis e estado desabilitado quando não há conteúdo para enviar.
+
 ## 2026-09-12
 
 ### Endurecimento pré-lançamento a partir dos dois vídeos
