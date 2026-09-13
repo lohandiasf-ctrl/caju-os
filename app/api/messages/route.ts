@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gt, like, or } from 'drizzle-orm';
 import { appUsers, employeeMessages } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { isSafeDataUrl } from '@/lib/safe-data-url';
 
 export async function GET(request: Request) {
   try {
@@ -61,16 +62,21 @@ export async function POST(request: Request) {
     const current = await requireApiUser(request);
     let payload: { to?: string; body?: string; attachment?: { name?: string; type?: string; data?: string } };
     try { payload = await request.json() as typeof payload; } catch { return Response.json({ error: 'Dados da mensagem inválidos.' }, { status: 400 }); }
-    const to = payload.to?.trim().toLowerCase();
-    const body = payload.body?.trim();
-    const attachment = payload.attachment?.data ? { name: payload.attachment.name?.trim() || 'Anexo', type: payload.attachment.type?.trim() || 'application/octet-stream', data: payload.attachment.data } : null;
+    if (!payload || typeof payload !== 'object') return Response.json({ error: 'Dados da mensagem inválidos.' }, { status: 400 });
+    const to = typeof payload.to === 'string' ? payload.to.trim().toLowerCase() : '';
+    const body = typeof payload.body === 'string' ? payload.body.trim() : '';
+    const rawAttachment = payload.attachment && typeof payload.attachment === 'object' ? payload.attachment : null;
+    const attachment = rawAttachment && typeof rawAttachment.data === 'string' ? {
+      name: typeof rawAttachment.name === 'string' ? rawAttachment.name.trim().slice(0, 180) || 'Anexo' : 'Anexo',
+      type: typeof rawAttachment.type === 'string' ? rawAttachment.type.trim() : '',
+      data: rawAttachment.data,
+    } : null;
     if (!to || (!body && !attachment)) return Response.json({ error: 'Escreva uma mensagem ou anexe um arquivo.' }, { status: 400 });
     const messageBody = body || '';
     if (to === current.email.toLowerCase()) return Response.json({ error: 'Escolha outro colega.' }, { status: 400 });
+    if (!/^\S+@\S+\.\S+$/.test(to)) return Response.json({ error: 'Destinatário inválido.' }, { status: 400 });
     if (messageBody.length > 2000) return Response.json({ error: 'A mensagem deve ter até 2.000 caracteres.' }, { status: 400 });
-    if (attachment && !attachment.type.startsWith('image/') && !attachment.type.startsWith('audio/') && attachment.type !== 'application/pdf') return Response.json({ error: 'Só é permitido enviar imagens, áudios ou PDFs.' }, { status: 400 });
-    if (attachment && !attachment.data.startsWith('data:')) return Response.json({ error: 'Formato de anexo inválido.' }, { status: 400 });
-    if (attachment && attachment.data.length > 1_000_000) return Response.json({ error: 'O anexo deve ter até 750 KB para manter o chat rápido.' }, { status: 400 });
+    if (attachment && !isSafeDataUrl(attachment.data, attachment.type, 1_000_000)) return Response.json({ error: 'Anexo inválido, incompatível com o tipo declarado ou muito grande. Use imagem, áudio ou PDF de até 750 KB.' }, { status: 400 });
     const recipient = await getDb().select({ active: appUsers.active }).from(appUsers).where(eq(appUsers.email, to)).get();
     if (!recipient?.active) return Response.json({ error: 'Colega não encontrado.' }, { status: 404 });
     const now = new Date().toISOString();

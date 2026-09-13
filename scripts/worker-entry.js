@@ -3,10 +3,12 @@
 // follow-ups need to run when nobody has the app open, so this wraps it and
 // adds a scheduled handler that drives the sweep through the normal route.
 import handler from './index.js';
+import { withSecurityHeaders } from './security-headers.mjs';
 
 export default {
-  fetch(request, env, ctx) {
-    return handler.fetch(request, env, ctx);
+  async fetch(request, env, ctx) {
+    const response = await handler.fetch(request, env, ctx);
+    return withSecurityHeaders(response, request.url);
   },
   async scheduled(event, env, ctx) {
     const sweep = handler.fetch(

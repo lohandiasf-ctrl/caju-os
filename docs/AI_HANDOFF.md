@@ -10,6 +10,13 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
+- **Segurança pré-lançamento (branch `codex/video-prelaunch-hardening`):**
+  `scripts/worker-entry.js` envolve as respostas com cabeçalhos definidos em
+  `scripts/security-headers.mjs`; `scripts/patch-wrangler.mjs` copia os dois
+  arquivos para `dist/server`. `lib/safe-data-url.ts` valida anexos em base64
+  do chat/N1 e a assinatura das fotos de RAT. Checklist e pendências em
+  `docs/PRELAUNCH_AUDIT.md`. Ainda não foi publicado em produção.
+
 - **Produção:** https://operacoes.cajutech.net — servida por um Cloudflare
   Worker (`caju-os`) na conta Cloudflare do usuário.
 - **Banco:** Cloudflare D1 `caju-os-prod`

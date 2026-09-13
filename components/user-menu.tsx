@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { hasSafeDataUrlType } from "@/lib/safe-data-url";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAuth } from "@/components/auth-provider";
 import { roleLabels } from "@/lib/permissions";
@@ -2417,6 +2418,8 @@ function MessageAttachment({
   if (!message.attachmentData) return null;
   const name = message.attachmentName || "Anexo";
   const type = message.attachmentType || "";
+  if (!hasSafeDataUrlType(message.attachmentData, type))
+    return <p className="mt-2 text-xs text-muted-foreground">Anexo antigo com formato não verificado.</p>;
   if (type.startsWith("image/"))
     return (
       <a

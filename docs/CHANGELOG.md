@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-12
 
+### Endurecimento pré-lançamento a partir dos dois vídeos
+
+- Chat individual/grupo e evidências N1 agora recusam data URLs cujo conteúdo
+  não corresponde ao MIME declarado; RAT confirma assinatura da imagem antes
+  de enviá-la à IA. Anexos legados de tipo não permitido deixam de abrir na
+  interface. Entradas inválidas do chat retornam 400 em vez de 500.
+- Worker aplica cabeçalhos básicos de segurança. O cookie de preferência da
+  barra lateral usa SameSite e Secure em HTTPS.
+- Painel interno marcado noindex, com `robots.txt` restritivo e página 404.
+- Checklist completo e pendências deliberadas: `docs/PRELAUNCH_AUDIT.md`.
+
+**Pendente:** auditoria de autorização, segredos no histórico Git, WAF,
+política jurídica, CSP e testes autenticados de acessibilidade/performance.
+Não houve publicação em produção.
+
+
 ### Chat: bolhas no estilo iMessage, adaptadas ao tema do app
 
 Pedido do usuario, com referencia visual (demo iMessage). Escopo escolhido: so o
