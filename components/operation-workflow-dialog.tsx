@@ -44,6 +44,7 @@ type Props = {
     store: string;
     city: string;
     rawStatus?: string;
+    priority?: string;
   };
   role: string | null;
   user: { getIdToken: () => Promise<string> } | null;
