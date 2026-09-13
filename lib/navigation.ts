@@ -1,6 +1,6 @@
 import type { UserRole } from './permissions';
 
-export const DASHBOARD_VIEWS = ['overview', 'tickets', 'central', 'agenda', 'technicians', 'projects', 'feedback', 'settings'] as const;
+export const DASHBOARD_VIEWS = ['overview', 'tickets', 'history', 'central', 'agenda', 'technicians', 'projects', 'feedback', 'settings'] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
 export function isDashboardView(value: string | null): value is DashboardView {
@@ -10,7 +10,7 @@ export function isDashboardView(value: string | null): value is DashboardView {
 export function canUseDashboardView(role: string | null, view: DashboardView) {
   if (role === 'gerencia' || role === 'coordenador') return true;
   if (role === 'n1') return view !== 'projects';
-  if (role === 'tecnico') return ['overview', 'agenda', 'technicians', 'feedback', 'settings'].includes(view);
+  if (role === 'tecnico') return ['overview', 'history', 'agenda', 'technicians', 'feedback', 'settings'].includes(view);
   if (role === 'analista') return !['central', 'projects'].includes(view);
   return view === 'overview' || view === 'feedback';
 }

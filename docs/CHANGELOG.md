@@ -11,6 +11,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Histórico permanente de chamados (branch `codex/ticket-history`)
+
+- Chamados que recebem atualização operacional, direcionamento, agendamento em lote, validação N1 ou alteração direta no Jira agora têm uma cópia persistente no D1. A cópia conserva a última situação conhecida, o responsável pela captura e a razão da alteração, sem depender de o chamado continuar na fila do Jira.
+- Nova tela **Histórico de chamados** no menu principal, com busca, ordenação por data (mais novos/mais antigos), abertura da ficha salva e consulta de dados operacionais relacionados: auditoria, evidências, visitas, tarefas, rastreios e vínculos N1.
+- O backup administrativo passa a incluir os registros arquivados. Perfis fora da gerência continuam recebendo os campos financeiros sensíveis ocultos na consulta detalhada.
+- A migração `0025_ticket_history.sql` cria `ticket_archives` e importa os fluxos operacionais já existentes, para que históricos locais anteriores não sejam perdidos.
+
+**Pendente:** aplicar `npm run db:migrate:remote` antes de enviar esta branch à `main`; sem a migração, a nova tela não terá a tabela necessária no D1 de produção.
+
+---
+
 ### Busca de técnicos, contatos CSV e vínculos de atendimento (branch `codex/technician-dispatch-and-contacts`)
 
 - A aba Técnicos de campo agora busca 2/5/10/20 técnicos mais próximos de uma cidade/UF, mostrando nome, telefone, cidade/UF e distância aproximada em linha reta. A busca usa centros das cidades do mapa local e geocodificação Nominatim/cache quando necessário; não representa trajeto rodoviário.

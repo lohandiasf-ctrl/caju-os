@@ -4,6 +4,7 @@ import { getDb } from '@/db';
 import { operationalAudit, operationalWorkflows, technicians, ticketSnapshots } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { enqueueJiraSync, shouldQueueJiraError } from '@/lib/server/jira-sync';
+import { captureTicketArchive } from '@/lib/server/ticket-archive';
 
 export async function GET(request: Request, context: { params: Promise<{ key: string }> }) {
   try {
@@ -62,6 +63,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ key: 
       details: JSON.stringify({ collaborator: user.email, origin: typeof changeOrigin === 'string' && changeOrigin === 'sistema' ? 'sistema' : 'Jira', reason: typeof changeReason === 'string' && changeReason.trim() ? changeReason.trim().slice(0, 500) : 'Edição direta nos detalhes do chamado', changedAt: now, changes: diffJira({ status: before.status, ...before.operationalFields }, { status: after.status, ...after.operationalFields }), before: { status: before.status, fields: before.operationalFields }, after: { status: after.status, fields: after.operationalFields } }),
       createdAt: now,
     });
+    const workflow = await getDb().select().from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, key)).get();
+    await captureTicketArchive(getDb(), {
+      ticketKey: key,
+      title: after.summary,
+      jiraStatus: after.status,
+      operationalStatus: workflow?.status ?? null,
+      storeName: after.store ?? workflow?.storeName,
+      city: after.city ?? workflow?.city,
+      snapshot: { jira: after, workflow: workflow ?? null },
+      actorEmail: user.email,
+      reason: typeof status === 'string' ? `Jira alterado: ${status}` : 'Campos do Jira atualizados',
+      capturedAt: now,
+    }).catch(() => undefined);
     return Response.json(after, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;

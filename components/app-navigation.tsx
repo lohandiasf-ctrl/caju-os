@@ -3,7 +3,7 @@
 import { useEffect, useSyncExternalStore, type MouseEvent } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageSquarePlus, PackageOpen, Settings, Users } from 'lucide-react';
+import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageSquarePlus, PackageOpen, Settings, Users } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -12,6 +12,7 @@ import { canUseNavItem } from '@/lib/navigation';
 const items = [
   ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'],
   ['Chamados', ClipboardList, '/?view=tickets', 'tickets'],
+  ['Histórico de chamados', Archive, '/?view=history', 'history'],
   ['Mapa operacional', Map, '/mapa', 'map'],
   ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
   ['Central N1', Headphones, '/?view=central', 'central'],
