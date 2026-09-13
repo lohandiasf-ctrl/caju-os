@@ -19,7 +19,7 @@ export async function GET(request: Request, context: { params: Promise<{ key: st
       : null;
     return Response.json({
       ticketKey: key,
-      n1: n1 ? { email: n1.n1Email, status: n1.status, claimedAt: n1.claimedAt } : null,
+      n1: n1 ? { email: n1.n1Email, participantEmail: n1.participantN1Email, status: n1.status, claimedAt: n1.claimedAt, participantClaimedAt: n1.participantClaimedAt } : null,
       analyst: workflow?.scheduledByEmail ? { email: workflow.scheduledByEmail, scheduledAt: workflow.scheduledAt } : null,
       technician: technician ?? null,
     }, { headers: { 'Cache-Control': 'private, no-store' } });

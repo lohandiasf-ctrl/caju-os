@@ -507,6 +507,8 @@ export const operationalVisits = sqliteTable(
 export const n1TicketAssignments = sqliteTable('n1_ticket_assignments', {
   ticketKey: text('ticket_key').primaryKey(),
   n1Email: text('n1_email').notNull(),
+  participantN1Email: text('participant_n1_email'),
+  participantClaimedAt: text('participant_claimed_at'),
   status: text('status', { enum: ['claimed', 'validated'] })
     .notNull()
     .default('claimed'),

@@ -15,6 +15,8 @@ export type BulkTicket = {
 
 export const MAX_BULK_TICKETS = 40;
 
+const sharedTicketUrl = (key: string) => `https://cajutech.net/chamados/${encodeURIComponent(key)}`;
+
 const TRANSITION_ROLES = new Set(['gerencia', 'coordenador', 'n1', 'analista']);
 
 // Etapa de origem exigida por cada ação: agendar só sai de "Pendente de
@@ -59,6 +61,7 @@ export function ticketsToClipboard(tickets: BulkTicket[], format: ClipboardForma
   }
   return tickets.map((ticket) => [
     `${ticket.id} · ${ticket.rawStatus}`,
+    sharedTicketUrl(ticket.id),
     ticket.title,
     [ticket.store, ticket.city].filter(Boolean).join(' · '),
     [ticket.schedule ? `Agendamento: ${ticket.schedule}` : '', ticket.technician ? `Técnico: ${ticket.technician}` : ''].filter(Boolean).join(' · '),

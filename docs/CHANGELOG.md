@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Resumo com link compartilhável e limite de dois N1
+
+- A opção **Copiar → Resumo para mensagem** agora inclui o link interno
+  `https://cajutech.net/chamados/FSA-...` para cada chamado selecionado, em vez
+  de depender do link do Jira.
+- Cada chamado N1 agora aceita no máximo dois N1: o primeiro que assumir vira
+  **N1 principal** e o segundo vira **N1 participante**.
+- Um terceiro N1 recebe bloqueio com aviso de que o chamado já tem principal e
+  participante.
+- Validação N1 pode ser feita pelo principal ou pelo participante.
+- O cartão de equipe do chamado mostra N1 principal e participante quando houver.
+- Migração `0026_n1_participant.sql` adiciona os campos do participante no D1.
+
+Verificado localmente: testes, TypeScript e build.
+
+---
+
 ### Primeira camada de segurança para venda
 
 - `requireApiUser` agora aplica rate limit por IP e por usuário/método em todas

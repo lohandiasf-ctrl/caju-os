@@ -36,11 +36,21 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
     const now = new Date().toISOString();
     const current = await db.select().from(n1TicketAssignments).where(eq(n1TicketAssignments.ticketKey, ticketKey)).get();
     if (action === 'claim') {
-      if (current && current.n1Email.toLowerCase() !== user.email.toLowerCase()) return Response.json({ error: `Chamado já assumido por ${current.n1Email}.` }, { status: 409 });
-      await db.insert(n1TicketAssignments).values({ ticketKey, n1Email: user.email, status: 'claimed', claimedAt: now, updatedAt: now }).onConflictDoUpdate({ target: n1TicketAssignments.ticketKey, set: { n1Email: user.email, status: 'claimed', updatedAt: now } });
-      await db.insert(operationalAudit).values({ ticketKey, action: 'Chamado assumido por N1', actorEmail: user.email, details: null, createdAt: now });
+      const isPrimary = current?.n1Email.toLowerCase() === user.email.toLowerCase();
+      const isParticipant = current?.participantN1Email?.toLowerCase() === user.email.toLowerCase();
+      if (!current) {
+        await db.insert(n1TicketAssignments).values({ ticketKey, n1Email: user.email, status: 'claimed', claimedAt: now, updatedAt: now });
+        await db.insert(operationalAudit).values({ ticketKey, action: 'Chamado assumido por N1 principal', actorEmail: user.email, details: null, createdAt: now });
+      } else if (isPrimary || isParticipant) {
+        await db.insert(operationalAudit).values({ ticketKey, action: 'N1 reabriu vínculo do chamado', actorEmail: user.email, details: null, createdAt: now });
+      } else if (!current.participantN1Email) {
+        await db.update(n1TicketAssignments).set({ participantN1Email: user.email, participantClaimedAt: now, updatedAt: now }).where(eq(n1TicketAssignments.ticketKey, ticketKey));
+        await db.insert(operationalAudit).values({ ticketKey, action: 'Chamado assumido por N1 participante', actorEmail: user.email, details: JSON.stringify({ primaryN1: current.n1Email }), createdAt: now });
+      } else {
+        return Response.json({ error: `Chamado já tem dois N1: ${current.n1Email} e ${current.participantN1Email}.` }, { status: 409 });
+      }
     } else if (action === 'validate') {
-      if (!current || current.n1Email.toLowerCase() !== user.email.toLowerCase()) return Response.json({ error: 'Assuma chamado antes de validar.' }, { status: 403 });
+      if (!current || ![current.n1Email, current.participantN1Email].some((email) => email?.toLowerCase() === user.email.toLowerCase())) return Response.json({ error: 'Assuma chamado antes de validar.' }, { status: 403 });
       const attachments = parseEvidence(body.evidence);
       if (!attachments) return bad('Evidência inválida, incompatível com o tipo declarado ou muito grande.');
       if (attachments.length) {

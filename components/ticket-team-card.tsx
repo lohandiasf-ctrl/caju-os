@@ -7,7 +7,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { sharedTicketUrl } from "@/lib/ticket-links";
 
 type Team = {
-  n1: { email: string; status: string } | null;
+  n1: { email: string; participantEmail?: string | null; status: string } | null;
   analyst: { email: string; scheduledAt: string | null } | null;
   technician: { id: number; name: string; baseCity: string | null; baseState: string | null } | null;
 };
@@ -49,7 +49,7 @@ export function TicketTeamCard({ ticketKey, user }: {
       <div className="flex flex-wrap gap-2"><Button type="button" variant="ghost" size="sm" onClick={() => setRefresh((value) => value + 1)}><RefreshCw aria-hidden="true" /> Atualizar vínculos</Button><Button type="button" variant="outline" size="sm" onClick={() => void copyLink()}><ClipboardCopy aria-hidden="true" /> Copiar link único</Button></div>
     </div>
     <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-      <p><span className="block text-muted-foreground">N1 responsável</span><b>{team?.n1?.email ?? "Não atribuído"}</b></p>
+      <p><span className="block text-muted-foreground">N1 principal</span><b>{team?.n1?.email ?? "Não atribuído"}</b>{team?.n1?.participantEmail && <span className="mt-1 block">Participante: <b>{team.n1.participantEmail}</b></span>}</p>
       <p><span className="block text-muted-foreground">Analista que agendou</span><b>{team?.analyst?.email ?? "Não registrado"}</b></p>
       <p><span className="block text-muted-foreground">Técnico de campo</span><b>{team?.technician?.name ?? "Não vinculado"}</b></p>
     </div>
