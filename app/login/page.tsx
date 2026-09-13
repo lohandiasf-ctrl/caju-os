@@ -2,7 +2,7 @@
 
 import { FormEvent, useRef, useState } from 'react';
 import { FirebaseError } from 'firebase/app';
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,17 +34,26 @@ export default function LoginPage() {
   async function resetPassword() {
     setError('');
     setMessage('');
-    if (!email.trim()) {
+    // Read the DOM value as well: browser/password-manager autofill may fill an
+    // input without issuing React's onChange event.
+    const resetEmail = (emailRef.current?.value || email).trim().toLowerCase();
+    if (!resetEmail) {
       setError('Informe seu e-mail para receber a recuperação de senha.');
       emailRef.current?.focus();
       return;
     }
     setResetting(true);
     try {
-      await sendPasswordResetEmail(auth, email.trim());
-      setMessage('Enviamos as instruções de recuperação para o seu e-mail.');
+      const response = await fetch('/api/auth/password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o e-mail de recuperação.');
+      setMessage('Se houver uma conta com esse e-mail, enviaremos as instruções de recuperação em instantes. Verifique também a caixa de spam.');
     } catch (cause) {
-      setError(authErrorMessage(cause));
+      setError(cause instanceof Error ? cause.message : 'Não foi possível enviar o e-mail de recuperação.');
     } finally {
       setResetting(false);
     }
