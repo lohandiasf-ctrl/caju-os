@@ -26,6 +26,9 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
   recuperação.
 - GitHub Actions ganhou backup diário do D1 via `wrangler d1 export`, com
   retenção de 30 dias, além do script `npm run backup:d1:remote`.
+- Adicionado script de restore D1 com confirmação explícita por `--yes`.
+- Headers de segurança ganharam CSP em modo `Report-Only` para observação antes
+  de bloqueio real.
 
 **Pendente:** confirmar secrets de backup no GitHub, ativar alerta dos logs no
 Cloudflare, criar staging e rodar auditoria externa LGPD/segurança.

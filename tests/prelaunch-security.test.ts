@@ -37,6 +37,8 @@ test('security headers protect HTTPS responses without forcing localhost HTTP', 
   const secure = withSecurityHeaders(Response.json({ ok: true }), 'https://operacoes.cajutech.net/');
   assert.equal(secure.headers.get('X-Content-Type-Options'), 'nosniff');
   assert.equal(secure.headers.get('X-Frame-Options'), 'DENY');
+  assert.equal(secure.headers.get('X-Permitted-Cross-Domain-Policies'), 'none');
+  assert.match(secure.headers.get('Content-Security-Policy-Report-Only') ?? '', /frame-ancestors 'none'/);
   assert.match(secure.headers.get('Strict-Transport-Security') ?? '', /max-age=/);
   const local = withSecurityHeaders(new Response('ok'), 'http://localhost:5173/');
   assert.equal(local.headers.get('Strict-Transport-Security'), null);

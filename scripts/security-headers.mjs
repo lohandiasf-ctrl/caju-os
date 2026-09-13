@@ -1,9 +1,11 @@
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
+  'X-Permitted-Cross-Domain-Policies': 'none',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'Permissions-Policy': 'payment=(), usb=(), geolocation=(self), microphone=(self), camera=(self)',
+  'Content-Security-Policy-Report-Only': "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: https:; media-src 'self' data: https: blob:; connect-src 'self' https: wss:; worker-src 'self' blob:",
 };
 
 export function withSecurityHeaders(response, requestUrl) {

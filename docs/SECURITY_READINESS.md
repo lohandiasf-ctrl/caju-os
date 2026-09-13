@@ -12,6 +12,9 @@
 - Backup diário do D1 configurado em GitHub Actions (`D1 backup`), com artefato
   SQL retido por 30 dias.
 - Script local/remoto: `npm run backup:d1:remote`.
+- Script de restauração controlada: `npm run restore:d1:remote -- --file=backups/d1/arquivo.sql --yes`.
+- Cabeçalho `Content-Security-Policy-Report-Only` ativo para mapear quebras sem
+  derrubar o app em produção.
 
 ## Ainda necessário antes de vender
 
@@ -19,13 +22,15 @@
 - Confirmar que os secrets `CLOUDFLARE_API_TOKEN` e
   `CLOUDFLARE_ACCOUNT_ID` existem no GitHub.
 - Criar ambiente staging separado.
-- Fazer teste de restauração mensal.
+- Fazer teste de restauração mensal em staging antes de restaurar produção.
 - Rodar revisão externa LGPD/segurança antes do primeiro cliente pago.
 
 ## Plano de recuperação
 
 1. Falha no Jira: manter operações locais, enfileirar alterações e reenviar depois.
-2. Falha no D1: restaurar último backup exportado em novo D1 e trocar binding `DB`.
+2. Falha no D1: restaurar último backup exportado em novo D1 ou rodar
+   `npm run restore:d1:remote -- --file=backups/d1/arquivo.sql --yes` contra o
+   banco correto, depois trocar binding `DB` se necessário.
 3. Falha no Worker: rollback para commit anterior pela Cloudflare ou novo push revertendo.
 4. Vazamento de token: revogar token no provedor, trocar secret no Cloudflare, publicar novo deploy.
 5. Falha no SharePoint/Power Automate: manter cadastro local e sincronizar pendências depois.

@@ -1,10 +1,10 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { configFromEnv, loadCfConfig } from './cf-config.mjs';
+import { loadCfConfig } from './cf-config.mjs';
 
 function backupConfig() {
-  if (process.env.D1_DATABASE_NAME) return configFromEnv(process.env);
+  if (process.env.D1_DATABASE_NAME) return { d1_database_name: process.env.D1_DATABASE_NAME };
   return loadCfConfig();
 }
 
@@ -21,4 +21,3 @@ const result = spawnSync(command, args, { stdio: 'inherit' });
 if (result.error) throw result.error;
 if (result.status !== 0) process.exit(result.status ?? 1);
 console.log(`D1 backup written to ${output}`);
-
