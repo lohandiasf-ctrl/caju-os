@@ -16,8 +16,8 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 - A tela inicial ganhou o bloco **Pesquisar operação** para responder perguntas
   simples como “quantos chamados tem para amanhã”, “quantos chamados tem para
   10h”, “quantos estão agendados” e “quantos estão sem mandar para validação”.
-- A resposta mostra a contagem e os primeiros chamados do resultado, com clique
-  direto para abrir a FSA.
+- A resposta mostra a contagem e uma lista selecionável dos chamados do resultado,
+  com **Selecionar tudo/Desmarcar tudo** e clique direto para abrir a FSA.
 - A busca cruza status, data/hora de agendamento e fila de validação já carregada
   no painel operacional.
 

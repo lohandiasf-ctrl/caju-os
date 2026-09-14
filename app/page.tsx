@@ -1215,6 +1215,7 @@ export default function Home() {
               answer={operationalAnswer}
               selectedKeys={selectedKeys}
               onToggleSelected={toggleSelected}
+              onToggleAll={toggleSelectedGroup}
               onOpenTicket={(ticket) => void openTicket(ticket)}
             />
           )}
@@ -3372,6 +3373,7 @@ function OperationalQuestionBox({
   answer,
   selectedKeys,
   onToggleSelected,
+  onToggleAll,
   onOpenTicket,
 }: {
   value: string;
@@ -3379,6 +3381,7 @@ function OperationalQuestionBox({
   answer: OperationalAnswer;
   selectedKeys: Set<string>;
   onToggleSelected: (ticketKey: string) => void;
+  onToggleAll: (ticketKeys: string[]) => void;
   onOpenTicket: (ticket: Ticket) => void;
 }) {
   const examples = [
@@ -3421,6 +3424,21 @@ function OperationalQuestionBox({
           <p className="text-xs font-bold uppercase tracking-wide text-primary">{answer.title}</p>
           <p className="mt-2 text-4xl font-semibold tabular-nums">{answer.count}</p>
           <p className="mt-2 text-xs text-muted-foreground">{answer.description}</p>
+          {!!answer.tickets.length && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => onToggleAll(answer.tickets.map((ticket) => ticket.id))}
+              >
+                {answer.tickets.every((ticket) => selectedKeys.has(ticket.id)) ? "Desmarcar tudo" : "Selecionar tudo"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {answer.tickets.filter((ticket) => selectedKeys.has(ticket.id)).length} de {answer.tickets.length} selecionados
+              </span>
+            </div>
+          )}
           <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
             {answer.tickets.map((ticket) => (
               <div
