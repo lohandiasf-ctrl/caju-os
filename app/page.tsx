@@ -1209,6 +1209,16 @@ export default function Home() {
             </div>
           )}
           {activeView === "overview" && (
+            <OperationalQuestionBox
+              value={operationalQuestion}
+              onChange={setOperationalQuestion}
+              answer={operationalAnswer}
+              selectedKeys={selectedKeys}
+              onToggleSelected={toggleSelected}
+              onOpenTicket={(ticket) => void openTicket(ticket)}
+            />
+          )}
+          {activeView === "overview" && (
             <ActiveAttendances
               availableTickets={tickets.map((ticket) => ({
                 key: ticket.id,
@@ -1227,14 +1237,6 @@ export default function Home() {
                   priority: "Media",
                 });
               }}
-            />
-          )}
-          {activeView === "overview" && (
-            <OperationalQuestionBox
-              value={operationalQuestion}
-              onChange={setOperationalQuestion}
-              answer={operationalAnswer}
-              onOpenTicket={(ticket) => void openTicket(ticket)}
             />
           )}
           {activeView === "overview" && (
@@ -3368,11 +3370,15 @@ function OperationalQuestionBox({
   value,
   onChange,
   answer,
+  selectedKeys,
+  onToggleSelected,
   onOpenTicket,
 }: {
   value: string;
   onChange: (value: string) => void;
   answer: OperationalAnswer;
+  selectedKeys: Set<string>;
+  onToggleSelected: (ticketKey: string) => void;
   onOpenTicket: (ticket: Ticket) => void;
 }) {
   const examples = [
@@ -3415,21 +3421,32 @@ function OperationalQuestionBox({
           <p className="text-xs font-bold uppercase tracking-wide text-primary">{answer.title}</p>
           <p className="mt-2 text-4xl font-semibold tabular-nums">{answer.count}</p>
           <p className="mt-2 text-xs text-muted-foreground">{answer.description}</p>
-          <div className="mt-3 space-y-2">
-            {answer.tickets.slice(0, 4).map((ticket) => (
-              <button
+          <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
+            {answer.tickets.map((ticket) => (
+              <div
                 key={ticket.id}
-                type="button"
-                onClick={() => onOpenTicket(ticket)}
-                className="block w-full rounded-lg border border-border bg-background/60 px-3 py-2 text-left text-xs transition hover:border-primary/40 hover:bg-primary/8"
+                className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs transition ${selectedKeys.has(ticket.id) ? "border-primary/60 bg-primary/15" : "border-border bg-background/60 hover:border-primary/40 hover:bg-primary/8"}`}
               >
-                <b className="font-mono text-primary">{ticket.id}</b>
-                <span className="mt-1 block truncate">{ticket.title}</span>
-              </button>
+                <input
+                  type="checkbox"
+                  checked={selectedKeys.has(ticket.id)}
+                  onChange={() => onToggleSelected(ticket.id)}
+                  aria-label={`Selecionar ${ticket.id}`}
+                  className="mt-1 size-4 rounded border-border accent-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => onOpenTicket(ticket)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <b className="font-mono text-primary">{ticket.id}</b>
+                  <span className="mt-1 block truncate">{ticket.title}</span>
+                  <span className="mt-1 block truncate text-muted-foreground">
+                    {[ticket.status, ticket.schedule, ticket.city].filter(Boolean).join(" · ")}
+                  </span>
+                </button>
+              </div>
             ))}
-            {answer.tickets.length > 4 && (
-              <p className="text-xs text-muted-foreground">+{answer.tickets.length - 4} chamados no resultado.</p>
-            )}
           </div>
         </div>
       </div>
