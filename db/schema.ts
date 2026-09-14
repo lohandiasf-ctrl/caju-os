@@ -318,6 +318,9 @@ export const chatGroupMessages = sqliteTable(
     attachmentType: text('attachment_type'),
     attachmentData: text('attachment_data'),
     createdAt: text('created_at').notNull(),
+    editedAt: text('edited_at'),
+    editHistory: text('edit_history'),
+    deletedAt: text('deleted_at'),
   },
   (table) => [
     index('idx_chat_group_messages_group_created').on(

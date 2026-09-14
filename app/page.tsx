@@ -2113,7 +2113,7 @@ function TechniciansView({
   loading: boolean;
   tickets: Ticket[];
 }) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [tab, setTab] = useState<"n1" | "field">("n1");
   const [fieldTechnicians, setFieldTechnicians] = useState<FieldTechnician[]>(
     [],
@@ -2276,7 +2276,9 @@ function TechniciansView({
         ) : (
           <EmptyState label="Nenhuma conta N1 ativa." />
         )
-      ) : (
+      ) : null}
+      {tab === "n1" && role === "gerencia" && <EmployeeInvitePanel user={user} />}
+      {tab === "field" && (
         <>
           <section className="surface-panel max-w-4xl rounded-2xl p-4 sm:p-5" aria-labelledby="nearby-technicians-title">
             <div className="flex flex-wrap items-start justify-between gap-3">

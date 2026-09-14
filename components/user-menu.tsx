@@ -19,6 +19,7 @@ import {
   Minimize2,
   MonitorUp,
   Paperclip,
+  Pencil,
   Phone,
   PhoneIncoming,
   PhoneOff,
@@ -27,6 +28,7 @@ import {
   Send,
   Signal,
   Square,
+  Trash2,
   UserPlus,
   Users,
   X,
@@ -106,6 +108,9 @@ type GroupMessage = {
   attachmentType?: string | null;
   attachmentData?: string | null;
   createdAt: string;
+  editedAt?: string | null;
+  editHistory?: string | null;
+  deletedAt?: string | null;
 };
 type CallLog = {
   id: number;
@@ -2810,6 +2815,10 @@ function GroupChatDialog({
   } | null>(null);
   const [error, setError] = useState("");
   const [membersOpen, setMembersOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
     if (!user || !group) return;
@@ -2892,6 +2901,75 @@ function GroupChatDialog({
       setError(reason instanceof Error ? reason.message : "Falha ao enviar.");
     }
   }
+  async function renameGroup() {
+    if (!user || !group || !renameDraft.trim()) return;
+    try {
+      const response = await fetch(`/api/chat-groups/${group.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: renameDraft.trim() }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error);
+      setRenaming(false);
+      onUpdated();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Falha ao renomear o grupo.");
+    }
+  }
+  async function deleteGroup() {
+    if (!user || !group) return;
+    if (!window.confirm(`Excluir o grupo "${group.name}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const response = await fetch(`/api/chat-groups/${group.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error);
+      onUpdated();
+      onClose();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Falha ao excluir o grupo.");
+    }
+  }
+  async function saveEdit(messageId: number) {
+    if (!user || !group || !editDraft.trim()) return;
+    try {
+      const response = await fetch(`/api/chat-groups/${group.id}/messages/${messageId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ body: editDraft.trim() }),
+      });
+      const payload = (await response.json()) as { message?: GroupMessage; error?: string };
+      if (!response.ok || !payload.message) throw new Error(payload.error);
+      setMessages((items) => items.map((item) => (item.id === messageId ? payload.message! : item)));
+      setEditingId(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Falha ao editar a mensagem.");
+    }
+  }
+  async function deleteMessage(messageId: number) {
+    if (!user || !group) return;
+    if (!window.confirm("Apagar esta mensagem para os demais participantes?")) return;
+    try {
+      const response = await fetch(`/api/chat-groups/${group.id}/messages/${messageId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error);
+      void load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Falha ao apagar a mensagem.");
+    }
+  }
   const owner = group?.createdBy.toLowerCase() === user?.email?.toLowerCase();
   return (
     <>
@@ -2909,14 +2987,39 @@ function GroupChatDialog({
         >
           <DialogHeader className="chat-header border-b border-border/60 p-4 pr-14">
             <DialogTitle>{group?.name}</DialogTitle>
-            <button
-              type="button"
-              onClick={() => setMembersOpen(true)}
-              className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Users className="size-3.5" />
-              {group?.members.length} participantes
-            </button>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMembersOpen(true)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Users className="size-3.5" />
+                {group?.members.length} participantes
+              </button>
+              {owner && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRenameDraft(group?.name ?? "");
+                      setRenaming(true);
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil className="size-3.5" />
+                    Renomear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteGroup()}
+                    className="inline-flex items-center gap-1 text-xs text-rose-300 hover:text-rose-200"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Excluir grupo
+                  </button>
+                </>
+              )}
+            </div>
           </DialogHeader>
           <div className="chat-thread min-h-0 overflow-y-auto p-4" role="log" aria-label={`Conversa do grupo ${group?.name || ""}`}>
             {messages.length ? (
@@ -2938,6 +3041,8 @@ function GroupChatDialog({
                     !message.ticketId &&
                     !message.attachmentData &&
                     EMOJI_ONLY.test(message.body.trim());
+                  const deletedForOthers = Boolean(message.deletedAt) && !mine;
+                  const editing = editingId === message.id;
                   return (
                     <ChatMessageRow key={message.id} mine={mine} grouped={runStart} animate={index === messages.length - 1}>
                       <div
@@ -2949,12 +3054,55 @@ function GroupChatDialog({
                               message.senderEmail.split("@")[0]}
                           </p>
                         )}
-                        {message.body && (
-                          <p className="whitespace-pre-wrap break-words text-sm">
-                            {message.body}
+                        {deletedForOthers ? (
+                          <p className="text-sm italic text-muted-foreground">
+                            Mensagem apagada
                           </p>
+                        ) : editing ? (
+                          <div className="flex flex-col gap-2">
+                            <textarea
+                              value={editDraft}
+                              onChange={(event) => setEditDraft(event.target.value)}
+                              rows={2}
+                              className="w-full rounded-lg border border-border bg-background/70 p-2 text-sm"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void saveEdit(message.id)}
+                                className="text-xs font-semibold text-primary"
+                              >
+                                Salvar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingId(null)}
+                                className="text-xs text-muted-foreground"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {message.body && (
+                              <p className="whitespace-pre-wrap break-words text-sm">
+                                {message.body}
+                              </p>
+                            )}
+                            {message.deletedAt && mine && (
+                              <p className="mt-1 text-[10px] italic text-muted-foreground">
+                                Apagada para os demais participantes
+                              </p>
+                            )}
+                            {message.editedAt && !message.deletedAt && (
+                              <p className="mt-1 text-[10px] text-muted-foreground">
+                                editada
+                              </p>
+                            )}
+                          </>
                         )}
-                        {message.ticketId && (
+                        {!deletedForOthers && message.ticketId && (
                           <TicketShareCard
                             ticketId={message.ticketId}
                             label={
@@ -2969,7 +3117,30 @@ function GroupChatDialog({
                             }}
                           />
                         )}
-                        <MessageAttachment message={message} mine={mine} />
+                        {!deletedForOthers && <MessageAttachment message={message} mine={mine} />}
+                        {mine && !message.deletedAt && !editing && (
+                          <div className="mt-1 flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingId(message.id);
+                                setEditDraft(message.body);
+                              }}
+                              className="text-muted-foreground/70 hover:text-foreground"
+                              aria-label="Editar mensagem"
+                            >
+                              <Pencil className="size-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteMessage(message.id)}
+                              className="text-muted-foreground/70 hover:text-rose-300"
+                              aria-label="Apagar mensagem"
+                            >
+                              <Trash2 className="size-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </ChatMessageRow>
                   );
@@ -3125,6 +3296,37 @@ function GroupChatDialog({
                 ))}
             </select>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={renaming} onOpenChange={setRenaming}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Renomear grupo</DialogTitle>
+          </DialogHeader>
+          <input
+            value={renameDraft}
+            onChange={(event) => setRenameDraft(event.target.value)}
+            maxLength={60}
+            className="h-11 rounded-xl border border-input bg-background px-3 text-sm"
+            placeholder="Nome do grupo"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setRenaming(false)}
+              className="min-h-9 rounded-lg px-3 text-sm text-muted-foreground"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => void renameGroup()}
+              disabled={!renameDraft.trim()}
+              className="min-h-9 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              Salvar
+            </button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

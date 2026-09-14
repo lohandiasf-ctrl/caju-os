@@ -10,10 +10,18 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   try {
     const current = await requireApiUser(request); const groupId = Number((await context.params).id);
     if (!Number.isSafeInteger(groupId) || !(await membership(groupId, current.email))) return Response.json({ error: 'Grupo não encontrado.' }, { status: 404 });
-    const messages = await getDb().select().from(chatGroupMessages).where(eq(chatGroupMessages.groupId, groupId)).orderBy(asc(chatGroupMessages.id)).limit(200).all();
-    const lastId = messages.at(-1)?.id ?? 0; const now = new Date().toISOString();
+    const rows = await getDb().select().from(chatGroupMessages).where(eq(chatGroupMessages.groupId, groupId)).orderBy(asc(chatGroupMessages.id)).limit(200).all();
+    const lastId = rows.at(-1)?.id ?? 0; const now = new Date().toISOString();
     await getDb().insert(chatGroupReads).values({ groupId, email: current.email, lastReadMessageId: lastId, updatedAt: now }).onConflictDoUpdate({ target: [chatGroupReads.groupId, chatGroupReads.email], set: { lastReadMessageId: lastId, updatedAt: now } });
     const members = await getDb().select().from(chatGroupMembers).where(eq(chatGroupMembers.groupId, groupId)).all();
+    // A deleted message disappears for everyone except its sender, who keeps
+    // proof of what they wrote (and its edit history); nobody else gets it.
+    const messages = rows.map((message) => {
+      const mine = message.senderEmail === current.email;
+      if (message.deletedAt && !mine) return { ...message, body: '', ticketId: null, attachmentName: null, attachmentType: null, attachmentData: null, editHistory: null };
+      if (!mine) return { ...message, editHistory: null };
+      return message;
+    });
     return Response.json({ messages, members }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { if (error instanceof Response) return error; return Response.json({ error: 'Não foi possível carregar o grupo.' }, { status: 500 }); }
 }
