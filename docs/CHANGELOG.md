@@ -44,6 +44,18 @@ Verificado localmente: testes, TypeScript e build.
 
 ---
 
+## 2026-09-14
+
+### Primeira rodada do feedback operacional
+
+- Criar um atendimento agora o deixa **em preparação**; somente o botão **Iniciar agora** marca a execução. Chamados reais adicionais podem ser vinculados ao grupo existente, antes ou depois do início. Atendimento já existente permanece em andamento após a migration.
+- Valor do grupo fica visível/editável na criação para analistas, coordenação e gerência; N1 não define preço.
+- A lista e agenda de chamados passam a exibir o campo Jira **Nome do Técnico** (`customfield_12316`), em vez do responsável pelo ticket.
+- No celular, o mapa abre em modo leve e só carrega o mapa interativo sob demanda; seu contêiner fica abaixo do menu lateral.
+- Alertas operacionais não são mais truncados enquanto a contagem mostra todos; há ação **Marcar como lido**. Exportação de contatos mantém link direto do CSV caso o download automático falhe no celular.
+- O atalho de criação externa foi retirado das telas sem contexto de chamados e explicitamente identificado como criação no Jira.
+- **Pendente:** o encerramento com evidências foi adiado a pedido do usuário. Ainda precisam de escopo próprio: criação de chamados avulsos, gestão completa de grupos/mensagens, preenchimento do histórico de FSAs não editadas, cadastro de colaborador pela tela Equipe e diagnóstico da escrita dos dados do técnico no Jira.
+
 ### Pesquisa por data não mistura direcionados
 
 - Perguntas como “quantos chamados tem para amanhã” ou por horário agora contam

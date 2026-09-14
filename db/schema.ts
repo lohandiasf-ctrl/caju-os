@@ -580,6 +580,7 @@ export const activeAttendances = sqliteTable(
     ownerEmail: text('owner_email').notNull(),
     whatsappGroupName: text('whatsapp_group_name'),
     groupValueCents: integer('group_value_cents'),
+    phase: text('phase').notNull().default('ongoing'),
     startedAt: text('started_at').notNull(),
     endedAt: text('ended_at'),
     endedBy: text('ended_by'),

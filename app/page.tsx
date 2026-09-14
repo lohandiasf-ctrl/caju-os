@@ -130,6 +130,7 @@ type JiraTicket = {
   statusCategory: string;
   priority: string;
   assignee: string | null;
+  technicianName: string | null;
   updatedAt: string;
   store: string | null;
   city: string | null;
@@ -361,6 +362,19 @@ export default function Home() {
   const seenOperationalAlerts = useRef<Set<string>>(new Set());
   const [removedTicketAlerts, setRemovedTicketAlerts] = useState<string[]>([]);
   const [newTicketAlerts, setNewTicketAlerts] = useState<string[]>([]);
+  const [readAlertKeys, setReadAlertKeys] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    try { setReadAlertKeys(new Set(JSON.parse(localStorage.getItem('caju-read-alerts') ?? '[]') as string[])); } catch { /* armazenamento indisponível */ }
+  }, []);
+  const markAlertRead = (key: string) => {
+    setReadAlertKeys((current) => {
+      const next = new Set(current);
+      next.add(key);
+      try { localStorage.setItem('caju-read-alerts', JSON.stringify([...next].slice(-500))); } catch { /* armazenamento indisponível */ }
+      return next;
+    });
+  };
+  const visibleOperationalAlerts = operational?.alerts.filter((alert) => !readAlertKeys.has(`${alert.ticketKey}|${alert.message}`)) ?? [];
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1063,8 +1077,7 @@ export default function Home() {
             onClick={() => setNotificationsOpen((value) => !value)}
           >
             <Bell />
-            {(removedTicketAlerts.length || newTicketAlerts.length || operational?.alerts.length ||
-              tickets.some((ticket) => ticket.priority === "Alta")) && (
+            {(removedTicketAlerts.length || newTicketAlerts.length || visibleOperationalAlerts.length) > 0 && (
               <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
             )}
           </Button>
@@ -1073,29 +1086,22 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Central de alertas</h2>
                 <Badge variant="outline">
-                  {removedTicketAlerts.length + newTicketAlerts.length + (operational?.alerts.length ?? 0) +
-                    tickets.filter((ticket) => ticket.priority === "Alta")
-                      .length}
+                  {removedTicketAlerts.length + newTicketAlerts.length + visibleOperationalAlerts.length}
                 </Badge>
               </div>
               <div className="mt-3 space-y-2">
-                {removedTicketAlerts.slice(0, 3).map((message) => <div key={message} className="rounded-lg border border-blue-400/25 bg-blue-400/10 px-3 py-2 text-xs text-blue-100">{message}</div>)}
-                {newTicketAlerts.slice(0, 3).map((message) => <div key={message} className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-primary">Novo chamado · {message}</div>)}
-                {operational?.alerts.slice(0, 5).map((alert) => (
-                  <button
+                {removedTicketAlerts.map((message) => <div key={message} className="rounded-lg border border-blue-400/25 bg-blue-400/10 px-3 py-2 text-xs text-blue-100">{message}<button type="button" className="mt-1 block underline" onClick={() => setRemovedTicketAlerts((current) => current.filter((item) => item !== message))}>Marcar como lido</button></div>)}
+                {newTicketAlerts.map((message) => <div key={message} className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-primary">Novo chamado · {message}<button type="button" className="mt-1 block underline" onClick={() => setNewTicketAlerts((current) => current.filter((item) => item !== message))}>Marcar como lido</button></div>)}
+                {visibleOperationalAlerts.map((alert) => (
+                  <div
                     key={`${alert.ticketKey}-${alert.message}`}
-                    onClick={() => {
-                      const ticket = tickets.find(
-                        (item) => item.id === alert.ticketKey,
-                      );
-                      if (ticket) void openTicket(ticket);
-                    }}
-                    className={`w-full rounded-lg border p-2 text-left text-xs ${alert.level === "critical" ? "border-red-400/30 bg-red-400/10 text-red-200" : "border-amber-400/30 bg-amber-400/10 text-amber-100"}`}
+                    className={`rounded-lg border p-2 text-xs ${alert.level === "critical" ? "border-red-400/30 bg-red-400/10 text-red-200" : "border-amber-400/30 bg-amber-400/10 text-amber-100"}`}
                   >
-                    <b>{alert.ticketKey}</b> · {alert.message}
-                  </button>
+                    <p><b>{alert.ticketKey}</b> · {alert.message}</p>
+                    <div className="mt-2 flex gap-3"><button type="button" className="underline" onClick={() => { const ticket = tickets.find((item) => item.id === alert.ticketKey); if (ticket) void openTicket(ticket); }}>Abrir chamado</button><button type="button" className="underline" onClick={() => markAlertRead(`${alert.ticketKey}|${alert.message}`)}>Marcar como lido</button></div>
+                  </div>
                 ))}
-                {!operational?.alerts.length && (
+                {!visibleOperationalAlerts.length && (
                   <p className="text-sm text-muted-foreground">
                     Nenhum alerta operacional crítico.
                   </p>
@@ -1124,7 +1130,7 @@ export default function Home() {
                 {viewCopy[activeView][2]}
               </p>
             </div>
-            {activeView !== "settings" && (
+            {activeView === "tickets" && (
               <Button
                 size="lg"
                 className="h-11 px-4 font-bold shadow-[0_10px_28px_color-mix(in_oklab,var(--primary)_20%,transparent)]"
@@ -1136,7 +1142,7 @@ export default function Home() {
                   />
                 }
               >
-                <Plus /> Novo chamado
+                <Plus /> Novo chamado no Jira
               </Button>
             )}
           </div>
@@ -2125,6 +2131,8 @@ function TechniciansView({
   const [nearError, setNearError] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [lastTcpNumber, setLastTcpNumber] = useState("");
+  const [exportFile, setExportFile] = useState<{ url: string; name: string } | null>(null);
+  useEffect(() => () => { if (exportFile) URL.revokeObjectURL(exportFile.url); }, [exportFile]);
   useEffect(() => {
     if (tab !== "field" || !user || fieldTechnicians.length) return;
     let active = true;
@@ -2201,11 +2209,14 @@ function TechniciansView({
     const csv = googleContactsCsv(fieldTechnicians, last);
     const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
+    const name = `tecnicos-google-contatos-tcp-${String(last + 1).padStart(4, "0")}.csv`;
     const link = document.createElement("a");
     link.href = url;
-    link.download = `tecnicos-google-contatos-tcp-${String(last + 1).padStart(4, "0")}.csv`;
+    link.download = name;
+    document.body.appendChild(link);
     link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    link.remove();
+    setExportFile({ url, name });
     setExportOpen(false);
   }
   return (
@@ -2272,6 +2283,7 @@ function TechniciansView({
               <div><h2 id="nearby-technicians-title" className="font-semibold">Buscar técnicos próximos</h2><p className="mt-1 text-sm text-muted-foreground">Distância aproximada em linha reta entre os centros das cidades.</p></div>
               <Button type="button" variant="outline" onClick={() => setExportOpen(true)} disabled={!fieldTechnicians.some((tech) => brazilPhone(tech.phone))}><Download aria-hidden="true" /> Exportar Google Contatos</Button>
             </div>
+            {exportFile && <p role="status" className="mt-3 text-sm text-emerald-200">CSV gerado. Se o download não iniciou, <a className="underline" href={exportFile.url} download={exportFile.name}>toque aqui para salvar {exportFile.name}</a>.</p>}
             <form onSubmit={(event) => void searchNearby(event)} className="mt-4 flex flex-wrap items-end gap-2">
               <div className="min-w-48 flex-1"><label htmlFor="near-city" className="mb-1 block text-sm font-medium">Cidade e UF</label><Input id="near-city" value={nearCity} onChange={(event) => setNearCity(event.target.value)} placeholder="Ex.: Salvador/BA" /></div>
               <div><label htmlFor="near-limit" className="mb-1 block text-sm font-medium">Mostrar</label><select id="near-limit" value={nearLimit} onChange={(event) => setNearLimit(Number(event.target.value))} className="h-11 rounded-md border border-input bg-background px-3 text-sm">{[2, 5, 10, 20].map((limit) => <option key={limit} value={limit}>{limit} técnicos</option>)}</select></div>
@@ -3669,7 +3681,7 @@ function toTicket(issue: JiraTicket): Ticket {
     status,
     rawStatus: issue.status,
     priority,
-    technician: issue.assignee ?? undefined,
+    technician: issue.technicianName ?? undefined,
     schedule: formatJiraDate(issue.scheduledAt),
     partnerTriggeredAt: formatJiraDate(issue.partnerTriggeredAt),
     updatedAt: issue.updatedAt,

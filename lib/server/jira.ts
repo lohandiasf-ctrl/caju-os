@@ -11,6 +11,7 @@ export type JiraIssueSummary = {
   statusCategory: string;
   priority: string;
   assignee: string | null;
+  technicianName: string | null;
   createdAt: string;
   updatedAt: string;
   dueDate: string | null;
@@ -187,7 +188,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
 
   const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12036', 'customfield_12278'],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12036', 'customfield_12278', 'customfield_12316'],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
@@ -456,8 +457,8 @@ export async function getFinancialIssues(days = 180): Promise<FinancialIssue[]> 
       key: issue.key,
       title: issue.fields.summary ?? 'Sem título',
       status: issue.fields.status?.name ?? 'Sem status',
-      technician: firstTextField(issue.fields, financialFields.technician)
-        ?? issue.fields.assignee?.displayName
+      technician: customFieldText(issue.fields.customfield_12316)
+        ?? firstTextField(issue.fields, financialFields.technician)
         ?? 'Não atribuído',
       store: customFieldText(issue.fields.customfield_14954) ?? 'Loja não informada',
       city: customFieldText(issue.fields.customfield_11994) ?? 'Cidade não informada',
@@ -713,6 +714,7 @@ function toSummary(issue: JiraIssue): JiraIssueSummary {
     statusCategory: fields.status?.statusCategory?.key ?? 'undefined',
     priority: fields.priority?.name ?? 'Sem prioridade',
     assignee: fields.assignee?.displayName ?? null,
+    technicianName: customFieldText(fields.customfield_12316),
     createdAt: fields.created ?? '',
     updatedAt: fields.updated ?? '',
     dueDate: fields.duedate ?? null,

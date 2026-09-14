@@ -48,6 +48,18 @@ pós-migração Cloudflare.
 
 ## Mapa e busca de técnico
 
+O feedback de 2026-09-14 apontou lentidão forte do mapa no celular e sobreposição
+ao menu lateral. O mapa agora inicia sob demanda em telas pequenas e seu
+contêiner cria contexto de empilhamento próprio; validar em dispositivo real.
+
+O campo de técnico na agenda estava lendo `assignee` (responsável no Jira),
+não `customfield_12316` (Nome do Técnico). Corrigido no código; validar com
+chamados em produção que tenham o campo preenchido.
+
+Exportação Google Contatos: o clique em download não deixava confirmação nem
+link de recuperação no celular. O CSV agora é anexado ao DOM antes do clique e
+um link para salvar fica visível. Validar no WebView/Android usado pela equipe.
+
 Na branch `codex/technician-dispatch-and-contacts`, há uma busca nova por centros de cidades. Ela mostra distância geográfica aproximada; técnicos sem cidade encontrada no mapa local não aparecem no ranking. Validar cobertura com a base real antes da publicação.
 
 | Item | Estado | Nota |

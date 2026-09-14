@@ -14,6 +14,15 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
+- **Feedback 2026-09-14 (branch `codex/feedback-attendance-workflow`):** nova
+  migration `0028_attendance_preparation.sql` adiciona `phase` em
+  `active_attendances` com default `ongoing`. POST cria `preparing`; PATCH
+  `{action:"start"}` inicia; POST `/api/active-attendances/:id/tickets` adiciona
+  FSAs verificadas no Jira ao grupo. Migration aplicada e conferida no D1 remoto
+  em 2026-09-14, antes do deploy.
+  O encerramento permaneceu como estava porque o usuário pediu para ignorá-lo
+  nesta rodada. O restante do feedback está discriminado no CHANGELOG.
+
 - **Produção em `main`:** histórico permanente de FSAs está implementado em
   `ticket_archives`, com tela **Histórico de chamados** e APIs
   `/api/ticket-history`. Toda gravação operacional, edição direta do Jira,
