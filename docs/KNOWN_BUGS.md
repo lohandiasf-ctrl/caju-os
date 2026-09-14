@@ -70,6 +70,17 @@ Na branch `codex/technician-dispatch-and-contacts`, há uma busca nova por centr
 | Distância é estimada por faixas, não real | **Pendente (limitação)** | técnicos não têm lat/lng no banco; custo de deslocamento em R$ é aproximado |
 | Cruzamento técnico ↔ cadastro por nome+cidade pode falhar | **Validar em produção** | grafia diferente (abreviação, "junior" vs "Jr") → telefone não aparece no painel |
 
+## Chat / grupos
+
+| Item | Estado | Nota |
+|---|---|---|
+| Renomear grupo, excluir grupo, editar/apagar mensagem própria | **Resolvido** | `app/api/chat-groups/[id]/route.ts` e `.../messages/[messageId]/route.ts`; apagar esconde só para os outros, quem enviou continua vendo |
+| Cadastro de colaborador não aparecia na tela Equipe | **Resolvido** | `EmployeeInvitePanel` agora também renderiza na aba "Equipe interna" para `gerencia` |
+| RG fictício ("Não informado") gravável no Jira ao agendar técnico | **Resolvido** | linha de RG fica em branco em vez de texto literal |
+| Chamados avulsos fora dos projetos Americanas/Delfia | **Pendente (decisão de produto)** | precisa definir projeto/tipo de issue no Jira antes de implementar |
+| Lista de chamados para anexar ao chat só mostra ativos no Jira | **Pendente** | não inclui `ticket_archives`; baixo risco, baixa prioridade |
+| Cabeçalho bugado na busca de técnicos de campo | **Não reproduzido** | nenhum `sticky`/`fixed` extra encontrado na seção; precisa print/vídeo do problema real |
+
 ## Calendário / agenda
 
 | Item | Estado | Nota |

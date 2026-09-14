@@ -46,6 +46,63 @@ Verificado localmente: testes, TypeScript e build.
 
 ## 2026-09-14
 
+### Segunda rodada do feedback operacional (gestão de grupo, cadastro, RG)
+
+- **Grupos de chat**: agora dá para renomear o grupo, excluir o grupo,
+  editar mensagem própria (guarda um histórico de edição visível só para
+  quem editou) e apagar mensagem própria (some para os demais participantes,
+  mas quem enviou continua vendo o texto original como prova do que foi
+  dito). Ver, adicionar e remover participante já existiam e continuam
+  funcionando; só faltavam essas quatro ações.
+- **Cadastro de colaborador pela tela Equipe**: o formulário "Adicionar
+  funcionário" (`EmployeeInvitePanel`) já existia, mas só aparecia em
+  Configurações. Agora também aparece na aba "Equipe interna" da tela
+  Equipe (só para gerência), que é onde o usuário esperava encontrá-lo.
+- **RG falso enviado ao agendar técnico**: ao selecionar um técnico na
+  busca do agendamento, o sistema preenchia a linha "RG" com o texto
+  literal "Não informado" — um valor fictício que arriscava ser gravado
+  como se fosse dado real no Jira (o parser do lado servidor já ignora
+  linha de RG vazia, mas gravava esse texto porque ele não é vazio). A
+  linha agora fica em branco; o rótulo abaixo do campo já avisava que dá
+  para completar o RG manualmente.
+- **Pendente**: migration `0029_chat_group_message_management.sql`
+  (adiciona `edited_at`, `edit_history`, `deleted_at` em
+  `chat_group_messages`) precisa rodar em produção com
+  `npm run db:migrate:remote`.
+
+Verificado localmente: `npm test` (44/44), `npx tsc --noEmit`, `npm run build`.
+
+---
+
+### Itens do feedback de 2026-09-14 ainda em aberto (avaliados, não corrigidos)
+
+- **Chamados avulsos** (criar chamado fora dos projetos Americanas/Delfia):
+  não implementado. Exige decisão de produto — em qual projeto/tipo de
+  issue do Jira esses chamados devem nascer, e se "avulso" significa só
+  Jira sem vínculo de loja/projeto, ou um registro puramente local. Não dá
+  para resolver com uma suposição, por tocar fluxo Jira de produção.
+- **Histórico com chamados já atendidos/validados**: a tela "Histórico de
+  chamados" (`ticket-history.tsx`, tabela `ticket_archives`) já grava uma
+  cópia a cada alteração salva no Jira por este app — incluindo transições
+  para validado/resolvido — então um chamado que passou por aqui já
+  aparece. O que o usuário viu foi a lista de seleção de chamados para
+  anexar ao chat (painel de colegas), que só lista chamados atualmente
+  ativos na consulta do Jira; ampliar essa lista para incluir arquivados
+  não foi feito nesta rodada.
+- **Cabeçalho "bugado" na busca de técnicos de campo**: não reproduzido.
+  Não há elemento `sticky`/`fixed` na seção "Buscar técnicos próximos"
+  além do cabeçalho principal do app (que já existia antes deste
+  feedback); precisa de print/vídeo do problema real no celular para
+  investigar sem chutar uma correção.
+- **Dados do técnico não salvando no Jira**: o formulário e o botão
+  "Salvar alterações no Jira" estão corretamente conectados ao estado e
+  ao `PATCH /api/jira/issues/[key]`; não foi encontrado bug óbvio no
+  código. Já está listado em `docs/KNOWN_BUGS.md` como prioridade 1 para
+  validar em produção com um chamado real — não dá para confirmar sem
+  testar contra o Jira ao vivo.
+
+---
+
 ### Primeira rodada do feedback operacional
 
 - Criar um atendimento agora o deixa **em preparação**; somente o botão **Iniciar agora** marca a execução. Chamados reais adicionais podem ser vinculados ao grupo existente, antes ou depois do início. Atendimento já existente permanece em andamento após a migration.
