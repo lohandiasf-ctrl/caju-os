@@ -11,6 +11,7 @@ export type BulkTicket = {
   rawStatus: string;
   schedule?: string;
   technician?: string;
+  allegedDefect?: string | null;
 };
 
 export const MAX_BULK_TICKETS = 40;
@@ -72,7 +73,7 @@ function sheetCell(value: string) {
 }
 
 function formatMessageSummary(ticket: BulkTicket) {
-  const { subject, problem } = splitTicketTitle(ticket.title);
+  const { subject, problem } = messageParts(ticket);
   return [
     `${ticket.id} · ${ticket.rawStatus}`,
     '',
@@ -84,6 +85,11 @@ function formatMessageSummary(ticket: BulkTicket) {
     '',
     `Resumo do problema "${problem || ticket.title}"`,
   ].join('\n');
+}
+
+function messageParts(ticket: BulkTicket) {
+  const parsed = splitTicketTitle(ticket.title);
+  return { subject: parsed.subject || ticket.title, problem: ticket.allegedDefect?.trim() || parsed.problem || 'Não informado' };
 }
 
 function splitTicketTitle(title: string) {
@@ -108,7 +114,7 @@ function storeCode(ticket: BulkTicket) {
 }
 
 function formatMessageSummaryHtml(ticket: BulkTicket) {
-  const { subject, problem } = splitTicketTitle(ticket.title);
+  const { subject, problem } = messageParts(ticket);
   const url = sharedTicketUrl(ticket.id);
   return [
     `<b>${escapeHtml(ticket.id)} · ${escapeHtml(ticket.rawStatus)}</b>`,

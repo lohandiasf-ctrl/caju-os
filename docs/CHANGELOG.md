@@ -21,6 +21,8 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
   equipamento e `Resumo do problema "..."`, sem agendamento/técnico extra.
 - Quando o título não traz um campo separado, o sistema separa equipamento e
   defeito alegado para evitar repetir a mesma informação no resumo.
+- Ao copiar o resumo, o sistema consulta os detalhes do Jira e usa o campo real
+  **Defeito alegado**; o texto do título permanece apenas como fallback.
 
 Verificado localmente: testes, TypeScript e build.
 

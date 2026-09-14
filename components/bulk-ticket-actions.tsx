@@ -43,7 +43,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [results, setResults] = useState<Result[] | null>(null);
-  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const [copyState, setCopyState] = useState<'idle' | 'copying' | 'ok' | 'fail'>('idle');
 
   const canTransition = canBulkTransition(role);
   const toSchedule = useMemo(() => tickets.filter((ticket) => isBulkEligible(ticket.rawStatus, 'scheduled')), [tickets]);
@@ -63,7 +63,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   }, [mode, user]);
 
   useEffect(() => {
-    if (copyState === 'idle') return;
+    if (copyState === 'idle' || copyState === 'copying') return;
     const timer = window.setTimeout(() => setCopyState('idle'), 2200);
     return () => window.clearTimeout(timer);
   }, [copyState]);
@@ -89,7 +89,23 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   }
 
   async function copy(format: ClipboardFormat) {
-    const ok = await copyToClipboard(ticketsToClipboard(tickets, format), ticketsToClipboardHtml(tickets, format)).catch(() => false);
+    setCopyState('copying');
+    let source = tickets;
+    if (format === 'message' && user) {
+      try {
+        const token = await user.getIdToken();
+        const enriched: BulkTicket[] = [];
+        for (const ticket of tickets) {
+          try {
+            const response = await fetch(`/api/jira/issues/${encodeURIComponent(ticket.id)}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+            const payload = await response.json() as { operationalFields?: { allegedDefect?: string | null } };
+            enriched.push(response.ok ? { ...ticket, allegedDefect: payload.operationalFields?.allegedDefect ?? null } : ticket);
+          } catch { enriched.push(ticket); }
+        }
+        source = enriched;
+      } catch { /* Usa o título como fallback se a sessão expirar. */ }
+    }
+    const ok = await copyToClipboard(ticketsToClipboard(source, format), ticketsToClipboardHtml(source, format)).catch(() => false);
     setCopyState(ok ? 'ok' : 'fail');
   }
 
@@ -141,8 +157,8 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
         <span className="px-2 text-sm font-semibold"><b className="text-violet-200">{tickets.length}</b> {tickets.length === 1 ? 'selecionado' : 'selecionados'}</span>
         <DropdownMenu>
           <DropdownMenuTrigger className={buttonVariants({ variant: 'outline', className: 'h-9' })}>
-            {copyState === 'ok' ? <ClipboardCheck className="text-emerald-300" /> : <Clipboard />}
-            {copyState === 'ok' ? 'Copiado' : copyState === 'fail' ? 'Falhou' : 'Copiar'}
+            {copyState === 'copying' ? <Loader2 className="animate-spin" /> : copyState === 'ok' ? <ClipboardCheck className="text-emerald-300" /> : <Clipboard />}
+            {copyState === 'copying' ? 'Copiando...' : copyState === 'ok' ? 'Copiado' : copyState === 'fail' ? 'Falhou' : 'Copiar'}
             <ChevronDown className="size-3.5 opacity-60" />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-64">

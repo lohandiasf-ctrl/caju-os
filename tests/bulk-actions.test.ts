@@ -24,7 +24,7 @@ test('only roles that may change a Jira stage can act in bulk', () => {
 });
 
 const tickets = [
-  { id: 'FSA-1', title: 'Loja L300 | Desktop\tManutenção | PC deu pau', store: 'Código da loja: L300', city: 'Governador Valadares', rawStatus: 'AGENDAMENTO' },
+  { id: 'FSA-1', title: 'Loja L300 | Desktop\tManutenção | PC deu pau', store: 'Código da loja: L300', city: 'Governador Valadares', rawStatus: 'AGENDAMENTO', allegedDefect: 'PC travando constantemente' },
   { id: 'FSA-2', title: 'Código da loja 5053 | CPU - Performance - Lentidão, Self Checkout?: Não', store: 'Código da loja: 5053', city: 'Bom Despacho', rawStatus: 'AGENDADO', schedule: '12/09/2026, 08:00', technician: 'Ana' },
 ];
 
@@ -43,7 +43,7 @@ test('copying as a message puts each ticket in its own block', () => {
   const message = ticketsToClipboard(tickets, 'message');
   assert.match(message, /FSA-1 · AGENDAMENTO\n\nhttps:\/\/app\.cajutech\.net\/\?ticket=FSA-1/);
   assert.match(message, /L300 - Governador Valadares/);
-  assert.match(message, /Resumo do problema "PC deu pau"/);
+  assert.match(message, /Resumo do problema "PC travando constantemente"/);
   assert.match(message, /CPU\n\nResumo do problema "Performance - Lentidão, Self Checkout\?: Não"/);
   assert.doesNotMatch(message, /Agendamento:/);
   assert.doesNotMatch(message, /Técnico:/);
