@@ -11,6 +11,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Pesquisa por data não mistura direcionados
+
+- Perguntas como “quantos chamados tem para amanhã” ou por horário agora contam
+  apenas chamados **Agendados** quando o usuário não pedir outro status
+  explicitamente.
+- Chamados **Direcionados** só entram se a pergunta pedir direcionados.
+
+Verificado localmente: testes, TypeScript e build.
+
+---
+
 ### Resumo para mensagem no formato operacional
 
 - A opção **Copiar → Resumo para mensagem** agora gera blocos no padrão:

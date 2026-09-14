@@ -3538,6 +3538,15 @@ function answerOperationalQuestion(
   const validationKeys = new Set((operational?.validationQueue ?? []).map((item) => item.ticketKey));
   let result = [...tickets];
   const parts: string[] = [];
+  const asksValidation = /validacao/.test(normalized);
+  const asksUnsentValidation = /sem\s+(mandar|enviar|ir).*(validacao)|nao.*validacao/.test(normalized);
+  const asksScheduled = /agendad/.test(normalized);
+  const asksField = /tecnico|campo|atendimento/.test(normalized);
+  const asksSpare = /spare|peca/.test(normalized);
+  const asksPending = /pendente|agenda/.test(normalized);
+  const asksDirected = /direcionad/.test(normalized);
+  const asksStatus = asksValidation || asksUnsentValidation || asksScheduled || asksField || asksSpare || asksPending || asksDirected;
+  let hasDateOrHourFilter = false;
   if (!normalized) {
     return {
       title: "Resumo rápido",
@@ -3549,10 +3558,12 @@ function answerOperationalQuestion(
   if (/\bamanha\b/.test(normalized)) {
     const target = addDays(new Date(), 1);
     result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
+    hasDateOrHourFilter = true;
     parts.push("agendados para amanhã");
   } else if (/\bhoje\b/.test(normalized)) {
     const target = new Date();
     result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
+    hasDateOrHourFilter = true;
     parts.push("agendados para hoje");
   }
   const explicitDate = normalized.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
@@ -3562,6 +3573,7 @@ function answerOperationalQuestion(
     const year = explicitDate[3] ? Number(explicitDate[3].length === 2 ? `20${explicitDate[3]}` : explicitDate[3]) : new Date().getFullYear();
     const target = new Date(year, month, day);
     result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
+    hasDateOrHourFilter = true;
     parts.push(`em ${target.toLocaleDateString("pt-BR")}`);
   }
   const hourMatch = normalized.match(/\b(?:as\s*)?(\d{1,2})(?:h|:00|\s*horas?)\b/);
@@ -3572,27 +3584,29 @@ function answerOperationalQuestion(
       const date = new Date(ticket.scheduledAt);
       return Number.isFinite(date.getTime()) && date.getHours() === hour;
     });
+    hasDateOrHourFilter = true;
     parts.push(`${hour}h`);
   }
-  if (/sem\s+(mandar|enviar|ir).*(validacao)|nao.*validacao/.test(normalized)) {
+  if (hasDateOrHourFilter && !asksStatus) result = result.filter((ticket) => ticket.status === "Agendado");
+  if (asksUnsentValidation) {
     result = result.filter((ticket) => ticket.status === "Técnico em campo" && !validationKeys.has(ticket.id));
     parts.push("em campo sem validação enviada");
-  } else if (/validacao/.test(normalized)) {
+  } else if (asksValidation) {
     result = result.filter((ticket) => validationKeys.has(ticket.id));
     parts.push("em validação");
-  } else if (/agendad/.test(normalized) && !parts.some((part) => part.includes("agendad"))) {
+  } else if (asksScheduled && !parts.some((part) => part.includes("agendad"))) {
     result = result.filter((ticket) => ticket.status === "Agendado");
     parts.push("agendados");
-  } else if (/tecnico|campo|atendimento/.test(normalized)) {
+  } else if (asksField) {
     result = result.filter((ticket) => ticket.status === "Técnico em campo");
     parts.push("com técnico em campo");
-  } else if (/spare|peca/.test(normalized)) {
+  } else if (asksSpare) {
     result = result.filter((ticket) => ticket.status === "Aguardando spare");
     parts.push("aguardando spare");
-  } else if (/pendente|agenda/.test(normalized)) {
+  } else if (asksPending) {
     result = result.filter((ticket) => ticket.status === "Pendente de agendamento");
     parts.push("pendentes de agendamento");
-  } else if (/direcionad/.test(normalized)) {
+  } else if (asksDirected) {
     result = result.filter((ticket) => ticket.status === "Direcionado");
     parts.push("direcionados");
   }
