@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Resumo para mensagem no formato operacional
+
+- A opção **Copiar → Resumo para mensagem** agora gera blocos no padrão:
+  FSA/status, link `https://app.cajutech.net/?ticket=FSA-...`, loja/cidade,
+  equipamento e “Resumo do problema”.
+
+Verificado localmente: testes, TypeScript e build.
+
+---
+
 ### Pesquisa operacional na dashboard
 
 - A tela inicial ganhou o bloco **Pesquisar operação** para responder perguntas

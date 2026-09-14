@@ -15,7 +15,7 @@ export type BulkTicket = {
 
 export const MAX_BULK_TICKETS = 40;
 
-const sharedTicketUrl = (key: string) => `https://operacoes.cajutech.net/?ticket=${encodeURIComponent(key)}`;
+const sharedTicketUrl = (key: string) => `https://app.cajutech.net/?ticket=${encodeURIComponent(key)}`;
 
 const TRANSITION_ROLES = new Set(['gerencia', 'coordenador', 'n1', 'analista']);
 
@@ -59,15 +59,41 @@ export function ticketsToClipboard(tickets: BulkTicket[], format: ClipboardForma
     const rows = tickets.map((ticket) => [ticket.id, ticket.title, ticket.store, ticket.city, ticket.rawStatus, ticket.schedule ?? '', ticket.technician ?? '']);
     return [header, ...rows].map((row) => row.map(sheetCell).join('\t')).join('\n');
   }
-  return tickets.map((ticket) => [
-    `${ticket.id} · ${ticket.rawStatus}`,
-    sharedTicketUrl(ticket.id),
-    ticket.title,
-    [ticket.store, ticket.city].filter(Boolean).join(' · '),
-    [ticket.schedule ? `Agendamento: ${ticket.schedule}` : '', ticket.technician ? `Técnico: ${ticket.technician}` : ''].filter(Boolean).join(' · '),
-  ].filter(Boolean).join('\n')).join('\n\n');
+  return tickets.map(formatMessageSummary).join('\n\n');
 }
 
 function sheetCell(value: string) {
   return value.replace(/[\t\r\n]+/g, ' ').trim();
+}
+
+function formatMessageSummary(ticket: BulkTicket) {
+  const { subject, problem } = splitTicketTitle(ticket.title);
+  const lines = [
+    `${ticket.id} · ${ticket.rawStatus}`,
+    '',
+    sharedTicketUrl(ticket.id),
+    '',
+    [storeCode(ticket), ticket.city].filter(Boolean).join(' - '),
+    '',
+    subject || ticket.title,
+    '',
+    'Resumo do problema',
+    `"${problem || ticket.title}"`,
+  ];
+  if (ticket.schedule) lines.push('', `Agendamento: ${ticket.schedule}`);
+  if (ticket.technician) lines.push(`Técnico: ${ticket.technician}`);
+  return lines.join('\n');
+}
+
+function splitTicketTitle(title: string) {
+  const parts = title.split('|').map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 3) return { subject: parts[1], problem: parts.slice(2).join(' | ') };
+  if (parts.length === 2) return { subject: parts[1], problem: parts[1] };
+  return { subject: title, problem: title };
+}
+
+function storeCode(ticket: BulkTicket) {
+  const fromStore = ticket.store.match(/[A-Z]?\d+/i)?.[0];
+  const fromTitle = ticket.title.match(/(?:loja|codigo da loja|código da loja)\s+([A-Z]?\d+)/i)?.[1];
+  return fromStore || fromTitle || ticket.store;
 }

@@ -24,7 +24,7 @@ test('only roles that may change a Jira stage can act in bulk', () => {
 });
 
 const tickets = [
-  { id: 'FSA-1', title: 'Loja L300 | Desktop\tManutenção', store: 'Código da loja: L300', city: 'Governador Valadares', rawStatus: 'AGENDAMENTO' },
+  { id: 'FSA-1', title: 'Loja L300 | Desktop\tManutenção | PC deu pau', store: 'Código da loja: L300', city: 'Governador Valadares', rawStatus: 'AGENDAMENTO' },
   { id: 'FSA-2', title: 'CPU lenta', store: 'Código da loja: 5053', city: 'Bom Despacho', rawStatus: 'AGENDADO', schedule: '12/09/2026, 08:00', technician: 'Ana' },
 ];
 
@@ -40,8 +40,9 @@ test('copying as a sheet keeps one row per ticket even with tabs in a title', ()
 });
 
 test('copying as a message puts each ticket in its own block', () => {
-  const blocks = ticketsToClipboard(tickets, 'message').split('\n\n');
-  assert.equal(blocks.length, 2);
-  assert.match(blocks[0], /https:\/\/operacoes\.cajutech\.net\/\?ticket=FSA-1/);
-  assert.match(blocks[1], /Agendamento: 12\/09\/2026, 08:00 · Técnico: Ana/);
+  const message = ticketsToClipboard(tickets, 'message');
+  assert.match(message, /FSA-1 · AGENDAMENTO\n\nhttps:\/\/app\.cajutech\.net\/\?ticket=FSA-1/);
+  assert.match(message, /L300 - Governador Valadares/);
+  assert.match(message, /Resumo do problema\n"PC deu pau"/);
+  assert.match(message, /Agendamento: 12\/09\/2026, 08:00\nTécnico: Ana/);
 });
