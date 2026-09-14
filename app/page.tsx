@@ -307,6 +307,7 @@ export default function Home() {
   const [jiraLoading, setJiraLoading] = useState(true);
   const [jiraError, setJiraError] = useState("");
   const [query, setQuery] = useState("");
+  const [operationalQuestion, setOperationalQuestion] = useState("");
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
@@ -402,6 +403,10 @@ export default function Home() {
   const selectedTickets = useMemo(
     () => tickets.filter((ticket) => selectedKeys.has(ticket.id)),
     [selectedKeys, tickets],
+  );
+  const operationalAnswer = useMemo(
+    () => answerOperationalQuestion(operationalQuestion, tickets, operational),
+    [operationalQuestion, operational, tickets],
   );
 
   function toggleSelected(ticketKey: string) {
@@ -1222,6 +1227,14 @@ export default function Home() {
                   priority: "Media",
                 });
               }}
+            />
+          )}
+          {activeView === "overview" && (
+            <OperationalQuestionBox
+              value={operationalQuestion}
+              onChange={setOperationalQuestion}
+              answer={operationalAnswer}
+              onOpenTicket={(ticket) => void openTicket(ticket)}
             />
           )}
           {activeView === "overview" && (
@@ -3343,6 +3356,87 @@ function OperationalSummary({
     </section>
   );
 }
+
+type OperationalAnswer = {
+  title: string;
+  count: number;
+  description: string;
+  tickets: Ticket[];
+};
+
+function OperationalQuestionBox({
+  value,
+  onChange,
+  answer,
+  onOpenTicket,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  answer: OperationalAnswer;
+  onOpenTicket: (ticket: Ticket) => void;
+}) {
+  const examples = [
+    "quantos chamados tem para amanhã",
+    "quantos chamados tem para 10h",
+    "quantos chamados estão agendados",
+    "quantos chamados estão sem mandar para validação",
+  ];
+  return (
+    <section className="surface-panel mt-6 rounded-2xl p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+              <Search className="size-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="font-semibold">Pesquisar operação</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Pergunte por contagens de chamados, horários, datas, status e validação.
+              </p>
+            </div>
+          </div>
+          <Input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder='Ex: "quantos chamados tem para amanhã às 10h?"'
+            className="mt-4 h-11 bg-background/80"
+            aria-label="Perguntar sobre chamados"
+          />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {examples.map((example) => (
+              <Button key={example} type="button" size="sm" variant="ghost" onClick={() => onChange(example)}>
+                {example}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-primary/15 bg-primary/8 p-4 lg:w-[360px]">
+          <p className="text-xs font-bold uppercase tracking-wide text-primary">{answer.title}</p>
+          <p className="mt-2 text-4xl font-semibold tabular-nums">{answer.count}</p>
+          <p className="mt-2 text-xs text-muted-foreground">{answer.description}</p>
+          <div className="mt-3 space-y-2">
+            {answer.tickets.slice(0, 4).map((ticket) => (
+              <button
+                key={ticket.id}
+                type="button"
+                onClick={() => onOpenTicket(ticket)}
+                className="block w-full rounded-lg border border-border bg-background/60 px-3 py-2 text-left text-xs transition hover:border-primary/40 hover:bg-primary/8"
+              >
+                <b className="font-mono text-primary">{ticket.id}</b>
+                <span className="mt-1 block truncate">{ticket.title}</span>
+              </button>
+            ))}
+            {answer.tickets.length > 4 && (
+              <p className="text-xs text-muted-foreground">+{answer.tickets.length - 4} chamados no resultado.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="surface-panel mt-6 grid min-h-48 place-items-center rounded-2xl border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -3398,6 +3492,88 @@ function relativeAge(value: string) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `há ${hours} h`;
   return `há ${Math.floor(hours / 24)} d`;
+}
+
+function answerOperationalQuestion(
+  question: string,
+  tickets: Ticket[],
+  operational: OperationalDashboard | null,
+): OperationalAnswer {
+  const normalized = normalizeText(question);
+  const validationKeys = new Set((operational?.validationQueue ?? []).map((item) => item.ticketKey));
+  let result = [...tickets];
+  const parts: string[] = [];
+  if (!normalized) {
+    return {
+      title: "Resumo rápido",
+      count: tickets.length,
+      description: "Digite uma pergunta ou use um atalho para contar chamados por data, hora, status ou validação.",
+      tickets: tickets.slice(0, 4),
+    };
+  }
+  if (/\bamanha\b/.test(normalized)) {
+    const target = addDays(new Date(), 1);
+    result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
+    parts.push("agendados para amanhã");
+  } else if (/\bhoje\b/.test(normalized)) {
+    const target = new Date();
+    result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
+    parts.push("agendados para hoje");
+  }
+  const explicitDate = normalized.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
+  if (explicitDate) {
+    const day = Number(explicitDate[1]);
+    const month = Number(explicitDate[2]) - 1;
+    const year = explicitDate[3] ? Number(explicitDate[3].length === 2 ? `20${explicitDate[3]}` : explicitDate[3]) : new Date().getFullYear();
+    const target = new Date(year, month, day);
+    result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
+    parts.push(`em ${target.toLocaleDateString("pt-BR")}`);
+  }
+  const hourMatch = normalized.match(/\b(?:as\s*)?(\d{1,2})(?:h|:00|\s*horas?)\b/);
+  if (hourMatch) {
+    const hour = Number(hourMatch[1]);
+    result = result.filter((ticket) => {
+      if (!ticket.scheduledAt) return false;
+      const date = new Date(ticket.scheduledAt);
+      return Number.isFinite(date.getTime()) && date.getHours() === hour;
+    });
+    parts.push(`${hour}h`);
+  }
+  if (/sem\s+(mandar|enviar|ir).*(validacao)|nao.*validacao/.test(normalized)) {
+    result = result.filter((ticket) => ticket.status === "Técnico em campo" && !validationKeys.has(ticket.id));
+    parts.push("em campo sem validação enviada");
+  } else if (/validacao/.test(normalized)) {
+    result = result.filter((ticket) => validationKeys.has(ticket.id));
+    parts.push("em validação");
+  } else if (/agendad/.test(normalized) && !parts.some((part) => part.includes("agendad"))) {
+    result = result.filter((ticket) => ticket.status === "Agendado");
+    parts.push("agendados");
+  } else if (/tecnico|campo|atendimento/.test(normalized)) {
+    result = result.filter((ticket) => ticket.status === "Técnico em campo");
+    parts.push("com técnico em campo");
+  } else if (/spare|peca/.test(normalized)) {
+    result = result.filter((ticket) => ticket.status === "Aguardando spare");
+    parts.push("aguardando spare");
+  } else if (/pendente|agenda/.test(normalized)) {
+    result = result.filter((ticket) => ticket.status === "Pendente de agendamento");
+    parts.push("pendentes de agendamento");
+  } else if (/direcionad/.test(normalized)) {
+    result = result.filter((ticket) => ticket.status === "Direcionado");
+    parts.push("direcionados");
+  }
+  const label = parts.length ? parts.join(" · ") : "chamados encontrados";
+  return {
+    title: "Resultado",
+    count: result.length,
+    description: `Contando ${label}.`,
+    tickets: result,
+  };
+}
+
+function addDays(date: Date, days: number) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
 }
 
 function toTicket(issue: JiraTicket): Ticket {

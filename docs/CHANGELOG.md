@@ -11,6 +11,20 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Pesquisa operacional na dashboard
+
+- A tela inicial ganhou o bloco **Pesquisar operação** para responder perguntas
+  simples como “quantos chamados tem para amanhã”, “quantos chamados tem para
+  10h”, “quantos estão agendados” e “quantos estão sem mandar para validação”.
+- A resposta mostra a contagem e os primeiros chamados do resultado, com clique
+  direto para abrir a FSA.
+- A busca cruza status, data/hora de agendamento e fila de validação já carregada
+  no painel operacional.
+
+Verificado localmente: testes, TypeScript e build.
+
+---
+
 ### Resumo com link compartilhável e limite de dois N1
 
 - A opção **Copiar → Resumo para mensagem** agora inclui o link interno
