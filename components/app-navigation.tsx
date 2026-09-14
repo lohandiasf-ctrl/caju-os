@@ -1,13 +1,46 @@
 'use client';
 
-import { useEffect, useSyncExternalStore, type MouseEvent } from 'react';
+import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
 import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageSquarePlus, PackageOpen, Settings, Users } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { canUseNavItem } from '@/lib/navigation';
+import { projectMomentum, rubberband } from '@/lib/gesture';
+
+// Matches the drawer's own w-[min(300px,calc(100vw-2rem))] closely enough
+// for the rubber-band curve and close threshold; exact px is not load-bearing.
+const DRAWER_WIDTH = 300;
+
+/**
+ * Lets the mobile nav drawer be swiped closed 1:1 with the finger. The
+ * actual open/close state (focus trap, Escape, outside click, unmount) stays
+ * entirely owned by Sheet/onOpenChange below — this only tracks a visual x
+ * offset and calls onClose once a flick or drag crosses the threshold, the
+ * same call a tap on the close button already makes.
+ */
+function DraggableDrawer({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  const x = useMotionValue(0);
+  function onPan(_: unknown, info: PanInfo) {
+    const raw = info.offset.x;
+    // Free 1:1 tracking while closing (drag left); rubber-band resistance
+    // past fully open (drag right — there is nothing further to open into).
+    x.set(raw <= 0 ? raw : rubberband(raw, DRAWER_WIDTH));
+  }
+  function onPanEnd(_: unknown, info: PanInfo) {
+    const projected = info.offset.x + projectMomentum(info.velocity.x);
+    void animate(x, 0, { type: 'spring', bounce: 0, duration: 0.25 });
+    if (projected < -DRAWER_WIDTH / 3) onClose();
+  }
+  return (
+    <motion.div className="flex h-full flex-col" style={{ x }} onPan={onPan} onPanEnd={onPanEnd}>
+      {children}
+    </motion.div>
+  );
+}
 
 const items = [
   ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'],
@@ -74,7 +107,7 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
       <SheetContent side="left" keepMounted className="data-[side=left]:w-[min(300px,calc(100vw-2rem))] gap-0 px-3 py-5">
         <SheetTitle className="sr-only">Menu principal</SheetTitle>
         <SheetDescription className="sr-only">Navegue pelas áreas da operação.</SheetDescription>
-        {content}
+        <DraggableDrawer onClose={() => onOpenChange(false)}>{content}</DraggableDrawer>
       </SheetContent>
     </Sheet>}
   </>;
