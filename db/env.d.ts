@@ -17,6 +17,11 @@ declare namespace Cloudflare {
     SPARES_SYNC_PUSH_URL_ORIGINAL?: string;
     SPARES_SYNC_PULL_URL?: string;
     SPARES_SYNC_TOKEN?: string;
+    // WhatsApp Cloud API. Nunca expor no cliente nem registrar em logs.
+    WHATSAPP_VERIFY_TOKEN?: string;
+    META_APP_SECRET?: string;
+    WHATSAPP_ACCESS_TOKEN?: string;
+    WHATSAPP_PHONE_NUMBER_ID?: string;
     // Workers AI, usado para ler a RAT. `Ai` e um tipo global de
     // @cloudflare/workers-types: importar aqui transformaria este .d.ts em
     // modulo e quebraria a declaracao de namespace.

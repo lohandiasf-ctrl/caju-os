@@ -170,6 +170,26 @@ export const jiraIssueLinks = sqliteTable('jira_issue_links', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// Eventos recebidos pela Cloud API. O `wamid` único impede que a repetição de
+// webhooks da Meta duplique conversas no atendimento.
+export const whatsappMessages = sqliteTable('whatsapp_messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  wamid: text('wamid').notNull(),
+  phoneNumberId: text('phone_number_id').notNull(),
+  contactPhone: text('contact_phone'),
+  contactName: text('contact_name'),
+  direction: text('direction', { enum: ['incoming', 'status'] }).notNull(),
+  messageType: text('message_type').notNull(),
+  body: text('body'),
+  mediaId: text('media_id'),
+  deliveryStatus: text('delivery_status'),
+  occurredAt: text('occurred_at').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_whatsapp_messages_wamid').on(table.wamid),
+  index('idx_whatsapp_messages_contact_occurred').on(table.contactPhone, table.occurredAt),
+]);
+
 export const financeSettings = sqliteTable('finance_settings', {
   key: text('key').primaryKey(),
   firstTicketCents: integer('first_ticket_cents').notNull().default(7000),

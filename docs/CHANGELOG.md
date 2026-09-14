@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Base segura do webhook WhatsApp Cloud API
+
+- Criada a rota pública `GET/POST /api/whatsapp/webhook`: a inscrição usa
+  verify token e cada POST exige assinatura HMAC `x-hub-signature-256` da Meta.
+- Mensagens e status recebidos passam a ser persistidos de forma idempotente
+  em `whatsapp_messages`; a carga integral não é registrada em logs.
+- **Pendente:** aplicar migration `0027_whatsapp_messages.sql`, cadastrar os
+  secrets do Worker e assinar o campo `messages` na Meta antes de ativar a
+  caixa de entrada/respostas no sistema.
+
 ### Links clicáveis no resumo para WhatsApp
 
 - A cópia do **Resumo para mensagem** agora envia `text/html` junto com
