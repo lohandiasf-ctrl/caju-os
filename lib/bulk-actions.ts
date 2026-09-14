@@ -73,7 +73,7 @@ function sheetCell(value: string) {
 
 function formatMessageSummary(ticket: BulkTicket) {
   const { subject, problem } = splitTicketTitle(ticket.title);
-  const lines = [
+  return [
     `${ticket.id} · ${ticket.rawStatus}`,
     '',
     sharedTicketUrl(ticket.id),
@@ -82,12 +82,8 @@ function formatMessageSummary(ticket: BulkTicket) {
     '',
     subject || ticket.title,
     '',
-    'Resumo do problema',
-    `"${problem || ticket.title}"`,
-  ];
-  if (ticket.schedule) lines.push('', `Agendamento: ${ticket.schedule}`);
-  if (ticket.technician) lines.push(`Técnico: ${ticket.technician}`);
-  return lines.join('\n');
+    `Resumo do problema "${problem || ticket.title}"`,
+  ].join('\n');
 }
 
 function splitTicketTitle(title: string) {
@@ -106,7 +102,7 @@ function storeCode(ticket: BulkTicket) {
 function formatMessageSummaryHtml(ticket: BulkTicket) {
   const { subject, problem } = splitTicketTitle(ticket.title);
   const url = sharedTicketUrl(ticket.id);
-  const lines = [
+  return [
     `<b>${escapeHtml(ticket.id)} · ${escapeHtml(ticket.rawStatus)}</b>`,
     '',
     `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`,
@@ -115,12 +111,8 @@ function formatMessageSummaryHtml(ticket: BulkTicket) {
     '',
     escapeHtml(subject || ticket.title),
     '',
-    '<b>Resumo do problema</b>',
-    `&quot;${escapeHtml(problem || ticket.title)}&quot;`,
-  ];
-  if (ticket.schedule) lines.push('', `Agendamento: ${escapeHtml(ticket.schedule)}`);
-  if (ticket.technician) lines.push(`Técnico: ${escapeHtml(ticket.technician)}`);
-  return lines.join('<br>');
+    `<b>Resumo do problema</b> &quot;${escapeHtml(problem || ticket.title)}&quot;`,
+  ].join('<br>');
 }
 
 function escapeHtml(value: string) {

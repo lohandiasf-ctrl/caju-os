@@ -17,6 +17,8 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
   `text/plain` quando o navegador permite, com os links como âncoras reais.
 - Isso reduz falhas do WhatsApp/Teams ao transformar URLs longas em links
   clicáveis em mensagens grandes.
+- O resumo foi enxugado para manter apenas FSA/status, link, loja/cidade,
+  equipamento e `Resumo do problema "..."`, sem agendamento/técnico extra.
 
 Verificado localmente: testes, TypeScript e build.
 

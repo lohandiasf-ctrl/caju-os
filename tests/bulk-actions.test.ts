@@ -43,8 +43,9 @@ test('copying as a message puts each ticket in its own block', () => {
   const message = ticketsToClipboard(tickets, 'message');
   assert.match(message, /FSA-1 · AGENDAMENTO\n\nhttps:\/\/app\.cajutech\.net\/\?ticket=FSA-1/);
   assert.match(message, /L300 - Governador Valadares/);
-  assert.match(message, /Resumo do problema\n"PC deu pau"/);
-  assert.match(message, /Agendamento: 12\/09\/2026, 08:00\nTécnico: Ana/);
+  assert.match(message, /Resumo do problema "PC deu pau"/);
+  assert.doesNotMatch(message, /Agendamento:/);
+  assert.doesNotMatch(message, /Técnico:/);
 });
 
 test('copying as a message can include rich clickable links', () => {
