@@ -8,7 +8,11 @@ test('validation only releases a complete field-service ticket', () => {
 });
 
 test('validation explains every pending requirement', () => {
-  assert.equal(validationRequirements({ status: 'AGENDAMENTO', ticketTotal: '0', attachmentCount: 0, pendingSync: 1 }).length, 9);
+  assert.equal(validationRequirements({ status: 'AGENDAMENTO', ticketTotal: '0', attachmentCount: 0, pendingSync: 1 }).length, 8);
+});
+
+test('validation does not require the part to replace', () => {
+  assert.deepEqual(validationRequirements({ status: 'TEC-CAMPO', ticketTotal: '120', attachmentCount: 1, identifiedProblem: 'Fonte', testsPerformed: 'Medição', serviceStartedAt: '2026-09-10T09:00:00.000-03:00', serviceEndedAt: '2026-09-10T09:30:00.000-03:00', pendingSync: 0 }), []);
 });
 
 test('validation rejects an end time that does not follow the start time', () => {

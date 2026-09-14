@@ -55,7 +55,7 @@ export const KNOWLEDGE_ARTICLES: KnowledgeArticle[] = [
     steps: [
       'Trocar só após teste cruzado com cabo, fonte ou porta funcional.',
       'Registrar serial/modelo da peça atual e evidência do defeito.',
-      'Preencher peça a ser trocada antes de enviar para validação.',
+      'Preencher peça a ser trocada quando houver troca (campo opcional).',
     ],
   },
   {

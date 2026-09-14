@@ -11,6 +11,12 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Validação sem peça obrigatória
+
+- O campo **Peça a ser trocada** passou a ser opcional na validação. Ele só é
+  preenchido quando houver troca de componente; os demais requisitos técnicos
+  e datas continuam obrigatórios.
+
 ### Base segura do webhook WhatsApp Cloud API
 
 - Criada a rota pública `GET/POST /api/whatsapp/webhook`: a inscrição usa

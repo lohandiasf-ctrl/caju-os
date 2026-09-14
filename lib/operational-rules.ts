@@ -22,7 +22,6 @@ export function validationRequirements(input: ValidationInput) {
   if (input.attachmentCount < 1) missing.push('ao menos uma evidência');
   if (!input.identifiedProblem?.trim()) missing.push('problema identificado');
   if (!input.testsPerformed?.trim()) missing.push('testes feitos');
-  if (!input.partToReplace?.trim()) missing.push('peça a ser trocada');
   if (!input.serviceStartedAt?.trim()) missing.push('data/hora de início');
   if (!input.serviceEndedAt?.trim()) missing.push('data/hora de término');
   if (input.serviceStartedAt?.trim() && input.serviceEndedAt?.trim()) {
