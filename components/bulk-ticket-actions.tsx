@@ -6,7 +6,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { canBulkTransition, isBulkEligible, MAX_BULK_TICKETS, ticketsToClipboard, type BulkStatus, type BulkTicket, type ClipboardFormat } from '@/lib/bulk-actions';
+import { canBulkTransition, isBulkEligible, MAX_BULK_TICKETS, ticketsToClipboard, ticketsToClipboardHtml, type BulkStatus, type BulkTicket, type ClipboardFormat } from '@/lib/bulk-actions';
 import { copyToClipboard } from '@/lib/clipboard';
 
 type User = { getIdToken: () => Promise<string> } | null;
@@ -89,7 +89,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   }
 
   async function copy(format: ClipboardFormat) {
-    const ok = await copyToClipboard(ticketsToClipboard(tickets, format)).catch(() => false);
+    const ok = await copyToClipboard(ticketsToClipboard(tickets, format), ticketsToClipboardHtml(tickets, format)).catch(() => false);
     setCopyState(ok ? 'ok' : 'fail');
   }
 

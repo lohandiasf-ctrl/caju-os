@@ -1,6 +1,15 @@
 // Copia texto para a área de transferência; cai para execCommand quando a
 // Clipboard API não existe (http, WebView antiga).
-export async function copyToClipboard(value: string) {
+export async function copyToClipboard(value: string, html?: string) {
+  if (html && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/plain": new Blob([value], { type: "text/plain" }),
+        "text/html": new Blob([html], { type: "text/html" }),
+      }),
+    ]);
+    return true;
+  }
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
     return true;

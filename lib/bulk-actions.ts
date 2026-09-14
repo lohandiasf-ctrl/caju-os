@@ -62,6 +62,11 @@ export function ticketsToClipboard(tickets: BulkTicket[], format: ClipboardForma
   return tickets.map(formatMessageSummary).join('\n\n');
 }
 
+export function ticketsToClipboardHtml(tickets: BulkTicket[], format: ClipboardFormat) {
+  if (format !== 'message') return undefined;
+  return tickets.map(formatMessageSummaryHtml).join('<br><br>');
+}
+
 function sheetCell(value: string) {
   return value.replace(/[\t\r\n]+/g, ' ').trim();
 }
@@ -96,4 +101,28 @@ function storeCode(ticket: BulkTicket) {
   const fromStore = ticket.store.match(/[A-Z]?\d+/i)?.[0];
   const fromTitle = ticket.title.match(/(?:loja|codigo da loja|código da loja)\s+([A-Z]?\d+)/i)?.[1];
   return fromStore || fromTitle || ticket.store;
+}
+
+function formatMessageSummaryHtml(ticket: BulkTicket) {
+  const { subject, problem } = splitTicketTitle(ticket.title);
+  const url = sharedTicketUrl(ticket.id);
+  const lines = [
+    `<b>${escapeHtml(ticket.id)} · ${escapeHtml(ticket.rawStatus)}</b>`,
+    '',
+    `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`,
+    '',
+    escapeHtml([storeCode(ticket), ticket.city].filter(Boolean).join(' - ')),
+    '',
+    escapeHtml(subject || ticket.title),
+    '',
+    '<b>Resumo do problema</b>',
+    `&quot;${escapeHtml(problem || ticket.title)}&quot;`,
+  ];
+  if (ticket.schedule) lines.push('', `Agendamento: ${escapeHtml(ticket.schedule)}`);
+  if (ticket.technician) lines.push(`Técnico: ${escapeHtml(ticket.technician)}`);
+  return lines.join('<br>');
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 }

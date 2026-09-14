@@ -11,6 +11,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-13
 
+### Links clicáveis no resumo para WhatsApp
+
+- A cópia do **Resumo para mensagem** agora envia `text/html` junto com
+  `text/plain` quando o navegador permite, com os links como âncoras reais.
+- Isso reduz falhas do WhatsApp/Teams ao transformar URLs longas em links
+  clicáveis em mensagens grandes.
+
+Verificado localmente: testes, TypeScript e build.
+
+---
+
 ### Pesquisa por data não mistura direcionados
 
 - Perguntas como “quantos chamados tem para amanhã” ou por horário agora contam

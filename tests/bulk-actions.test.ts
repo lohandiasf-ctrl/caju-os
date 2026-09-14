@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bulkIneligibleReason, canBulkTransition, isBulkEligible, ticketsToClipboard } from '../lib/bulk-actions.ts';
+import { bulkIneligibleReason, canBulkTransition, isBulkEligible, ticketsToClipboard, ticketsToClipboardHtml } from '../lib/bulk-actions.ts';
 
 test('bulk scheduling only takes tickets waiting to be scheduled', () => {
   assert.equal(isBulkEligible('AGENDAMENTO', 'scheduled'), true);
@@ -45,4 +45,10 @@ test('copying as a message puts each ticket in its own block', () => {
   assert.match(message, /L300 - Governador Valadares/);
   assert.match(message, /Resumo do problema\n"PC deu pau"/);
   assert.match(message, /Agendamento: 12\/09\/2026, 08:00\nTécnico: Ana/);
+});
+
+test('copying as a message can include rich clickable links', () => {
+  const html = ticketsToClipboardHtml(tickets, 'message') ?? '';
+  assert.match(html, /<a href="https:\/\/app\.cajutech\.net\/\?ticket=FSA-1">https:\/\/app\.cajutech\.net\/\?ticket=FSA-1<\/a>/);
+  assert.match(html, /<b>Resumo do problema<\/b>/);
 });
