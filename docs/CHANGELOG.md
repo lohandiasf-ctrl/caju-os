@@ -28,8 +28,8 @@ Verificado localmente: testes, TypeScript e build.
 ### Resumo com link compartilhável e limite de dois N1
 
 - A opção **Copiar → Resumo para mensagem** agora inclui o link interno
-  `https://cajutech.net/chamados/FSA-...` para cada chamado selecionado, em vez
-  de depender do link do Jira.
+  `https://operacoes.cajutech.net/?ticket=FSA-...` para cada chamado
+  selecionado, em vez de depender do link do Jira.
 - Cada chamado N1 agora aceita no máximo dois N1: o primeiro que assumir vira
   **N1 principal** e o segundo vira **N1 participante**.
 - Um terceiro N1 recebe bloqueio com aviso de que o chamado já tem principal e

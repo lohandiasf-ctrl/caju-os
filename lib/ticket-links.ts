@@ -1,4 +1,4 @@
-const PUBLIC_TICKET_BASE = "https://cajutech.net/chamados";
+const PUBLIC_TICKET_BASE = "https://operacoes.cajutech.net/";
 
 export function normalizeTicketKey(value: string) {
   return value.trim().toUpperCase().replace(/^FSA-?/, "FSA-");
@@ -9,6 +9,5 @@ export function isTicketKey(value: string) {
 }
 
 export function sharedTicketUrl(ticketKey: string) {
-  return `${PUBLIC_TICKET_BASE}/${encodeURIComponent(normalizeTicketKey(ticketKey))}`;
+  return `${PUBLIC_TICKET_BASE}?ticket=${encodeURIComponent(normalizeTicketKey(ticketKey))}`;
 }
-

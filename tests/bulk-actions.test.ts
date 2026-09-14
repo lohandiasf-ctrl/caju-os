@@ -42,6 +42,6 @@ test('copying as a sheet keeps one row per ticket even with tabs in a title', ()
 test('copying as a message puts each ticket in its own block', () => {
   const blocks = ticketsToClipboard(tickets, 'message').split('\n\n');
   assert.equal(blocks.length, 2);
-  assert.match(blocks[0], /https:\/\/cajutech\.net\/chamados\/FSA-1/);
+  assert.match(blocks[0], /https:\/\/operacoes\.cajutech\.net\/\?ticket=FSA-1/);
   assert.match(blocks[1], /Agendamento: 12\/09\/2026, 08:00 · Técnico: Ana/);
 });

@@ -15,7 +15,7 @@ export type BulkTicket = {
 
 export const MAX_BULK_TICKETS = 40;
 
-const sharedTicketUrl = (key: string) => `https://cajutech.net/chamados/${encodeURIComponent(key)}`;
+const sharedTicketUrl = (key: string) => `https://operacoes.cajutech.net/?ticket=${encodeURIComponent(key)}`;
 
 const TRANSITION_ROLES = new Set(['gerencia', 'coordenador', 'n1', 'analista']);
 
