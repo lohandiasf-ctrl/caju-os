@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validateEvidenceFiles } from '@/lib/image-validation';
+import { haptic } from '@/lib/haptics';
 
 export type JiraOperationalFields = {
   storeCode: string | null; storeName: string | null; contactName: string | null; contactPhone: string | null; preferredServiceTime: string | null;
@@ -138,8 +139,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
       const payload = await response.json() as Details & { error?: string; queued?: boolean };
       if (!response.ok) throw new Error(payload.error || 'Não foi possível atualizar o Jira.');
       if (payload.queued) { setMessage(payload.error || 'Alteração guardada para sincronização.'); return; }
-      onUpdated(payload); setMessage('Atualizado no Jira.');
-    } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Não foi possível atualizar o Jira.'); }
+      onUpdated(payload); setMessage('Atualizado no Jira.'); haptic('success');
+    } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Não foi possível atualizar o Jira.'); haptic('error'); }
     finally { setSavingKey(null); }
   }
 

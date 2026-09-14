@@ -36,6 +36,7 @@ import {
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { hasSafeDataUrlType } from "@/lib/safe-data-url";
+import { haptic } from "@/lib/haptics";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChatMessageRow, ChatTypingIndicator } from "@/components/ui/chat-message-row";
 import { useAuth } from "@/components/auth-provider";
@@ -2896,9 +2897,11 @@ function GroupChatDialog({
       setTicketId("");
       setAttachment(null);
       setError("");
+      haptic("tap");
       onUpdated();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Falha ao enviar.");
+      haptic("error");
     }
   }
   async function renameGroup() {

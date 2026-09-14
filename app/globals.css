@@ -117,15 +117,24 @@
     background-image: radial-gradient(ellipse at 75% 0%, rgb(61 99 179 / 15%), transparent 52rem), radial-gradient(ellipse at 10% 80%, rgb(25 68 86 / 10%), transparent 38rem);
     background-attachment: fixed;
   }
-  h1, h2, h3 { text-wrap: balance; }
-  h1 { line-height: 1.2; }
+  /* Optical sizing: large headings track tighter and lead tighter than body
+     copy; body stays near 0 tracking for legibility at small sizes. */
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.015em; }
+  h1 { line-height: 1.15; letter-spacing: -0.02em; }
+  h2 { line-height: 1.2; }
+  h3 { line-height: 1.3; }
   button, a, input, select, textarea, [tabindex] { scroll-margin-block: 6rem; }
   button, a, input, select, textarea {
-    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
     transition-duration: var(--motion-fast);
     transition-timing-function: var(--ease-ui);
   }
   button, [role='button'] { cursor: pointer; touch-action: manipulation; }
+  /* Feedback on press, not on release — Apple's "respond on pointer-down". */
+  button:not(:disabled):active, [role='button']:not([aria-disabled='true']):active {
+    transform: scale(.97);
+    transition-duration: 100ms;
+  }
   button:disabled { cursor: not-allowed; }
   :where(a, button, input, select, textarea, [tabindex]):focus-visible {
     outline: 2px solid var(--ring);
@@ -275,8 +284,32 @@
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  button:active, [role='button']:active { transform: none !important; }
   .caju-loading-mark img, .caju-loading-mark source { display: none !important; }
   .caju-loading-mark { aspect-ratio: 32 / 25; background: url("/brand/caju-loading-static.png") center / contain no-repeat; }
+}
+
+/* Frostier, near-solid glass for people who asked the OS to reduce
+   transparency — same hierarchy, less see-through. */
+@media (prefers-reduced-transparency: reduce) {
+  .surface-panel, .cockpit-stat, main .rounded-xl.border-border.bg-card,
+  .caju-sidebar, .cockpit-sidebar, main > aside.fixed,
+  .app-content > header, main > section > header,
+  [data-slot='dialog-content'], [data-slot='sheet-content'] {
+    backdrop-filter: none !important;
+    background: var(--card) !important;
+  }
+}
+
+/* Near-solid backgrounds with a defined border instead of relying on subtle
+   contrast between translucent layers. */
+@media (prefers-contrast: more) {
+  .surface-panel, .cockpit-stat, main .rounded-xl.border-border.bg-card,
+  [data-slot='dialog-content'], [data-slot='sheet-content'] {
+    border-width: 2px;
+    background: var(--card);
+    backdrop-filter: none;
+  }
 }
 
 /* ── Chat bubbles (iOS-style tail + run grouping), unlayered so the tail
@@ -370,4 +403,13 @@
 @media (forced-colors: active) {
   .chat-bubble { border: 1px solid CanvasText; }
   .chat-bubble::before, .chat-bubble::after { forced-color-adjust: none; }
+}
+
+/* Materialize, don't just fade: a glass surface should read as arriving as
+   a real material, not a flat opacity fade — blur and opacity settle
+   together on enter/exit. */
+[data-slot='sheet-content'] { transition: filter var(--motion-standard) var(--ease-ui), opacity var(--motion-standard) var(--ease-ui), transform var(--motion-standard) var(--ease-ui); }
+[data-slot='sheet-content'][data-starting-style], [data-slot='sheet-content'][data-ending-style] { filter: blur(6px); }
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='sheet-content'][data-starting-style], [data-slot='sheet-content'][data-ending-style] { filter: none; }
 }
