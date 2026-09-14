@@ -19,6 +19,8 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
   clicáveis em mensagens grandes.
 - O resumo foi enxugado para manter apenas FSA/status, link, loja/cidade,
   equipamento e `Resumo do problema "..."`, sem agendamento/técnico extra.
+- Quando o título não traz um campo separado, o sistema separa equipamento e
+  defeito alegado para evitar repetir a mesma informação no resumo.
 
 Verificado localmente: testes, TypeScript e build.
 

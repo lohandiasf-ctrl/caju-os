@@ -89,8 +89,16 @@ function formatMessageSummary(ticket: BulkTicket) {
 function splitTicketTitle(title: string) {
   const parts = title.split('|').map((part) => part.trim()).filter(Boolean);
   if (parts.length >= 3) return { subject: parts[1], problem: parts.slice(2).join(' | ') };
-  if (parts.length === 2) return { subject: parts[1], problem: parts[1] };
-  return { subject: title, problem: title };
+  const source = parts.length === 2 ? parts[1] : title;
+  return splitSubjectAndAllegedDefect(source);
+}
+
+function splitSubjectAndAllegedDefect(value: string) {
+  const clean = value.trim();
+  const pieces = clean.split(/\s+-\s+/).map((part) => part.trim()).filter(Boolean);
+  if (pieces.length >= 3) return { subject: pieces.slice(0, -2).join(' - '), problem: pieces.slice(-2).join(' - ') };
+  if (pieces.length === 2) return { subject: pieces[0], problem: pieces[1] };
+  return { subject: clean, problem: 'Não informado' };
 }
 
 function storeCode(ticket: BulkTicket) {
