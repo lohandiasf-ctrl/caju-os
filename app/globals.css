@@ -404,3 +404,12 @@
   .chat-bubble { border: 1px solid CanvasText; }
   .chat-bubble::before, .chat-bubble::after { forced-color-adjust: none; }
 }
+
+/* Materialize, don't just fade: a glass surface should read as arriving as
+   a real material, not a flat opacity fade — blur and opacity settle
+   together on enter/exit. */
+[data-slot='sheet-content'] { transition: filter var(--motion-standard) var(--ease-ui), opacity var(--motion-standard) var(--ease-ui), transform var(--motion-standard) var(--ease-ui); }
+[data-slot='sheet-content'][data-starting-style], [data-slot='sheet-content'][data-ending-style] { filter: blur(6px); }
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='sheet-content'][data-starting-style], [data-slot='sheet-content'][data-ending-style] { filter: none; }
+}

@@ -14,6 +14,9 @@ import { projectMomentum, rubberband } from '@/lib/gesture';
 // Matches the drawer's own w-[min(300px,calc(100vw-2rem))] closely enough
 // for the rubber-band curve and close threshold; exact px is not load-bearing.
 const DRAWER_WIDTH = 300;
+// Hysteresis before a touch commits to a drag, so a tap that wobbles a
+// couple pixels on a real touchscreen still lands as a tap, not a drag.
+const DRAG_THRESHOLD = 10;
 
 /**
  * Lets the mobile nav drawer be swiped closed 1:1 with the finger. The
@@ -26,9 +29,11 @@ function DraggableDrawer({ children, onClose }: { children: ReactNode; onClose: 
   const x = useMotionValue(0);
   function onPan(_: unknown, info: PanInfo) {
     const raw = info.offset.x;
+    if (Math.abs(raw) < DRAG_THRESHOLD) { x.set(0); return; }
+    const past = raw < 0 ? raw + DRAG_THRESHOLD : raw - DRAG_THRESHOLD;
     // Free 1:1 tracking while closing (drag left); rubber-band resistance
     // past fully open (drag right — there is nothing further to open into).
-    x.set(raw <= 0 ? raw : rubberband(raw, DRAWER_WIDTH));
+    x.set(past <= 0 ? past : rubberband(past, DRAWER_WIDTH));
   }
   function onPanEnd(_: unknown, info: PanInfo) {
     const projected = info.offset.x + projectMomentum(info.velocity.x);
