@@ -4,7 +4,7 @@ import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
-import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageSquarePlus, PackageOpen, Settings, Users } from 'lucide-react';
+import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, Settings, Users } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -54,6 +54,7 @@ const items = [
   ['Mapa operacional', Map, '/mapa', 'map'],
   ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
   ['Central N1', Headphones, '/?view=central', 'central'],
+  ['WhatsApp', MessageCircle, '/?view=whatsapp', 'whatsapp'],
   ['Equipe', Users, '/?view=technicians', 'technicians'],
   ['Projetos e lojas', Building2, '/?view=projects', 'projects'],
   ['Spares', PackageOpen, '/spares', 'spares'],

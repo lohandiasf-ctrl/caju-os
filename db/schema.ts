@@ -178,17 +178,33 @@ export const whatsappMessages = sqliteTable('whatsapp_messages', {
   phoneNumberId: text('phone_number_id').notNull(),
   contactPhone: text('contact_phone'),
   contactName: text('contact_name'),
-  direction: text('direction', { enum: ['incoming', 'status'] }).notNull(),
+  direction: text('direction', { enum: ['incoming', 'outgoing', 'status'] }).notNull(),
   messageType: text('message_type').notNull(),
   body: text('body'),
   mediaId: text('media_id'),
   deliveryStatus: text('delivery_status'),
+  senderEmail: text('sender_email'),
   occurredAt: text('occurred_at').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [
   uniqueIndex('idx_whatsapp_messages_wamid').on(table.wamid),
   index('idx_whatsapp_messages_contact_occurred').on(table.contactPhone, table.occurredAt),
 ]);
+
+// One row per WhatsApp contact. Read state and the linked ticket live here
+// instead of on every message row, since both apply to the conversation as
+// a whole, not to any single message.
+export const whatsappConversations = sqliteTable('whatsapp_conversations', {
+  contactPhone: text('contact_phone').primaryKey(),
+  contactName: text('contact_name'),
+  ticketKey: text('ticket_key'),
+  assignedTo: text('assigned_to'),
+  lastMessageAt: text('last_message_at').notNull(),
+  lastReadAt: text('last_read_at'),
+  lastReadBy: text('last_read_by'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
 
 export const financeSettings = sqliteTable('finance_settings', {
   key: text('key').primaryKey(),

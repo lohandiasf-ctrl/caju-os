@@ -44,7 +44,9 @@ export async function POST(request: Request) {
       const item = object(message); const wamid = string(item.id); const type = string(item.type) || 'unknown';
       if (!wamid) continue;
       const content = object(item[type]);
-      statements.push(insertMessage(wamid, phoneNumberId, contactPhone || null, contactName, 'incoming', type, messageBody(type, content), string(content.id) || null, null, timestamp(item.timestamp), now));
+      const occurredAt = timestamp(item.timestamp);
+      statements.push(insertMessage(wamid, phoneNumberId, contactPhone || null, contactName, 'incoming', type, messageBody(type, content), string(content.id) || null, null, occurredAt, now));
+      if (contactPhone) statements.push(upsertConversation(contactPhone, contactName, occurredAt, now));
     }
     for (const status of array(value.statuses)) {
       const item = object(status); const wamid = string(item.id); if (!wamid) continue;
@@ -53,6 +55,19 @@ export async function POST(request: Request) {
   }
   if (statements.length) await env.DB.batch(statements);
   return Response.json({ received: true });
+}
+
+// Read state and the linked ticket are owned by whichever agent set them
+// last; an incoming message only ever touches the name/last-message-time.
+function upsertConversation(contactPhone: string, contactName: string | null, lastMessageAt: string, now: string) {
+  return env.DB.prepare(`
+    INSERT INTO whatsapp_conversations (contact_phone, contact_name, last_message_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(contact_phone) DO UPDATE SET
+      contact_name = COALESCE(excluded.contact_name, whatsapp_conversations.contact_name),
+      last_message_at = excluded.last_message_at,
+      updated_at = excluded.updated_at
+  `).bind(contactPhone, contactName, lastMessageAt, now, now);
 }
 
 function insertMessage(wamid: string, phoneNumberId: string, contactPhone: string | null, contactName: string | null, direction: 'incoming' | 'status', messageType: string, body: string | null, mediaId: string | null, deliveryStatus: string | null, occurredAt: string, createdAt: string) {

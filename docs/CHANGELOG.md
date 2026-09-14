@@ -46,6 +46,38 @@ Verificado localmente: testes, TypeScript e build.
 
 ## 2026-09-14
 
+### Caixa de entrada do WhatsApp Business
+
+- Nova tela **WhatsApp** (`/?view=whatsapp`, gerência/coordenador/N1/analista):
+  lista as conversas recebidas pelo webhook já existente
+  (`app/api/whatsapp/webhook/route.ts`), com contagem de não lidas, e abre
+  cada uma em um painel de conversa.
+- Dá para **vincular uma conversa a um chamado (FSA)** e abrir o chamado
+  direto dali. O vínculo e o estado de lida ficam em uma tabela nova,
+  `whatsapp_conversations` (um registro por contato), separada do log de
+  mensagens (`whatsapp_messages`).
+- **Responder pelo app** já está implementado (`POST
+  /api/whatsapp/conversations/[phone]/send`, via Meta Graph API), mas
+  **inativo em produção**: falta configurar os secrets
+  `WHATSAPP_ACCESS_TOKEN` e `WHATSAPP_PHONE_NUMBER_ID` do Worker (o tipo
+  já previa essas chaves em `db/env.d.ts`, só não estavam cadastradas). Sem
+  eles a rota responde 503 com mensagem clara. O usuário ainda não tem o
+  token — passo a passo de onde gerar ficou registrado na conversa com o
+  Claude, não neste changelog (é uma credencial, não decisão técnica).
+- **Pendente:** notificação/alerta proativo de mensagem nova (hoje é só
+  contagem ao abrir a tela, sem polling em segundo plano/desktop
+  notification como o de chamado novo do Jira).
+- **Pendente:** migration `0030_whatsapp_conversations.sql` (tabela nova +
+  `whatsapp_messages.sender_email`) precisa rodar em produção com
+  `npm run db:migrate:remote`.
+
+Verificado localmente: `npm test` (50/50), `npx tsc --noEmit`, `npm run build`.
+Nenhum teste manual contra o Meta Graph API real foi possível nesta sessão
+(sem token de acesso ainda) — a rota de envio está implementada conforme a
+documentação pública da Cloud API, mas não foi exercitada de ponta a ponta.
+
+---
+
 ### Segunda rodada do feedback operacional (gestão de grupo, cadastro, RG)
 
 - **Grupos de chat**: agora dá para renomear o grupo, excluir o grupo,
