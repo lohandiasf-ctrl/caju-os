@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     return Response.json({
       attendances: attendances.map((attendance) => ({
         ...attendance,
-        groupValueCents: user.role === 'gerencia' ? attendance.groupValueCents : null,
+        groupValueCents: ['gerencia', 'coordenador', 'analista'].includes(user.role) ? attendance.groupValueCents : null,
         ownerName:
           displayNames.get(attendance.ownerEmail.toLowerCase()) ??
           attendance.ownerEmail.split('@')[0],
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     if (ticketKeys.length > 1 && !whatsappGroupName) return invalid('Informe o nome do grupo de WhatsApp para este atendimento agrupado.');
     const groupValueCents = body.groupValueCents === null || body.groupValueCents === undefined ? null : Number(body.groupValueCents);
     if (groupValueCents !== null && (!Number.isSafeInteger(groupValueCents) || groupValueCents < 0)) return invalid('Valor do grupo inválido.');
-    if (groupValueCents !== null && user.role !== 'gerencia') return Response.json({ error: 'Somente a gerência pode definir valores do grupo.' }, { status: 403 });
+    if (groupValueCents !== null && !['gerencia', 'coordenador', 'analista'].includes(user.role)) return Response.json({ error: 'Somente analistas, coordenação ou gerência podem definir valores do grupo.' }, { status: 403 });
 
     const db = getDb();
     const knownTickets = await db
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     const verification = await verifyIssues(ticketKeys);
     if (verification.invalid.length) {
       return Response.json(
-        { error: `Não foi possível iniciar. FSAs inválidas: ${verification.invalid.join(', ')}.`, invalidKeys: verification.invalid },
+        { error: `Não foi possível preparar. FSAs inválidas: ${verification.invalid.join(', ')}.`, invalidKeys: verification.invalid },
         { status: 400 },
       );
     }
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const attendance = await db
       .insert(activeAttendances)
-      .values({ ownerEmail: user.email, whatsappGroupName: whatsappGroupName || null, groupValueCents, startedAt: now, createdAt: now, updatedAt: now })
+      .values({ ownerEmail: user.email, whatsappGroupName: whatsappGroupName || null, groupValueCents, phase: 'preparing', startedAt: now, createdAt: now, updatedAt: now })
       .returning()
       .get();
     await db.insert(activeAttendanceTickets).values(
@@ -120,9 +120,9 @@ export async function POST(request: Request) {
     await db.insert(operationalAudit).values(
       verification.valid.map((issue) => ({
         ticketKey: issue.key,
-        action: 'Atendimento iniciado',
+        action: 'Atendimento preparado',
         actorEmail: user.email,
-        details: JSON.stringify({ attendanceId: attendance.id, ticketKeys, whatsappGroupName, groupValueCents, startedAt: now, origin: 'sistema' }),
+        details: JSON.stringify({ attendanceId: attendance.id, ticketKeys, whatsappGroupName, groupValueCents, createdAt: now, origin: 'sistema' }),
         createdAt: now,
       })),
     );
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof Response) return error;
     if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
-    return Response.json({ error: 'Não foi possível iniciar o atendimento.' }, { status: 500 });
+    return Response.json({ error: 'Não foi possível preparar o atendimento.' }, { status: 500 });
   }
 }
 

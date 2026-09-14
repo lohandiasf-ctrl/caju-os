@@ -17,7 +17,7 @@ docs only when the task touches that area.
 - Latest known production version endpoint reports `0.1.15`.
 - Ticket history is already merged and migrated through
   `drizzle/0025_ticket_history.sql`.
-- Active D1 migrations: 26 applied remotely as of 2026-09-13.
+- Active D1 migrations: through `0028_attendance_preparation.sql` applied remotely as of 2026-09-14.
 
 ## Important Local State
 

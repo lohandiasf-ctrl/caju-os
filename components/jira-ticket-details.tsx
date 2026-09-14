@@ -154,7 +154,7 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   function selectTechnician(technician: Technician) {
     setTechnicianQuery(technician.name);
     setTechnicianSearchOpen(false);
-    setForm((current) => ({ ...current, technicianData: `Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}` }));
+    setForm((current) => ({ ...current, technicianData: `Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: \nTEL: ${technician.phone || 'Não informado'}` }));
   }
 
   function applyStatus(target: string) {

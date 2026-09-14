@@ -318,6 +318,9 @@ export const chatGroupMessages = sqliteTable(
     attachmentType: text('attachment_type'),
     attachmentData: text('attachment_data'),
     createdAt: text('created_at').notNull(),
+    editedAt: text('edited_at'),
+    editHistory: text('edit_history'),
+    deletedAt: text('deleted_at'),
   },
   (table) => [
     index('idx_chat_group_messages_group_created').on(
@@ -580,6 +583,7 @@ export const activeAttendances = sqliteTable(
     ownerEmail: text('owner_email').notNull(),
     whatsappGroupName: text('whatsapp_group_name'),
     groupValueCents: integer('group_value_cents'),
+    phase: text('phase').notNull().default('ongoing'),
     startedAt: text('started_at').notNull(),
     endedAt: text('ended_at'),
     endedBy: text('ended_by'),

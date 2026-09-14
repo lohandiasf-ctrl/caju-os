@@ -48,6 +48,18 @@ pós-migração Cloudflare.
 
 ## Mapa e busca de técnico
 
+O feedback de 2026-09-14 apontou lentidão forte do mapa no celular e sobreposição
+ao menu lateral. O mapa agora inicia sob demanda em telas pequenas e seu
+contêiner cria contexto de empilhamento próprio; validar em dispositivo real.
+
+O campo de técnico na agenda estava lendo `assignee` (responsável no Jira),
+não `customfield_12316` (Nome do Técnico). Corrigido no código; validar com
+chamados em produção que tenham o campo preenchido.
+
+Exportação Google Contatos: o clique em download não deixava confirmação nem
+link de recuperação no celular. O CSV agora é anexado ao DOM antes do clique e
+um link para salvar fica visível. Validar no WebView/Android usado pela equipe.
+
 Na branch `codex/technician-dispatch-and-contacts`, há uma busca nova por centros de cidades. Ela mostra distância geográfica aproximada; técnicos sem cidade encontrada no mapa local não aparecem no ranking. Validar cobertura com a base real antes da publicação.
 
 | Item | Estado | Nota |
@@ -57,6 +69,17 @@ Na branch `codex/technician-dispatch-and-contacts`, há uma busca nova por centr
 | Raio de 55 km escondia todos quando ninguém estava dentro | **Resolvido** | virou faixa de destaque; fallback mostra os 8 mais próximos |
 | Distância é estimada por faixas, não real | **Pendente (limitação)** | técnicos não têm lat/lng no banco; custo de deslocamento em R$ é aproximado |
 | Cruzamento técnico ↔ cadastro por nome+cidade pode falhar | **Validar em produção** | grafia diferente (abreviação, "junior" vs "Jr") → telefone não aparece no painel |
+
+## Chat / grupos
+
+| Item | Estado | Nota |
+|---|---|---|
+| Renomear grupo, excluir grupo, editar/apagar mensagem própria | **Resolvido** | `app/api/chat-groups/[id]/route.ts` e `.../messages/[messageId]/route.ts`; apagar esconde só para os outros, quem enviou continua vendo |
+| Cadastro de colaborador não aparecia na tela Equipe | **Resolvido** | `EmployeeInvitePanel` agora também renderiza na aba "Equipe interna" para `gerencia` |
+| RG fictício ("Não informado") gravável no Jira ao agendar técnico | **Resolvido** | linha de RG fica em branco em vez de texto literal |
+| Chamados avulsos fora dos projetos Americanas/Delfia | **Pendente (decisão de produto)** | precisa definir projeto/tipo de issue no Jira antes de implementar |
+| Lista de chamados para anexar ao chat só mostra ativos no Jira | **Pendente** | não inclui `ticket_archives`; baixo risco, baixa prioridade |
+| Cabeçalho bugado na busca de técnicos de campo | **Não reproduzido** | nenhum `sticky`/`fixed` extra encontrado na seção; precisa print/vídeo do problema real |
 
 ## Calendário / agenda
 

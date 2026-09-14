@@ -66,12 +66,16 @@ export default function Page() {
     [sel, setSel] = useState<C | null>(null),
     [directory, setDirectory] = useState<Technician[]>([]),
     [ready, setReady] = useState(false),
+    [mapEnabled, setMapEnabled] = useState(false),
     [menu, setMenu] = useState(false),
     [error, setError] = useState(""),
     [geo, setGeo] = useState<{ lat: number; lng: number; label: string } | null>(null),
     [geoLoading, setGeoLoading] = useState(false),
     [roster, setRoster] = useState<ApiTechnician[]>([]),
     [selected, setSelected] = useState<(Technician & { distance: number }) | null>(null);
+  useEffect(() => {
+    if (window.matchMedia('(min-width: 768px)').matches) setMapEnabled(true);
+  }, []);
   useEffect(() => {
     let mounted = true;
     fetch("/data/technician-map.json")
@@ -204,7 +208,7 @@ export default function Page() {
     [ranked],
   );
   useEffect(() => {
-    if (!ready || !el.current) return;
+    if (!ready || !mapEnabled || !el.current) return;
     let cancelled = false;
     void (async () => {
       const L = (await import("leaflet")).default;
@@ -262,7 +266,7 @@ export default function Page() {
       map.invalidateSize();
     })().catch(() => setError("Falha ao iniciar o mapa"));
     return () => { cancelled = true; };
-  }, [ready, show, origin, originLabel, fallbackTechnicians]);
+  }, [ready, mapEnabled, show, origin, originLabel, fallbackTechnicians]);
   const total = show.reduce((s, x) => s + x.technicians, 0),
     onboard = show.reduce((s, x) => s + x.onboarded, 0),
     vehicles = show.reduce((s, x) => s + x.vehicles, 0);
@@ -365,8 +369,9 @@ export default function Page() {
               )}
             </section>
           )}
-          <div className="map-surface relative mt-5 overflow-hidden rounded-xl border border-border bg-card">
-            <div ref={el} className="h-[650px] w-full bg-[#17201c]" />
+          {!mapEnabled && <div className="surface-panel mt-5 rounded-2xl p-4 text-sm"><p>Modo leve: a busca e a lista de técnicos funcionam sem carregar o mapa interativo.</p><Button variant="outline" className="mt-3" onClick={() => setMapEnabled(true)}><Map aria-hidden="true" /> Abrir mapa</Button></div>}
+          <div className={`map-surface relative isolate mt-5 overflow-hidden rounded-xl border border-border bg-card ${mapEnabled || selected ? '' : 'hidden'}`}>
+            <div ref={el} className={`${mapEnabled ? 'h-[650px]' : 'hidden'} w-full bg-[#17201c]`} />
             {error && (
               <div className="absolute inset-0 grid place-items-center bg-card text-amber-300">
                 {error}
