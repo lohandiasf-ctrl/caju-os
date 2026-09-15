@@ -11,6 +11,28 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### Exportação de contatos sem duplicados; WhatsApp só para o piloto
+
+- Exportação para Google Contatos (`lib/google-contacts.ts`): o cadastro de
+  técnicos tem registros repetidos da mesma pessoa, e cada um virava um
+  contato com número TCP próprio. Agora telefone repetido, ou mesmo nome
+  completo + cidade + UF (sem diferenciar acento/maiúscula), vira um contato
+  só, e a numeração TCP segue sem buracos. Os registros duplicados continuam
+  no cadastro de técnicos — só a exportação deixou de repetir.
+- Aba WhatsApp em teste fechado: visível e acessível apenas para
+  `lohandiasf@gmail.com` (`WHATSAPP_PILOT_EMAILS` em `lib/navigation.ts`),
+  independentemente do cargo. Também bloqueado no servidor
+  (`requireWhatsappUser`, 403 para os demais) em todas as rotas
+  `/api/whatsapp/*` com login; o webhook do bridge não muda. Para liberar mais
+  gente, adicionar o e-mail na lista.
+- Tela do WhatsApp no formato WhatsApp Web: lista de conversas à esquerda
+  (foto do contato, horário, prévia, contador de não lidas, chamado
+  vinculado), pesquisa por nome/número/chamado/texto e filtros Todas / Não
+  lidas / Com chamado; conversa aberta ao lado em vez de janela sobreposta. No
+  celular mostra uma coisa por vez, com botão de voltar. Fotos da lista só são
+  buscadas quando a linha aparece na tela. Botões do modelo sem função no
+  sistema (chamada, vídeo, novo grupo, favoritos) ficaram de fora.
+
 ### Jira: telefone do técnico não é mais enviado
 
 Pedido do usuário. O telefone do técnico não vai para nenhum campo do Jira;

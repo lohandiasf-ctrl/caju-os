@@ -1,11 +1,10 @@
-import { requireApiUser } from '@/lib/server/firebase-auth';
-import { bridgeFetch, WHATSAPP_SUPPORT_ROLES } from '@/lib/server/whatsapp-bridge';
+import { bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 
 // Media lives on the bridge's disk; this proxies it so the browser never sees
 // the bridge secret.
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireApiUser(request, [...WHATSAPP_SUPPORT_ROLES]);
+    await requireWhatsappUser(request);
     const { id } = await context.params;
     const safeId = id.replace(/[^A-Za-z0-9_-]/g, '');
     if (!safeId) return Response.json({ error: 'Mídia inválida.' }, { status: 400 });

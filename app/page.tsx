@@ -388,7 +388,7 @@ export default function Home() {
   useEffect(() => {
     const syncView = () => {
       const requested = dashboardViewFromLocation();
-      const next = canUseDashboardView(role, requested)
+      const next = canUseDashboardView(role, requested, user?.email)
         ? requested
         : defaultDashboardView(role);
       setActiveView(next);
@@ -397,7 +397,7 @@ export default function Home() {
     syncView();
     window.addEventListener("popstate", syncView);
     return () => window.removeEventListener("popstate", syncView);
-  }, [role]);
+  }, [role, user?.email]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((ticket) => {
@@ -956,7 +956,7 @@ export default function Home() {
       return;
     event.preventDefault();
     const requested = dashboardViewFromHref(href);
-    if (requested && !canUseDashboardView(role, requested)) {
+    if (requested && !canUseDashboardView(role, requested, user?.email)) {
       event.preventDefault();
       window.history.pushState(null, "", `/?view=${defaultDashboardView(role)}`);
       setActiveView(defaultDashboardView(role));

@@ -1,11 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { requireApiUser } from '@/lib/server/firebase-auth';
-import { bridgeConfigured, bridgeFetch, recordOutgoing, senderLabelFor, WHATSAPP_SUPPORT_ROLES } from '@/lib/server/whatsapp-bridge';
+import { bridgeConfigured, bridgeFetch, recordOutgoing, requireWhatsappUser, senderLabelFor } from '@/lib/server/whatsapp-bridge';
 import { signWhatsappText } from '@/lib/whatsapp-sender';
 
 export async function POST(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
-    const current = await requireApiUser(request, [...WHATSAPP_SUPPORT_ROLES]);
+    const current = await requireWhatsappUser(request);
     const useBridge = bridgeConfigured();
     if (!useBridge && (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID)) {
       return Response.json({ error: 'Envio pelo WhatsApp ainda não está configurado: falta o token de acesso da Meta e o Phone Number ID (ou o bridge não-oficial).' }, { status: 503 });

@@ -1,5 +1,4 @@
-import { requireApiUser } from '@/lib/server/firebase-auth';
-import { bridgeFetch, recordOutgoing, senderLabelFor, WHATSAPP_SUPPORT_ROLES } from '@/lib/server/whatsapp-bridge';
+import { bridgeFetch, recordOutgoing, requireWhatsappUser, senderLabelFor } from '@/lib/server/whatsapp-bridge';
 import { signWhatsappText } from '@/lib/whatsapp-sender';
 
 // WhatsApp caps media at 16 MB and documents at 100 MB; stay well under the
@@ -8,7 +7,7 @@ const MAX_BYTES = 32 * 1024 * 1024;
 
 export async function POST(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
-    const current = await requireApiUser(request, [...WHATSAPP_SUPPORT_ROLES]);
+    const current = await requireWhatsappUser(request);
     const { phone } = await context.params;
     const contactPhone = decodeURIComponent(phone);
     const form = await request.formData().catch(() => null);

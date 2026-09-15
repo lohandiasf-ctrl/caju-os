@@ -17,3 +17,16 @@ test('exports Google Contacts header and continues TCP numbering', () => {
   assert.match(row ?? '', /^TCP - Ewerton Renann \(Timbaúba\/PE\) \| #TCP-0126,/);
   assert.match(row ?? '', /,Mobile,\+5581991230754,Work,/);
 });
+
+test('repeated technician records become a single numbered contact', () => {
+  const csv = googleContactsCsv([
+    { name: 'Adao Rodrigues', phone: '(89) 99999-0001', city: 'Corrente', state: 'PI' },
+    { name: 'ADÃO RODRIGUES', phone: '89 99999-0002', city: 'corrente', state: 'pi' },
+    { name: 'Adao R.', phone: '+55 89 99999-0001', city: 'Corrente', state: 'PI' },
+    { name: 'Addan Dantas', phone: '(88) 98888-0000', city: 'Cariré', state: 'CE' },
+  ], 5);
+  const rows = csv.split('\r\n').slice(1);
+  assert.equal(rows.length, 2);
+  assert.match(rows[0], /^TCP - Adao Rodrigues \(Corrente\/PI\) \| #TCP-0006,/);
+  assert.match(rows[1], /^TCP - Addan Dantas \(Cariré\/CE\) \| #TCP-0007,/);
+});
