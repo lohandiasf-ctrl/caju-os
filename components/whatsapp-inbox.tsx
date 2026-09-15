@@ -5,6 +5,7 @@ import { Link2, Loader2, MessageCircle, Send, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { roleLabels, isUserRole } from '@/lib/permissions';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type Ticket = { id: string; title: string; store: string; city: string };
@@ -14,6 +15,7 @@ type Conversation = {
   lastMessage: { body: string | null; direction: string; occurredAt: string; messageType: string } | null;
 };
 type Message = { id: number; direction: string; messageType: string; body: string | null; senderEmail: string | null; occurredAt: string };
+type Colleague = { email: string; role: string | null; displayName: string | null };
 
 export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tickets: Ticket[]; onOpenTicket: (ticketId: string) => void }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -75,6 +77,13 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   </section>;
 }
 
+function senderLabel(email: string, colleaguesByEmail: Record<string, Colleague>) {
+  const colleague = colleaguesByEmail[email];
+  const firstName = (colleague?.displayName || email.split('@')[0]).trim().split(/\s+/)[0];
+  const role = colleague?.role && isUserRole(colleague.role) ? roleLabels[colleague.role] : null;
+  return role ? `${firstName} · ${role}` : firstName;
+}
+
 function messageTypeLabel(type?: string) {
   if (!type) return 'Sem mensagens ainda';
   if (type === 'text') return '';
@@ -90,6 +99,17 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
   const [sending, setSending] = useState(false);
   const [ticketKey, setTicketKey] = useState('');
   const [error, setError] = useState('');
+  const [colleaguesByEmail, setColleaguesByEmail] = useState<Record<string, Colleague>>({});
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const response = await fetch('/api/colleagues', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = await response.json() as { colleagues?: Colleague[] };
+      setColleaguesByEmail(Object.fromEntries((payload.colleagues ?? []).map((item) => [item.email, item])));
+    })();
+  }, [user]);
 
   const load = useCallback(async () => {
     if (!user || !conversation) return;
@@ -152,12 +172,16 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
         {ticketKey && <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => void link('')} aria-label="Desvincular chamado"><Unlink className="size-3.5" /></Button>}
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-3" role="log" aria-label="Mensagens">
-        {loading ? <Loader2 className="mx-auto size-5 animate-spin text-primary" /> : messages.length ? messages.map((message) => (
-          <div key={message.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${message.direction === 'outgoing' ? 'ml-auto bg-primary text-primary-foreground' : 'bg-muted'}`}>
-            <p className="whitespace-pre-wrap break-words">{message.body || `[${message.messageType}]`}</p>
-            <p className="mt-1 text-[10px] opacity-70">{new Date(message.occurredAt).toLocaleString('pt-BR')}{message.senderEmail ? ` · ${message.senderEmail.split('@')[0]}` : ''}</p>
-          </div>
-        )) : <p className="text-center text-sm text-muted-foreground">Nenhuma mensagem ainda.</p>}
+        {loading ? <Loader2 className="mx-auto size-5 animate-spin text-primary" /> : messages.length ? messages.map((message) => {
+          const sender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : null;
+          return (
+            <div key={message.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${message.direction === 'outgoing' ? 'ml-auto bg-primary text-primary-foreground' : 'bg-muted'}`}>
+              {sender && <p className="mb-0.5 text-[11px] font-bold opacity-80">{sender}</p>}
+              <p className="whitespace-pre-wrap break-words">{message.body || `[${message.messageType}]`}</p>
+              <p className="mt-1 text-[10px] opacity-70">{new Date(message.occurredAt).toLocaleString('pt-BR')}</p>
+            </div>
+          );
+        }) : <p className="text-center text-sm text-muted-foreground">Nenhuma mensagem ainda.</p>}
       </div>
       {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
       <div className="flex gap-2 border-t border-border pt-3">
