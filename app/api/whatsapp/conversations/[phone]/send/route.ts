@@ -1,14 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { getDb } from '@/db';
-import { whatsappConversations, whatsappMessages } from '@/db/schema';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-
-const SUPPORT_ROLES = ['gerencia', 'coordenador', 'n1', 'analista'] as const;
+import { bridgeConfigured, bridgeFetch, recordOutgoing, WHATSAPP_SUPPORT_ROLES } from '@/lib/server/whatsapp-bridge';
 
 export async function POST(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
-    const current = await requireApiUser(request, [...SUPPORT_ROLES]);
-    const useBridge = Boolean(env.WHATSAPP_BRIDGE_URL && env.WHATSAPP_BRIDGE_SECRET);
+    const current = await requireApiUser(request, [...WHATSAPP_SUPPORT_ROLES]);
+    const useBridge = bridgeConfigured();
     if (!useBridge && (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID)) {
       return Response.json({ error: 'Envio pelo WhatsApp ainda não está configurado: falta o token de acesso da Meta e o Phone Number ID (ou o bridge não-oficial).' }, { status: 503 });
     }
@@ -21,9 +18,9 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
     let wamid: string;
     let phoneNumberId: string;
     if (useBridge) {
-      const response = await fetch(`${env.WHATSAPP_BRIDGE_URL}/send`, {
+      const response = await bridgeFetch('/send', {
         method: 'POST',
-        headers: { 'x-bridge-secret': env.WHATSAPP_BRIDGE_SECRET!, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: contactPhone, text }),
       });
       const payload = await response.json().catch(() => null) as { wamid?: string; error?: string } | null;
@@ -48,20 +45,7 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
       phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID!;
     }
 
-    const now = new Date().toISOString();
-    const db = getDb();
-    await db.insert(whatsappMessages).values({
-      wamid, phoneNumberId, contactPhone, contactName: null,
-      direction: 'outgoing', messageType: 'text', body: text, mediaId: null, deliveryStatus: null, senderEmail: current.email,
-      occurredAt: now, createdAt: now,
-    });
-    await db.insert(whatsappConversations).values({ contactPhone, lastMessageAt: now, createdAt: now, updatedAt: now })
-      .onConflictDoUpdate({ target: whatsappConversations.contactPhone, set: { lastMessageAt: now, updatedAt: now } });
-
+    await recordOutgoing({ wamid, phoneNumberId, contactPhone, messageType: 'text', body: text, mediaId: null, senderEmail: current.email });
     return Response.json({ ok: true }, { status: 201 });
-  } catch (error) {
-    if (error instanceof Response) return error;
-    console.error('whatsapp send failed:', error instanceof Error ? error.message : error);
-    return Response.json({ error: 'Não foi possível enviar a mensagem.' }, { status: 500 });
-  }
+  } catch (error) { if (error instanceof Response) return error; return Response.json({ error: 'Não foi possível enviar a mensagem.' }, { status: 500 }); }
 }

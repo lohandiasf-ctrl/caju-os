@@ -4,19 +4,34 @@
 // the regular phone app keeps working. See README.md before running this in
 // production: this violates WhatsApp's Terms of Service and risks a ban.
 
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import makeWASocket, {
+  useMultiFileAuthState, DisconnectReason, downloadMediaMessage, normalizeMessageContent, getContentType,
+} from '@whiskeysockets/baileys';
 import qrcodeTerminal from 'qrcode-terminal';
 import http from 'node:http';
+import { spawn } from 'node:child_process';
+import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 
 const CAJU_WEBHOOK_URL = process.env.CAJU_WEBHOOK_URL; // e.g. https://operacoes.cajutech.net/api/whatsapp/bridge-webhook
 const BRIDGE_SECRET = process.env.WHATSAPP_BRIDGE_SECRET;
 const PORT = Number(process.env.PORT || 3300);
+// Lives on the same Fly volume as the session, so media survives redeploys.
+const MEDIA_DIR = './auth/media';
+const MAX_MEDIA_BYTES = 64 * 1024 * 1024;
+const TYPING_TTL_MS = 12_000;
 
 if (!CAJU_WEBHOOK_URL || !BRIDGE_SECRET) {
   console.error('Faltam variáveis de ambiente: CAJU_WEBHOOK_URL e WHATSAPP_BRIDGE_SECRET são obrigatórias.');
   process.exit(1);
 }
 
+await mkdir(MEDIA_DIR, { recursive: true });
+
+const silentLogger = { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, fatal() {}, child() { return silentLogger; } };
+const presence = new Map(); // jid -> { state, at }
+const presenceSubscribedAt = new Map(); // jid -> ms
+const photoCache = new Map(); // jid -> { url, at }
 let sock;
 
 async function start() {
@@ -41,32 +56,89 @@ async function start() {
     }
   });
 
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-    for (const message of messages) {
-      if (!message.message || message.key.fromMe) continue;
-      // WhatsApp now hides some contacts behind a "@lid" (linked ID) instead
-      // of exposing the real phone number over "@s.whatsapp.net" — keep the
-      // full JID (suffix included) as the identifier so a reply can target
-      // the same JID; stripping it to a bare number breaks sends for @lid
-      // contacts (confirmed: send failed with a stripped @lid contact).
-      const contactPhone = message.key.remoteJid;
-      if (!contactPhone) continue;
-      const text = message.message.conversation
-        || message.message.extendedTextMessage?.text
-        || message.message.imageMessage?.caption
-        || null;
-      await forwardToCaju({
-        wamid: message.key.id,
-        contactPhone,
-        contactName: message.pushName || null,
-        direction: 'incoming',
-        messageType: text ? 'text' : 'unknown',
-        body: text,
-        occurredAt: message.messageTimestamp ? new Date(Number(message.messageTimestamp) * 1000).toISOString() : new Date().toISOString(),
-      });
+  sock.ev.on('presence.update', ({ id, presences }) => {
+    for (const value of Object.values(presences ?? {})) {
+      if (value?.lastKnownPresence) presence.set(id, { state: value.lastKnownPresence, at: Date.now() });
     }
   });
+
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    // 'append' also carries messages sent from the phone while this device
+    // was catching up; bound it to recent ones so a reconnect doesn't replay
+    // a whole history into the inbox.
+    if (type !== 'notify' && type !== 'append') return;
+    for (const message of messages) {
+      try { await handleMessage(message, type); } catch (error) { console.error('Falha ao processar mensagem:', error); }
+    }
+  });
+}
+
+async function handleMessage(message, type) {
+  const jid = message.key.remoteJid;
+  if (!jid || !message.message || !isDirectChat(jid)) return;
+  const occurredAtMs = message.messageTimestamp ? Number(message.messageTimestamp) * 1000 : Date.now();
+  if (type === 'append' && Date.now() - occurredAtMs > 24 * 60 * 60 * 1000) return;
+
+  const content = normalizeMessageContent(message.message);
+  const parsed = parseContent(content);
+  if (!parsed) return;
+
+  const wamid = message.key.id;
+  const fromMe = Boolean(message.key.fromMe);
+  let mediaId = null;
+  if (parsed.media) {
+    mediaId = safeId(wamid);
+    if (!await mediaExists(mediaId)) {
+      const size = Number(parsed.media.fileLength ?? 0);
+      if (size && size > MAX_MEDIA_BYTES) {
+        mediaId = null;
+      } else {
+        try {
+          const buffer = await downloadMediaMessage({ ...message, message: content }, 'buffer', {}, { logger: silentLogger, reuploadRequest: sock.updateMediaMessage });
+          await saveMedia(mediaId, buffer, { mimetype: parsed.media.mimetype ?? 'application/octet-stream', fileName: parsed.media.fileName ?? null });
+        } catch (error) {
+          console.error('Falha ao baixar mídia:', error?.message ?? error);
+          mediaId = null;
+        }
+      }
+    }
+  }
+
+  await forwardToCaju({
+    wamid,
+    // WhatsApp sometimes addresses a contact by a "@lid" (linked ID) instead
+    // of "@s.whatsapp.net" — keep the full JID so replies target it.
+    contactPhone: jid,
+    // On our own messages pushName is our name, not the contact's.
+    contactName: fromMe ? null : (message.pushName || null),
+    direction: fromMe ? 'outgoing' : 'incoming',
+    messageType: parsed.type,
+    body: parsed.body,
+    mediaId,
+    occurredAt: new Date(occurredAtMs).toISOString(),
+  });
+}
+
+function isDirectChat(jid) {
+  return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
+}
+
+function parseContent(content) {
+  const type = getContentType(content);
+  if (!type) return null;
+  const value = content[type];
+  switch (type) {
+    case 'conversation': return { type: 'text', body: value };
+    case 'extendedTextMessage': return { type: 'text', body: value?.text ?? null };
+    case 'imageMessage': return { type: 'image', body: value?.caption || null, media: value };
+    case 'videoMessage': return { type: 'video', body: value?.caption || null, media: value };
+    case 'audioMessage': return { type: 'audio', body: null, media: value };
+    case 'documentMessage': return { type: 'document', body: value?.caption || value?.fileName || 'Arquivo', media: value };
+    case 'stickerMessage': return { type: 'sticker', body: null, media: value };
+    case 'locationMessage': return { type: 'location', body: `https://maps.google.com/?q=${value?.degreesLatitude},${value?.degreesLongitude}` };
+    case 'contactMessage': return { type: 'contact', body: value?.displayName ?? 'Contato' };
+    default: return null; // reactions, protocol/edit/revoke messages, polls...
+  }
 }
 
 async function forwardToCaju(payload) {
@@ -82,35 +154,144 @@ async function forwardToCaju(payload) {
   }
 }
 
-// Minimal HTTP API so the Caju OS backend can send outbound messages through
-// this same phone number. Guarded by the same shared secret as the webhook.
+function safeId(id) { return String(id).replace(/[^A-Za-z0-9_-]/g, ''); }
+async function mediaExists(id) { return stat(`${MEDIA_DIR}/${id}.bin`).then(() => true, () => false); }
+async function saveMedia(id, buffer, meta) {
+  await writeFile(`${MEDIA_DIR}/${id}.bin`, buffer);
+  await writeFile(`${MEDIA_DIR}/${id}.json`, JSON.stringify(meta));
+}
+
+function jidFor(rawTo) {
+  const to = String(rawTo ?? '').trim();
+  if (!to) return null;
+  return to.includes('@') ? to : `${to.replace(/\D/g, '')}@s.whatsapp.net`;
+}
+
+// Browsers record voice as webm/opus; WhatsApp phones only play voice notes
+// as ogg/opus, so transcode before sending.
+function toOggOpus(buffer) {
+  return new Promise((resolve, reject) => {
+    const ffmpeg = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn', '-ac', '1', '-ar', '48000', '-c:a', 'libopus', '-b:a', '32k', '-f', 'ogg', 'pipe:1']);
+    const chunks = [];
+    ffmpeg.stdout.on('data', (chunk) => chunks.push(chunk));
+    ffmpeg.on('error', reject);
+    ffmpeg.on('close', (code) => code === 0 ? resolve(Buffer.concat(chunks)) : reject(new Error(`ffmpeg saiu com código ${code}`)));
+    ffmpeg.stdin.on('error', () => {});
+    ffmpeg.stdin.end(buffer);
+  });
+}
+
+async function readBody(request, limit) {
+  const chunks = []; let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > limit) throw Object.assign(new Error('Arquivo grande demais.'), { status: 413 });
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+function json(response, status, payload) {
+  response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(payload));
+}
+
+async function profilePhoto(jid) {
+  const cached = photoCache.get(jid);
+  if (cached && Date.now() - cached.at < 6 * 60 * 60 * 1000) return cached.url;
+  const url = await sock.profilePictureUrl(jid, 'image').catch(() => null);
+  photoCache.set(jid, { url, at: Date.now() });
+  return url;
+}
+
+// Minimal HTTP API for the Caju OS backend. Every route is guarded by the
+// same shared secret as the webhook.
 http.createServer(async (request, response) => {
-  if (request.method !== 'POST' || request.url !== '/send') {
-    response.writeHead(404).end();
-    return;
-  }
-  if (request.headers['x-bridge-secret'] !== BRIDGE_SECRET) {
-    response.writeHead(403).end(JSON.stringify({ error: 'Segredo inválido.' }));
-    return;
-  }
-  let raw = '';
-  for await (const chunk of request) raw += chunk;
-  let body;
-  try { body = JSON.parse(raw); } catch { response.writeHead(400).end(JSON.stringify({ error: 'JSON inválido.' })); return; }
-  const rawTo = typeof body?.to === 'string' ? body.to.trim() : '';
-  // `to` may already be a full JID (contact_phone stored as-is for @lid
-  // contacts) — only bare phone numbers need the @s.whatsapp.net suffix.
-  const to = rawTo.includes('@') ? rawTo : rawTo.replace(/\D/g, '');
-  const jid = rawTo.includes('@') ? rawTo : `${to}@s.whatsapp.net`;
-  const text = typeof body?.text === 'string' ? body.text.trim() : '';
-  if (!to || !text) { response.writeHead(400).end(JSON.stringify({ error: 'to e text são obrigatórios.' })); return; }
-  if (!sock) { response.writeHead(503).end(JSON.stringify({ error: 'Bridge ainda não conectado ao WhatsApp.' })); return; }
   try {
-    const sent = await sock.sendMessage(jid, { text });
-    response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ wamid: sent.key.id }));
+    if (request.headers['x-bridge-secret'] !== BRIDGE_SECRET) return json(response, 403, { error: 'Segredo inválido.' });
+    const url = new URL(request.url, 'http://bridge');
+    if (!sock) return json(response, 503, { error: 'Bridge ainda não conectado ao WhatsApp.' });
+
+    if (request.method === 'POST' && url.pathname === '/send') {
+      const body = JSON.parse((await readBody(request, 64 * 1024)).toString('utf8') || '{}');
+      const jid = jidFor(body?.to);
+      const text = typeof body?.text === 'string' ? body.text.trim() : '';
+      if (!jid || !text) return json(response, 400, { error: 'to e text são obrigatórios.' });
+      const sent = await sock.sendMessage(jid, { text });
+      return json(response, 200, { wamid: sent.key.id });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/send-media') {
+      const jid = jidFor(url.searchParams.get('to'));
+      if (!jid) return json(response, 400, { error: 'to é obrigatório.' });
+      const mimetype = String(request.headers['content-type'] || 'application/octet-stream').split(';')[0].trim();
+      const fileName = url.searchParams.get('fileName') || 'arquivo';
+      const caption = url.searchParams.get('caption') || undefined;
+      const voice = url.searchParams.get('voice') === '1';
+      const buffer = await readBody(request, MAX_MEDIA_BYTES);
+      if (!buffer.length) return json(response, 400, { error: 'Arquivo vazio.' });
+
+      let message; let type; let storedBuffer = buffer; let storedMime = mimetype;
+      if (voice) {
+        storedBuffer = await toOggOpus(buffer);
+        storedMime = 'audio/ogg; codecs=opus';
+        message = { audio: storedBuffer, mimetype: storedMime, ptt: true }; type = 'audio';
+      } else if (mimetype.startsWith('image/') && mimetype !== 'image/svg+xml') {
+        message = { image: buffer, mimetype, caption }; type = 'image';
+      } else if (mimetype.startsWith('video/')) {
+        message = { video: buffer, mimetype, caption }; type = 'video';
+      } else if (mimetype.startsWith('audio/')) {
+        message = { audio: buffer, mimetype }; type = 'audio';
+      } else {
+        message = { document: buffer, mimetype, fileName, caption }; type = 'document';
+      }
+      const sent = await sock.sendMessage(jid, message);
+      const mediaId = safeId(sent.key.id);
+      await saveMedia(mediaId, storedBuffer, { mimetype: storedMime, fileName: type === 'document' ? fileName : null });
+      return json(response, 200, { wamid: sent.key.id, mediaId, messageType: type });
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/media/')) {
+      const id = safeId(url.pathname.slice('/media/'.length));
+      if (!id || !await mediaExists(id)) return json(response, 404, { error: 'Mídia não encontrada.' });
+      const meta = JSON.parse(await readFile(`${MEDIA_DIR}/${id}.json`, 'utf8').catch(() => '{}'));
+      const info = await stat(`${MEDIA_DIR}/${id}.bin`);
+      response.writeHead(200, {
+        'Content-Type': meta.mimetype || 'application/octet-stream',
+        'Content-Length': info.size,
+        ...(meta.fileName ? { 'X-File-Name': encodeURIComponent(meta.fileName) } : {}),
+      });
+      createReadStream(`${MEDIA_DIR}/${id}.bin`).pipe(response);
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/presence') {
+      const jid = jidFor(url.searchParams.get('jid'));
+      if (!jid) return json(response, 400, { error: 'jid é obrigatório.' });
+      // WhatsApp only pushes a contact's presence after we subscribe to it,
+      // and the subscription lapses, so renew it every few minutes.
+      if (Date.now() - (presenceSubscribedAt.get(jid) ?? 0) > 4 * 60 * 1000) {
+        presenceSubscribedAt.set(jid, Date.now());
+        await sock.presenceSubscribe(jid).catch(() => {});
+      }
+      const current = presence.get(jid);
+      let state = current?.state ?? null;
+      if ((state === 'composing' || state === 'recording') && Date.now() - current.at > TYPING_TTL_MS) state = 'available';
+      return json(response, 200, { state, photoUrl: await profilePhoto(jid) });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/typing') {
+      const body = JSON.parse((await readBody(request, 4096)).toString('utf8') || '{}');
+      const jid = jidFor(body?.to);
+      const state = ['composing', 'recording', 'paused'].includes(body?.state) ? body.state : 'paused';
+      if (!jid) return json(response, 400, { error: 'to é obrigatório.' });
+      await sock.sendPresenceUpdate(state, jid).catch(() => {});
+      return json(response, 200, { ok: true });
+    }
+
+    return json(response, 404, { error: 'Rota não encontrada.' });
   } catch (error) {
-    console.error('Falha ao enviar mensagem:', error);
-    response.writeHead(502).end(JSON.stringify({ error: 'Falha ao enviar pelo WhatsApp.' }));
+    console.error('Falha na API do bridge:', error?.message ?? error);
+    if (!response.headersSent) json(response, error?.status ?? 502, { error: error?.status === 413 ? 'Arquivo grande demais.' : 'Falha ao falar com o WhatsApp.' });
   }
 }).listen(PORT, () => console.log(`Bridge HTTP ouvindo na porta ${PORT}`));
 

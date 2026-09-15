@@ -11,6 +11,33 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: mídia, mensagens enviadas pelo celular, "digitando..."
+
+- Mensagens enviadas direto pelo celular (fora do sistema) agora aparecem na
+  conversa. O bridge ignorava tudo que era `fromMe`; agora encaminha como
+  `outgoing` sem `sender_email`. O eco de uma resposta enviada pelo próprio
+  sistema tem o mesmo `wamid`: o webhook usa `INSERT OR IGNORE` e o envio usa
+  upsert que só preenche `sender_email` (`lib/server/whatsapp-bridge.ts`).
+- Imagem, vídeo, áudio, documento e figurinha, recebidos e enviados. A mídia
+  fica no disco do bridge (volume do Fly, `auth/media/`), não no D1 (limite de
+  tamanho de linha). O navegador busca por `GET /api/whatsapp/media/[id]`
+  (proxy com login) e exibe via blob URL.
+- Envio: clipe (qualquer arquivo), câmera (foto/vídeo) e gravação de áudio
+  pelo microfone. O navegador grava webm/opus e o bridge converte para
+  ogg/opus com ffmpeg, formato que o WhatsApp do celular toca como áudio de voz.
+  Limite de 32 MB por arquivo.
+- Cabeçalho mostra foto de perfil do contato, "online", "digitando..." e
+  "gravando áudio..."; o contato também vê quando o atendente está digitando.
+  Consulta a cada 3 s (`/api/whatsapp/conversations/[phone]/presence`).
+- Localização e contato compartilhados aparecem como link/nome.
+- Removido o log de diagnóstico temporário do envio (substitui o PR #11).
+
+**Pendente/limites:** grupos do WhatsApp continuam fora da caixa de entrada.
+Sem confirmação de entregue/lido (check simples). Disco do bridge é de 1 GB:
+acompanhar uso; se encher, aumentar o volume (`fly volumes extend`) ou migrar a
+mídia para R2. Um mesmo contato pode aparecer duas vezes se o WhatsApp alternar
+entre número e `@lid`.
+
 ### Bridge não-oficial do WhatsApp (Baileys) como alternativa ao Cloud API
 
 A integração oficial (Meta Cloud API, `app/api/whatsapp/`) exige migrar o
