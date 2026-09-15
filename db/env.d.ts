@@ -22,6 +22,11 @@ declare namespace Cloudflare {
     META_APP_SECRET?: string;
     WHATSAPP_ACCESS_TOKEN?: string;
     WHATSAPP_PHONE_NUMBER_ID?: string;
+    // Non-official bridge (whatsapp-bridge/, Baileys) as an alternative to the
+    // Meta Cloud API above — same phone number stays usable on the phone app.
+    // When set, the send route uses the bridge instead of the Graph API.
+    WHATSAPP_BRIDGE_URL?: string;
+    WHATSAPP_BRIDGE_SECRET?: string;
     // Workers AI, usado para ler a RAT. `Ai` e um tipo global de
     // @cloudflare/workers-types: importar aqui transformaria este .d.ts em
     // modulo e quebraria a declaracao de namespace.
