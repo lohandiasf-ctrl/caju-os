@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: assinatura de quem respondeu na própria mensagem
+
+Mensagens de texto enviadas pelo sistema chegam ao contato com a primeira
+linha em negrito `*Lohan · Gerência*` (primeiro nome + cargo do sistema).
+Fotos, vídeos e documentos levam a assinatura na legenda; áudios não, porque o
+WhatsApp não aceita legenda em áudio. O banco guarda o texto sem a assinatura
+(a caixa de entrada já mostra o remetente acima da mensagem), inclusive quando
+o eco do bridge chega antes. Rótulo compartilhado em `lib/whatsapp-sender.ts`,
+com teste.
+
 ### WhatsApp: mídia, mensagens enviadas pelo celular, "digitando..."
 
 - Mensagens enviadas direto pelo celular (fora do sistema) agora aparecem na

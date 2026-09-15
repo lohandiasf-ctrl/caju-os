@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { bridgeConfigured, bridgeFetch, recordOutgoing, WHATSAPP_SUPPORT_ROLES } from '@/lib/server/whatsapp-bridge';
+import { bridgeConfigured, bridgeFetch, recordOutgoing, senderLabelFor, WHATSAPP_SUPPORT_ROLES } from '@/lib/server/whatsapp-bridge';
+import { signWhatsappText } from '@/lib/whatsapp-sender';
 
 export async function POST(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
@@ -14,6 +15,8 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
     const body = await request.json().catch(() => null) as { text?: unknown } | null;
     const text = typeof body?.text === 'string' ? body.text.trim().slice(0, 4096) : '';
     if (!text) return Response.json({ error: 'Escreva uma mensagem.' }, { status: 400 });
+    // The contact sees who on the team is answering, as a bold first line.
+    const signedText = signWhatsappText(await senderLabelFor(current), text);
 
     let wamid: string;
     let phoneNumberId: string;
@@ -21,7 +24,7 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
       const response = await bridgeFetch('/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: contactPhone, text }),
+        body: JSON.stringify({ to: contactPhone, text: signedText }),
       });
       const payload = await response.json().catch(() => null) as { wamid?: string; error?: string } | null;
       if (!response.ok || !payload?.wamid) {
@@ -33,7 +36,7 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
       const response = await fetch(`https://graph.facebook.com/v21.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messaging_product: 'whatsapp', to: contactPhone, type: 'text', text: { body: text } }),
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: contactPhone, type: 'text', text: { body: signedText } }),
       });
       const payload = await response.json() as { messages?: Array<{ id: string }>; error?: { message?: string } };
       if (!response.ok || !payload.messages?.[0]?.id) {
