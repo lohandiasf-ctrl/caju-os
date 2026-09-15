@@ -123,7 +123,7 @@ async function start() {
       }
       // First connection of a number: pull the address book so contacts the
       // inbox only knows by "@lid" get their phone number.
-      if (!phones.size) resyncContacts().catch(() => {});
+      if (!phones.size) resyncContacts({ full: true }).catch(() => {});
     }
   });
 
@@ -321,8 +321,16 @@ function phoneJidFor(jid) {
 
 // Re-reads the account's contact list from WhatsApp. Each contact arrives
 // with both of its IDs, which is what fills the lid -> phone map.
-async function resyncContacts() {
+async function resyncContacts({ full = false } = {}) {
   const before = phones.size;
+  // WhatsApp only sends what changed since the stored version, so a plain
+  // resync of an already-synced number replays nothing. Dropping the version
+  // markers (never the sync key) makes it send the whole snapshot again.
+  if (full) {
+    for (const entry of await readdir('./auth')) {
+      if (entry.startsWith('app-state-sync-version-')) await rm(`./auth/${entry}`, { force: true });
+    }
+  }
   await sock.resyncAppState(['critical_unblock_low', 'regular_high', 'regular_low', 'regular'], false);
   console.log(`Contatos sincronizados: ${phones.size - before} telefone(s) novo(s), ${phones.size} no total.`);
   return { learned: phones.size - before, total: phones.size };
@@ -571,7 +579,7 @@ http.createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && url.pathname === '/resync-contacts') {
-      return json(response, 200, await resyncContacts());
+      return json(response, 200, await resyncContacts({ full: url.searchParams.get('full') === '1' }));
     }
 
     // Which of these JIDs the bridge can already turn into a phone number.

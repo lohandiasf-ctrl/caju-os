@@ -5,7 +5,8 @@ import { bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 export async function POST(request: Request) {
   try {
     await requireWhatsappUser(request);
-    const upstream = await bridgeFetch('/resync-contacts', { method: 'POST', signal: AbortSignal.timeout(60_000) });
+    // full=1: re-read the whole address book, not just what changed.
+    const upstream = await bridgeFetch('/resync-contacts?full=1', { method: 'POST', signal: AbortSignal.timeout(60_000) });
     const payload = await upstream.json().catch(() => ({})) as { learned?: number; total?: number; error?: string };
     if (!upstream.ok) return Response.json({ error: payload.error ?? 'O bridge não conseguiu sincronizar os contatos.' }, { status: 502 });
     return Response.json({ learned: payload.learned ?? 0, total: payload.total ?? 0 });
