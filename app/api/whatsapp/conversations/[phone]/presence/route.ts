@@ -1,14 +1,11 @@
-import { bridgeConfigured, bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
+import { bridgeConfigured, bridgeFetch, fetchBridgePresence, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 
 // Contact's live state (typing / recording / online) and profile photo.
 export async function GET(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
     await requireWhatsappUser(request);
-    if (!bridgeConfigured()) return Response.json({ state: null, photoUrl: null });
     const { phone } = await context.params;
-    const upstream = await bridgeFetch(`/presence?${new URLSearchParams({ jid: decodeURIComponent(phone) })}`);
-    const payload = await upstream.json().catch(() => null) as { state?: string | null; photoUrl?: string | null } | null;
-    return Response.json({ state: payload?.state ?? null, photoUrl: payload?.photoUrl ?? null }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json(await fetchBridgePresence(decodeURIComponent(phone)), { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { if (error instanceof Response) return error; return Response.json({ state: null, photoUrl: null }); }
 }
 

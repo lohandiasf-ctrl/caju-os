@@ -37,6 +37,19 @@ export async function bridgeFetch(path: string, init: RequestInit = {}) {
   return fetch(`${env.WHATSAPP_BRIDGE_URL}${path}`, { ...init, headers });
 }
 
+// Contact's typing/recording/online state and profile photo. Best-effort:
+// any bridge failure reads as "no information".
+export async function fetchBridgePresence(jid: string): Promise<{ state: string | null; photoUrl: string | null }> {
+  if (!bridgeConfigured()) return { state: null, photoUrl: null };
+  try {
+    const upstream = await bridgeFetch(`/presence?${new URLSearchParams({ jid })}`);
+    const payload = await upstream.json().catch(() => null) as { state?: string | null; photoUrl?: string | null } | null;
+    return { state: payload?.state ?? null, photoUrl: payload?.photoUrl ?? null };
+  } catch {
+    return { state: null, photoUrl: null };
+  }
+}
+
 export async function recordOutgoing(row: {
   wamid: string; phoneNumberId: string; contactPhone: string; messageType: string;
   body: string | null; mediaId: string | null; senderEmail: string;

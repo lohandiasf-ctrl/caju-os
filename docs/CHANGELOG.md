@@ -11,6 +11,31 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: menos requisições (erro "Muitas tentativas")
+
+A tela nova do WhatsApp pedia lista (10 s), mensagens (4 s) e presença (3 s)
+separadamente, mais as fotos da lista. Somado ao resto do app, estourava o
+limite de 120 requisições autenticadas por minuto por IP
+(`lib/server/firebase-auth.ts`, compartilhado por quem está no mesmo IP) e a
+lista mostrava "Muitas tentativas. Aguarde e tente novamente."
+
+- Mensagens e presença vêm juntas (`GET .../messages?presence=1`).
+- Conversa aberta atualiza a cada 4 s, lista a cada 15 s, e tudo pausa com a
+  aba escondida (retoma na hora ao voltar).
+- Um 429 numa atualização de fundo não vira mensagem de erro; espera a
+  próxima.
+- A página do WhatsApp ocupa exatamente a tela: a página não rola mais (só a
+  lista e a conversa rolam por dentro). Feito via `data-view` no `<html>` e
+  regras em `globals.css`, sem mexer nas outras telas.
+- Nessa página os botões flutuantes parados ("Reunião" e colegas,
+  `data-floating-launcher`) ficam ocultos, pois cobriam o campo de mensagem.
+  Uma chamada em andamento continua visível.
+- Dados: conversa de teste "bianca" (`89537652981855@lid`) apagada do D1 de
+  produção a pedido do usuário (2 mensagens + conversa, sem mídia). Volta a
+  aparecer se esse número mandar mensagem de novo.
+
+O limite por IP em si não foi alterado.
+
 ### Exportação de contatos sem duplicados; WhatsApp só para o piloto
 
 - Exportação para Google Contatos (`lib/google-contacts.ts`): o cadastro de

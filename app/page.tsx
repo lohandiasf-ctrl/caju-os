@@ -398,6 +398,12 @@ export default function Home() {
     window.addEventListener("popstate", syncView);
     return () => window.removeEventListener("popstate", syncView);
   }, [role, user?.email]);
+  // Lets globals.css lay out full-screen views (WhatsApp) and hide the
+  // floating launchers there.
+  useEffect(() => {
+    document.documentElement.dataset.view = activeView;
+    return () => { delete document.documentElement.dataset.view; };
+  }, [activeView]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tickets.filter((ticket) => {

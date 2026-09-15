@@ -38,6 +38,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     if (!user) return;
     try {
       const response = await fetch('/api/whatsapp/conversations', { headers: await authHeaders(), cache: 'no-store' });
+      if (response.status === 429) return;
       const payload = await response.json() as { conversations?: Conversation[]; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar as conversas.');
       setConversations(payload.conversations ?? []);
@@ -46,11 +47,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     finally { setLoading(false); }
   }, [user, authHeaders]);
 
-  useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => void load(), 10_000);
-    return () => window.clearInterval(timer);
-  }, [load]);
+  useVisiblePolling(load, 15_000);
 
   const visible = useMemo(() => {
     const term = normalize(query);
@@ -64,8 +61,8 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
 
   const selected = conversations.find((conversation) => conversation.contactPhone === selectedPhone) ?? null;
 
-  return <section className="mt-6" aria-label="Conversas do WhatsApp">
-    <div className="flex h-[calc(100dvh-13rem)] min-h-[560px] overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100 shadow-2xl">
+  return <section className="mt-4 flex min-h-[360px] flex-1 flex-col lg:mt-6" aria-label="Conversas do WhatsApp">
+    <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100 shadow-2xl">
       {/* Chat list */}
       <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-white/10 bg-[#111b21] md:w-[340px] lg:w-[380px]`}>
         <div className="flex h-16 shrink-0 items-center justify-between bg-[#202c33] px-4">
@@ -218,31 +215,22 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     })();
   }, [user, authHeaders]);
 
+  // One request brings messages and the contact's typing state.
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch(`${basePath}/messages`, { headers: await authHeaders(), cache: 'no-store' });
-      const payload = await response.json() as { messages?: Message[]; error?: string };
+      const response = await fetch(`${basePath}/messages?presence=1`, { headers: await authHeaders(), cache: 'no-store' });
+      // A background refresh that hits the rate limit just waits for the next one.
+      if (response.status === 429) return;
+      const payload = await response.json() as { messages?: Message[]; presence?: Presence; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar a conversa.');
       setMessages(payload.messages ?? []);
+      if (payload.presence) setPresence(payload.presence);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a conversa.'); }
     finally { setLoading(false); }
   }, [user, basePath, authHeaders]);
 
-  const loadPresence = useCallback(async () => {
-    if (!user) return;
-    try {
-      const response = await fetch(`${basePath}/presence`, { headers: await authHeaders(), cache: 'no-store' });
-      if (response.ok) setPresence(await response.json() as Presence);
-    } catch { /* presence is best-effort */ }
-  }, [user, basePath, authHeaders]);
-
-  useEffect(() => {
-    void load(); void loadPresence();
-    const messagesTimer = window.setInterval(() => void load(), 4_000);
-    const presenceTimer = window.setInterval(() => void loadPresence(), 3_000);
-    return () => { window.clearInterval(messagesTimer); window.clearInterval(presenceTimer); };
-  }, [load, loadPresence]);
+  useVisiblePolling(load, 4_000);
 
   // Opening a conversation marks it read on the server; refresh the list badge.
   useEffect(() => { if (!loading) onUpdated(); }, [loading, onUpdated]);
@@ -491,6 +479,24 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
       )}
     </div>
   </>;
+}
+
+// Refreshes right away, then every `intervalMs` while the tab is visible, and
+// again as soon as it becomes visible. Every authenticated API call counts
+// toward a per-IP limit shared by the whole app, so hidden tabs stay quiet.
+function useVisiblePolling(callback: () => void | Promise<void>, intervalMs: number) {
+  useEffect(() => {
+    let timer: number | undefined;
+    const start = () => {
+      window.clearInterval(timer);
+      if (document.visibilityState !== 'visible') return;
+      void callback();
+      timer = window.setInterval(() => void callback(), intervalMs);
+    };
+    start();
+    document.addEventListener('visibilitychange', start);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', start); };
+  }, [callback, intervalMs]);
 }
 
 // Profile photos are looked up once per contact (only when the row scrolls

@@ -413,3 +413,26 @@
 @media (prefers-reduced-motion: reduce) {
   [data-slot='sheet-content'][data-starting-style], [data-slot='sheet-content'][data-ending-style] { filter: none; }
 }
+
+/* WhatsApp is a full-screen app view: the page itself never scrolls, only the
+   chat list and the message thread do. Unlayered so it wins over the main
+   column's pb-44/xl:pb-36 utilities. */
+html[data-view='whatsapp'] .app-content {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+html[data-view='whatsapp'] .app-content > header { flex: none; }
+html[data-view='whatsapp'] .app-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  padding-bottom: 1rem;
+}
+/* The idle "Reunião" and colleagues launchers would sit on top of the
+   message composer; a live call surface is not tagged and stays visible. */
+html[data-view='whatsapp'] [data-floating-launcher] { display: none !important; }
