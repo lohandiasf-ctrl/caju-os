@@ -11,12 +11,14 @@ import { participantJid, WHATSAPP_GROUP_NAME_MAX } from '@/lib/whatsapp-group-na
 export async function GET(request: Request) {
   try {
     await requireWhatsappUser(request);
-    const rows = await getDb().select({ jid: whatsappConversations.contactPhone, name: whatsappConversations.contactName })
+    const rows = await getDb().select({ jid: whatsappConversations.contactPhone, name: whatsappConversations.contactName, phoneJid: whatsappConversations.phoneJid })
       .from(whatsappConversations)
       .where(notLike(whatsappConversations.contactPhone, '%@g.us'))
       .orderBy(desc(whatsappConversations.lastMessageAt)).limit(200).all();
-    const phones = await fetchPhones(rows.map((row) => row.jid));
-    return Response.json({ contacts: rows.map((row) => ({ ...row, phone: phones[row.jid] ?? null })) }, { headers: { 'Cache-Control': 'private, no-store' } });
+    const phones = await fetchPhones(rows.filter((row) => !row.phoneJid).map((row) => row.jid));
+    return Response.json({
+      contacts: rows.map((row) => ({ jid: row.jid, name: row.name, phone: row.phoneJid ?? phones[row.jid] ?? null })),
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: 'Não foi possível carregar os contatos do WhatsApp.' }, { status: 500 });
