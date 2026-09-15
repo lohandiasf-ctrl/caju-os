@@ -45,7 +45,12 @@ async function start() {
     if (type !== 'notify') return;
     for (const message of messages) {
       if (!message.message || message.key.fromMe) continue;
-      const contactPhone = message.key.remoteJid?.replace(/@s\.whatsapp\.net$/, '');
+      // WhatsApp now hides some contacts behind a "@lid" (linked ID) instead
+      // of exposing the real phone number over "@s.whatsapp.net" — keep the
+      // full JID (suffix included) as the identifier so a reply can target
+      // the same JID; stripping it to a bare number breaks sends for @lid
+      // contacts (confirmed: send failed with a stripped @lid contact).
+      const contactPhone = message.key.remoteJid;
       if (!contactPhone) continue;
       const text = message.message.conversation
         || message.message.extendedTextMessage?.text
@@ -92,12 +97,16 @@ http.createServer(async (request, response) => {
   for await (const chunk of request) raw += chunk;
   let body;
   try { body = JSON.parse(raw); } catch { response.writeHead(400).end(JSON.stringify({ error: 'JSON inválido.' })); return; }
-  const to = typeof body?.to === 'string' ? body.to.replace(/\D/g, '') : '';
+  const rawTo = typeof body?.to === 'string' ? body.to.trim() : '';
+  // `to` may already be a full JID (contact_phone stored as-is for @lid
+  // contacts) — only bare phone numbers need the @s.whatsapp.net suffix.
+  const to = rawTo.includes('@') ? rawTo : rawTo.replace(/\D/g, '');
+  const jid = rawTo.includes('@') ? rawTo : `${to}@s.whatsapp.net`;
   const text = typeof body?.text === 'string' ? body.text.trim() : '';
   if (!to || !text) { response.writeHead(400).end(JSON.stringify({ error: 'to e text são obrigatórios.' })); return; }
   if (!sock) { response.writeHead(503).end(JSON.stringify({ error: 'Bridge ainda não conectado ao WhatsApp.' })); return; }
   try {
-    const sent = await sock.sendMessage(`${to}@s.whatsapp.net`, { text });
+    const sent = await sock.sendMessage(jid, { text });
     response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ wamid: sent.key.id }));
   } catch (error) {
     console.error('Falha ao enviar mensagem:', error);
