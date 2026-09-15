@@ -27,6 +27,9 @@ lista mostrava "Muitas tentativas. Aguarde e tente novamente."
 - A página do WhatsApp ocupa exatamente a tela: a página não rola mais (só a
   lista e a conversa rolam por dentro). Feito via `data-view` no `<html>` e
   regras em `globals.css`, sem mexer nas outras telas.
+- Sem o bloco de título ("WhatsApp Business / Conversas / descrição") nessa
+  página: a caixa de conversas ocupa toda a área abaixo da barra superior. O
+  título continua disponível para leitores de tela (`sr-only`).
 - Nessa página os botões flutuantes parados ("Reunião" e colegas,
   `data-floating-launcher`) ficam ocultos, pois cobriam o campo de mensagem.
   Uma chamada em andamento continua visível.
