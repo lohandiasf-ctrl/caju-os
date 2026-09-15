@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { isUserRole, roleLabels } from '@/lib/permissions';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 import { splitTicketKeys } from '@/lib/whatsapp-ticket-keys';
@@ -423,8 +423,11 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
                             <ContextMenuSub>
                               <ContextMenuSubTrigger disabled={Boolean(attaching)}><ClipboardCheck />Adicionar como evidência</ContextMenuSubTrigger>
                               <ContextMenuSubContent>
-                                <ContextMenuLabel>Anexar no Jira da FSA</ContextMenuLabel>
-                                {linkedKeys.map((key) => <ContextMenuItem key={key} onClick={() => void addEvidence(message, key)}>{key}</ContextMenuItem>)}
+                                {/* Base UI throws (and blanks the page) if a label sits outside a Group. */}
+                                <ContextMenuGroup>
+                                  <ContextMenuLabel>Anexar no Jira da FSA</ContextMenuLabel>
+                                  {linkedKeys.map((key) => <ContextMenuItem key={key} onClick={() => void addEvidence(message, key)}>{key}</ContextMenuItem>)}
+                                </ContextMenuGroup>
                               </ContextMenuSubContent>
                             </ContextMenuSub>
                           ) : <ContextMenuItem disabled><ClipboardCheck />Vincule uma FSA para adicionar evidência</ContextMenuItem>}
