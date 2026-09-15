@@ -33,7 +33,7 @@ storage). Host it on something that stays running: a small VPS, Railway,
 Render, Fly.io, etc. It keeps the WhatsApp session in `./auth/` on disk —
 back that up, losing it means re-scanning the QR code.
 
-## Setup
+## Setup — local / any VPS
 
 ```bash
 cd whatsapp-bridge
@@ -55,6 +55,31 @@ npm start
 On first run it prints a QR code in the terminal. Open WhatsApp on the phone
 that owns the number → **Aparelhos conectados** → **Conectar aparelho** →
 scan it. After that it reconnects automatically using the saved session.
+
+## Setup — Fly.io (recommended free option)
+
+`Dockerfile` and `fly.toml` are already in this folder. Fly's free allowance
+(3 small shared-cpu VMs, 3GB persistent storage) covers this comfortably — a
+card is required to sign up, but a single instance of this service shouldn't
+be billed.
+
+```bash
+# once: https://fly.io/docs/hands-on/install-flyctl/
+fly auth login
+
+cd whatsapp-bridge
+fly launch --no-deploy   # reuses fly.toml, pick a unique app name if asked
+fly volumes create whatsapp_bridge_auth --size 1 --region gru
+
+fly secrets set CAJU_WEBHOOK_URL=https://operacoes.cajutech.net/api/whatsapp/bridge-webhook
+fly secrets set WHATSAPP_BRIDGE_SECRET=<same value as the Worker's WHATSAPP_BRIDGE_SECRET>
+
+fly deploy
+fly logs   # scan the QR code that prints here with the phone
+```
+
+The app gets a public URL like `https://caju-whatsapp-bridge.fly.dev` —
+that's the value for `WHATSAPP_BRIDGE_URL` on the Worker.
 
 ## Wiring it to Caju OS
 
