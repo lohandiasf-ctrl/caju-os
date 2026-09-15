@@ -85,7 +85,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   function selectTechnician(technician: Technician) {
     setSelectedTechnicianId(technician.id);
     setTechnicianQuery(technician.name);
-    setTechnicianData(`Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: ${technician.phone || 'Não informado'}`);
+    setTechnicianData(`Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: .`);
   }
 
   async function copy(format: ClipboardFormat) {

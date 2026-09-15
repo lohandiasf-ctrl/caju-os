@@ -11,6 +11,30 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### Jira: telefone do técnico não é mais enviado
+
+Pedido do usuário. O telefone do técnico não vai para nenhum campo do Jira;
+onde o Jira espera algo, vai `.`:
+
+- Bloco "Dados dos técnicos" (`customfield_12279`): linha `TEL:` vira `TEL: .`,
+  inclusive quando o texto é digitado à mão ou reaproveitado do Jira na
+  transição para Agendado.
+- "Telefone do Técnico" (`customfield_16237`): sempre `.` ao gravar dados do
+  técnico, sobrescrevendo telefone antigo de agendamentos anteriores.
+- "Número Contato" (`customfield_11963`): o código gravava o telefone do
+  técnico aqui, mas `JIRA_FIELDS.md` documenta esse campo como contato do
+  solicitante. Parou de gravar (sem `.`, para não apagar dado real do
+  solicitante). Conferir no Jira qual é o uso real desse campo.
+- A regra fica no servidor (`lib/server/jira.ts`, com
+  `lib/technician-data.ts` testado), então vale para agendamento individual,
+  em lote e fila de sincronização; as telas de agendamento já preenchem
+  `TEL: .`.
+
+**Pendente:** não validado contra o Jira real nesta sessão (nenhum chamado foi
+agendado de teste). Conferir no próximo agendamento que o Jira aceita o `.`
+nos campos de telefone. Telefones já gravados em chamados antigos só são
+substituídos quando o chamado for reagendado.
+
 ### WhatsApp: assinatura de quem respondeu na própria mensagem
 
 Mensagens de texto enviadas pelo sistema chegam ao contato com a primeira
