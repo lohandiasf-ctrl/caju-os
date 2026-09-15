@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: grupo com várias FSAs sem prefixo repetido
+
+Nome como `AMERICANAS L252 (FSA-132030 | 132034 |132035)` só vinculava a
+primeira FSA: o parser exigia `FSA` antes de cada número. Agora números
+listados logo depois de uma FSA (separados por `|`, `,`, `;`, `/`, `+`, `&`,
+" e " ou espaço) também entram, desde que tenham 3+ dígitos. Na conversa,
+FSA fora da fila atual aparece como etiqueta, sem botão "Abrir".
+
+**Pendente:** grupo já vinculado só corrige na próxima mensagem recebida.
+
 ### WhatsApp: grupos vinculam FSAs pelo nome
 
 Grupos já são nomeados com as FSAs que atendem. O `bridge-webhook` extrai
