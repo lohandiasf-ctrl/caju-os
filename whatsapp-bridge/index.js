@@ -4,11 +4,9 @@
 // the regular phone app keeps working. See README.md before running this in
 // production: this violates WhatsApp's Terms of Service and risks a ban.
 
-import baileys from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
 import qrcodeTerminal from 'qrcode-terminal';
 import http from 'node:http';
-
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = baileys;
 
 const CAJU_WEBHOOK_URL = process.env.CAJU_WEBHOOK_URL; // e.g. https://operacoes.cajutech.net/api/whatsapp/bridge-webhook
 const BRIDGE_SECRET = process.env.WHATSAPP_BRIDGE_SECRET;
