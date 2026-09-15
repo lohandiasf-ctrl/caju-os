@@ -59,5 +59,9 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
       .onConflictDoUpdate({ target: whatsappConversations.contactPhone, set: { lastMessageAt: now, updatedAt: now } });
 
     return Response.json({ ok: true }, { status: 201 });
-  } catch (error) { if (error instanceof Response) return error; return Response.json({ error: 'Não foi possível enviar a mensagem.' }, { status: 500 }); }
+  } catch (error) {
+    if (error instanceof Response) return error;
+    console.error('whatsapp send failed:', error instanceof Error ? error.message : error);
+    return Response.json({ error: 'Não foi possível enviar a mensagem.' }, { status: 500 });
+  }
 }
