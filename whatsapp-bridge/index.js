@@ -32,6 +32,7 @@ const silentLogger = { level: 'silent', trace() {}, debug() {}, info() {}, warn(
 const presence = new Map(); // jid -> { state, at }
 const presenceSubscribedAt = new Map(); // jid -> ms
 const photoCache = new Map(); // jid -> { url, at }
+const groupCache = new Map(); // group jid -> { subject, at }
 let sock;
 
 async function start() {
@@ -75,7 +76,7 @@ async function start() {
 
 async function handleMessage(message, type) {
   const jid = message.key.remoteJid;
-  if (!jid || !message.message || !isDirectChat(jid)) return;
+  if (!jid || !message.message || !isSupportedChat(jid)) return;
   const occurredAtMs = message.messageTimestamp ? Number(message.messageTimestamp) * 1000 : Date.now();
   if (type === 'append' && Date.now() - occurredAtMs > 24 * 60 * 60 * 1000) return;
 
@@ -109,8 +110,11 @@ async function handleMessage(message, type) {
     // WhatsApp sometimes addresses a contact by a "@lid" (linked ID) instead
     // of "@s.whatsapp.net" — keep the full JID so replies target it.
     contactPhone: jid,
-    // On our own messages pushName is our name, not the contact's.
+    // On our own messages pushName is our name, not the contact's. In a group
+    // it names the participant who wrote, so the conversation gets the group
+    // subject instead.
     contactName: fromMe ? null : (message.pushName || null),
+    conversationName: isGroup(jid) ? await groupSubject(jid) : undefined,
     direction: fromMe ? 'outgoing' : 'incoming',
     messageType: parsed.type,
     body: parsed.body,
@@ -119,8 +123,18 @@ async function handleMessage(message, type) {
   });
 }
 
-function isDirectChat(jid) {
-  return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
+function isGroup(jid) { return jid.endsWith('@g.us'); }
+
+function isSupportedChat(jid) {
+  return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid') || isGroup(jid);
+}
+
+async function groupSubject(jid) {
+  const cached = groupCache.get(jid);
+  if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.subject;
+  const subject = await sock.groupMetadata(jid).then((meta) => meta?.subject || null, () => cached?.subject ?? null);
+  groupCache.set(jid, { subject, at: Date.now() });
+  return subject;
 }
 
 function parseContent(content) {

@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json().catch(() => null) as {
-    wamid?: unknown; contactPhone?: unknown; contactName?: unknown;
+    wamid?: unknown; contactPhone?: unknown; contactName?: unknown; conversationName?: unknown;
     direction?: unknown; messageType?: unknown; body?: unknown; mediaId?: unknown; occurredAt?: unknown;
   } | null;
   if (!payload) return Response.json({ error: 'Carga inválida.' }, { status: 400 });
@@ -22,6 +22,9 @@ export async function POST(request: Request) {
   if (!wamid || !contactPhone) return Response.json({ error: 'wamid e contactPhone são obrigatórios.' }, { status: 400 });
 
   const contactName = string(payload.contactName) || null;
+  // In a group contactName is the participant who wrote; the conversation is
+  // named after the group subject, never after whoever spoke last.
+  const conversationName = string(payload.conversationName) || (contactPhone.endsWith('@g.us') ? null : contactName);
   const messageType = string(payload.messageType) || 'text';
   const body = string(payload.body) || null;
   const mediaId = string(payload.mediaId) || null;
@@ -41,7 +44,7 @@ export async function POST(request: Request) {
         contact_name = COALESCE(excluded.contact_name, whatsapp_conversations.contact_name),
         last_message_at = excluded.last_message_at,
         updated_at = excluded.updated_at
-    `).bind(contactPhone, contactName, occurredAt, now, now),
+    `).bind(contactPhone, conversationName, occurredAt, now, now),
   ]);
 
   return Response.json({ received: true });

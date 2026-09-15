@@ -15,7 +15,7 @@ type Conversation = {
   lastMessageAt: string; lastReadAt: string | null; unread: number;
   lastMessage: { body: string | null; direction: string; occurredAt: string; messageType: string } | null;
 };
-type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; senderEmail: string | null; occurredAt: string };
+type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderEmail: string | null; occurredAt: string };
 type Colleague = { email: string; role: string | null; displayName: string | null };
 type Presence = { state: string | null; photoUrl: string | null };
 type Recording = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; startedAt: number; cancelled: boolean };
@@ -106,7 +106,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
           ) : visible.length ? (
             <ul>
               {visible.map((conversation) => {
-                const name = conversation.contactName || displayPhone(conversation.contactPhone) || 'Contato';
+                const name = conversation.contactName || displayPhone(conversation.contactPhone) || (isGroup(conversation.contactPhone) ? 'Grupo' : 'Contato');
                 const active = conversation.contactPhone === selectedPhone;
                 const last = conversation.lastMessage;
                 return (
@@ -344,8 +344,8 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível vincular o chamado.'); }
   }
 
-  const title = conversation.contactName || displayPhone(contactPhone) || 'Contato';
-  const subtitle = presence.state === 'composing' ? 'digitando...' : presence.state === 'recording' ? 'gravando áudio...' : presence.state === 'available' ? 'online' : displayPhone(contactPhone);
+  const title = conversation.contactName || displayPhone(contactPhone) || (isGroup(contactPhone) ? 'Grupo' : 'Contato');
+  const subtitle = presence.state === 'composing' ? 'digitando...' : presence.state === 'recording' ? 'gravando áudio...' : presence.state === 'available' ? 'online' : isGroup(contactPhone) ? 'grupo' : displayPhone(contactPhone);
   const canSend = Boolean(draft.trim() || pendingFile);
 
   return <>
@@ -374,7 +374,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
         <AnimatePresence initial={false}>
           {messages.map((message, index) => {
             const outgoing = message.direction === 'outgoing';
-            const sender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : null;
+            const sender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : !outgoing && isGroup(contactPhone) ? message.contactName : null;
             const day = dayLabel(message.occurredAt);
             const showDay = index === 0 || dayLabel(messages[index - 1].occurredAt) !== day;
             const isMedia = Boolean(MEDIA_TYPES[message.messageType]);
@@ -632,9 +632,11 @@ function previewText(type: string, body: string | null) {
   }
 }
 
-// "@lid" identifiers are opaque WhatsApp IDs, not phone numbers.
+function isGroup(jid: string) { return jid.endsWith('@g.us'); }
+
+// "@lid" and group ("@g.us") identifiers are opaque WhatsApp IDs, not phone numbers.
 function displayPhone(jid: string) {
-  if (!jid || jid.endsWith('@lid')) return '';
+  if (!jid || jid.endsWith('@lid') || isGroup(jid)) return '';
   const digits = jid.replace(/@.*$/, '').replace(/\D/g, '');
   return digits ? `+${digits}` : '';
 }
