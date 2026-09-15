@@ -8,9 +8,10 @@ import makeWASocket, {
   useMultiFileAuthState, DisconnectReason, downloadMediaMessage, normalizeMessageContent, getContentType,
 } from '@whiskeysockets/baileys';
 import qrcodeTerminal from 'qrcode-terminal';
+import QRCode from 'qrcode';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 
 const CAJU_WEBHOOK_URL = process.env.CAJU_WEBHOOK_URL; // e.g. https://operacoes.cajutech.net/api/whatsapp/bridge-webhook
@@ -41,11 +42,50 @@ const names = new Map(Object.entries(JSON.parse(await readFile(NAMES_FILE, 'utf8
 let namesSaveTimer;
 // What the Caju OS inbox shows when the WhatsApp session is down.
 let connectionState = { status: 'connecting', since: new Date().toISOString() };
+// Latest pairing QR, so a manager can scan it from the Caju OS inbox instead
+// of the Fly logs. Cleared as soon as the session opens or closes.
+let currentQr = null;
 let sock;
+
+// Each group-list sync is one heavy query; reconnects only resync once an hour
+// (renames and new groups still arrive right away through events).
+const GROUP_SYNC_MIN_INTERVAL_MS = 60 * 60 * 1000;
+let lastGroupSyncAt = 0;
+
+// Profile photo lookups are queries too; cap them so opening a big group
+// doesn't flood WhatsApp. Over the cap the caller is told to retry later.
+const PHOTO_LOOKUPS_PER_MINUTE = 10;
+let photoWindow = { startedAt: 0, count: 0 };
+
+// Watchdog: Baileys can report "open" while WhatsApp stops answering queries
+// (keep alive times out, nothing arrives). Ping on our own and force a
+// reconnect after repeated failures, instead of waiting for a manual restart.
+const WATCHDOG_INTERVAL_MS = 90_000;
+const WATCHDOG_TIMEOUT_MS = 20_000;
+const WATCHDOG_MAX_FAILURES = 3;
+const WATCHDOG_COOLDOWN_MS = 10 * 60 * 1000;
+let watchdogFailures = 0;
+let lastForcedReconnectAt = 0;
 
 function setConnectionState(status) {
   if (connectionState.status !== status) connectionState = { status, since: new Date().toISOString() };
 }
+
+setInterval(async () => {
+  if (!sock || connectionState.status !== 'open') { watchdogFailures = 0; return; }
+  try {
+    await sock.query({ tag: 'iq', attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:p' }, content: [{ tag: 'ping', attrs: {} }] }, WATCHDOG_TIMEOUT_MS);
+    watchdogFailures = 0;
+  } catch (error) {
+    watchdogFailures += 1;
+    console.error(`Watchdog: WhatsApp não respondeu ao ping (${watchdogFailures}/${WATCHDOG_MAX_FAILURES}):`, error?.message ?? error);
+    if (watchdogFailures < WATCHDOG_MAX_FAILURES || Date.now() - lastForcedReconnectAt < WATCHDOG_COOLDOWN_MS) return;
+    watchdogFailures = 0;
+    lastForcedReconnectAt = Date.now();
+    console.error('Watchdog: forçando reconexão.');
+    sock.end(new Error('Watchdog: WhatsApp parou de responder'));
+  }
+}, WATCHDOG_INTERVAL_MS);
 
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth');
@@ -56,20 +96,25 @@ async function start() {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
+      currentQr = qr;
       setConnectionState('qr');
       console.log('Escaneie este QR code no WhatsApp do celular (Aparelhos conectados > Conectar aparelho):');
       qrcodeTerminal.generate(qr, { small: true });
     }
     if (connection === 'close') {
+      currentQr = null;
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
       setConnectionState(loggedOut ? 'logged_out' : 'connecting');
       console.log('Conexão fechada.', loggedOut ? 'Sessão encerrada — apague ./auth e escaneie o QR de novo.' : 'Reconectando...');
       if (!loggedOut) start();
     } else if (connection === 'open') {
+      currentQr = null;
       setConnectionState('open');
       console.log('Bridge do WhatsApp conectado.');
-      syncAllGroups().catch((error) => console.error('Falha ao sincronizar grupos:', error?.message ?? error));
+      if (Date.now() - lastGroupSyncAt > GROUP_SYNC_MIN_INTERVAL_MS) {
+        syncAllGroups().catch((error) => console.error('Falha ao sincronizar grupos:', error?.message ?? error));
+      }
     }
   });
 
@@ -195,6 +240,7 @@ async function syncAllGroups() {
   const all = Object.values(await sock.groupFetchAllParticipating());
   for (const group of all) groupCache.set(group.id, { subject: group.subject || null, at: Date.now() });
   await forwardGroups(all);
+  lastGroupSyncAt = Date.now();
   console.log(`Grupos sincronizados: ${all.length}.`);
 }
 
@@ -323,12 +369,36 @@ function json(response, status, payload) {
   response.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(payload));
 }
 
-async function profilePhoto(jid) {
+// { url, limited }: limited means the per-minute cap was hit and nothing was
+// cached, so the caller should ask again later. The open conversation's own
+// header (/presence) skips the cap.
+async function profilePhoto(jid, { capped = true } = {}) {
   const cached = photoCache.get(jid);
-  if (cached && Date.now() - cached.at < 6 * 60 * 60 * 1000) return cached.url;
+  if (cached && Date.now() - cached.at < 6 * 60 * 60 * 1000) return { url: cached.url, limited: false };
+  if (capped) {
+    if (Date.now() - photoWindow.startedAt > 60_000) photoWindow = { startedAt: Date.now(), count: 0 };
+    if (photoWindow.count >= PHOTO_LOOKUPS_PER_MINUTE) return { url: cached?.url ?? null, limited: true };
+    photoWindow.count += 1;
+  }
   const url = await sock.profilePictureUrl(jid, 'image').catch(() => null);
   photoCache.set(jid, { url, at: Date.now() });
-  return url;
+  return { url, limited: false };
+}
+
+// Clears the linked-device session (keeps media and learned names) so the
+// next start shows a fresh pairing QR.
+async function resetSession() {
+  // Detach first: the close handler would otherwise start() a second socket
+  // on the credentials being deleted below.
+  try { sock?.ev.removeAllListeners('connection.update'); sock?.end(new Error('Sessão reiniciada pelo Caju OS')); } catch {}
+  for (const entry of await readdir('./auth')) {
+    if (entry === 'media' || entry === 'names.json') continue;
+    await rm(`./auth/${entry}`, { recursive: true, force: true });
+  }
+  currentQr = null;
+  lastGroupSyncAt = 0;
+  setConnectionState('connecting');
+  await start();
 }
 
 // Minimal HTTP API for the Caju OS backend. Every route is guarded by the
@@ -404,11 +474,25 @@ http.createServer(async (request, response) => {
       const current = presence.get(jid);
       let state = current?.state ?? null;
       if ((state === 'composing' || state === 'recording') && Date.now() - current.at > TYPING_TTL_MS) state = 'available';
-      return json(response, 200, { state, photoUrl: await profilePhoto(jid) });
+      return json(response, 200, { state, photoUrl: (await profilePhoto(jid, { capped: false })).url });
     }
 
     if (request.method === 'GET' && url.pathname === '/status') {
       return json(response, 200, connectionState);
+    }
+
+    // Pairing QR as an image, only while the bridge is waiting to be linked.
+    if (request.method === 'GET' && url.pathname === '/qr') {
+      const qr = connectionState.status === 'qr' && currentQr ? await QRCode.toDataURL(currentQr, { margin: 1, width: 320 }) : null;
+      return json(response, 200, { ...connectionState, qr });
+    }
+
+    // Start over with a new QR. Refused while connected so a click can't
+    // unlink a working session.
+    if (request.method === 'POST' && url.pathname === '/reset-session') {
+      if (connectionState.status === 'open') return json(response, 409, { error: 'O WhatsApp está conectado. Desconecte o aparelho no celular antes de gerar um novo QR code.' });
+      await resetSession();
+      return json(response, 200, { ok: true });
     }
 
     // Profile photo only. Unlike /presence it doesn't subscribe to the JID's
@@ -416,7 +500,8 @@ http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/photo') {
       const jid = jidFor(url.searchParams.get('jid'));
       if (!jid) return json(response, 400, { error: 'jid é obrigatório.' });
-      return json(response, 200, { photoUrl: await profilePhoto(jid) });
+      const photo = await profilePhoto(jid);
+      return json(response, 200, { photoUrl: photo.url, limited: photo.limited });
     }
 
     if (request.method === 'POST' && url.pathname === '/typing') {
