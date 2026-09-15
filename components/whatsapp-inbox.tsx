@@ -363,12 +363,14 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
       </div>
     </div>
 
-    <div className="flex shrink-0 items-center gap-2 border-b border-white/5 bg-[#111b21] px-3 py-2">
+    <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-white/5 bg-[#111b21] px-3 py-2">
       <select value={linkedKeys.length > 1 ? '' : ticketKey} onChange={(event) => void link(event.target.value)} className="h-8 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#2a3942] px-2 text-xs text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] md:max-w-sm" aria-label="Vincular a um chamado">
         <option value="">{linkedKeys.length > 1 ? `${linkedKeys.length} chamados vinculados` : 'Sem chamado vinculado'}</option>
         {tickets.slice(0, 200).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.store}</option>)}
       </select>
-      {linkedTickets.map((item) => <Button key={item.id} type="button" size="sm" variant="outline" className="h-8 border-white/10 bg-transparent text-neutral-200" onClick={() => onOpenTicket(item.id)}><Link2 className="size-3.5" />Abrir {item.id}</Button>)}
+      {linkedKeys.map((key) => linkedTickets.some((item) => item.id === key)
+        ? <Button key={key} type="button" size="sm" variant="outline" className="h-8 border-white/10 bg-transparent text-neutral-200" onClick={() => onOpenTicket(key)}><Link2 className="size-3.5" />Abrir {key}</Button>
+        : <span key={key} className="grid h-8 shrink-0 place-items-center rounded-lg border border-white/10 px-2 text-xs text-neutral-400" title="FSA fora da fila atual">{key}</span>)}
       {ticketKey && <Button type="button" size="sm" variant="ghost" className="h-8 text-neutral-300" onClick={() => void link('')} aria-label="Desvincular chamado"><Unlink className="size-3.5" /></Button>}
     </div>
 
