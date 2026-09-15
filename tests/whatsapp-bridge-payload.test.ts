@@ -1,6 +1,29 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseBridgeGroups, parseBridgeMessage } from '../lib/whatsapp-bridge-payload.ts';
+import { parseBridgeGroups, parseBridgeMessage, parseBridgeMessageEvent, ticketEvidenceKind } from '../lib/whatsapp-bridge-payload.ts';
+
+test('WhatsApp file maps to the N1 evidence kind it can count as', () => {
+  assert.equal(ticketEvidenceKind('evidence', 'image/jpeg'), 'photo');
+  assert.equal(ticketEvidenceKind('evidence', 'video/mp4'), 'video');
+  assert.equal(ticketEvidenceKind('evidence', 'application/pdf'), null);
+  assert.equal(ticketEvidenceKind('rat', 'application/pdf'), 'rat');
+  assert.equal(ticketEvidenceKind('rat', 'image/jpeg'), 'rat');
+  assert.equal(ticketEvidenceKind('rat', 'video/mp4'), null);
+});
+
+test('reply keeps the quoted preview, capped at 500 characters', () => {
+  const message = parseBridgeMessage({ wamid: 'W9', contactPhone: '1@g.us', quotedWamid: 'W8', quotedBody: 'x'.repeat(600), quotedName: 'Piter' }, '2026-09-15T12:00:00.000Z');
+  assert.equal(message?.quotedWamid, 'W8');
+  assert.equal(message?.quotedBody?.length, 500);
+  assert.equal(message?.quotedName, 'Piter');
+});
+
+test('delete and edit events need the target message; edit needs text', () => {
+  assert.deepEqual(parseBridgeMessageEvent({ type: 'revoke', contactPhone: '1@g.us', wamid: 'W1' }), { type: 'revoke', contactPhone: '1@g.us', wamid: 'W1' });
+  assert.deepEqual(parseBridgeMessageEvent({ type: 'edit', contactPhone: '1@g.us', wamid: 'W1', body: ' novo ' }), { type: 'edit', contactPhone: '1@g.us', wamid: 'W1', body: 'novo' });
+  assert.equal(parseBridgeMessageEvent({ type: 'edit', contactPhone: '1@g.us', wamid: 'W1', body: '' }), null);
+  assert.equal(parseBridgeMessageEvent({ type: 'revoke', contactPhone: '1@g.us' }), null);
+});
 
 const NOW = '2026-09-15T12:00:00.000Z';
 

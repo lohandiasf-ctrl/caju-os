@@ -186,6 +186,16 @@ export const whatsappMessages = sqliteTable('whatsapp_messages', {
   senderEmail: text('sender_email'),
   // Group participant who wrote an incoming message (bridge only).
   senderJid: text('sender_jid'),
+  // Reply context: the message this one quotes, as shown in WhatsApp.
+  quotedWamid: text('quoted_wamid'),
+  quotedBody: text('quoted_body'),
+  quotedName: text('quoted_name'),
+  // Set when the sender edits or deletes the message; the text stays for
+  // the operation's record.
+  editedAt: text('edited_at'),
+  deletedAt: text('deleted_at'),
+  // FSAs this media was attached to as evidence (comma-separated).
+  evidenceTicketKeys: text('evidence_ticket_keys'),
   occurredAt: text('occurred_at').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [

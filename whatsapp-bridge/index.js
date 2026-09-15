@@ -112,6 +112,17 @@ async function handleMessage(message, type) {
   if (type === 'append' && Date.now() - occurredAtMs > 24 * 60 * 60 * 1000) return;
 
   const content = normalizeMessageContent(message.message);
+  // Deletes and edits arrive as protocol messages pointing at the original.
+  const protocol = content?.protocolMessage;
+  if (protocol?.key?.id) {
+    if (protocol.type === 0 || protocol.type === 'REVOKE') {
+      await forwardToCaju({ type: 'revoke', contactPhone: jid, wamid: protocol.key.id });
+    } else if (protocol.type === 14 || protocol.type === 'MESSAGE_EDIT') {
+      const edited = parseContent(normalizeMessageContent(protocol.editedMessage));
+      if (edited?.body) await forwardToCaju({ type: 'edit', contactPhone: jid, wamid: protocol.key.id, body: resolveMentions(edited.body, edited.contextInfo) });
+    }
+    return;
+  }
   const parsed = parseContent(content);
   if (!parsed) return;
 
@@ -155,8 +166,23 @@ async function handleMessage(message, type) {
     messageType: parsed.type,
     body: parsed.body,
     mediaId,
+    ...quotedFrom(parsed.contextInfo),
     occurredAt: new Date(occurredAtMs).toISOString(),
   });
+}
+
+// The message being replied to, as a short preview (WhatsApp sends a copy).
+function quotedFrom(contextInfo) {
+  if (!contextInfo?.stanzaId || !contextInfo.quotedMessage) return {};
+  const quoted = parseContent(normalizeMessageContent(contextInfo.quotedMessage));
+  const labels = { image: '📷 Foto', video: '🎥 Vídeo', audio: '🎤 Áudio', document: '📄 Documento', sticker: 'Figurinha', location: '📍 Localização', contact: '👤 Contato' };
+  const body = quoted?.body ? resolveMentions(quoted.body, quoted.contextInfo) : null;
+  const preview = quoted?.type === 'text' ? body : [labels[quoted?.type], quoted?.type === 'document' ? null : body].filter(Boolean).join(' · ');
+  return {
+    quotedWamid: contextInfo.stanzaId,
+    quotedBody: (preview || 'Mensagem').slice(0, 500),
+    quotedName: nameFor(contextInfo.participant) || null,
+  };
 }
 
 function isGroup(jid) { return jid.endsWith('@g.us'); }
