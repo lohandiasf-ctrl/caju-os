@@ -135,8 +135,10 @@ async function start() {
     void forwardGroups(groups);
   });
 
-  sock.ev.on('contacts.upsert', (contacts) => { for (const contact of contacts) learnName(contact.notify || contact.name, contact.id, contact.lid, contact.phoneNumber); });
-  sock.ev.on('contacts.update', (contacts) => { for (const contact of contacts) learnName(contact.notify || contact.name, contact.id, contact.lid, contact.phoneNumber); });
+  sock.ev.on('contacts.upsert', (contacts) => contacts.forEach(learnContact));
+  sock.ev.on('contacts.update', (contacts) => contacts.forEach(learnContact));
+  // WhatsApp tells us the phone behind a "@lid" chat when the contact shares it.
+  sock.ev.on('chats.phoneNumberShare', ({ lid, jid }) => learnPhone(lid, jid));
 
   sock.ev.on('presence.update', ({ id, presences }) => {
     for (const value of Object.values(presences ?? {})) {
@@ -247,7 +249,11 @@ function isSupportedChat(jid) {
 
 async function syncAllGroups() {
   const all = Object.values(await sock.groupFetchAllParticipating());
-  for (const group of all) groupCache.set(group.id, { subject: group.subject || null, at: Date.now() });
+  for (const group of all) {
+    groupCache.set(group.id, { subject: group.subject || null, at: Date.now() });
+    // Participants come with both IDs, which is how most phone numbers are learned.
+    (group.participants ?? []).forEach(learnContact);
+  }
   await forwardGroups(all);
   lastGroupSyncAt = Date.now();
   console.log(`Grupos sincronizados: ${all.length}.`);
@@ -283,6 +289,13 @@ function learnName(name, ...jids) {
 
 function nameFor(jid) { return jid ? names.get(jidUser(jid)) ?? null : null; }
 
+// A contact (also each group participant) carries both of its IDs.
+function learnContact(contact) {
+  if (!contact?.id) return;
+  learnName(contact.notify || contact.name, contact.id, contact.lid, contact.jid);
+  learnPhone(contact.lid ?? contact.id, contact.jid ?? (String(contact.id).endsWith('@s.whatsapp.net') ? contact.id : null));
+}
+
 function learnPhone(lid, phoneJid) {
   if (!lid || !phoneJid || !String(lid).endsWith('@lid') || !String(phoneJid).endsWith('@s.whatsapp.net')) return;
   const key = jidUser(lid);
@@ -316,7 +329,10 @@ function resolveMentions(body, contextInfo) {
 async function groupSubject(jid) {
   const cached = groupCache.get(jid);
   if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.subject;
-  const subject = await sock.groupMetadata(jid).then((meta) => meta?.subject || null, () => cached?.subject ?? null);
+  const subject = await sock.groupMetadata(jid).then((meta) => {
+    (meta?.participants ?? []).forEach(learnContact);
+    return meta?.subject || null;
+  }, () => cached?.subject ?? null);
   groupCache.set(jid, { subject, at: Date.now() });
   return subject;
 }
@@ -513,6 +529,12 @@ http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/qr') {
       const qr = connectionState.status === 'qr' && currentQr ? await QRCode.toDataURL(currentQr, { margin: 1, width: 320 }) : null;
       return json(response, 200, { ...connectionState, qr });
+    }
+
+    // Which of these JIDs the bridge can already turn into a phone number.
+    if (request.method === 'GET' && url.pathname === '/phones') {
+      const wanted = (url.searchParams.get('jids') ?? '').split(',').map((jid) => jid.trim()).filter(Boolean).slice(0, 300);
+      return json(response, 200, { phones: Object.fromEntries(wanted.map((jid) => [jid, phoneJidFor(jid)])) });
     }
 
     // Creates a group with the given participants (phone JIDs) and pushes it

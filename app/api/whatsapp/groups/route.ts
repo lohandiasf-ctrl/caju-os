@@ -1,6 +1,39 @@
+import { desc, notLike } from 'drizzle-orm';
+import { getDb } from '@/db';
+import { whatsappConversations } from '@/db/schema';
 import { logSecurityEvent } from '@/lib/server/security-log';
 import { bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 import { participantJid, WHATSAPP_GROUP_NAME_MAX } from '@/lib/whatsapp-group-name';
+
+// Contacts that can go into a new group: the inbox's direct conversations,
+// each with the phone the bridge knows for it (WhatsApp often addresses a
+// contact by an opaque "@lid", and a group can only be created with phones).
+export async function GET(request: Request) {
+  try {
+    await requireWhatsappUser(request);
+    const rows = await getDb().select({ jid: whatsappConversations.contactPhone, name: whatsappConversations.contactName })
+      .from(whatsappConversations)
+      .where(notLike(whatsappConversations.contactPhone, '%@g.us'))
+      .orderBy(desc(whatsappConversations.lastMessageAt)).limit(200).all();
+    const phones = await fetchPhones(rows.map((row) => row.jid));
+    return Response.json({ contacts: rows.map((row) => ({ ...row, phone: phones[row.jid] ?? null })) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    if (error instanceof Response) return error;
+    return Response.json({ error: 'Não foi possível carregar os contatos do WhatsApp.' }, { status: 500 });
+  }
+}
+
+async function fetchPhones(jids: string[]): Promise<Record<string, string | null>> {
+  if (!jids.length) return {};
+  try {
+    const upstream = await bridgeFetch(`/phones?${new URLSearchParams({ jids: jids.join(',') })}`, { signal: AbortSignal.timeout(8_000) });
+    if (!upstream.ok) return {};
+    const payload = await upstream.json().catch(() => null) as { phones?: Record<string, string | null> } | null;
+    return payload?.phones ?? {};
+  } catch {
+    return {};
+  }
+}
 
 const MAX_PARTICIPANTS = 20;
 const MAX_TICKETS = 40;
