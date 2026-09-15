@@ -109,6 +109,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
         </div>
 
         {bridgeWarning && <p role="alert" className="mx-3 mb-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">{bridgeWarning}</p>}
+        {(bridge?.status === 'qr' || bridge?.status === 'logged_out') && <ConnectionPanel status={bridge.status} authHeaders={authHeaders} onChanged={load} />}
         {error && <p role="alert" className="mx-3 mb-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs text-rose-100">{error}</p>}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -579,6 +580,65 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
   </>;
 }
 
+// Pairing the operation's number from the inbox: shows the bridge's QR code
+// while it waits to be linked, and lets management start a new session when
+// the old one was logged out. Hidden for roles the server doesn't allow.
+function ConnectionPanel({ status, authHeaders, onChanged }: { status: 'qr' | 'logged_out'; authHeaders: AuthHeaders; onChanged: () => void }) {
+  const [qr, setQr] = useState<string | null>(null);
+  const [allowed, setAllowed] = useState(true);
+  const [resetting, setResetting] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const refresh = useCallback(async () => {
+    try {
+      const response = await fetch('/api/whatsapp/connection', { headers: await authHeaders(), cache: 'no-store' });
+      if (response.status === 403) { setAllowed(false); return; }
+      const payload = await response.json().catch(() => ({})) as { qr?: string | null; status?: string; error?: string };
+      if (!response.ok) { setMessage(payload.error ?? 'Não foi possível consultar a conexão.'); return; }
+      setMessage('');
+      setQr(payload.qr ?? null);
+      if (payload.status === 'open') onChanged();
+    } catch { setMessage('Não foi possível consultar a conexão.'); }
+  }, [authHeaders, onChanged]);
+
+  // WhatsApp rotates the QR about every 20 s.
+  useVisiblePolling(refresh, 5_000);
+
+  async function reset() {
+    if (!window.confirm('Gerar um novo QR code? A sessão antiga do WhatsApp no bridge será apagada e será preciso escanear de novo no celular da operação.')) return;
+    setResetting(true); setMessage('');
+    try {
+      const response = await fetch('/api/whatsapp/connection', { method: 'POST', headers: await authHeaders() });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível gerar um novo QR code.');
+      setMessage('Gerando QR code...');
+      onChanged(); await refresh();
+    } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Não foi possível gerar um novo QR code.'); }
+    finally { setResetting(false); }
+  }
+
+  if (!allowed) return null;
+  return (
+    <div className="mx-3 mb-2 rounded-lg border border-white/10 bg-[#202c33] p-3 text-xs text-neutral-200">
+      <p className="font-semibold text-neutral-100">Conectar o WhatsApp da operação</p>
+      {qr ? (
+        <>
+          <img src={qr} alt="QR code para conectar o WhatsApp" className="mx-auto my-3 size-56 max-w-full rounded-md bg-white p-2" />
+          <p className="text-neutral-400">No celular da operação: WhatsApp → Aparelhos conectados → Conectar aparelho, e aponte para o código. Ele se renova sozinho.</p>
+        </>
+      ) : status === 'logged_out' ? (
+        <>
+          <p className="mt-1 text-neutral-400">A sessão foi encerrada no celular. Gere um novo QR code para conectar de novo.</p>
+          <Button type="button" size="sm" disabled={resetting} onClick={() => void reset()} className="mt-2 h-8 bg-[#00a884] text-white hover:bg-[#06cf9c]">
+            {resetting && <Loader2 className="size-3.5 animate-spin" />}Gerar novo QR code
+          </Button>
+        </>
+      ) : <p className="mt-2 flex items-center gap-2 text-neutral-400"><Loader2 className="size-3.5 animate-spin" />Aguardando QR code do bridge...</p>}
+      {message && <p className="mt-2 text-amber-200">{message}</p>}
+    </div>
+  );
+}
+
 // Refreshes right away, then every `intervalMs` while the tab is visible, and
 // again as soon as it becomes visible. Every authenticated API call counts
 // toward a per-IP limit shared by the whole app, so hidden tabs stay quiet.
@@ -599,7 +659,9 @@ function useVisiblePolling(callback: () => void | Promise<void>, intervalMs: num
 
 // Profile photos are looked up once per contact (only when the row scrolls
 // into view) and shared between the list and the open conversation.
-const photoCache = new Map<string, Promise<string | null>>();
+const PHOTO_LIMITED = Symbol('photo-limited');
+const PHOTO_RETRY_MS = 30_000;
+const photoCache = new Map<string, Promise<string | null | typeof PHOTO_LIMITED>>();
 
 function ContactAvatar({ contactPhone, name, authHeaders, photoUrl, className }: {
   contactPhone: string; name: string; authHeaders: AuthHeaders; photoUrl?: string | null; className: string;
@@ -615,22 +677,34 @@ function ContactAvatar({ contactPhone, name, authHeaders, photoUrl, className }:
     const element = ref.current;
     if (!element) return;
     let active = true;
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting)) return;
-      observer.disconnect();
+    let retryTimer: number | undefined;
+    // The bridge caps photo lookups per minute; a capped answer isn't cached,
+    // so the avatar keeps its initials and asks again a bit later.
+    const lookup = () => {
       let pending = photoCache.get(contactPhone);
       if (!pending) {
         pending = (async () => {
           const response = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(contactPhone)}/presence?photo=1`, { headers: await authHeaders(), cache: 'no-store' });
           if (!response.ok) return null;
-          return (await response.json() as Presence).photoUrl ?? null;
+          const payload = await response.json() as Presence & { limited?: boolean };
+          if (payload.limited) { photoCache.delete(contactPhone); return PHOTO_LIMITED; }
+          return payload.photoUrl ?? null;
         })().catch(() => null);
         photoCache.set(contactPhone, pending);
       }
-      void pending.then((value) => { if (active) setUrl(value); });
+      void pending.then((value) => {
+        if (!active) return;
+        if (value === PHOTO_LIMITED) { retryTimer = window.setTimeout(lookup, PHOTO_RETRY_MS); return; }
+        setUrl(value);
+      });
+    };
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      lookup();
     });
     observer.observe(element);
-    return () => { active = false; observer.disconnect(); };
+    return () => { active = false; observer.disconnect(); window.clearTimeout(retryTimer); };
   }, [contactPhone, authHeaders, photoUrl]);
 
   return (

@@ -11,6 +11,30 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: vigia de conexão, menos consultas ao WhatsApp, QR code no sistema
+
+Às ~20h o inbox parou de receber mensagens: o bridge dizia `open`, mas o
+WhatsApp não respondia às consultas ("error in sending keep alive",
+"init queries" Timed Out). Resolvido na hora com `flyctl machine restart`.
+
+- **Vigia (bridge).** Ping próprio a cada 90 s (timeout 20 s); 3 falhas
+  seguidas forçam reconexão (`sock.end` → reconecta), no máximo 1× a cada
+  10 min.
+- **Menos consultas.** Lista de grupos sincroniza no máximo 1× por hora nas
+  reconexões (renomeação e grupo novo continuam por evento). Fotos de perfil
+  limitadas a 10 buscas/min em `/photo`; acima disso o bridge responde
+  `limited` e o inbox mantém as iniciais e tenta de novo em 30 s. Foto do
+  cabeçalho da conversa aberta não entra no limite. `fetchBridgePhoto` não
+  cai mais em `/presence`.
+- **QR code no sistema.** Bridge ganhou `GET /qr` (QR como imagem via
+  pacote `qrcode`) e `POST /reset-session` (apaga a sessão, mantém mídia e
+  nomes; recusado se conectado). App: `GET/POST /api/whatsapp/connection`
+  (ver QR: gerência/coordenação; gerar novo: gerência; registrado em
+  `security-log`). Inbox mostra o QR quando o bridge espera conexão e o botão
+  "Gerar novo QR code" quando a sessão foi encerrada.
+
+Sem migration. **Pendente:** merge e `cd whatsapp-bridge; flyctl deploy`.
+
 ### WhatsApp: lista de conversas quebrada após sincronizar grupos
 
 Depois do deploy do #25/#26 o inbox mostrava "Não foi possível carregar as

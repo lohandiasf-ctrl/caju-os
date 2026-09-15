@@ -8,7 +8,7 @@ export async function GET(request: Request, context: { params: Promise<{ phone: 
     const { phone } = await context.params;
     const jid = decodeURIComponent(phone);
     const payload = new URL(request.url).searchParams.get('photo') === '1'
-      ? { state: null, photoUrl: await fetchBridgePhoto(jid) }
+      ? { state: null, ...await fetchBridgePhoto(jid) }
       : await fetchBridgePresence(jid);
     return Response.json(payload, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) { if (error instanceof Response) return error; return Response.json({ state: null, photoUrl: null }); }

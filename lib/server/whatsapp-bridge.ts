@@ -71,16 +71,24 @@ export async function fetchBridgeHealth(): Promise<BridgeHealth | null> {
 
 // Profile photo only, without subscribing to presence. Falls back to the
 // /presence route on a bridge that predates /photo.
-export async function fetchBridgePhoto(jid: string): Promise<string | null> {
-  if (!bridgeConfigured()) return null;
+export async function fetchBridgePhoto(jid: string): Promise<{ photoUrl: string | null; limited: boolean }> {
+  if (!bridgeConfigured()) return { photoUrl: null, limited: false };
   try {
     const upstream = await bridgeFetch(`/photo?${new URLSearchParams({ jid })}`);
-    if (upstream.status === 404) return (await fetchBridgePresence(jid)).photoUrl;
-    const payload = await upstream.json().catch(() => null) as { photoUrl?: string | null } | null;
-    return payload?.photoUrl ?? null;
+    const payload = await upstream.json().catch(() => null) as { photoUrl?: string | null; limited?: boolean } | null;
+    // limited: the bridge's per-minute lookup cap was hit; ask again later.
+    return { photoUrl: payload?.photoUrl ?? null, limited: Boolean(payload?.limited) };
   } catch {
-    return null;
+    return { photoUrl: null, limited: false };
   }
+}
+
+// Pairing QR (data URL) while the bridge waits to be linked, plus its state.
+export async function fetchBridgeQr(): Promise<{ status: string; since: string | null; qr: string | null } | null> {
+  if (!bridgeConfigured()) return null;
+  const upstream = await bridgeFetch('/qr', { signal: AbortSignal.timeout(8_000) });
+  if (!upstream.ok) return null;
+  return upstream.json() as Promise<{ status: string; since: string | null; qr: string | null }>;
 }
 
 export async function recordOutgoing(row: {
