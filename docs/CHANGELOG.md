@@ -11,6 +11,13 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: botão direito na mídia derrubava a página
+
+O menu "Adicionar como evidência" usava `ContextMenuLabel` fora de
+`ContextMenuGroup`. Base UI lança "MenuGroupContext is missing" nesse caso e
+a página inteira caía em "This page couldn't load". Label agora fica dentro
+de `ContextMenuGroup`.
+
 ### WhatsApp: mídia do chat vira evidência da FSA
 
 Botão direito numa foto, vídeo ou arquivo recebido no inbox abre
