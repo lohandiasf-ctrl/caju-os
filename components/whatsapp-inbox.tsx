@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Camera, Check, Download, FileText, Link2, Loader2, MessageCircle, Mic, Paperclip, Send, Trash2, Unlink, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, Download, FileText, Link2, Loader2, MessageCircle, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { isUserRole, roleLabels } from '@/lib/permissions';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 
 type User = { getIdToken: () => Promise<string> } | null;
+type AuthHeaders = () => Promise<Record<string, string>>;
 type Ticket = { id: string; title: string; store: string; city: string };
 type Conversation = {
   contactPhone: string; contactName: string | null; ticketKey: string | null; assignedTo: string | null;
@@ -19,83 +19,177 @@ type Message = { id: number; wamid: string; direction: string; messageType: stri
 type Colleague = { email: string; role: string | null; displayName: string | null };
 type Presence = { state: string | null; photoUrl: string | null };
 type Recording = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; startedAt: number; cancelled: boolean };
+type Filter = 'all' | 'unread' | 'ticket';
 
 const MAX_UPLOAD_BYTES = 32 * 1024 * 1024;
+const FILTERS: Array<[Filter, string]> = [['all', 'Todas'], ['unread', 'Não lidas'], ['ticket', 'Com chamado']];
 
 export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tickets: Ticket[]; onOpenTicket: (ticketId: string) => void }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState<Conversation | null>(null);
+  const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
+
+  const authHeaders = useCallback<AuthHeaders>(async (): Promise<Record<string, string>> => (user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}), [user]);
 
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch('/api/whatsapp/conversations', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
+      const response = await fetch('/api/whatsapp/conversations', { headers: await authHeaders(), cache: 'no-store' });
       const payload = await response.json() as { conversations?: Conversation[]; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar as conversas.');
       setConversations(payload.conversations ?? []);
       setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as conversas.'); }
     finally { setLoading(false); }
-  }, [user]);
+  }, [user, authHeaders]);
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), 15_000);
+    const timer = window.setInterval(() => void load(), 10_000);
     return () => window.clearInterval(timer);
   }, [load]);
 
-  return <section className="mt-6" aria-labelledby="whatsapp-inbox-title">
-    <div className="surface-panel rounded-2xl p-4 sm:p-6">
-      <p className="text-xs font-bold uppercase tracking-[.14em] text-primary">WhatsApp Business</p>
-      <h2 id="whatsapp-inbox-title" className="mt-1 text-xl font-bold tracking-tight sm:text-2xl">Conversas</h2>
-      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Mensagens recebidas pelo WhatsApp da operação, com a opção de vincular a um chamado.</p>
-      {error && <p role="alert" className="mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{error}</p>}
-      {loading ? <div className="grid min-h-56 place-items-center"><Loader2 className="size-6 animate-spin text-primary" aria-label="Carregando conversas" /></div> : conversations.length ? (
-        <ul className="mt-5 divide-y divide-border overflow-hidden rounded-xl border border-border bg-background/25">
-          {conversations.map((conversation) => (
-            <li key={conversation.contactPhone}>
-              <button type="button" onClick={() => setSelected(conversation)} className="flex min-h-20 w-full items-center gap-3 p-3 text-left transition hover:bg-white/[.045] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:p-4">
-                <div className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-300/20 bg-emerald-300/10 text-emerald-100"><MessageCircle className="size-5" aria-hidden="true" /></div>
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <b className="text-sm">{conversation.contactName || displayPhone(conversation.contactPhone) || 'Contato'}</b>
-                    {conversation.ticketKey && <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">{conversation.ticketKey}</span>}
-                  </span>
-                  <span className="mt-1 block truncate text-xs text-muted-foreground">
-                    {conversation.lastMessage ? `${conversation.lastMessage.direction === 'outgoing' ? 'Você: ' : ''}${previewText(conversation.lastMessage.messageType, conversation.lastMessage.body)}` : 'Sem mensagens ainda'}
-                  </span>
-                </span>
-                {conversation.unread > 0 && <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">{conversation.unread}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div className="mt-5 grid min-h-56 place-items-center rounded-xl border border-dashed border-border p-6 text-center">
-          <MessageCircle className="size-7 text-muted-foreground" aria-hidden="true" />
-          <p className="mt-3 font-semibold">Nenhuma conversa ainda</p>
-          <p className="mt-1 max-w-md text-sm text-muted-foreground">Mensagens recebidas no WhatsApp da operação aparecem aqui automaticamente.</p>
+  const visible = useMemo(() => {
+    const term = normalize(query);
+    return conversations.filter((conversation) => {
+      if (filter === 'unread' && conversation.unread === 0) return false;
+      if (filter === 'ticket' && !conversation.ticketKey) return false;
+      if (!term) return true;
+      return normalize(`${conversation.contactName ?? ''} ${displayPhone(conversation.contactPhone)} ${conversation.ticketKey ?? ''} ${conversation.lastMessage?.body ?? ''}`).includes(term);
+    });
+  }, [conversations, query, filter]);
+
+  const selected = conversations.find((conversation) => conversation.contactPhone === selectedPhone) ?? null;
+
+  return <section className="mt-6" aria-label="Conversas do WhatsApp">
+    <div className="flex h-[calc(100dvh-13rem)] min-h-[560px] overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100 shadow-2xl">
+      {/* Chat list */}
+      <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-white/10 bg-[#111b21] md:w-[340px] lg:w-[380px]`}>
+        <div className="flex h-16 shrink-0 items-center justify-between bg-[#202c33] px-4">
+          <h2 className="text-lg font-bold tracking-tight">Conversas</h2>
+          {conversations.some((conversation) => conversation.unread > 0) && (
+            <span className="rounded-full bg-[#00a884] px-2 py-0.5 text-xs font-bold text-[#111b21]">{conversations.filter((conversation) => conversation.unread > 0).length} não lida(s)</span>
+          )}
         </div>
-      )}
+
+        <div className="shrink-0 space-y-2 px-3 py-2.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Pesquisar nome, número ou chamado"
+              aria-label="Pesquisar conversas"
+              className="h-9 w-full rounded-lg bg-[#202c33] pr-3 pl-10 text-sm text-neutral-100 placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]"
+            />
+          </div>
+          <div className="flex gap-1.5" role="group" aria-label="Filtrar conversas">
+            {FILTERS.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilter(value)}
+                aria-pressed={filter === value}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] ${filter === value ? 'bg-[#0a332c] text-[#25d366]' : 'bg-[#202c33] text-neutral-300 hover:bg-[#2a3942]'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && <p role="alert" className="mx-3 mb-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs text-rose-100">{error}</p>}
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          {loading ? (
+            <div className="grid h-40 place-items-center"><Loader2 className="size-6 animate-spin text-[#00a884]" aria-label="Carregando conversas" /></div>
+          ) : visible.length ? (
+            <ul>
+              {visible.map((conversation) => {
+                const name = conversation.contactName || displayPhone(conversation.contactPhone) || 'Contato';
+                const active = conversation.contactPhone === selectedPhone;
+                const last = conversation.lastMessage;
+                return (
+                  <li key={conversation.contactPhone}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhone(conversation.contactPhone)}
+                      aria-current={active ? 'true' : undefined}
+                      className={`flex w-full items-center gap-3 px-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#00a884] ${active ? 'bg-[#2a3942]' : 'hover:bg-[#202c33]'}`}
+                    >
+                      <ContactAvatar contactPhone={conversation.contactPhone} name={name} authHeaders={authHeaders} className="size-12" />
+                      <span className="flex min-w-0 flex-1 flex-col border-b border-white/5 py-3">
+                        <span className="flex items-baseline gap-2">
+                          <b className="min-w-0 flex-1 truncate text-[15px] font-medium text-neutral-100">{name}</b>
+                          <span className={`shrink-0 text-xs ${conversation.unread > 0 ? 'text-[#25d366]' : 'text-neutral-400'}`}>{last ? listTimeLabel(last.occurredAt) : ''}</span>
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-[13px] text-neutral-400">
+                            {last ? <>{last.direction === 'outgoing' && <Check className="mr-1 inline size-3.5 align-[-2px]" aria-label="Enviada" />}{previewText(last.messageType, last.body)}</> : 'Sem mensagens ainda'}
+                          </span>
+                          {conversation.ticketKey && <span className="shrink-0 rounded-full bg-[#53bdeb]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#53bdeb]">{conversation.ticketKey}</span>}
+                          {conversation.unread > 0 && <span className="grid min-w-5 shrink-0 place-items-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-bold text-[#111b21]">{conversation.unread}</span>}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="grid place-items-center px-6 py-12 text-center">
+              <MessageCircle className="size-7 text-neutral-500" aria-hidden="true" />
+              <p className="mt-3 text-sm font-semibold">{conversations.length ? 'Nenhuma conversa encontrada' : 'Nenhuma conversa ainda'}</p>
+              <p className="mt-1 text-xs text-neutral-400">{conversations.length ? 'Ajuste a pesquisa ou o filtro.' : 'Mensagens recebidas no WhatsApp da operação aparecem aqui automaticamente.'}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Conversation */}
+      <div className={`${selected ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
+        {selected ? (
+          <ConversationPane
+            key={selected.contactPhone}
+            conversation={selected}
+            user={user}
+            authHeaders={authHeaders}
+            tickets={tickets}
+            onBack={() => setSelectedPhone(null)}
+            onUpdated={load}
+            onOpenTicket={onOpenTicket}
+          />
+        ) : (
+          <div className="grid flex-1 place-items-center border-b-4 border-[#00a884] bg-[#222e35] px-6 text-center">
+            <div>
+              <div className="mx-auto grid size-20 place-items-center rounded-full bg-[#00a884]/15 text-[#25d366]"><MessageCircle className="size-10" aria-hidden="true" /></div>
+              <p className="mt-5 text-2xl font-light text-neutral-200">WhatsApp da operação</p>
+              <p className="mt-2 max-w-sm text-sm text-neutral-400">Selecione uma conversa para ler e responder. As respostas saem com seu nome e cargo.</p>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
-    <ConversationDialog conversation={selected} user={user} tickets={tickets} onClose={() => setSelected(null)} onUpdated={load} onOpenTicket={onOpenTicket} />
   </section>;
 }
 
-function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, onOpenTicket }: {
-  conversation: Conversation | null; user: User; tickets: Ticket[]; onClose: () => void; onUpdated: () => void; onOpenTicket: (ticketId: string) => void;
+function ConversationPane({ conversation, user, authHeaders, tickets, onBack, onUpdated, onOpenTicket }: {
+  conversation: Conversation; user: User; authHeaders: AuthHeaders; tickets: Ticket[];
+  onBack: () => void; onUpdated: () => void; onOpenTicket: (ticketId: string) => void;
 }) {
+  const contactPhone = conversation.contactPhone;
+  const basePath = `/api/whatsapp/conversations/${encodeURIComponent(contactPhone)}`;
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
-  const [ticketKey, setTicketKey] = useState('');
+  const [ticketKey, setTicketKey] = useState(conversation.ticketKey ?? '');
   const [error, setError] = useState('');
   const [colleaguesByEmail, setColleaguesByEmail] = useState<Record<string, Colleague>>({});
   const [presence, setPresence] = useState<Presence>({ state: null, photoUrl: null });
-  const [photoFailed, setPhotoFailed] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [recording, setRecording] = useState<Recording | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -103,12 +197,11 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const lastTypingSentAt = useRef(0);
-  const contactPhone = conversation?.contactPhone ?? '';
-  const basePath = `/api/whatsapp/conversations/${encodeURIComponent(contactPhone)}`;
+  const recordingRef = useRef<Recording | null>(null);
   const lastMessageId = messages[messages.length - 1]?.id;
   const contactTyping = presence.state === 'composing' || presence.state === 'recording';
 
-  const authHeaders = useCallback(async (): Promise<Record<string, string>> => (user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}), [user]);
+  useEffect(() => { setTicketKey(conversation.ticketKey ?? ''); }, [conversation.ticketKey]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -126,7 +219,7 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
   }, [user, authHeaders]);
 
   const load = useCallback(async () => {
-    if (!user || !contactPhone) return;
+    if (!user) return;
     try {
       const response = await fetch(`${basePath}/messages`, { headers: await authHeaders(), cache: 'no-store' });
       const payload = await response.json() as { messages?: Message[]; error?: string };
@@ -134,35 +227,43 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
       setMessages(payload.messages ?? []);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar a conversa.'); }
     finally { setLoading(false); }
-  }, [user, contactPhone, basePath, authHeaders]);
+  }, [user, basePath, authHeaders]);
 
   const loadPresence = useCallback(async () => {
-    if (!user || !contactPhone) return;
+    if (!user) return;
     try {
       const response = await fetch(`${basePath}/presence`, { headers: await authHeaders(), cache: 'no-store' });
       if (response.ok) setPresence(await response.json() as Presence);
     } catch { /* presence is best-effort */ }
-  }, [user, contactPhone, basePath, authHeaders]);
+  }, [user, basePath, authHeaders]);
 
   useEffect(() => {
-    if (!conversation) { setMessages([]); setPresence({ state: null, photoUrl: null }); return; }
-    setTicketKey(conversation.ticketKey ?? ''); setLoading(true); setError(''); setPhotoFailed(false); setPendingFile(null); setDraft('');
     void load(); void loadPresence();
     const messagesTimer = window.setInterval(() => void load(), 4_000);
     const presenceTimer = window.setInterval(() => void loadPresence(), 3_000);
     return () => { window.clearInterval(messagesTimer); window.clearInterval(presenceTimer); };
-  }, [conversation, load, loadPresence]);
+  }, [load, loadPresence]);
+
+  // Opening a conversation marks it read on the server; refresh the list badge.
+  useEffect(() => { if (!loading) onUpdated(); }, [loading, onUpdated]);
+
+  // Switching conversations unmounts this pane: never leave the mic open.
+  useEffect(() => () => {
+    const active = recordingRef.current;
+    if (active) { active.cancelled = true; if (active.recorder.state !== 'inactive') active.recorder.stop(); }
+  }, []);
 
   useEffect(() => {
+    recordingRef.current = recording;
     if (!recording) { setRecordingSeconds(0); return; }
     const timer = window.setInterval(() => setRecordingSeconds(Math.floor((Date.now() - recording.startedAt) / 1000)), 250);
     return () => window.clearInterval(timer);
   }, [recording]);
 
-  const ticket = useMemo(() => tickets.find((item) => item.id === conversation?.ticketKey), [conversation, tickets]);
+  const ticket = useMemo(() => tickets.find((item) => item.id === ticketKey), [ticketKey, tickets]);
 
   const notifyPresence = useCallback(async (state: 'composing' | 'recording' | 'paused') => {
-    if (!user || !contactPhone) return;
+    if (!user) return;
     if (state !== 'paused') {
       if (Date.now() - lastTypingSentAt.current < 8_000) return;
       lastTypingSentAt.current = Date.now();
@@ -172,10 +273,10 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
     try {
       await fetch(`${basePath}/presence`, { method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) });
     } catch { /* best-effort */ }
-  }, [user, contactPhone, basePath, authHeaders]);
+  }, [user, basePath, authHeaders]);
 
   async function sendText() {
-    if (!user || !conversation || !draft.trim() || sending) return;
+    if (!user || !draft.trim() || sending) return;
     setSending(true); setError('');
     try {
       const response = await fetch(`${basePath}/send`, {
@@ -189,7 +290,7 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
   }
 
   async function sendFile(file: File, options: { caption?: string; voice?: boolean } = {}) {
-    if (!user || !conversation) return;
+    if (!user) return;
     if (file.size > MAX_UPLOAD_BYTES) { setError('Arquivo grande demais (máximo 32 MB).'); return; }
     setSending(true); setError('');
     try {
@@ -245,7 +346,7 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
   }
 
   async function link(nextTicketKey: string) {
-    if (!user || !conversation) return;
+    if (!user) return;
     try {
       const response = await fetch(basePath, {
         method: 'PATCH', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ ticketKey: nextTicketKey }),
@@ -255,152 +356,188 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível vincular o chamado.'); }
   }
 
-  function close() {
-    stopRecording(true);
-    onClose();
-  }
-
-  const title = conversation?.contactName || displayPhone(contactPhone) || 'Contato';
+  const title = conversation.contactName || displayPhone(contactPhone) || 'Contato';
   const subtitle = presence.state === 'composing' ? 'digitando...' : presence.state === 'recording' ? 'gravando áudio...' : presence.state === 'available' ? 'online' : displayPhone(contactPhone);
   const canSend = Boolean(draft.trim() || pendingFile);
 
-  return <Dialog open={Boolean(conversation)} onOpenChange={(open) => { if (!open) close(); }}>
-    <DialogContent showCloseButton={false} className="flex h-[min(90dvh,780px)] flex-col gap-0 overflow-hidden bg-[#0b141a] p-0 text-neutral-100 ring-white/10 sm:max-w-lg">
-      <div className="flex shrink-0 items-center gap-2.5 bg-[#202c33] px-3 py-2.5">
-        <button type="button" onClick={close} className="grid size-9 place-items-center rounded-full text-neutral-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]" aria-label="Fechar conversa">
-          <ArrowLeft className="size-5" />
-        </button>
-        {presence.photoUrl && !photoFailed ? (
-          <img src={presence.photoUrl} alt="" onError={() => setPhotoFailed(true)} className="size-10 shrink-0 rounded-full object-cover" />
-        ) : (
-          <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[#00a884]/20 text-sm font-bold text-[#25d366]" aria-hidden="true">{initials(title)}</div>
-        )}
-        <div className="min-w-0 flex-1">
-          <DialogTitle className="truncate text-[15px] leading-tight font-semibold text-neutral-100">{title}</DialogTitle>
-          <DialogDescription className={`truncate text-xs ${contactTyping || presence.state === 'available' ? 'text-[#25d366]' : 'text-neutral-400'}`} aria-live="polite">{subtitle}</DialogDescription>
-        </div>
+  return <>
+    <div className="flex h-16 shrink-0 items-center gap-3 bg-[#202c33] px-3">
+      <button type="button" onClick={onBack} className="grid size-9 place-items-center rounded-full text-neutral-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] md:hidden" aria-label="Voltar para as conversas">
+        <ArrowLeft className="size-5" />
+      </button>
+      <ContactAvatar contactPhone={contactPhone} name={title} authHeaders={authHeaders} photoUrl={presence.photoUrl} className="size-10" />
+      <div className="min-w-0 flex-1">
+        <h3 className="truncate text-[15px] leading-tight font-semibold text-neutral-100">{title}</h3>
+        <p className={`truncate text-xs ${contactTyping || presence.state === 'available' ? 'text-[#25d366]' : 'text-neutral-400'}`} aria-live="polite">{subtitle}</p>
       </div>
+    </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-b border-white/5 bg-[#111b21] px-3 py-2">
-        <select value={ticketKey} onChange={(event) => void link(event.target.value)} className="h-8 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#2a3942] px-2 text-xs text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]" aria-label="Vincular a um chamado">
-          <option value="">Sem chamado vinculado</option>
-          {tickets.slice(0, 200).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.store}</option>)}
-        </select>
-        {ticket && <Button type="button" size="sm" variant="outline" className="h-8 border-white/10 bg-transparent text-neutral-200" onClick={() => { close(); onOpenTicket(ticket.id); }}><Link2 className="size-3.5" />Abrir {ticket.id}</Button>}
-        {ticketKey && <Button type="button" size="sm" variant="ghost" className="h-8 text-neutral-300" onClick={() => void link('')} aria-label="Desvincular chamado"><Unlink className="size-3.5" /></Button>}
-      </div>
+    <div className="flex shrink-0 items-center gap-2 border-b border-white/5 bg-[#111b21] px-3 py-2">
+      <select value={ticketKey} onChange={(event) => void link(event.target.value)} className="h-8 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#2a3942] px-2 text-xs text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] md:max-w-sm" aria-label="Vincular a um chamado">
+        <option value="">Sem chamado vinculado</option>
+        {tickets.slice(0, 200).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.store}</option>)}
+      </select>
+      {ticket && <Button type="button" size="sm" variant="outline" className="h-8 border-white/10 bg-transparent text-neutral-200" onClick={() => onOpenTicket(ticket.id)}><Link2 className="size-3.5" />Abrir {ticket.id}</Button>}
+      {ticketKey && <Button type="button" size="sm" variant="ghost" className="h-8 text-neutral-300" onClick={() => void link('')} aria-label="Desvincular chamado"><Unlink className="size-3.5" /></Button>}
+    </div>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [background-image:radial-gradient(rgba(255,255,255,.035)_1px,transparent_1px)] [background-size:18px_18px]" role="log" aria-label="Mensagens">
-        {loading ? <Loader2 className="mx-auto mt-6 size-5 animate-spin text-[#00a884]" /> : messages.length ? (
-          <AnimatePresence initial={false}>
-            {messages.map((message, index) => {
-              const outgoing = message.direction === 'outgoing';
-              const sender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : null;
-              const day = dayLabel(message.occurredAt);
-              const showDay = index === 0 || dayLabel(messages[index - 1].occurredAt) !== day;
-              const isMedia = Boolean(MEDIA_TYPES[message.messageType]);
-              const caption = message.messageType === 'document' ? null : message.body;
-              return (
-                <div key={message.wamid ?? message.id}>
-                  {showDay && <div className="my-2 flex justify-center"><span className="rounded-lg bg-[#182229] px-2.5 py-1 text-[11px] font-medium text-neutral-400 shadow-sm">{day}</span></div>}
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-                    className={`mb-1 flex ${outgoing ? 'justify-end' : 'justify-start'}`}
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [background-image:radial-gradient(rgba(255,255,255,.035)_1px,transparent_1px)] [background-size:18px_18px] md:px-[6%]" role="log" aria-label="Mensagens">
+      {loading ? <Loader2 className="mx-auto mt-6 size-5 animate-spin text-[#00a884]" /> : messages.length ? (
+        <AnimatePresence initial={false}>
+          {messages.map((message, index) => {
+            const outgoing = message.direction === 'outgoing';
+            const sender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : null;
+            const day = dayLabel(message.occurredAt);
+            const showDay = index === 0 || dayLabel(messages[index - 1].occurredAt) !== day;
+            const isMedia = Boolean(MEDIA_TYPES[message.messageType]);
+            const caption = message.messageType === 'document' ? null : message.body;
+            return (
+              <div key={message.wamid ?? message.id}>
+                {showDay && <div className="my-2 flex justify-center"><span className="rounded-lg bg-[#182229] px-2.5 py-1 text-[11px] font-medium text-neutral-400 shadow-sm">{day}</span></div>}
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                  className={`mb-1 flex ${outgoing ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`relative max-w-[85%] px-1.5 pt-1.5 pb-1 text-[14px] leading-snug shadow-sm md:max-w-[65%] ${outgoing ? 'bg-[#005c4b]' : 'bg-[#202c33]'} ${message.messageType === 'sticker' ? '!bg-transparent !shadow-none' : ''}`}
+                    style={{ borderRadius: outgoing ? '8px 0 8px 8px' : '0 8px 8px 8px' }}
                   >
-                    <div
-                      className={`relative max-w-[85%] px-1.5 pt-1.5 pb-1 text-[14px] leading-snug shadow-sm ${outgoing ? 'bg-[#005c4b]' : 'bg-[#202c33]'} ${message.messageType === 'sticker' ? '!bg-transparent !shadow-none' : ''}`}
-                      style={{ borderRadius: outgoing ? '8px 0 8px 8px' : '0 8px 8px 8px' }}
-                    >
-                      {sender && <p className="mb-0.5 px-1 text-[12.5px] font-semibold text-[#53bdeb]">{sender}</p>}
-                      {isMedia && <MediaContent message={message} authHeaders={authHeaders} />}
-                      {!isMedia && message.messageType === 'location' && message.body && (
-                        <a href={message.body} target="_blank" rel="noreferrer" className="block px-1 text-[#53bdeb] underline">📍 Ver localização</a>
-                      )}
-                      {!isMedia && message.messageType === 'contact' && <p className="px-1">👤 {message.body}</p>}
-                      {(!isMedia && message.messageType !== 'location' && message.messageType !== 'contact') && (
-                        <p className="whitespace-pre-wrap break-words px-1 text-neutral-100">{message.body || '[mensagem não suportada]'}</p>
-                      )}
-                      {isMedia && caption && <p className="mt-1 whitespace-pre-wrap break-words px-1 text-neutral-100">{caption}</p>}
-                      <div className="mt-0.5 flex items-center justify-end gap-1 px-1 text-[11px] text-neutral-400">
-                        <span>{timeLabel(message.occurredAt)}</span>
-                        {outgoing && <Check className="size-3.5" aria-label="Enviada" />}
-                      </div>
+                    {sender && <p className="mb-0.5 px-1 text-[12.5px] font-semibold text-[#53bdeb]">{sender}</p>}
+                    {isMedia && <MediaContent message={message} authHeaders={authHeaders} />}
+                    {!isMedia && message.messageType === 'location' && message.body && (
+                      <a href={message.body} target="_blank" rel="noreferrer" className="block px-1 text-[#53bdeb] underline">📍 Ver localização</a>
+                    )}
+                    {!isMedia && message.messageType === 'contact' && <p className="px-1">👤 {message.body}</p>}
+                    {(!isMedia && message.messageType !== 'location' && message.messageType !== 'contact') && (
+                      <p className="whitespace-pre-wrap break-words px-1 text-neutral-100">{message.body || '[mensagem não suportada]'}</p>
+                    )}
+                    {isMedia && caption && <p className="mt-1 whitespace-pre-wrap break-words px-1 text-neutral-100">{caption}</p>}
+                    <div className="mt-0.5 flex items-center justify-end gap-1 px-1 text-[11px] text-neutral-400">
+                      <span>{timeLabel(message.occurredAt)}</span>
+                      {outgoing && <Check className="size-3.5" aria-label="Enviada" />}
                     </div>
-                  </motion.div>
-                </div>
-              );
-            })}
-            {contactTyping && (
-              <motion.div key="typing" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-1 flex justify-start">
-                <div className="flex items-center gap-1.5 bg-[#202c33] px-3 py-2" style={{ borderRadius: '0 8px 8px 8px' }}>
-                  <span className="text-[12px] font-semibold text-[#25d366]">{presence.state === 'recording' ? 'gravando áudio' : 'digitando'}</span>
-                  {[0, 1, 2].map((dot) => (
-                    <motion.span key={dot} className="size-1.5 rounded-full bg-[#25d366]" animate={{ y: [0, -3, 0], opacity: [0.4, 1, 0.4] }} transition={{ duration: 0.6, repeat: Infinity, delay: dot * 0.15 }} />
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        ) : <p className="mt-6 text-center text-sm text-neutral-400">Nenhuma mensagem ainda.</p>}
-      </div>
+                  </div>
+                </motion.div>
+              </div>
+            );
+          })}
+          {contactTyping && (
+            <motion.div key="typing" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mb-1 flex justify-start">
+              <div className="flex items-center gap-1.5 bg-[#202c33] px-3 py-2" style={{ borderRadius: '0 8px 8px 8px' }}>
+                <span className="text-[12px] font-semibold text-[#25d366]">{presence.state === 'recording' ? 'gravando áudio' : 'digitando'}</span>
+                {[0, 1, 2].map((dot) => (
+                  <motion.span key={dot} className="size-1.5 rounded-full bg-[#25d366]" animate={{ y: [0, -3, 0], opacity: [0.4, 1, 0.4] }} transition={{ duration: 0.6, repeat: Infinity, delay: dot * 0.15 }} />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      ) : <p className="mt-6 text-center text-sm text-neutral-400">Nenhuma mensagem ainda.</p>}
+    </div>
 
-      {error && <p role="alert" className="shrink-0 bg-[#111b21] px-4 pt-2 text-xs text-rose-300">{error}</p>}
+    {error && <p role="alert" className="shrink-0 bg-[#111b21] px-4 pt-2 text-xs text-rose-300">{error}</p>}
 
-      {pendingFile && (
-        <div className="flex shrink-0 items-center gap-3 border-t border-white/5 bg-[#111b21] px-3 py-2">
-          <FilePreview file={pendingFile} />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm text-neutral-100">{pendingFile.name}</p>
-            <p className="text-xs text-neutral-400">{formatBytes(pendingFile.size)} · escreva uma legenda (opcional)</p>
-          </div>
-          <button type="button" onClick={() => setPendingFile(null)} disabled={sending} className="grid size-8 place-items-center rounded-full text-neutral-300 hover:bg-white/10" aria-label="Remover arquivo"><X className="size-4" /></button>
+    {pendingFile && (
+      <div className="flex shrink-0 items-center gap-3 border-t border-white/5 bg-[#111b21] px-3 py-2">
+        <FilePreview file={pendingFile} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm text-neutral-100">{pendingFile.name}</p>
+          <p className="text-xs text-neutral-400">{formatBytes(pendingFile.size)} · escreva uma legenda (opcional)</p>
         </div>
-      )}
-
-      <input ref={fileInputRef} type="file" className="hidden" onChange={(event) => { pickFile(event.target.files); event.target.value = ''; }} />
-      <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(event) => { pickFile(event.target.files); event.target.value = ''; }} />
-
-      <div className="flex shrink-0 items-center gap-2 bg-[#202c33] px-3 py-2.5">
-        {recording ? (
-          <>
-            <button type="button" onClick={() => stopRecording(true)} className="grid size-11 shrink-0 place-items-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-rose-300" aria-label="Cancelar gravação"><Trash2 className="size-5" /></button>
-            <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-[#2a3942] px-4 text-[15px] text-neutral-100" aria-live="polite">
-              <span className="size-2.5 animate-pulse rounded-full bg-rose-500" aria-hidden="true" />
-              Gravando {formatDuration(recordingSeconds)}
-            </div>
-            <button type="button" onClick={() => stopRecording(false)} aria-label="Enviar áudio" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c]"><Send className="size-5" /></button>
-          </>
-        ) : (
-          <>
-            <div className="flex h-11 min-w-0 flex-1 items-center rounded-full bg-[#2a3942] pr-1.5 pl-4">
-              <input
-                value={draft}
-                onChange={(event) => { setDraft(event.target.value); if (event.target.value.trim()) void notifyPresence('composing'); }}
-                onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (pendingFile) void sendFile(pendingFile, { caption: draft.trim() }); else void sendText(); } }}
-                placeholder={pendingFile ? 'Legenda' : 'Mensagem'}
-                disabled={sending}
-                aria-label={pendingFile ? 'Legenda do arquivo' : 'Responder pelo WhatsApp'}
-                className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-neutral-100 placeholder:text-neutral-400 focus-visible:outline-none disabled:opacity-60"
-              />
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending} className="grid size-9 place-items-center rounded-full text-neutral-400 hover:text-neutral-100" aria-label="Anexar arquivo"><Paperclip className="size-5" /></button>
-              <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={sending} className="grid size-9 place-items-center rounded-full text-neutral-400 hover:text-neutral-100" aria-label="Foto ou vídeo"><Camera className="size-5" /></button>
-            </div>
-            {canSend ? (
-              <button type="button" onClick={() => { if (pendingFile) void sendFile(pendingFile, { caption: draft.trim() }); else void sendText(); }} disabled={sending} aria-label="Enviar" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">
-                {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
-              </button>
-            ) : (
-              <button type="button" onClick={() => void startRecording()} disabled={sending} aria-label="Gravar áudio" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">
-                {sending ? <Loader2 className="size-5 animate-spin" /> : <Mic className="size-5" />}
-              </button>
-            )}
-          </>
-        )}
+        <button type="button" onClick={() => setPendingFile(null)} disabled={sending} className="grid size-8 place-items-center rounded-full text-neutral-300 hover:bg-white/10" aria-label="Remover arquivo"><X className="size-4" /></button>
       </div>
-    </DialogContent>
-  </Dialog>;
+    )}
+
+    <input ref={fileInputRef} type="file" className="hidden" onChange={(event) => { pickFile(event.target.files); event.target.value = ''; }} />
+    <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(event) => { pickFile(event.target.files); event.target.value = ''; }} />
+
+    <div className="flex shrink-0 items-center gap-2 bg-[#202c33] px-3 py-2.5">
+      {recording ? (
+        <>
+          <button type="button" onClick={() => stopRecording(true)} className="grid size-11 shrink-0 place-items-center rounded-full text-neutral-300 hover:bg-white/10 hover:text-rose-300" aria-label="Cancelar gravação"><Trash2 className="size-5" /></button>
+          <div className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-[#2a3942] px-4 text-[15px] text-neutral-100" aria-live="polite">
+            <span className="size-2.5 animate-pulse rounded-full bg-rose-500" aria-hidden="true" />
+            Gravando {formatDuration(recordingSeconds)}
+          </div>
+          <button type="button" onClick={() => stopRecording(false)} aria-label="Enviar áudio" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c]"><Send className="size-5" /></button>
+        </>
+      ) : (
+        <>
+          <div className="flex h-11 min-w-0 flex-1 items-center rounded-full bg-[#2a3942] pr-1.5 pl-4">
+            <input
+              value={draft}
+              onChange={(event) => { setDraft(event.target.value); if (event.target.value.trim()) void notifyPresence('composing'); }}
+              onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (pendingFile) void sendFile(pendingFile, { caption: draft.trim() }); else void sendText(); } }}
+              placeholder={pendingFile ? 'Legenda' : 'Mensagem'}
+              disabled={sending}
+              aria-label={pendingFile ? 'Legenda do arquivo' : 'Responder pelo WhatsApp'}
+              className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-neutral-100 placeholder:text-neutral-400 focus-visible:outline-none disabled:opacity-60"
+            />
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending} className="grid size-9 place-items-center rounded-full text-neutral-400 hover:text-neutral-100" aria-label="Anexar arquivo"><Paperclip className="size-5" /></button>
+            <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={sending} className="grid size-9 place-items-center rounded-full text-neutral-400 hover:text-neutral-100" aria-label="Foto ou vídeo"><Camera className="size-5" /></button>
+          </div>
+          {canSend ? (
+            <button type="button" onClick={() => { if (pendingFile) void sendFile(pendingFile, { caption: draft.trim() }); else void sendText(); }} disabled={sending} aria-label="Enviar" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">
+              {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
+            </button>
+          ) : (
+            <button type="button" onClick={() => void startRecording()} disabled={sending} aria-label="Gravar áudio" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">
+              {sending ? <Loader2 className="size-5 animate-spin" /> : <Mic className="size-5" />}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  </>;
+}
+
+// Profile photos are looked up once per contact (only when the row scrolls
+// into view) and shared between the list and the open conversation.
+const photoCache = new Map<string, Promise<string | null>>();
+
+function ContactAvatar({ contactPhone, name, authHeaders, photoUrl, className }: {
+  contactPhone: string; name: string; authHeaders: AuthHeaders; photoUrl?: string | null; className: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [url, setUrl] = useState<string | null>(photoUrl ?? null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => { if (photoUrl) { setUrl(photoUrl); setFailed(false); } }, [photoUrl]);
+
+  useEffect(() => {
+    if (photoUrl !== undefined) return;
+    const element = ref.current;
+    if (!element) return;
+    let active = true;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      let pending = photoCache.get(contactPhone);
+      if (!pending) {
+        pending = (async () => {
+          const response = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(contactPhone)}/presence`, { headers: await authHeaders(), cache: 'no-store' });
+          if (!response.ok) return null;
+          return (await response.json() as Presence).photoUrl ?? null;
+        })().catch(() => null);
+        photoCache.set(contactPhone, pending);
+      }
+      void pending.then((value) => { if (active) setUrl(value); });
+    });
+    observer.observe(element);
+    return () => { active = false; observer.disconnect(); };
+  }, [contactPhone, authHeaders, photoUrl]);
+
+  return (
+    <div ref={ref} className={`${className} shrink-0 overflow-hidden rounded-full`}>
+      {url && !failed ? (
+        <img src={url} alt="" onError={() => setFailed(true)} className="size-full object-cover" />
+      ) : (
+        <div className="grid size-full place-items-center bg-[#00a884]/20 text-sm font-bold text-[#25d366]" aria-hidden="true">{initials(name)}</div>
+      )}
+    </div>
+  );
 }
 
 const MEDIA_TYPES: Record<string, true> = { image: true, video: true, audio: true, document: true, sticker: true };
@@ -409,7 +546,7 @@ const MEDIA_TYPES: Record<string, true> = { image: true, video: true, audio: tru
 // once per session and hand the element a blob URL.
 const mediaCache = new Map<string, Promise<{ url: string; fileName: string | null }>>();
 
-function useMediaUrl(mediaId: string | null, authHeaders: () => Promise<Record<string, string>>) {
+function useMediaUrl(mediaId: string | null, authHeaders: AuthHeaders) {
   const [state, setState] = useState<{ url: string; fileName: string | null } | null | 'error'>(null);
   useEffect(() => {
     if (!mediaId) { setState('error'); return; }
@@ -431,7 +568,7 @@ function useMediaUrl(mediaId: string | null, authHeaders: () => Promise<Record<s
   return state;
 }
 
-function MediaContent({ message, authHeaders }: { message: Message; authHeaders: () => Promise<Record<string, string>> }) {
+function MediaContent({ message, authHeaders }: { message: Message; authHeaders: AuthHeaders }) {
   const media = useMediaUrl(message.mediaId, authHeaders);
   if (media === 'error') return <p className="px-1 text-sm text-neutral-400 italic">{previewText(message.messageType, null)} indisponível</p>;
   if (!media) return <div className="grid h-24 w-56 max-w-full place-items-center rounded-md bg-black/20"><Loader2 className="size-5 animate-spin text-neutral-400" /></div>;
@@ -496,6 +633,10 @@ function displayPhone(jid: string) {
   return digits ? `+${digits}` : '';
 }
 
+function normalize(value: string) {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
+}
+
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter((part) => /[\p{L}]/u.test(part));
   if (!parts.length) return '#';
@@ -513,6 +654,11 @@ function dayLabel(iso: string) {
   if (date.toDateString() === today.toDateString()) return 'Hoje';
   if (date.toDateString() === yesterday.toDateString()) return 'Ontem';
   return date.toLocaleDateString('pt-BR');
+}
+
+function listTimeLabel(iso: string) {
+  const day = dayLabel(iso);
+  return day === 'Hoje' ? timeLabel(iso) : day;
 }
 
 function formatBytes(bytes: number) {
