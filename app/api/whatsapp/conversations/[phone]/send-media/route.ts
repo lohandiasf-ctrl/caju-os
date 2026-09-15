@@ -1,4 +1,5 @@
-import { bridgeFetch, recordOutgoing, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
+import { bridgeFetch, recordOutgoing, requireWhatsappUser, senderLabelFor } from '@/lib/server/whatsapp-bridge';
+import { signWhatsappText } from '@/lib/whatsapp-sender';
 
 // WhatsApp caps media at 16 MB and documents at 100 MB; stay well under the
 // Worker's request limits and the bridge's disk.
@@ -17,7 +18,11 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
     const voice = form?.get('voice') === '1';
 
     const params = new URLSearchParams({ to: contactPhone, fileName: file.name || 'arquivo' });
-    if (caption) params.set('caption', caption);
+    // Sign the caption like text messages. Audio can't carry a caption in
+    // WhatsApp, so voice notes and audio files go unsigned.
+    const isAudio = voice || file.type.startsWith('audio/');
+    const outgoingCaption = isAudio ? caption : signWhatsappText(await senderLabelFor(current), caption);
+    if (outgoingCaption) params.set('caption', outgoingCaption);
     if (voice) params.set('voice', '1');
     const response = await bridgeFetch(`/send-media?${params}`, {
       method: 'POST',

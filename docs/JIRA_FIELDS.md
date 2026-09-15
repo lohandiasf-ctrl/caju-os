@@ -16,9 +16,9 @@ Código: `lib/server/jira.ts`. Projeto: `JIRA_PROJECT_KEY` (ex.: `FSA`).
 | Data/Hora – Agendamento | `customfield_12036` | DateTime ISO-8601 | data do agendamento; **obrigatório** antes da transição para Agendado |
 | Data/Hora – Início | `customfield_10702` | DateTime ISO-8601 | início efetivo do atendimento; **obrigatório** antes de enviar para validação |
 | Data/Hora – Término | `customfield_10703` | DateTime ISO-8601 | término efetivo do atendimento; **obrigatório** e posterior ao início antes de enviar para validação |
-| Dados dos técnicos | `customfield_12279` | TextArea (ADF) | bloco de texto com nome/CPF/RG/telefone do técnico; **fallback** quando os campos individuais não estão na tela |
+| Dados dos técnicos | `customfield_12279` | TextArea (ADF) | bloco de texto com nome/CPF/RG do técnico; a linha `TEL:` vai sempre com `.` (telefone do técnico não é mais enviado ao Jira, desde 2026-09-15) |
 | Nome do Técnico | `customfield_12316` | String | preenchido no agendamento |
-| Telefone do Técnico | `customfield_16237` | String | idem |
+| Telefone do Técnico | `customfield_16237` | String | sempre `.` (não enviar telefone do técnico) |
 | RG | `customfield_11956` | String | idem (pode ser complementado à mão) |
 | CPF/CNPJ Técnico | `customfield_16238` | String | idem |
 | Número Contato | `customfield_11963` | String | contato do solicitante |

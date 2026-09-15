@@ -5,7 +5,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, Camera, Check, Download, FileText, Link2, Loader2, MessageCircle, Mic, Paperclip, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { roleLabels, isUserRole } from '@/lib/permissions';
+import { isUserRole, roleLabels } from '@/lib/permissions';
+import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type Ticket = { id: string; title: string; store: string; city: string };
@@ -471,9 +472,8 @@ function FilePreview({ file }: { file: File }) {
 
 function senderLabel(email: string, colleaguesByEmail: Record<string, Colleague>) {
   const colleague = colleaguesByEmail[email];
-  const firstName = (colleague?.displayName || email.split('@')[0]).trim().split(/\s+/)[0];
   const role = colleague?.role && isUserRole(colleague.role) ? roleLabels[colleague.role] : null;
-  return role ? `${firstName} · ${role}` : firstName;
+  return whatsappSenderLabel(email, colleague?.displayName, role);
 }
 
 function previewText(type: string, body: string | null) {

@@ -26,6 +26,40 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
   `/api/whatsapp/*` com login; o webhook do bridge não muda. Para liberar mais
   gente, adicionar o e-mail na lista.
 
+### Jira: telefone do técnico não é mais enviado
+
+Pedido do usuário. O telefone do técnico não vai para nenhum campo do Jira;
+onde o Jira espera algo, vai `.`:
+
+- Bloco "Dados dos técnicos" (`customfield_12279`): linha `TEL:` vira `TEL: .`,
+  inclusive quando o texto é digitado à mão ou reaproveitado do Jira na
+  transição para Agendado.
+- "Telefone do Técnico" (`customfield_16237`): sempre `.` ao gravar dados do
+  técnico, sobrescrevendo telefone antigo de agendamentos anteriores.
+- "Número Contato" (`customfield_11963`): o código gravava o telefone do
+  técnico aqui, mas `JIRA_FIELDS.md` documenta esse campo como contato do
+  solicitante. Parou de gravar (sem `.`, para não apagar dado real do
+  solicitante). Conferir no Jira qual é o uso real desse campo.
+- A regra fica no servidor (`lib/server/jira.ts`, com
+  `lib/technician-data.ts` testado), então vale para agendamento individual,
+  em lote e fila de sincronização; as telas de agendamento já preenchem
+  `TEL: .`.
+
+**Pendente:** não validado contra o Jira real nesta sessão (nenhum chamado foi
+agendado de teste). Conferir no próximo agendamento que o Jira aceita o `.`
+nos campos de telefone. Telefones já gravados em chamados antigos só são
+substituídos quando o chamado for reagendado.
+
+### WhatsApp: assinatura de quem respondeu na própria mensagem
+
+Mensagens de texto enviadas pelo sistema chegam ao contato com a primeira
+linha em negrito `*Lohan · Gerência*` (primeiro nome + cargo do sistema).
+Fotos, vídeos e documentos levam a assinatura na legenda; áudios não, porque o
+WhatsApp não aceita legenda em áudio. O banco guarda o texto sem a assinatura
+(a caixa de entrada já mostra o remetente acima da mensagem), inclusive quando
+o eco do bridge chega antes. Rótulo compartilhado em `lib/whatsapp-sender.ts`,
+com teste.
+
 ### WhatsApp: mídia, mensagens enviadas pelo celular, "digitando..."
 
 - Mensagens enviadas direto pelo celular (fora do sistema) agora aparecem na

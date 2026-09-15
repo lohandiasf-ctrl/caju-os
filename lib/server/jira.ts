@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { JIRA_PHONE_PLACEHOLDER, scrubTechnicianPhone } from '@/lib/technician-data';
 
 export function isJiraConfigured() {
   return Boolean(env.JIRA_BASE_URL?.trim() && env.JIRA_EMAIL?.trim() && env.JIRA_API_TOKEN?.trim());
@@ -250,6 +251,7 @@ export async function getJiraIssue(key: string) {
 
 export async function updateJiraIssue(key: string, input: Record<string, unknown>, options: { allowNoop?: boolean } = {}) {
   const normalizedKey = validIssueKey(key);
+  input = withoutTechnicianPhone(input);
   const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?expand=names&fields=*all`);
   const ids = namedIds(issue.names ?? {});
   const fields: Record<string, unknown> = {};
@@ -286,9 +288,13 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
   }
   if (input.technicianData !== undefined) {
     const technician = parseTechnicianData(cleanJiraValue(input.technicianData));
+    // The technician phone field always gets the placeholder, overwriting a
+    // phone left by an earlier scheduling. customfield_11963 ("Número
+    // Contato") is no longer written here: it's documented as the requester's
+    // contact, so a placeholder could erase real data.
     const individualFields: Record<string, string | null> = {
-      customfield_12316: technician.name, customfield_16237: technician.phone, customfield_11956: technician.rg,
-      customfield_16238: technician.cpf, customfield_11963: technician.phone,
+      customfield_12316: technician.name, customfield_16237: JIRA_PHONE_PLACEHOLDER, customfield_11956: technician.rg,
+      customfield_16238: technician.cpf,
     };
     for (const [id, value] of Object.entries(individualFields)) if (value) fields[id] = value;
   }
@@ -348,7 +354,9 @@ export async function transitionJiraIssue(key: string, localStatus: string, inpu
   const transitionFields: Record<string, unknown> = {};
   if (localStatus === 'scheduled') {
     const scheduledDateTime = jiraDateTimeValue(input.scheduledDateTime) ?? current.fields.customfield_12036;
-    const technicianText = cleanJiraValue(input.technicianData) ?? customFieldText(current.fields.customfield_12279);
+    // Also scrubs an older block already in Jira, since the transition rewrites it.
+    const rawTechnicianText = cleanJiraValue(input.technicianData) ?? customFieldText(current.fields.customfield_12279);
+    const technicianText = typeof rawTechnicianText === 'string' ? scrubTechnicianPhone(rawTechnicianText) : rawTechnicianText;
     if (!scheduledDateTime || !technicianText) throw new JiraError('Para agendar, selecione um técnico e informe a data/hora do atendimento.', 400);
     transitionFields.customfield_12036 = scheduledDateTime;
     transitionFields.customfield_12279 = typeof technicianText === 'string' ? textToAdf(technicianText) : technicianText;
@@ -558,6 +566,15 @@ function jiraDateTimeValue(value: unknown) {
   }
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString();
+}
+
+function withoutTechnicianPhone(input: Record<string, unknown>) {
+  const next = { ...input };
+  if (typeof next.technicianData === 'string') next.technicianData = scrubTechnicianPhone(next.technicianData);
+  if (next.technicianPhone !== undefined) next.technicianPhone = JIRA_PHONE_PLACEHOLDER;
+  // Maps to customfield_11963, documented as the requester's contact.
+  delete next.technicianContact;
+  return next;
 }
 
 function parseTechnicianData(value: string | number | null) {

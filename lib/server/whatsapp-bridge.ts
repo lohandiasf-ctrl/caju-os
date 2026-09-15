@@ -1,8 +1,17 @@
 import { env } from 'cloudflare:workers';
+import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { whatsappConversations, whatsappMessages } from '@/db/schema';
+import { employeePresence, whatsappConversations, whatsappMessages } from '@/db/schema';
 import { canUseWhatsapp } from '@/lib/navigation';
+import { roleLabels, type UserRole } from '@/lib/permissions';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
+
+export async function senderLabelFor(user: { email: string; role: UserRole }) {
+  const presence = await getDb().select({ displayName: employeePresence.displayName })
+    .from(employeePresence).where(eq(employeePresence.email, user.email)).get();
+  return whatsappSenderLabel(user.email, presence?.displayName, roleLabels[user.role]);
+}
 
 export const WHATSAPP_SUPPORT_ROLES = ['gerencia', 'coordenador', 'n1', 'analista'] as const;
 
@@ -35,10 +44,11 @@ export async function recordOutgoing(row: {
   const now = new Date().toISOString();
   const db = getDb();
   // The bridge may already have stored this wamid from its own echo of the
-  // sent message; keep that row and attribute it to the sender.
+  // sent message (with the signature line in the body); keep that row, but
+  // store the unsigned body since the inbox shows the sender separately.
   await db.insert(whatsappMessages).values({
     ...row, contactName: null, direction: 'outgoing', deliveryStatus: null, occurredAt: now, createdAt: now,
-  }).onConflictDoUpdate({ target: whatsappMessages.wamid, set: { senderEmail: row.senderEmail, mediaId: row.mediaId } });
+  }).onConflictDoUpdate({ target: whatsappMessages.wamid, set: { senderEmail: row.senderEmail, mediaId: row.mediaId, body: row.body } });
   await db.insert(whatsappConversations).values({ contactPhone: row.contactPhone, lastMessageAt: now, createdAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: whatsappConversations.contactPhone, set: { lastMessageAt: now, updatedAt: now } });
 }
