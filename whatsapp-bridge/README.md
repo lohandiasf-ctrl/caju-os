@@ -99,6 +99,19 @@ code change needed on the Caju OS side. Incoming messages arrive at
 `whatsapp_messages` / `whatsapp_conversations` tables the Meta integration
 uses, so the WhatsApp inbox screen works the same either way.
 
-The bridge's own HTTP port (`/send`) needs to be reachable from the Cloudflare
+HTTP API (all routes require the `x-bridge-secret` header):
+
+- `POST /send` `{to, text}` — text message.
+- `POST /send-media?to=&fileName=&caption=&voice=1` — raw file bytes as the
+  body, mime type in `Content-Type`. `voice=1` transcodes to ogg/opus (needs
+  `ffmpeg`, installed in the Dockerfile) and sends as a voice note.
+- `GET /media/:id` — stored media (`auth/media/`, same volume as the session).
+- `GET /presence?jid=` — `{state, photoUrl}`; state is `composing`,
+  `recording`, `available` or null.
+- `POST /typing` `{to, state}` — show "typing"/"recording" to the contact.
+
+Messages sent from the phone itself are forwarded too (`direction: outgoing`).
+
+The bridge's own HTTP port needs to be reachable from the Cloudflare
 Worker over the public internet (or a tunnel) — there's no shared private
 network between a Worker and an arbitrary host.
