@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Loader2, MessageCirclePlus, Plus, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Loader2, MessageCirclePlus, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
   const [phone, setPhone] = useState('');
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const [savingJid, setSavingJid] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<{ subject: string; missing: string[] } | null>(null);
@@ -35,21 +36,21 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
   const ticketsRef = useRef(tickets);
   ticketsRef.current = tickets;
 
+  const loadContacts = useCallback(async () => {
+    if (!user) return;
+    try {
+      const response = await fetch('/api/whatsapp/groups', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
+      const payload = await response.json() as { contacts?: Array<{ jid: string; name: string | null; phone: string | null }> };
+      if (!response.ok) return;
+      setContacts((payload.contacts ?? []).map((item) => ({ jid: item.jid, name: item.name || displayJid(item.phone ?? item.jid), phone: item.phone })));
+    } catch { /* Typing numbers still works without the contact list. */ }
+  }, [user]);
+
   useEffect(() => {
     if (!open) return;
     setSubject(whatsappGroupName(ticketsRef.current)); setSelected([]); setQuery(''); setPhone(''); setError(''); setCreated(null);
-    if (!user) return;
-    let active = true;
-    void (async () => {
-      try {
-        const response = await fetch('/api/whatsapp/groups', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
-        const payload = await response.json() as { contacts?: Array<{ jid: string; name: string | null; phone: string | null }> };
-        if (!active || !response.ok) return;
-        setContacts((payload.contacts ?? []).map((item) => ({ jid: item.jid, name: item.name || displayJid(item.phone ?? item.jid), phone: item.phone })));
-      } catch { /* Typing numbers still works without the contact list. */ }
-    })();
-    return () => { active = false; };
-  }, [open, user]);
+    void loadContacts();
+  }, [open, loadContacts]);
 
   const matches = useMemo(() => {
     const term = normalize(query);
@@ -58,6 +59,20 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
       .filter((contact) => !term || normalize(`${contact.name} ${displayJid(contact.jid)}`).includes(term))
       .slice(0, 6);
   }, [contacts, selected, query]);
+
+  // Pulls the WhatsApp address book, which is where most numbers come from.
+  async function syncContacts() {
+    if (!user || syncing) return;
+    setSyncing(true); setError('');
+    try {
+      const response = await fetch('/api/whatsapp/contacts', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      const payload = await response.json().catch(() => ({})) as { learned?: number; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível sincronizar os contatos.');
+      await loadContacts();
+      if (!payload.learned) setError('O WhatsApp não trouxe números novos. Informe o número ao lado do contato.');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível sincronizar os contatos.'); }
+    finally { setSyncing(false); }
+  }
 
   // Saving the number on the conversation keeps it for the next groups too.
   async function saveNumber(contact: Contact) {
@@ -147,9 +162,14 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
                   ))}
                 </ul>
               )}
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar contato do WhatsApp" aria-label="Buscar contato do WhatsApp" className="pl-9" />
+              <div className="relative flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                  <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar contato do WhatsApp" aria-label="Buscar contato do WhatsApp" className="pl-9" />
+                </div>
+                <Button type="button" variant="outline" disabled={syncing} onClick={() => void syncContacts()} title="Buscar os números na agenda do WhatsApp">
+                  {syncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}Buscar números
+                </Button>
               </div>
               {(query || matches.length > 0) && (
                 <ul className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border">
