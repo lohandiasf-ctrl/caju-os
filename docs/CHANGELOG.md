@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: grupos vinculam FSAs pelo nome
+
+Grupos já são nomeados com as FSAs que atendem. O `bridge-webhook` extrai
+todas as FSAs do assunto do grupo (`lib/whatsapp-ticket-keys.ts`; aceita
+`FSA-123`, `FSA 123`, `fsa123`, `FSA_123`, `FSA#123`) e grava em
+`whatsapp_conversations.ticket_key` como lista separada por vírgula. O nome
+do grupo manda: se ele tem FSAs, substitui o vínculo manual; se não tem,
+o vínculo atual fica. Inbox mostra todas as FSAs na lista e um botão
+"Abrir" por FSA. Sem migration.
+
+**Pendente:** grupos existentes só vinculam na próxima mensagem recebida.
+Renomear grupo pode levar até 1 h para refletir (cache do assunto no bridge).
+
 ### WhatsApp: grupos aparecem no inbox
 
 O bridge descartava toda mensagem de JID `@g.us` (`isDirectChat`), então
