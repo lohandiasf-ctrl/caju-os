@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: guardar o número do contato quando o WhatsApp não informa
+
+A consulta pelo `@lid` (#33) foi testada na máquina do bridge e o WhatsApp
+respondeu sem telefone (`{"209479127822392@lid": null}`, sem erro no log).
+Para contatos antigos não há como descobrir o número sozinho.
+
+Agora, na janela de criar grupo, contato sem número traz um campo para
+informar o número uma vez; ele é gravado em
+`whatsapp_conversations.phone_jid` (migration
+`0033_whatsapp_conversation_phone.sql`) e usado nos próximos grupos. O
+`PATCH` da conversa aceita `phoneJid` (validado). Contatos novos continuam
+sendo aprendidos sozinhos pelas mensagens.
+
+**Pendente, nesta ordem:** 1) `npm.cmd run db:migrate:remote`; 2) merge.
+Sem deploy do bridge.
+
 ### WhatsApp: perguntar ao WhatsApp o telefone por trás do `@lid`
 
 As fontes passivas (mensagens, eventos de contato, participantes de grupo)

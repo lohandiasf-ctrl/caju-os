@@ -24,6 +24,8 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
   const [selected, setSelected] = useState<Contact[]>([]);
   const [query, setQuery] = useState('');
   const [phone, setPhone] = useState('');
+  const [numbers, setNumbers] = useState<Record<string, string>>({});
+  const [savingJid, setSavingJid] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [created, setCreated] = useState<{ subject: string; missing: string[] } | null>(null);
@@ -56,6 +58,27 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
       .filter((contact) => !term || normalize(`${contact.name} ${displayJid(contact.jid)}`).includes(term))
       .slice(0, 6);
   }, [contacts, selected, query]);
+
+  // Saving the number on the conversation keeps it for the next groups too.
+  async function saveNumber(contact: Contact) {
+    if (!user || savingJid) return;
+    const typed = (numbers[contact.jid] ?? '').trim();
+    const jid = participantJid(typed);
+    if (!jid) { setError('Número inválido. Use DDD + número, ex.: (73) 98818-1339.'); return; }
+    setSavingJid(contact.jid); setError('');
+    try {
+      const response = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(contact.jid)}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneJid: typed }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível salvar o número.');
+      setContacts((current) => current.map((item) => (item.jid === contact.jid ? { ...item, phone: jid } : item)));
+      add({ ...contact, phone: jid });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o número.'); }
+    finally { setSavingJid(null); }
+  }
 
   function add(contact: Contact & { phone?: string | null }) {
     setSelected((current) => (current.some((item) => item.jid === contact.jid) ? current : [...current, contact]));
@@ -132,16 +155,29 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
                 <ul className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border">
                   {matches.length ? matches.map((contact) => (
                     <li key={contact.jid}>
-                      <button
-                        type="button"
-                        disabled={!contact.phone}
-                        onClick={() => add(contact)}
-                        title={contact.phone ? undefined : 'O WhatsApp ainda não informou o número deste contato. Digite-o abaixo.'}
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
-                      >
-                        <span className="truncate">{contact.name}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">{contact.phone ? displayJid(contact.phone) : 'sem número'}</span>
-                      </button>
+                      {contact.phone ? (
+                        <button type="button" onClick={() => add(contact)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent">
+                          <span className="truncate">{contact.name}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">{displayJid(contact.phone)}</span>
+                        </button>
+                      ) : (
+                        // WhatsApp never told us this contact's number; saved once here, it stays.
+                        <div className="flex items-center gap-2 px-3 py-2 text-sm">
+                          <span className="min-w-0 flex-1 truncate">{contact.name}</span>
+                          <Input
+                            value={numbers[contact.jid] ?? ''}
+                            onChange={(event) => setNumbers((current) => ({ ...current, [contact.jid]: event.target.value }))}
+                            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveNumber(contact); } }}
+                            placeholder="número com DDD"
+                            aria-label={`Número de ${contact.name}`}
+                            inputMode="tel"
+                            className="h-8 w-40"
+                          />
+                          <Button type="button" size="sm" variant="outline" className="h-8" disabled={savingJid === contact.jid} onClick={() => void saveNumber(contact)}>
+                            {savingJid === contact.jid ? <Loader2 className="size-3.5 animate-spin" /> : 'Salvar'}
+                          </Button>
+                        </div>
+                      )}
                     </li>
                   )) : <li className="px-3 py-2 text-xs text-muted-foreground">Nenhum contato encontrado. Digite o número abaixo.</li>}
                 </ul>

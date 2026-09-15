@@ -209,6 +209,9 @@ export const whatsappMessages = sqliteTable('whatsapp_messages', {
 export const whatsappConversations = sqliteTable('whatsapp_conversations', {
   contactPhone: text('contact_phone').primaryKey(),
   contactName: text('contact_name'),
+  // Phone JID of a contact WhatsApp only addresses by "@lid": learned from
+  // messages or filled in by hand, and needed to create a group.
+  phoneJid: text('phone_jid'),
   ticketKey: text('ticket_key'),
   assignedTo: text('assigned_to'),
   lastMessageAt: text('last_message_at').notNull(),
