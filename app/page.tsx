@@ -58,6 +58,7 @@ import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog"
 import { FeedbackBoard } from "@/components/feedback-board";
 import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { TicketHistory } from "@/components/ticket-history";
+import { WhatsAppInbox } from "@/components/whatsapp-inbox";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
@@ -293,6 +294,11 @@ const viewCopy: Record<DashboardView, [string, string, string]> = {
     "Cobertura operacional",
     "Projetos e lojas",
     "Locais com chamados ativos e volume por unidade.",
+  ],
+  whatsapp: [
+    "WhatsApp Business",
+    "Conversas",
+    "Mensagens recebidas pelo WhatsApp da operação, vinculáveis a um chamado.",
   ],
   settings: [
     "Administração",
@@ -1482,6 +1488,16 @@ export default function Home() {
           )}
           {activeView === "feedback" && <FeedbackBoard user={user} />}
           {activeView === "history" && <TicketHistory user={user} />}
+          {activeView === "whatsapp" && (
+            <WhatsAppInbox
+              user={user}
+              tickets={tickets.map((ticket) => ({ id: ticket.id, title: ticket.title, store: ticket.store, city: ticket.city }))}
+              onOpenTicket={(ticketId) => {
+                const ticket = tickets.find((item) => item.id === ticketId);
+                if (ticket) void openTicket(ticket);
+              }}
+            />
+          )}
           {activeView === "settings" && (
             <>
               <SettingsView

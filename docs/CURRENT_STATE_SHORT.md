@@ -17,7 +17,10 @@ docs only when the task touches that area.
 - Latest known production version endpoint reports `0.1.15`.
 - Ticket history is already merged and migrated through
   `drizzle/0025_ticket_history.sql`.
-- Active D1 migrations: through `0028_attendance_preparation.sql` applied remotely as of 2026-09-14.
+- Active D1 migrations: through `0029_chat_group_message_management.sql`
+  applied remotely as of 2026-09-14. `0030_whatsapp_conversations.sql` is
+  pending — run `npm run db:migrate:remote` after merging the WhatsApp
+  inbox branch.
 
 ## Important Local State
 

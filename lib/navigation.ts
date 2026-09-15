@@ -1,6 +1,6 @@
 import type { UserRole } from './permissions';
 
-export const DASHBOARD_VIEWS = ['overview', 'tickets', 'history', 'central', 'agenda', 'technicians', 'projects', 'feedback', 'settings'] as const;
+export const DASHBOARD_VIEWS = ['overview', 'tickets', 'history', 'central', 'agenda', 'technicians', 'projects', 'whatsapp', 'feedback', 'settings'] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
 export function isDashboardView(value: string | null): value is DashboardView {
