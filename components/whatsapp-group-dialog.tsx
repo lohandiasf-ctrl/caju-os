@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { participantJid, WHATSAPP_GROUP_NAME_MAX, whatsappGroupName, type GroupNameTicket } from '@/lib/whatsapp-group-name';
 
 type User = { getIdToken: () => Promise<string> } | null;
-type Contact = { jid: string; name: string };
+type Contact = { jid: string; name: string; phone?: string | null };
 
 // Creates a WhatsApp group from the selected tickets: name suggested from the
 // operation's pattern (editable), participants picked from the inbox contacts
@@ -40,12 +40,10 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
     let active = true;
     void (async () => {
       try {
-        const response = await fetch('/api/whatsapp/conversations', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
-        const payload = await response.json() as { conversations?: Array<{ contactPhone: string; contactName: string | null }> };
+        const response = await fetch('/api/whatsapp/groups', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
+        const payload = await response.json() as { contacts?: Array<{ jid: string; name: string | null; phone: string | null }> };
         if (!active || !response.ok) return;
-        setContacts((payload.conversations ?? [])
-          .filter((item) => !item.contactPhone.endsWith('@g.us'))
-          .map((item) => ({ jid: item.contactPhone, name: item.contactName || displayJid(item.contactPhone) })));
+        setContacts((payload.contacts ?? []).map((item) => ({ jid: item.jid, name: item.name || displayJid(item.phone ?? item.jid), phone: item.phone })));
       } catch { /* Typing numbers still works without the contact list. */ }
     })();
     return () => { active = false; };
@@ -59,7 +57,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
       .slice(0, 6);
   }, [contacts, selected, query]);
 
-  function add(contact: Contact) {
+  function add(contact: Contact & { phone?: string | null }) {
     setSelected((current) => (current.some((item) => item.jid === contact.jid) ? current : [...current, contact]));
     setQuery('');
   }
@@ -134,9 +132,15 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
                 <ul className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border">
                   {matches.length ? matches.map((contact) => (
                     <li key={contact.jid}>
-                      <button type="button" onClick={() => add(contact)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent">
+                      <button
+                        type="button"
+                        disabled={!contact.phone}
+                        onClick={() => add(contact)}
+                        title={contact.phone ? undefined : 'O WhatsApp ainda não informou o número deste contato. Digite-o abaixo.'}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                      >
                         <span className="truncate">{contact.name}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">{displayJid(contact.jid)}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">{contact.phone ? displayJid(contact.phone) : 'sem número'}</span>
                       </button>
                     </li>
                   )) : <li className="px-3 py-2 text-xs text-muted-foreground">Nenhum contato encontrado. Digite o número abaixo.</li>}

@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: número dos contatos aprendido de mais fontes
+
+Criar grupo exige JID de telefone, e a maioria dos contatos do inbox vem
+como `@lid`. Além do `sender_pn`/`participant_pn` das mensagens, o bridge
+agora aprende o telefone em `contacts.upsert/update` (campos `lid` + `jid`),
+no evento `chats.phoneNumberShare` e nos participantes de grupo
+(`groupFetchAllParticipating` e `groupMetadata`). Guarda em
+`./auth/phones.json`.
+
+Bridge ganhou `GET /phones?jids=`; `GET /api/whatsapp/groups` devolve os
+contatos diretos com o telefone conhecido. Na janela de criar grupo, contato
+sem número aparece como "sem número" e não pode ser selecionado — o número
+é digitado no campo abaixo.
+
+**Pendente:** merge e `cd whatsapp-bridge; flyctl deploy`.
+
 ### WhatsApp: criar grupo a partir de chamados selecionados
 
 Na barra de seleção de chamados (visão geral, chamados, central), botão
