@@ -50,6 +50,20 @@ export async function fetchBridgePresence(jid: string): Promise<{ state: string 
   }
 }
 
+// Profile photo only, without subscribing to presence. Falls back to the
+// /presence route on a bridge that predates /photo.
+export async function fetchBridgePhoto(jid: string): Promise<string | null> {
+  if (!bridgeConfigured()) return null;
+  try {
+    const upstream = await bridgeFetch(`/photo?${new URLSearchParams({ jid })}`);
+    if (upstream.status === 404) return (await fetchBridgePresence(jid)).photoUrl;
+    const payload = await upstream.json().catch(() => null) as { photoUrl?: string | null } | null;
+    return payload?.photoUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function recordOutgoing(row: {
   wamid: string; phoneNumberId: string; contactPhone: string; messageType: string;
   body: string | null; mediaId: string | null; senderEmail: string;
