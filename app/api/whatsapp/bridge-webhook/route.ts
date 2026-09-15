@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { ticketKeysFromGroupName } from '@/lib/whatsapp-ticket-keys';
+import { parseBridgeGroups, parseBridgeMessage } from '@/lib/whatsapp-bridge-payload';
 
 // Ingest endpoint for whatsapp-bridge/ (Baileys, non-official) — the unofficial
 // counterpart to app/api/whatsapp/webhook/route.ts (Meta Cloud API). Same
@@ -11,37 +11,21 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Segredo do bridge inválido.' }, { status: 403 });
   }
 
-  const payload = await request.json().catch(() => null) as {
-    wamid?: unknown; contactPhone?: unknown; contactName?: unknown; conversationName?: unknown; senderJid?: unknown;
-    direction?: unknown; messageType?: unknown; body?: unknown; mediaId?: unknown; occurredAt?: unknown;
-  } | null;
-  if (!payload) return Response.json({ error: 'Carga inválida.' }, { status: 400 });
-
-  const wamid = string(payload.wamid);
-  const contactPhone = string(payload.contactPhone);
-  const direction = payload.direction === 'outgoing' ? 'outgoing' : 'incoming';
-  if (!wamid || !contactPhone) return Response.json({ error: 'wamid e contactPhone são obrigatórios.' }, { status: 400 });
-
-  const contactName = string(payload.contactName) || null;
-  // In a group contactName is the participant who wrote; the conversation is
-  // named after the group subject, never after whoever spoke last.
-  const conversationName = string(payload.conversationName) || (contactPhone.endsWith('@g.us') ? null : contactName);
-  // Groups carry their FSAs in the subject; the subject wins over a manual
-  // link, but a subject without FSAs leaves the current link alone.
-  const groupTicketKeys = contactPhone.endsWith('@g.us') ? ticketKeysFromGroupName(conversationName).join(',') || null : null;
-  const senderJid = string(payload.senderJid) || null;
-  const messageType = string(payload.messageType) || 'text';
-  const body = string(payload.body) || null;
-  const mediaId = string(payload.mediaId) || null;
-  const occurredAt = string(payload.occurredAt) || new Date().toISOString();
+  const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
+  if (!payload || typeof payload !== 'object') return Response.json({ error: 'Carga inválida.' }, { status: 400 });
   const now = new Date().toISOString();
+
+  if (payload.type === 'groups') return syncGroups(payload, now);
+
+  const message = parseBridgeMessage(payload, now);
+  if (!message) return Response.json({ error: 'wamid e contactPhone são obrigatórios.' }, { status: 400 });
 
   // A reply sent from the app echoes back through the bridge with the same
   // wamid; whichever row lands first stays, and the send route fills in
   // sender_email on conflict.
   await env.DB.batch([
     env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (wamid, phone_number_id, contact_phone, contact_name, sender_jid, direction, message_type, body, media_id, delivery_status, occurred_at, created_at) VALUES (?, 'bridge', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
-      .bind(wamid, contactPhone, contactName, senderJid, direction, messageType, body, mediaId, occurredAt, now),
+      .bind(message.wamid, message.contactPhone, message.contactName, message.senderJid, message.direction, message.messageType, message.body, message.mediaId, message.occurredAt, now),
     env.DB.prepare(`
       INSERT INTO whatsapp_conversations (contact_phone, contact_name, ticket_key, last_message_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -50,10 +34,29 @@ export async function POST(request: Request) {
         ticket_key = COALESCE(excluded.ticket_key, whatsapp_conversations.ticket_key),
         last_message_at = excluded.last_message_at,
         updated_at = excluded.updated_at
-    `).bind(contactPhone, conversationName, groupTicketKeys, occurredAt, now, now),
+    `).bind(message.contactPhone, message.conversationName, message.ticketKeys, message.occurredAt, now, now),
   ]);
 
   return Response.json({ received: true });
 }
 
-function string(value: unknown): string { return typeof value === 'string' ? value.trim() : ''; }
+// Group list sent when the bridge connects, and on renames / new groups. A
+// group whose name carries FSAs shows up in the inbox even before anyone
+// writes in it; other groups only get their name refreshed if they already
+// have a conversation, so unrelated groups don't flood the list.
+async function syncGroups(payload: Record<string, unknown>, now: string) {
+  const groups = parseBridgeGroups(payload);
+  const statements = groups.map((group) => group.ticketKeys
+    ? env.DB.prepare(`
+        INSERT INTO whatsapp_conversations (contact_phone, contact_name, ticket_key, last_message_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(contact_phone) DO UPDATE SET
+          contact_name = COALESCE(excluded.contact_name, whatsapp_conversations.contact_name),
+          ticket_key = excluded.ticket_key,
+          updated_at = excluded.updated_at
+      `).bind(group.jid, group.name, group.ticketKeys, group.createdAt ?? now, now, now)
+    : env.DB.prepare(`UPDATE whatsapp_conversations SET contact_name = COALESCE(?, contact_name), updated_at = ? WHERE contact_phone = ?`)
+      .bind(group.name, now, group.jid));
+  for (let index = 0; index < statements.length; index += 50) await env.DB.batch(statements.slice(index, index + 50));
+  return Response.json({ received: true, groups: groups.length });
+}

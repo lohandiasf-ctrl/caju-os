@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { splitTicketKeys, ticketKeysFromGroupName } from '../lib/whatsapp-ticket-keys.ts';
+import { splitTicketKeys, ticketKeysFromGroupName } from '../lib/whatsapp-bridge-payload.ts';
 
 test('group name yields every FSA it mentions, normalized and unique', () => {
   assert.deepEqual(ticketKeysFromGroupName('FSA-123 / fsa 124 · Loja Centro'), ['FSA-123', 'FSA-124']);

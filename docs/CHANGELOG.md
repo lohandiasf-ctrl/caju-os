@@ -11,6 +11,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: grupos sincronizados, menções com nome, aviso de bridge caído
+
+- **Grupos na hora.** Ao conectar, o bridge envia a lista de grupos
+  (`groupFetchAllParticipating`); renomeação (`groups.update`) e grupo novo
+  (`groups.upsert`) também. O `bridge-webhook` aceita `{ type: 'groups' }`:
+  grupo com FSA no nome entra no inbox e vincula FSAs sem esperar mensagem;
+  grupo sem FSA só atualiza o nome se já tiver conversa.
+- **Menções.** `@209479127822392` vira `@Nome`. O bridge aprende nomes de
+  mensagens e contatos (`contacts.upsert/update`) e guarda em
+  `./auth/names.json` no volume. Só vale para mensagens novas.
+- **Aviso de bridge caído.** Bridge ganhou `GET /status`; a lista de conversas
+  devolve `bridge` e o inbox mostra aviso quando a sessão foi encerrada,
+  o bridge não responde ou a reconexão passa de 1 min.
+- **Filtro "Grupos"** no inbox.
+- **Testes do webhook.** Parsing do payload saiu para
+  `lib/whatsapp-bridge-payload.ts` (que agora também contém o parser de FSAs,
+  antes em `lib/whatsapp-ticket-keys.ts`) com testes.
+- Rota de evidência tinha caracteres de controle literais numa regex; trocados
+  por escapes.
+
+Sem migration. **Pendente:** redeploy do bridge
+(`cd whatsapp-bridge; flyctl deploy`).
+
 ### WhatsApp: foto de quem enviou nas mensagens de grupo
 
 Grupos mostravam só o nome do participante. O bridge agora envia
