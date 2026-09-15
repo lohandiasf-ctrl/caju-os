@@ -706,6 +706,7 @@ export function ColleaguesPanel({
     <>
       <button
         type="button"
+        data-floating-launcher
         onClick={toggleColleagues}
         aria-label={
           colleaguesOpen
@@ -807,6 +808,7 @@ export function ColleaguesPanel({
       </aside>
       <button
         type="button"
+        data-floating-launcher
         onClick={() => {
           setMobileOpen(true);
           setMessageDot(false);
@@ -1950,6 +1952,7 @@ function TeamVoiceControl({
       {state === "idle" ? (
         <button
           type="button"
+          data-floating-launcher
           onClick={() => openPicker("start")}
           className="pointer-events-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-4 text-sm font-bold text-primary-foreground shadow-2xl transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >

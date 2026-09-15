@@ -24,8 +24,15 @@ lista mostrava "Muitas tentativas. Aguarde e tente novamente."
   aba escondida (retoma na hora ao voltar).
 - Um 429 numa atualização de fundo não vira mensagem de erro; espera a
   próxima.
-- Altura do painel reduzida para o campo de mensagem não ficar embaixo do
-  botão flutuante "Reunião".
+- A página do WhatsApp ocupa exatamente a tela: a página não rola mais (só a
+  lista e a conversa rolam por dentro). Feito via `data-view` no `<html>` e
+  regras em `globals.css`, sem mexer nas outras telas.
+- Nessa página os botões flutuantes parados ("Reunião" e colegas,
+  `data-floating-launcher`) ficam ocultos, pois cobriam o campo de mensagem.
+  Uma chamada em andamento continua visível.
+- Dados: conversa de teste "bianca" (`89537652981855@lid`) apagada do D1 de
+  produção a pedido do usuário (2 mensagens + conversa, sem mídia). Volta a
+  aparecer se esse número mandar mensagem de novo.
 
 O limite por IP em si não foi alterado.
 
