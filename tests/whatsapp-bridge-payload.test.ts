@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseBridgeGroups, parseBridgeMessage, parseBridgeMessageEvent, ticketEvidenceKind } from '../lib/whatsapp-bridge-payload.ts';
+import { changeParticipants, parseBridgeGroups, parseBridgeMessage, parseBridgeMessageEvent, ticketEvidenceKind } from '../lib/whatsapp-bridge-payload.ts';
+
+test('conversation takes at most two participants; the second moves up when the first leaves', () => {
+  assert.deepEqual(changeParticipants(null, 'Ana@Caju.net', 'join'), { participants: ['ana@caju.net'] });
+  assert.deepEqual(changeParticipants('ana@caju.net', 'bia@caju.net', 'join'), { participants: ['ana@caju.net', 'bia@caju.net'] });
+  assert.deepEqual(changeParticipants('ana@caju.net,bia@caju.net', 'ana@caju.net', 'join'), { participants: ['ana@caju.net', 'bia@caju.net'] });
+  assert.deepEqual(changeParticipants('ana@caju.net,bia@caju.net', 'caio@caju.net', 'join'), { error: 'Esta conversa já tem dois participantes.' });
+  assert.deepEqual(changeParticipants('ana@caju.net,bia@caju.net', 'ana@caju.net', 'leave'), { participants: ['bia@caju.net'] });
+});
 
 test('WhatsApp file maps to the N1 evidence kind it can count as', () => {
   assert.equal(ticketEvidenceKind('evidence', 'image/jpeg'), 'photo');

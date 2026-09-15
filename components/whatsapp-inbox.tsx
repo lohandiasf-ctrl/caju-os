@@ -19,7 +19,7 @@ type Conversation = {
 };
 type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderJid: string | null; senderEmail: string | null;
   quotedWamid: string | null; quotedBody: string | null; quotedName: string | null; editedAt: string | null; deletedAt: string | null; evidenceTicketKeys: string | null; occurredAt: string };
-type Colleague = { email: string; role: string | null; displayName: string | null };
+type Colleague = { email: string; role: string | null; displayName: string | null; photoUrl?: string | null };
 type Presence = { state: string | null; photoUrl: string | null };
 type Recording = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; startedAt: number; cancelled: boolean };
 type Filter = 'all' | 'unread' | 'groups' | 'ticket';
@@ -199,6 +199,9 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
   const [notice, setNotice] = useState('');
   const [attaching, setAttaching] = useState<string | null>(null);
   const [colleaguesByEmail, setColleaguesByEmail] = useState<Record<string, Colleague>>({});
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<string[]>(() => splitTicketKeys(conversation.assignedTo));
+  const [joining, setJoining] = useState(false);
   const [presence, setPresence] = useState<Presence>({ state: null, photoUrl: null });
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [recording, setRecording] = useState<Recording | null>(null);
@@ -212,6 +215,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
   const contactTyping = presence.state === 'composing' || presence.state === 'recording';
 
   useEffect(() => { setTicketKey(conversation.ticketKey ?? ''); }, [conversation.ticketKey]);
+  useEffect(() => { setParticipants(splitTicketKeys(conversation.assignedTo)); }, [conversation.assignedTo]);
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -223,8 +227,9 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     (async () => {
       const response = await fetch('/api/colleagues', { headers: await authHeaders(), cache: 'no-store' });
       if (!response.ok) return;
-      const payload = await response.json() as { colleagues?: Colleague[] };
-      setColleaguesByEmail(Object.fromEntries((payload.colleagues ?? []).map((item) => [item.email, item])));
+      const payload = await response.json() as { colleagues?: Colleague[]; currentEmail?: string };
+      setColleaguesByEmail(Object.fromEntries((payload.colleagues ?? []).flatMap((item) => [[item.email, item], [item.email.toLowerCase(), item]])));
+      setCurrentEmail(payload.currentEmail?.toLowerCase() ?? null);
     })();
   }, [user, authHeaders]);
 
@@ -348,6 +353,21 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     if (recording.recorder.state !== 'inactive') recording.recorder.stop();
   }
 
+  async function toggleParticipation() {
+    if (!user || joining) return;
+    const action = currentEmail && participants.includes(currentEmail) ? 'leave' : 'join';
+    setJoining(true); setError('');
+    try {
+      const response = await fetch(`${basePath}/participants`, {
+        method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
+      });
+      const payload = await response.json().catch(() => ({})) as { participants?: string[]; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível atualizar a participação.');
+      setParticipants(payload.participants ?? []); onUpdated();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível atualizar a participação.'); onUpdated(); }
+    finally { setJoining(false); }
+  }
+
   function scrollToMessage(wamid: string | null) {
     if (!wamid) return;
     const element = scrollRef.current?.querySelector<HTMLElement>(`[data-wamid="${CSS.escape(wamid)}"]`);
@@ -396,6 +416,31 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-[15px] leading-tight font-semibold text-neutral-100">{title}</h3>
         <p className={`truncate text-xs ${contactTyping || presence.state === 'available' ? 'text-[#25d366]' : 'text-neutral-400'}`} aria-live="polite">{subtitle}</p>
+      </div>
+      {/* Who is handling this conversation: up to two agents, each with their photo. */}
+      <div className="flex shrink-0 items-center gap-2">
+        {participants.length > 0 && (
+          <ul className="flex -space-x-2" aria-label="Participantes do atendimento">
+            {participants.map((email, index) => {
+              const colleague = colleaguesByEmail[email];
+              const name = colleague?.displayName || email.split('@')[0];
+              const role = index === 0 ? 'Principal' : 'Participante';
+              return (
+                <li key={email} title={`${name} · ${role}`} className="relative">
+                  {colleague?.photoUrl
+                    ? <img src={colleague.photoUrl} alt={`${name} (${role})`} className={`size-8 rounded-full object-cover ring-2 ${index === 0 ? 'ring-[#25d366]' : 'ring-[#53bdeb]'}`} />
+                    : <span className={`grid size-8 place-items-center rounded-full bg-[#2a3942] text-[11px] font-bold text-neutral-100 ring-2 ${index === 0 ? 'ring-[#25d366]' : 'ring-[#53bdeb]'}`} aria-label={`${name} (${role})`}>{initials(name)}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {currentEmail && (participants.includes(currentEmail) || participants.length < 2) && (
+          <Button type="button" size="sm" variant="outline" disabled={joining} onClick={() => void toggleParticipation()} className="h-8 border-white/10 bg-transparent px-2.5 text-xs text-neutral-200">
+            {joining ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {participants.includes(currentEmail) ? 'Sair' : 'Participar'}
+          </Button>
+        )}
       </div>
     </div>
 

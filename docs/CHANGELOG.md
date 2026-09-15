@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: até dois participantes por conversa, com foto no cabeçalho
+
+Preparação para abrir o inbox a mais N1 no mesmo número. Botão
+"Participar"/"Sair" no cabeçalho da conversa; até 2 participantes, cada um
+com a foto do perfil (anel verde = principal, azul = participante). Não
+bloqueia quem não participa de responder. Rota nova
+`POST /api/whatsapp/conversations/[phone]/participants` com escrita
+condicional (dois entrando ao mesmo tempo não viram ambos "segundo").
+Participantes ficam em `whatsapp_conversations.assigned_to` (coluna já
+existente, sem uso), separados por vírgula; o `PATCH` da conversa deixou de
+aceitar `assignedTo`. Sem migration.
+
+**Pendente:** o acesso ao WhatsApp continua restrito a
+`WHATSAPP_PILOT_EMAILS` (`lib/navigation.ts`); para outros N1 usarem, é
+preciso incluir os e-mails.
+
 ### WhatsApp: lista de conversas quebrada após sincronizar grupos
 
 Depois do deploy do #25/#26 o inbox mostrava "Não foi possível carregar as
