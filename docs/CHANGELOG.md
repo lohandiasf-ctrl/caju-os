@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: lista de conversas quebrada após sincronizar grupos
+
+Depois do deploy do #25/#26 o inbox mostrava "Não foi possível carregar as
+conversas do WhatsApp". A sincronização de grupos criou muitas conversas e
+`GET /api/whatsapp/conversations` fazia `inArray(contact_phone, [...até
+200])`; o D1 aceita no máximo 100 parâmetros por consulta. A rota agora usa
+uma consulta única com subconsultas correlacionadas (última mensagem e não
+lidas por conversa), sem lista de parâmetros. Erro passa a ir para o log.
+
 ### WhatsApp: citação, mensagem apagada/editada, selo de evidência, RAT e N1
 
 Migration `0032_whatsapp_quotes_edits_evidence.sql` (colunas novas em
