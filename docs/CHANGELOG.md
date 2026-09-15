@@ -11,6 +11,21 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: grupos aparecem no inbox
+
+O bridge descartava toda mensagem de JID `@g.us` (`isDirectChat`), então
+grupos nunca chegavam ao Caju OS. Agora o bridge encaminha grupos com
+`conversationName` = assunto do grupo (`groupMetadata`, cache de 1 h);
+`contactName` segue sendo quem escreveu. O `bridge-webhook` usa
+`conversationName` no nome da conversa e nunca o nome do participante para
+grupos. No inbox, bolhas recebidas em grupo mostram o nome do participante,
+e o cabeçalho mostra "grupo" em vez de número. Sem migration.
+
+**Pendente:** redeploy do bridge (`cd whatsapp-bridge && fly deploy`) — sem
+isso nada muda. Grupos só aparecem a partir da próxima mensagem recebida
+(ou reenvio `append` das últimas 24 h ao reconectar); histórico antigo não
+é importado.
+
 ### WhatsApp: menos requisições (erro "Muitas tentativas")
 
 A tela nova do WhatsApp pedia lista (10 s), mensagens (4 s) e presença (3 s)
