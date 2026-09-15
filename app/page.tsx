@@ -1130,7 +1130,8 @@ export default function Home() {
           )}
         </header>
         <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-6 pb-44 sm:px-6 lg:px-8 lg:pt-8 xl:pb-36">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          {/* WhatsApp is full-screen: its title stays only for screen readers. */}
+          <div className={activeView === "whatsapp" ? "sr-only" : "flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"}>
             <div>
               <p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-primary">
                 {viewCopy[activeView][0]}

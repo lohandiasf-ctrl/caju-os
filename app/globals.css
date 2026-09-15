@@ -431,7 +431,8 @@ html[data-view='whatsapp'] .app-main {
   flex-direction: column;
   width: 100%;
   min-height: 0;
-  padding-bottom: 1rem;
+  padding-top: .75rem;
+  padding-bottom: .75rem;
 }
 /* The idle "Reunião" and colleagues launchers would sit on top of the
    message composer; a live call surface is not tagged and stays visible. */

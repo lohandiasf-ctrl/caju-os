@@ -61,7 +61,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
 
   const selected = conversations.find((conversation) => conversation.contactPhone === selectedPhone) ?? null;
 
-  return <section className="mt-4 flex min-h-[360px] flex-1 flex-col lg:mt-6" aria-label="Conversas do WhatsApp">
+  return <section className="flex min-h-[360px] flex-1 flex-col" aria-label="Conversas do WhatsApp">
     <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100 shadow-2xl">
       {/* Chat list */}
       <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-white/10 bg-[#111b21] md:w-[340px] lg:w-[380px]`}>
