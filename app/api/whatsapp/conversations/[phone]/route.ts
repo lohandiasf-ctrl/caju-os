@@ -1,13 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { whatsappConversations } from '@/db/schema';
-import { requireApiUser } from '@/lib/server/firebase-auth';
-
-const SUPPORT_ROLES = ['gerencia', 'coordenador', 'n1', 'analista'] as const;
+import { requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 
 export async function PATCH(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
-    const current = await requireApiUser(request, [...SUPPORT_ROLES]);
+    const current = await requireWhatsappUser(request);
     const { phone } = await context.params;
     const contactPhone = decodeURIComponent(phone);
     const body = await request.json().catch(() => null) as { ticketKey?: unknown; assignedTo?: unknown } | null;

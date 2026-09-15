@@ -1,10 +1,9 @@
-import { requireApiUser } from '@/lib/server/firebase-auth';
-import { bridgeConfigured, bridgeFetch, WHATSAPP_SUPPORT_ROLES } from '@/lib/server/whatsapp-bridge';
+import { bridgeConfigured, bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 
 // Contact's live state (typing / recording / online) and profile photo.
 export async function GET(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
-    await requireApiUser(request, [...WHATSAPP_SUPPORT_ROLES]);
+    await requireWhatsappUser(request);
     if (!bridgeConfigured()) return Response.json({ state: null, photoUrl: null });
     const { phone } = await context.params;
     const upstream = await bridgeFetch(`/presence?${new URLSearchParams({ jid: decodeURIComponent(phone) })}`);
@@ -16,7 +15,7 @@ export async function GET(request: Request, context: { params: Promise<{ phone: 
 // Tells the contact that the agent is typing or recording.
 export async function POST(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
-    await requireApiUser(request, [...WHATSAPP_SUPPORT_ROLES]);
+    await requireWhatsappUser(request);
     if (!bridgeConfigured()) return Response.json({ ok: false });
     const { phone } = await context.params;
     const body = await request.json().catch(() => null) as { state?: unknown } | null;

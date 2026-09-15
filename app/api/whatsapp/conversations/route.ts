@@ -1,13 +1,11 @@
 import { desc, inArray, and } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { whatsappConversations, whatsappMessages } from '@/db/schema';
-import { requireApiUser } from '@/lib/server/firebase-auth';
-
-const SUPPORT_ROLES = ['gerencia', 'coordenador', 'n1', 'analista'] as const;
+import { requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 
 export async function GET(request: Request) {
   try {
-    await requireApiUser(request, [...SUPPORT_ROLES]);
+    await requireWhatsappUser(request);
     const db = getDb();
     const conversations = await db.select().from(whatsappConversations).orderBy(desc(whatsappConversations.lastMessageAt)).limit(200).all();
     if (!conversations.length) return Response.json({ conversations: [] }, { headers: { 'Cache-Control': 'private, no-store' } });

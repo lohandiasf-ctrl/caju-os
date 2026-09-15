@@ -37,10 +37,26 @@ function csvCell(value: string) {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+// The technician registry has repeated records for the same person; a
+// repeated phone, or the same full name in the same city, is one contact.
+function uniqueContacts(technicians: ContactTechnician[]) {
+  const seenPhones = new Set<string>();
+  const seenPeople = new Set<string>();
+  const normalize = (value: string) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '').trim().toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ');
+  return technicians.filter((technician) => {
+    const phone = brazilPhone(technician.phone);
+    if (!phone) return false;
+    const person = `${normalize(technician.name)}|${normalize(technician.city)}|${normalize(technician.state)}`;
+    if (seenPhones.has(phone) || seenPeople.has(person)) return false;
+    seenPhones.add(phone);
+    seenPeople.add(person);
+    return true;
+  });
+}
+
 export function googleContactsCsv(technicians: ContactTechnician[], lastNumber: number) {
   const start = Number.isInteger(lastNumber) && lastNumber >= 0 ? lastNumber + 1 : 1;
-  const rows = technicians
-    .filter((technician) => brazilPhone(technician.phone))
+  const rows = uniqueContacts(technicians)
     .map((technician, index) => {
       const sequence = String(start + index).padStart(4, '0');
       const display = `TCP - ${technicianShortName(technician.name)} (${titleCase(technician.city)}/${technician.state.trim().toUpperCase()}) | #TCP-${sequence}`;
