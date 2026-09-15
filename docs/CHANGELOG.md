@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: mídia do chat vira evidência da FSA
+
+Botão direito numa foto, vídeo ou arquivo recebido no inbox abre
+"Adicionar como evidência", com as FSAs vinculadas à conversa. A rota nova
+`POST /api/whatsapp/conversations/[phone]/evidence` busca o arquivo no bridge
+e anexa no Jira com `uploadJiraAttachments` (mesmo destino de "Anexos e
+evidências" do chamado). Valida: FSA precisa estar vinculada à conversa, só
+imagem/vídeo/documento, máximo 25 MB, tipo e assinatura do arquivo
+(`isSafeUpload`), log em `security-log`. Sem migration.
+
+**Pendente:** não grava em `ticket_evidence` (fluxo N1), só no Jira. Áudio e
+figurinha ficam fora. Não há marcação na mensagem de que já virou evidência.
+
 ### WhatsApp: grupo com várias FSAs sem prefixo repetido
 
 Nome como `AMERICANAS L252 (FSA-132030 | 132034 |132035)` só vinculava a

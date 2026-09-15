@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Camera, Check, Download, FileText, Link2, Loader2, MessageCircle, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { isUserRole, roleLabels } from '@/lib/permissions';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 import { splitTicketKeys } from '@/lib/whatsapp-ticket-keys';
@@ -186,6 +187,8 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
   const [sending, setSending] = useState(false);
   const [ticketKey, setTicketKey] = useState(conversation.ticketKey ?? '');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [attaching, setAttaching] = useState<string | null>(null);
   const [colleaguesByEmail, setColleaguesByEmail] = useState<Record<string, Colleague>>({});
   const [presence, setPresence] = useState<Presence>({ state: null, photoUrl: null });
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -336,6 +339,20 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     if (recording.recorder.state !== 'inactive') recording.recorder.stop();
   }
 
+  async function addEvidence(message: Message, key: string) {
+    if (!user || attaching) return;
+    setAttaching(message.wamid); setError(''); setNotice('');
+    try {
+      const response = await fetch(`${basePath}/evidence`, {
+        method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ wamid: message.wamid, ticketKey: key }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível anexar a evidência.');
+      setNotice(`Evidência anexada no Jira da ${key}.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível anexar a evidência.'); }
+    finally { setAttaching(null); }
+  }
+
   async function link(nextTicketKey: string) {
     if (!user) return;
     try {
@@ -398,7 +415,23 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
                     style={{ borderRadius: outgoing ? '8px 0 8px 8px' : '0 8px 8px 8px' }}
                   >
                     {sender && <p className="mb-0.5 px-1 text-[12.5px] font-semibold text-[#53bdeb]">{sender}</p>}
-                    {isMedia && <MediaContent message={message} authHeaders={authHeaders} />}
+                    {isMedia && (EVIDENCE_TYPES[message.messageType] && message.mediaId ? (
+                      <ContextMenu>
+                        <ContextMenuTrigger className="block select-auto"><MediaContent message={message} authHeaders={authHeaders} /></ContextMenuTrigger>
+                        <ContextMenuContent className="min-w-52">
+                          {linkedKeys.length ? (
+                            <ContextMenuSub>
+                              <ContextMenuSubTrigger disabled={Boolean(attaching)}><ClipboardCheck />Adicionar como evidência</ContextMenuSubTrigger>
+                              <ContextMenuSubContent>
+                                <ContextMenuLabel>Anexar no Jira da FSA</ContextMenuLabel>
+                                {linkedKeys.map((key) => <ContextMenuItem key={key} onClick={() => void addEvidence(message, key)}>{key}</ContextMenuItem>)}
+                              </ContextMenuSubContent>
+                            </ContextMenuSub>
+                          ) : <ContextMenuItem disabled><ClipboardCheck />Vincule uma FSA para adicionar evidência</ContextMenuItem>}
+                        </ContextMenuContent>
+                      </ContextMenu>
+                    ) : <MediaContent message={message} authHeaders={authHeaders} />)}
+                    {attaching === message.wamid && <p className="mt-1 flex items-center gap-1.5 px-1 text-[12px] text-[#53bdeb]"><Loader2 className="size-3 animate-spin" />Anexando no Jira...</p>}
                     {!isMedia && message.messageType === 'location' && message.body && (
                       <a href={message.body} target="_blank" rel="noreferrer" className="block px-1 text-[#53bdeb] underline">📍 Ver localização</a>
                     )}
@@ -431,6 +464,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     </div>
 
     {error && <p role="alert" className="shrink-0 bg-[#111b21] px-4 pt-2 text-xs text-rose-300">{error}</p>}
+    {notice && !error && <p role="status" className="shrink-0 bg-[#111b21] px-4 pt-2 text-xs text-[#25d366]">{notice}</p>}
 
     {pendingFile && (
       <div className="flex shrink-0 items-center gap-3 border-t border-white/5 bg-[#111b21] px-3 py-2">
@@ -552,6 +586,8 @@ function ContactAvatar({ contactPhone, name, authHeaders, photoUrl, className }:
 }
 
 const MEDIA_TYPES: Record<string, true> = { image: true, video: true, audio: true, document: true, sticker: true };
+// Media that can be attached to an FSA as evidence (right-click menu).
+const EVIDENCE_TYPES: Record<string, true> = { image: true, video: true, document: true };
 
 // Media needs the Firebase token, so it can't be a plain <img src>: fetch it
 // once per session and hand the element a blob URL.
