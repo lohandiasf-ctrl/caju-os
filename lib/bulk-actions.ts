@@ -10,6 +10,7 @@ export type BulkTicket = {
   city: string;
   rawStatus: string;
   schedule?: string;
+  scheduledAt?: string;
   technician?: string;
   allegedDefect?: string | null;
 };

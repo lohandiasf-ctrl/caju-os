@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Loader2, Search, UserRound, Wrench, X, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Loader2, MessageCirclePlus, Search, UserRound, Wrench, X, XCircle } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { canBulkTransition, isBulkEligible, MAX_BULK_TICKETS, ticketsToClipboard, ticketsToClipboardHtml, type BulkStatus, type BulkTicket, type ClipboardFormat } from '@/lib/bulk-actions';
 import { copyToClipboard } from '@/lib/clipboard';
+import { canUseWhatsapp } from '@/lib/navigation';
+import { WhatsAppGroupDialog } from '@/components/whatsapp-group-dialog';
 
-type User = { getIdToken: () => Promise<string> } | null;
+type User = { getIdToken: () => Promise<string>; email?: string | null } | null;
 type Technician = { id: number; technicianCode: string | null; name: string; cpf: string | null; phone: string | null; city: string; state: string };
 type Result = { key: string; ok: boolean; queued?: boolean; error?: string };
 
@@ -44,6 +46,8 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   const [error, setError] = useState('');
   const [results, setResults] = useState<Result[] | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'ok' | 'fail'>('idle');
+  const [groupOpen, setGroupOpen] = useState(false);
+  const canCreateGroup = canUseWhatsapp(user?.email);
 
   const canTransition = canBulkTransition(role);
   const toSchedule = useMemo(() => tickets.filter((ticket) => isBulkEligible(ticket.rawStatus, 'scheduled')), [tickets]);
@@ -174,10 +178,15 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
         {canTransition && toField.length > 0 && <Button variant="secondary" className="h-9" onClick={() => open('in_service')} disabled={toField.length > MAX_BULK_TICKETS} title={toField.length > MAX_BULK_TICKETS ? `Máximo de ${MAX_BULK_TICKETS} chamados por vez` : undefined}>
           <Wrench /> Técnico em campo {toField.length}
         </Button>}
+        {canCreateGroup && <Button variant="outline" className="h-9" onClick={() => setGroupOpen(true)} disabled={tickets.length > MAX_BULK_TICKETS} title={tickets.length > MAX_BULK_TICKETS ? `Máximo de ${MAX_BULK_TICKETS} chamados por vez` : undefined}>
+          <MessageCirclePlus /> Criar grupo
+        </Button>}
         <Button variant="ghost" className="size-9 p-0" onClick={onClear} aria-label="Limpar seleção" title="Limpar seleção"><X /></Button>
         <span className="sr-only" aria-live="polite">{copyState === 'ok' ? `${count(tickets.length, 'chamado copiado', 'chamados copiados')}.` : copyState === 'fail' ? 'Não foi possível copiar.' : ''}</span>
       </div>
     </>}
+
+    {canCreateGroup && <WhatsAppGroupDialog open={groupOpen} onOpenChange={setGroupOpen} tickets={tickets} user={user} />}
 
     <Dialog open={mode !== null} onOpenChange={(next) => { if (!next && !saving) setMode(null); }}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">

@@ -487,6 +487,20 @@ http.createServer(async (request, response) => {
       return json(response, 200, { ...connectionState, qr });
     }
 
+    // Creates a group with the given participants (phone JIDs) and pushes it
+    // to Caju OS right away, so it shows in the inbox with its FSAs linked.
+    if (request.method === 'POST' && url.pathname === '/groups') {
+      const body = JSON.parse((await readBody(request, 16 * 1024)).toString('utf8') || '{}');
+      const subject = typeof body?.subject === 'string' ? body.subject.trim().slice(0, 100) : '';
+      const participants = Array.isArray(body?.participants) ? [...new Set(body.participants.map(jidFor).filter(Boolean))] : [];
+      if (!subject || !participants.length) return json(response, 400, { error: 'Nome do grupo e participantes são obrigatórios.' });
+      const group = await sock.groupCreate(subject, participants);
+      groupCache.set(group.id, { subject: group.subject || subject, at: Date.now() });
+      await forwardGroups([{ ...group, subject: group.subject || subject, creation: group.creation ?? Math.floor(Date.now() / 1000) }]);
+      const added = new Set((group.participants ?? []).map((participant) => jidUser(participant.id)));
+      return json(response, 200, { jid: group.id, subject: group.subject || subject, missing: participants.filter((jid) => !added.has(jidUser(jid))) });
+    }
+
     // Start over with a new QR. Refused while connected so a click can't
     // unlink a working session.
     if (request.method === 'POST' && url.pathname === '/reset-session') {
