@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: perguntar ao WhatsApp o telefone por trás do `@lid`
+
+As fontes passivas (mensagens, eventos de contato, participantes de grupo)
+não cobriram os contatos já existentes: na janela de criar grupo eles
+continuavam "sem número". O bridge agora consulta o WhatsApp sob demanda
+(`executeUSyncQuery` com os protocolos `contact` + `lid`, pelo próprio
+`@lid`) em `GET /phones` (até 10 desconhecidos por chamada) e ao criar
+grupo. Falha é registrada e repetida no máximo 1× por hora por contato.
+
+**Pendente:** merge e deploy do bridge. Não dá para testar sem o WhatsApp
+ao vivo: se a resposta não trouxer o telefone, o contato segue exigindo o
+número digitado.
+
 ### WhatsApp: número dos contatos aprendido de mais fontes
 
 Criar grupo exige JID de telefone, e a maioria dos contatos do inbox vem

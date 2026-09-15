@@ -6,6 +6,7 @@
 
 import makeWASocket, {
   useMultiFileAuthState, DisconnectReason, downloadMediaMessage, normalizeMessageContent, getContentType,
+  USyncQuery, USyncUser,
 } from '@whiskeysockets/baileys';
 import qrcodeTerminal from 'qrcode-terminal';
 import QRCode from 'qrcode';
@@ -315,6 +316,32 @@ function phoneJidFor(jid) {
   return phones.get(jidUser(value)) ?? null;
 }
 
+const lidLookupAt = new Map(); // lid user -> ms of the last failed lookup
+const LID_LOOKUP_RETRY_MS = 60 * 60 * 1000;
+
+// Asks WhatsApp which phone is behind a "@lid", for contacts whose number
+// never came through a message, a contact event or a group. Best effort: the
+// answer may simply not carry the phone JID.
+async function resolveLidPhone(lid) {
+  const known = phoneJidFor(lid);
+  if (known) return known;
+  const key = jidUser(lid);
+  if (!key || Date.now() - (lidLookupAt.get(key) ?? 0) < LID_LOOKUP_RETRY_MS) return null;
+  lidLookupAt.set(key, Date.now());
+  try {
+    const query = new USyncQuery().withContactProtocol().withLIDProtocol();
+    query.withUser(new USyncUser().withId(`${key}@lid`).withLid(`${key}@lid`));
+    const result = await sock.executeUSyncQuery(query);
+    for (const item of result?.list ?? []) {
+      const candidates = [item.id, item.lid, item.jid].filter((value) => typeof value === 'string' && value.endsWith('@s.whatsapp.net'));
+      if (candidates.length) { learnPhone(`${key}@lid`, candidates[0]); return phoneJidFor(lid); }
+    }
+  } catch (error) {
+    console.error('Falha ao resolver telefone do contato:', error?.message ?? error);
+  }
+  return null;
+}
+
 // "@209479127822392" -> "@Lana Melo" for the JIDs the message mentions.
 function resolveMentions(body, contextInfo) {
   const mentioned = contextInfo?.mentionedJid ?? [];
@@ -534,7 +561,12 @@ http.createServer(async (request, response) => {
     // Which of these JIDs the bridge can already turn into a phone number.
     if (request.method === 'GET' && url.pathname === '/phones') {
       const wanted = (url.searchParams.get('jids') ?? '').split(',').map((jid) => jid.trim()).filter(Boolean).slice(0, 300);
-      return json(response, 200, { phones: Object.fromEntries(wanted.map((jid) => [jid, phoneJidFor(jid)])) });
+      const known = wanted.map((jid) => [jid, phoneJidFor(jid)]);
+      // Ask WhatsApp about a few unknown ones per call, so a big list doesn't
+      // turn into a burst of queries.
+      const pending = known.filter(([, phone]) => !phone).slice(0, 10);
+      const resolved = new Map(await Promise.all(pending.map(async ([jid]) => [jid, await resolveLidPhone(jid)])));
+      return json(response, 200, { phones: Object.fromEntries(known.map(([jid, phone]) => [jid, phone ?? resolved.get(jid) ?? null])) });
     }
 
     // Creates a group with the given participants (phone JIDs) and pushes it
@@ -544,7 +576,7 @@ http.createServer(async (request, response) => {
       const subject = typeof body?.subject === 'string' ? body.subject.trim().slice(0, 100) : '';
       const participants = Array.isArray(body?.participants) ? [...new Set(body.participants.map(jidFor).filter(Boolean))] : [];
       if (!subject || !participants.length) return json(response, 400, { error: 'Nome do grupo e participantes são obrigatórios.' });
-      const resolved = participants.map((jid) => ({ jid, phone: phoneJidFor(jid) }));
+      const resolved = await Promise.all(participants.map(async (jid) => ({ jid, phone: phoneJidFor(jid) ?? await resolveLidPhone(jid) })));
       const unknown = resolved.filter((item) => !item.phone).map((item) => item.jid);
       if (unknown.length) return json(response, 400, { error: 'Não sei o telefone destes contatos; digite o número com DDD.', unknown });
       const group = await sock.groupCreate(subject, resolved.map((item) => item.phone))
