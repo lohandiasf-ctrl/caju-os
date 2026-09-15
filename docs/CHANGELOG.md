@@ -11,6 +11,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: criar grupo a partir de chamados selecionados
+
+Na barra de seleção de chamados (visão geral, chamados, central), botão
+**Criar grupo** (só para quem tem acesso ao WhatsApp). Abre janela com nome
+sugerido e participantes.
+
+- **Nome** (`lib/whatsapp-group-name.ts`, com testes), editável:
+  `15/09- 16h - CMÇR/BA - AMERICANAS L1608 - (FSA-132495)` — data/hora do
+  agendamento mais cedo (fuso São Paulo), 4 primeiras consoantes da cidade
+  (mantém Ç) + UF, cliente (fixo `AMERICANAS`) e código(s) da loja, FSAs em
+  ordem com o prefixo uma vez. Sem agendamento ou cidade, a parte é omitida.
+- **Participantes:** busca nos contatos do inbox ou número digitado com DDD.
+- **Criação:** `POST /api/whatsapp/groups` → bridge `POST /groups`
+  (`groupCreate`); o bridge já envia o grupo ao webhook, então ele aparece no
+  inbox com as FSAs vinculadas. Participantes que o WhatsApp não aceitou são
+  informados. Registrado em `security-log`.
+
+**Pendente:** merge e `cd whatsapp-bridge; flyctl deploy`. Regra do
+tetragrama não reproduz abreviações como `VTCQ` (Vitória da Conquista); o
+nome pode ser ajustado antes de criar. Formato real do campo cidade no Jira
+não foi confirmado (o parser aceita "Cidade - UF", "Cidade/UF", "UF -
+Cidade" e cidade sem UF).
+
 ### WhatsApp: vigia de conexão, menos consultas ao WhatsApp, QR code no sistema
 
 Às ~20h o inbox parou de receber mensagens: o bridge dizia `open`, mas o
