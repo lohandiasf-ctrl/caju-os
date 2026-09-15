@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { JIRA_PHONE_PLACEHOLDER, scrubTechnicianPhone } from '@/lib/technician-data';
+import { splitCityUf } from '@/lib/whatsapp-group-name';
 
 export function isJiraConfigured() {
   return Boolean(env.JIRA_BASE_URL?.trim() && env.JIRA_EMAIL?.trim() && env.JIRA_API_TOKEN?.trim());
@@ -55,6 +56,7 @@ type JiraIssue = {
     customfield_14827?: unknown;
     customfield_14954?: unknown;
     customfield_11994?: unknown;
+    customfield_12317?: unknown;
     customfield_12036?: unknown;
     customfield_10702?: unknown;
     customfield_10703?: unknown;
@@ -189,7 +191,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
 
   const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12036', 'customfield_12278', 'customfield_12316'],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316'],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
@@ -739,10 +741,30 @@ function toSummary(issue: JiraIssue): JiraIssueSummary {
     store: customFieldText(fields.customfield_14954)
       ?? customFieldText(fields.customfield_14809)
       ?? customFieldText(fields.customfield_14827),
-    city: customFieldText(fields.customfield_11994),
+    city: cityWithUf(customFieldText(fields.customfield_11994), fields.customfield_12317),
     scheduledAt: customFieldText(fields.customfield_12036),
     partnerTriggeredAt: customFieldText(fields.customfield_12278),
   };
+}
+
+// The city text field has no UF; "Cidade / UF" (customfield_12317) is a
+// cascading select with both levels. Appends the UF when the text lacks one,
+// e.g. "Itabuna" -> "Itabuna - BA" (the WhatsApp group name needs it).
+function cityWithUf(city: string | null, cascade: unknown): string | null {
+  const parts = cascadingValues(cascade);
+  const uf = parts.find((part) => /^[A-Z]{2}$/.test(part.toUpperCase()) && part.length === 2)?.toUpperCase() ?? null;
+  const cascadeCity = parts.find((part) => part.length > 2) ?? null;
+  const base = city ?? cascadeCity;
+  if (!base) return null;
+  if (!uf || splitCityUf(base).uf) return base;
+  return `${base} - ${uf}`;
+}
+
+function cascadingValues(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  const node = value as { value?: unknown; child?: unknown };
+  const own = typeof node.value === 'string' && node.value.trim() ? [node.value.trim()] : [];
+  return [...own, ...cascadingValues(node.child)];
 }
 
 function customFieldText(value: unknown): string | null {

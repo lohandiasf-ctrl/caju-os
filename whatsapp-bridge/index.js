@@ -40,6 +40,11 @@ const NAMES_FILE = './auth/names.json';
 // mentions into "@Name". Persisted on the volume so a redeploy keeps them.
 const names = new Map(Object.entries(JSON.parse(await readFile(NAMES_FILE, 'utf8').catch(() => '{}'))));
 let namesSaveTimer;
+const PHONES_FILE = './auth/phones.json';
+// "@lid" (linked ID) -> phone JID, learned from the sender_pn WhatsApp sends
+// with each message. Creating a group needs the phone JID, not the "@lid".
+const phones = new Map(Object.entries(JSON.parse(await readFile(PHONES_FILE, 'utf8').catch(() => '{}'))));
+let phonesSaveTimer;
 // What the Caju OS inbox shows when the WhatsApp session is down.
 let connectionState = { status: 'connecting', since: new Date().toISOString() };
 // Latest pairing QR, so a manager can scan it from the Caju OS inbox instead
@@ -173,7 +178,11 @@ async function handleMessage(message, type) {
 
   const wamid = message.key.id;
   const fromMe = Boolean(message.key.fromMe);
-  if (!fromMe) learnName(message.pushName, message.key.participant, message.key.participantPn, message.key.participantLid, isGroup(jid) ? null : jid);
+  if (!fromMe) {
+    learnName(message.pushName, message.key.participant, message.key.participantPn, message.key.participantLid, isGroup(jid) ? null : jid);
+    learnPhone(message.key.participantLid ?? message.key.participant, message.key.participantPn);
+    if (!isGroup(jid)) learnPhone(jid, message.key.senderPn);
+  }
   if (parsed.body) parsed.body = resolveMentions(parsed.body, parsed.contextInfo);
   let mediaId = null;
   if (parsed.media) {
@@ -273,6 +282,25 @@ function learnName(name, ...jids) {
 }
 
 function nameFor(jid) { return jid ? names.get(jidUser(jid)) ?? null : null; }
+
+function learnPhone(lid, phoneJid) {
+  if (!lid || !phoneJid || !String(lid).endsWith('@lid') || !String(phoneJid).endsWith('@s.whatsapp.net')) return;
+  const key = jidUser(lid);
+  const value = `${jidUser(phoneJid)}@s.whatsapp.net`;
+  if (!key || phones.get(key) === value) return;
+  phones.set(key, value);
+  clearTimeout(phonesSaveTimer);
+  phonesSaveTimer = setTimeout(() => {
+    writeFile(PHONES_FILE, JSON.stringify(Object.fromEntries(phones))).catch((error) => console.error('Falha ao salvar telefones:', error?.message ?? error));
+  }, 5_000);
+}
+
+// A group can only be created with phone JIDs.
+function phoneJidFor(jid) {
+  const value = String(jid ?? '');
+  if (value.endsWith('@s.whatsapp.net')) return value;
+  return phones.get(jidUser(value)) ?? null;
+}
 
 // "@209479127822392" -> "@Lana Melo" for the JIDs the message mentions.
 function resolveMentions(body, contextInfo) {
@@ -494,7 +522,11 @@ http.createServer(async (request, response) => {
       const subject = typeof body?.subject === 'string' ? body.subject.trim().slice(0, 100) : '';
       const participants = Array.isArray(body?.participants) ? [...new Set(body.participants.map(jidFor).filter(Boolean))] : [];
       if (!subject || !participants.length) return json(response, 400, { error: 'Nome do grupo e participantes são obrigatórios.' });
-      const group = await sock.groupCreate(subject, participants);
+      const resolved = participants.map((jid) => ({ jid, phone: phoneJidFor(jid) }));
+      const unknown = resolved.filter((item) => !item.phone).map((item) => item.jid);
+      if (unknown.length) return json(response, 400, { error: 'Não sei o telefone destes contatos; digite o número com DDD.', unknown });
+      const group = await sock.groupCreate(subject, resolved.map((item) => item.phone))
+        .catch((error) => { throw Object.assign(new Error(`O WhatsApp recusou criar o grupo (${error?.data ?? error?.message ?? 'erro'}).`), { status: 502, expose: true }); });
       groupCache.set(group.id, { subject: group.subject || subject, at: Date.now() });
       await forwardGroups([{ ...group, subject: group.subject || subject, creation: group.creation ?? Math.floor(Date.now() / 1000) }]);
       const added = new Set((group.participants ?? []).map((participant) => jidUser(participant.id)));
@@ -530,7 +562,10 @@ http.createServer(async (request, response) => {
     return json(response, 404, { error: 'Rota não encontrada.' });
   } catch (error) {
     console.error('Falha na API do bridge:', error?.message ?? error);
-    if (!response.headersSent) json(response, error?.status ?? 502, { error: error?.status === 413 ? 'Arquivo grande demais.' : 'Falha ao falar com o WhatsApp.' });
+    if (!response.headersSent) {
+      const message = error?.status === 413 ? 'Arquivo grande demais.' : error?.expose ? error.message : 'Falha ao falar com o WhatsApp.';
+      json(response, error?.status ?? 502, { error: message });
+    }
   }
 }).listen(PORT, () => console.log(`Bridge HTTP ouvindo na porta ${PORT}`));
 

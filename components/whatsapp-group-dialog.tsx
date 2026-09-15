@@ -81,8 +81,12 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
         headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject: subject.trim(), participants: selected.map((item) => item.jid), ticketKeys: tickets.map((ticket) => ticket.id) }),
       });
-      const payload = await response.json().catch(() => ({})) as { subject?: string; missing?: string[]; error?: string };
-      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível criar o grupo.');
+      const payload = await response.json().catch(() => ({})) as { subject?: string; missing?: string[]; unknown?: string[]; error?: string };
+      if (!response.ok) {
+        // Contacts the bridge only knows by "@lid" have to be typed as phones.
+        const pending = (payload.unknown ?? []).map((jid) => selected.find((item) => item.jid === jid)?.name ?? displayJid(jid));
+        throw new Error(pending.length ? `${payload.error ?? 'Não foi possível criar o grupo.'} Faltam: ${pending.join(', ')}.` : payload.error ?? 'Não foi possível criar o grupo.');
+      }
       setCreated({ subject: payload.subject ?? subject.trim(), missing: (payload.missing ?? []).map((jid) => selected.find((item) => item.jid === jid)?.name ?? displayJid(jid)) });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível criar o grupo.'); }
     finally { setSaving(false); }

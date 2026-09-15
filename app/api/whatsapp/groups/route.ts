@@ -28,9 +28,11 @@ export async function POST(request: Request) {
       body: JSON.stringify({ subject, participants }),
       signal: AbortSignal.timeout(30_000),
     });
-    const payload = await upstream.json().catch(() => ({})) as { jid?: string; subject?: string; missing?: string[]; error?: string };
+    const payload = await upstream.json().catch(() => ({})) as { jid?: string; subject?: string; missing?: string[]; unknown?: string[]; error?: string };
     logSecurityEvent({ request, user, action: 'whatsapp_group_create', outcome: upstream.ok ? 'allowed' : 'denied', details: { subject, participants: participants.length, ticketKeys, status: upstream.status } });
-    if (!upstream.ok || !payload.jid) return Response.json({ error: payload.error ?? 'O WhatsApp não criou o grupo.' }, { status: 502 });
+    if (!upstream.ok || !payload.jid) {
+      return Response.json({ error: payload.error ?? 'O WhatsApp não criou o grupo.', unknown: payload.unknown ?? [] }, { status: upstream.status === 400 ? 400 : 502 });
+    }
     return Response.json({ jid: payload.jid, subject: payload.subject ?? subject, missing: payload.missing ?? [] });
   } catch (error) {
     if (error instanceof Response) return error;
