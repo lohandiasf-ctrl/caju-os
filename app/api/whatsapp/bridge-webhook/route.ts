@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { ticketKeysFromGroupName } from '@/lib/whatsapp-ticket-keys';
 
 // Ingest endpoint for whatsapp-bridge/ (Baileys, non-official) — the unofficial
 // counterpart to app/api/whatsapp/webhook/route.ts (Meta Cloud API). Same
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
   // In a group contactName is the participant who wrote; the conversation is
   // named after the group subject, never after whoever spoke last.
   const conversationName = string(payload.conversationName) || (contactPhone.endsWith('@g.us') ? null : contactName);
+  // Groups carry their FSAs in the subject; the subject wins over a manual
+  // link, but a subject without FSAs leaves the current link alone.
+  const groupTicketKeys = contactPhone.endsWith('@g.us') ? ticketKeysFromGroupName(conversationName).join(',') || null : null;
   const messageType = string(payload.messageType) || 'text';
   const body = string(payload.body) || null;
   const mediaId = string(payload.mediaId) || null;
@@ -38,13 +42,14 @@ export async function POST(request: Request) {
     env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (wamid, phone_number_id, contact_phone, contact_name, direction, message_type, body, media_id, delivery_status, occurred_at, created_at) VALUES (?, 'bridge', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
       .bind(wamid, contactPhone, contactName, direction, messageType, body, mediaId, occurredAt, now),
     env.DB.prepare(`
-      INSERT INTO whatsapp_conversations (contact_phone, contact_name, last_message_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO whatsapp_conversations (contact_phone, contact_name, ticket_key, last_message_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(contact_phone) DO UPDATE SET
         contact_name = COALESCE(excluded.contact_name, whatsapp_conversations.contact_name),
+        ticket_key = COALESCE(excluded.ticket_key, whatsapp_conversations.ticket_key),
         last_message_at = excluded.last_message_at,
         updated_at = excluded.updated_at
-    `).bind(contactPhone, conversationName, occurredAt, now, now),
+    `).bind(contactPhone, conversationName, groupTicketKeys, occurredAt, now, now),
   ]);
 
   return Response.json({ received: true });

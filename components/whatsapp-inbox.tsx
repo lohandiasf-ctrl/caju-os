@@ -6,6 +6,7 @@ import { ArrowLeft, Camera, Check, Download, FileText, Link2, Loader2, MessageCi
 import { Button } from '@/components/ui/button';
 import { isUserRole, roleLabels } from '@/lib/permissions';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
+import { splitTicketKeys } from '@/lib/whatsapp-ticket-keys';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type AuthHeaders = () => Promise<Record<string, string>>;
@@ -127,7 +128,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
                           <span className="min-w-0 flex-1 truncate text-[13px] text-neutral-400">
                             {last ? <>{last.direction === 'outgoing' && <Check className="mr-1 inline size-3.5 align-[-2px]" aria-label="Enviada" />}{previewText(last.messageType, last.body)}</> : 'Sem mensagens ainda'}
                           </span>
-                          {conversation.ticketKey && <span className="shrink-0 rounded-full bg-[#53bdeb]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#53bdeb]">{conversation.ticketKey}</span>}
+                          {conversation.ticketKey && <span className="max-w-[45%] shrink-0 truncate rounded-full bg-[#53bdeb]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#53bdeb]">{splitTicketKeys(conversation.ticketKey).join(' · ')}</span>}
                           {conversation.unread > 0 && <span className="grid min-w-5 shrink-0 place-items-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-bold text-[#111b21]">{conversation.unread}</span>}
                         </span>
                       </span>
@@ -248,7 +249,9 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     return () => window.clearInterval(timer);
   }, [recording]);
 
-  const ticket = useMemo(() => tickets.find((item) => item.id === ticketKey), [ticketKey, tickets]);
+  // Groups can be linked to several FSAs at once (taken from the group name).
+  const linkedKeys = useMemo(() => splitTicketKeys(ticketKey), [ticketKey]);
+  const linkedTickets = useMemo(() => tickets.filter((item) => linkedKeys.includes(item.id)), [linkedKeys, tickets]);
 
   const notifyPresence = useCallback(async (state: 'composing' | 'recording' | 'paused') => {
     if (!user) return;
@@ -361,11 +364,11 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     </div>
 
     <div className="flex shrink-0 items-center gap-2 border-b border-white/5 bg-[#111b21] px-3 py-2">
-      <select value={ticketKey} onChange={(event) => void link(event.target.value)} className="h-8 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#2a3942] px-2 text-xs text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] md:max-w-sm" aria-label="Vincular a um chamado">
-        <option value="">Sem chamado vinculado</option>
+      <select value={linkedKeys.length > 1 ? '' : ticketKey} onChange={(event) => void link(event.target.value)} className="h-8 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#2a3942] px-2 text-xs text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] md:max-w-sm" aria-label="Vincular a um chamado">
+        <option value="">{linkedKeys.length > 1 ? `${linkedKeys.length} chamados vinculados` : 'Sem chamado vinculado'}</option>
         {tickets.slice(0, 200).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.store}</option>)}
       </select>
-      {ticket && <Button type="button" size="sm" variant="outline" className="h-8 border-white/10 bg-transparent text-neutral-200" onClick={() => onOpenTicket(ticket.id)}><Link2 className="size-3.5" />Abrir {ticket.id}</Button>}
+      {linkedTickets.map((item) => <Button key={item.id} type="button" size="sm" variant="outline" className="h-8 border-white/10 bg-transparent text-neutral-200" onClick={() => onOpenTicket(item.id)}><Link2 className="size-3.5" />Abrir {item.id}</Button>)}
       {ticketKey && <Button type="button" size="sm" variant="ghost" className="h-8 text-neutral-300" onClick={() => void link('')} aria-label="Desvincular chamado"><Unlink className="size-3.5" /></Button>}
     </div>
 
