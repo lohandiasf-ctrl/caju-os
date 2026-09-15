@@ -33,7 +33,19 @@ const presence = new Map(); // jid -> { state, at }
 const presenceSubscribedAt = new Map(); // jid -> ms
 const photoCache = new Map(); // jid -> { url, at }
 const groupCache = new Map(); // group jid -> { subject, at }
+const NAMES_FILE = './auth/names.json';
+// Display names learned from messages and contact events, keyed by every JID
+// form a person shows up under (phone, "@lid"). Used to turn "@2094791..."
+// mentions into "@Name". Persisted on the volume so a redeploy keeps them.
+const names = new Map(Object.entries(JSON.parse(await readFile(NAMES_FILE, 'utf8').catch(() => '{}'))));
+let namesSaveTimer;
+// What the Caju OS inbox shows when the WhatsApp session is down.
+let connectionState = { status: 'connecting', since: new Date().toISOString() };
 let sock;
+
+function setConnectionState(status) {
+  if (connectionState.status !== status) connectionState = { status, since: new Date().toISOString() };
+}
 
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState('./auth');
@@ -44,18 +56,37 @@ async function start() {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
     if (qr) {
+      setConnectionState('qr');
       console.log('Escaneie este QR code no WhatsApp do celular (Aparelhos conectados > Conectar aparelho):');
       qrcodeTerminal.generate(qr, { small: true });
     }
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
+      setConnectionState(loggedOut ? 'logged_out' : 'connecting');
       console.log('Conexão fechada.', loggedOut ? 'Sessão encerrada — apague ./auth e escaneie o QR de novo.' : 'Reconectando...');
       if (!loggedOut) start();
     } else if (connection === 'open') {
+      setConnectionState('open');
       console.log('Bridge do WhatsApp conectado.');
+      syncAllGroups().catch((error) => console.error('Falha ao sincronizar grupos:', error?.message ?? error));
     }
   });
+
+  // Renamed groups and groups the number joins reach the inbox right away,
+  // instead of waiting for the next message in them.
+  sock.ev.on('groups.update', (updates) => {
+    const changed = updates.filter((group) => group.id && typeof group.subject === 'string');
+    for (const group of changed) groupCache.set(group.id, { subject: group.subject, at: Date.now() });
+    if (changed.length) void forwardGroups(changed);
+  });
+  sock.ev.on('groups.upsert', (groups) => {
+    for (const group of groups) if (group.id && group.subject) groupCache.set(group.id, { subject: group.subject, at: Date.now() });
+    void forwardGroups(groups);
+  });
+
+  sock.ev.on('contacts.upsert', (contacts) => { for (const contact of contacts) learnName(contact.notify || contact.name, contact.id, contact.lid, contact.phoneNumber); });
+  sock.ev.on('contacts.update', (contacts) => { for (const contact of contacts) learnName(contact.notify || contact.name, contact.id, contact.lid, contact.phoneNumber); });
 
   sock.ev.on('presence.update', ({ id, presences }) => {
     for (const value of Object.values(presences ?? {})) {
@@ -86,6 +117,8 @@ async function handleMessage(message, type) {
 
   const wamid = message.key.id;
   const fromMe = Boolean(message.key.fromMe);
+  if (!fromMe) learnName(message.pushName, message.key.participant, message.key.participantPn, message.key.participantLid, isGroup(jid) ? null : jid);
+  if (parsed.body) parsed.body = resolveMentions(parsed.body, parsed.contextInfo);
   let mediaId = null;
   if (parsed.media) {
     mediaId = safeId(wamid);
@@ -113,7 +146,7 @@ async function handleMessage(message, type) {
     // On our own messages pushName is our name, not the contact's. In a group
     // it names the participant who wrote, so the conversation gets the group
     // subject instead.
-    contactName: fromMe ? null : (message.pushName || null),
+    contactName: fromMe ? null : (message.pushName || nameFor(message.key.participantPn) || nameFor(message.key.participant) || null),
     conversationName: isGroup(jid) ? await groupSubject(jid) : undefined,
     // Who wrote it inside a group, so the inbox can show their photo. The
     // phone-number JID resolves profile photos more reliably than "@lid".
@@ -132,6 +165,54 @@ function isSupportedChat(jid) {
   return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid') || isGroup(jid);
 }
 
+async function syncAllGroups() {
+  const all = Object.values(await sock.groupFetchAllParticipating());
+  for (const group of all) groupCache.set(group.id, { subject: group.subject || null, at: Date.now() });
+  await forwardGroups(all);
+  console.log(`Grupos sincronizados: ${all.length}.`);
+}
+
+async function forwardGroups(groups) {
+  const items = groups.filter((group) => group.id && isGroup(group.id)).map((group) => ({
+    jid: group.id,
+    subject: group.subject ?? null,
+    createdAt: group.creation ? new Date(Number(group.creation) * 1000).toISOString() : null,
+  }));
+  for (let index = 0; index < items.length; index += 100) {
+    await forwardToCaju({ type: 'groups', groups: items.slice(index, index + 100) });
+  }
+}
+
+function jidUser(jid) { return String(jid ?? '').split('@')[0].split(':')[0]; }
+
+function learnName(name, ...jids) {
+  const clean = typeof name === 'string' ? name.trim() : '';
+  if (!clean) return;
+  let changed = false;
+  for (const jid of jids) {
+    const key = jidUser(jid);
+    if (key && names.get(key) !== clean) { names.set(key, clean); changed = true; }
+  }
+  if (!changed) return;
+  clearTimeout(namesSaveTimer);
+  namesSaveTimer = setTimeout(() => {
+    writeFile(NAMES_FILE, JSON.stringify(Object.fromEntries(names))).catch((error) => console.error('Falha ao salvar nomes:', error?.message ?? error));
+  }, 5_000);
+}
+
+function nameFor(jid) { return jid ? names.get(jidUser(jid)) ?? null : null; }
+
+// "@209479127822392" -> "@Lana Melo" for the JIDs the message mentions.
+function resolveMentions(body, contextInfo) {
+  const mentioned = contextInfo?.mentionedJid ?? [];
+  if (!mentioned.length) return body;
+  return body.replace(/@(\d{6,})/g, (match, digits) => {
+    const jid = mentioned.find((item) => jidUser(item) === digits);
+    const name = jid ? nameFor(jid) : null;
+    return name ? `@${name}` : match;
+  });
+}
+
 async function groupSubject(jid) {
   const cached = groupCache.get(jid);
   if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.subject;
@@ -143,7 +224,11 @@ async function groupSubject(jid) {
 function parseContent(content) {
   const type = getContentType(content);
   if (!type) return null;
-  const value = content[type];
+  const parsed = parseContentValue(type, content[type]);
+  return parsed && { ...parsed, contextInfo: content[type]?.contextInfo ?? null };
+}
+
+function parseContentValue(type, value) {
   switch (type) {
     case 'conversation': return { type: 'text', body: value };
     case 'extendedTextMessage': return { type: 'text', body: value?.text ?? null };
@@ -294,6 +379,10 @@ http.createServer(async (request, response) => {
       let state = current?.state ?? null;
       if ((state === 'composing' || state === 'recording') && Date.now() - current.at > TYPING_TTL_MS) state = 'available';
       return json(response, 200, { state, photoUrl: await profilePhoto(jid) });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/status') {
+      return json(response, 200, connectionState);
     }
 
     // Profile photo only. Unlike /presence it doesn't subscribe to the JID's

@@ -50,6 +50,25 @@ export async function fetchBridgePresence(jid: string): Promise<{ state: string 
   }
 }
 
+export type BridgeHealth = { status: 'open' | 'connecting' | 'qr' | 'logged_out' | 'unreachable'; since: string | null };
+
+// WhatsApp session state, so the inbox can warn when messages stop arriving.
+// null means "unknown" (bridge not configured, or a bridge without /status).
+export async function fetchBridgeHealth(): Promise<BridgeHealth | null> {
+  if (!bridgeConfigured()) return null;
+  try {
+    const upstream = await bridgeFetch('/status', { signal: AbortSignal.timeout(4_000) });
+    if (upstream.status === 404) return null;
+    if (!upstream.ok) return { status: 'unreachable', since: null };
+    const payload = await upstream.json().catch(() => null) as { status?: string; since?: string } | null;
+    const status = ['open', 'connecting', 'qr', 'logged_out'].includes(payload?.status ?? '') ? payload!.status as BridgeHealth['status'] : 'unreachable';
+    return { status, since: payload?.since ?? null };
+  } catch (error) {
+    if (error instanceof Response) return null;
+    return { status: 'unreachable', since: null };
+  }
+}
+
 // Profile photo only, without subscribing to presence. Falls back to the
 // /presence route on a bridge that predates /photo.
 export async function fetchBridgePhoto(jid: string): Promise<string | null> {

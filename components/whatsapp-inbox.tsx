@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { isUserRole, roleLabels } from '@/lib/permissions';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
-import { splitTicketKeys } from '@/lib/whatsapp-ticket-keys';
+import { splitTicketKeys } from '@/lib/whatsapp-bridge-payload';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type AuthHeaders = () => Promise<Record<string, string>>;
@@ -21,10 +21,13 @@ type Message = { id: number; wamid: string; direction: string; messageType: stri
 type Colleague = { email: string; role: string | null; displayName: string | null };
 type Presence = { state: string | null; photoUrl: string | null };
 type Recording = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; startedAt: number; cancelled: boolean };
-type Filter = 'all' | 'unread' | 'ticket';
+type Filter = 'all' | 'unread' | 'groups' | 'ticket';
+type BridgeHealth = { status: 'open' | 'connecting' | 'qr' | 'logged_out' | 'unreachable'; since: string | null };
 
 const MAX_UPLOAD_BYTES = 32 * 1024 * 1024;
-const FILTERS: Array<[Filter, string]> = [['all', 'Todas'], ['unread', 'Não lidas'], ['ticket', 'Com chamado']];
+const FILTERS: Array<[Filter, string]> = [['all', 'Todas'], ['unread', 'Não lidas'], ['groups', 'Grupos'], ['ticket', 'Com chamado']];
+// A reconnect usually takes a few seconds; only warn if it drags on.
+const RECONNECT_GRACE_MS = 60_000;
 
 export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tickets: Ticket[]; onOpenTicket: (ticketId: string) => void }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -33,6 +36,8 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [bridge, setBridge] = useState<BridgeHealth | null>(null);
+  const bridgeWarning = bridgeWarningText(bridge);
 
   const authHeaders = useCallback<AuthHeaders>(async (): Promise<Record<string, string>> => (user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}), [user]);
 
@@ -41,9 +46,10 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     try {
       const response = await fetch('/api/whatsapp/conversations', { headers: await authHeaders(), cache: 'no-store' });
       if (response.status === 429) return;
-      const payload = await response.json() as { conversations?: Conversation[]; error?: string };
+      const payload = await response.json() as { conversations?: Conversation[]; bridge?: BridgeHealth | null; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar as conversas.');
       setConversations(payload.conversations ?? []);
+      setBridge(payload.bridge ?? null);
       setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as conversas.'); }
     finally { setLoading(false); }
@@ -56,6 +62,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     return conversations.filter((conversation) => {
       if (filter === 'unread' && conversation.unread === 0) return false;
       if (filter === 'ticket' && !conversation.ticketKey) return false;
+      if (filter === 'groups' && !isGroup(conversation.contactPhone)) return false;
       if (!term) return true;
       return normalize(`${conversation.contactName ?? ''} ${displayPhone(conversation.contactPhone)} ${conversation.ticketKey ?? ''} ${conversation.lastMessage?.body ?? ''}`).includes(term);
     });
@@ -85,7 +92,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
               className="h-9 w-full rounded-lg bg-[#202c33] pr-3 pl-10 text-sm text-neutral-100 placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]"
             />
           </div>
-          <div className="flex gap-1.5" role="group" aria-label="Filtrar conversas">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar conversas">
             {FILTERS.map(([value, label]) => (
               <button
                 key={value}
@@ -100,6 +107,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
           </div>
         </div>
 
+        {bridgeWarning && <p role="alert" className="mx-3 mb-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">{bridgeWarning}</p>}
         {error && <p role="alert" className="mx-3 mb-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs text-rose-100">{error}</p>}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -689,6 +697,15 @@ function previewText(type: string, body: string | null) {
 }
 
 function isGroup(jid: string) { return jid.endsWith('@g.us'); }
+
+function bridgeWarningText(bridge: BridgeHealth | null) {
+  if (!bridge || bridge.status === 'open') return '';
+  if (bridge.status === 'logged_out' || bridge.status === 'qr') return 'WhatsApp desconectado: a sessão do bridge foi encerrada. Mensagens novas não estão chegando — é preciso escanear o QR code de novo.';
+  if (bridge.status === 'unreachable') return 'Bridge do WhatsApp fora do ar. Mensagens novas não estão chegando e respostas não saem.';
+  const since = bridge.since ? Date.parse(bridge.since) : Number.NaN;
+  if (!Number.isNaN(since) && Date.now() - since < RECONNECT_GRACE_MS) return '';
+  return 'WhatsApp reconectando. Mensagens novas podem atrasar.';
+}
 
 // "@lid" and group ("@g.us") identifiers are opaque WhatsApp IDs, not phone numbers.
 function displayPhone(jid: string) {
