@@ -11,6 +11,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: puxar os números da agenda do WhatsApp
+
+`resyncAppState(['critical_unblock_low', ...])` no bridge relê a agenda do
+número: cada contato chega em `contacts.upsert` com `lidJid` e o JID de
+telefone, preenchendo o mapa `lid -> telefone`. Roda sozinho na conexão
+quando o mapa está vazio e por `POST /resync-contacts`. App:
+`POST /api/whatsapp/contacts`; janela de criar grupo ganhou o botão
+"Buscar números". Sem migration.
+
+**Pendente:** merge e `flyctl deploy` do bridge.
+
 ### WhatsApp: guardar o número do contato quando o WhatsApp não informa
 
 A consulta pelo `@lid` (#33) foi testada na máquina do bridge e o WhatsApp

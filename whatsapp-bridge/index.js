@@ -121,6 +121,9 @@ async function start() {
       if (Date.now() - lastGroupSyncAt > GROUP_SYNC_MIN_INTERVAL_MS) {
         syncAllGroups().catch((error) => console.error('Falha ao sincronizar grupos:', error?.message ?? error));
       }
+      // First connection of a number: pull the address book so contacts the
+      // inbox only knows by "@lid" get their phone number.
+      if (!phones.size) resyncContacts().catch(() => {});
     }
   });
 
@@ -314,6 +317,15 @@ function phoneJidFor(jid) {
   const value = String(jid ?? '');
   if (value.endsWith('@s.whatsapp.net')) return value;
   return phones.get(jidUser(value)) ?? null;
+}
+
+// Re-reads the account's contact list from WhatsApp. Each contact arrives
+// with both of its IDs, which is what fills the lid -> phone map.
+async function resyncContacts() {
+  const before = phones.size;
+  await sock.resyncAppState(['critical_unblock_low', 'regular_high', 'regular_low', 'regular'], false);
+  console.log(`Contatos sincronizados: ${phones.size - before} telefone(s) novo(s), ${phones.size} no total.`);
+  return { learned: phones.size - before, total: phones.size };
 }
 
 const lidLookupAt = new Map(); // lid user -> ms of the last failed lookup
@@ -556,6 +568,10 @@ http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/qr') {
       const qr = connectionState.status === 'qr' && currentQr ? await QRCode.toDataURL(currentQr, { margin: 1, width: 320 }) : null;
       return json(response, 200, { ...connectionState, qr });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/resync-contacts') {
+      return json(response, 200, await resyncContacts());
     }
 
     // Which of these JIDs the bridge can already turn into a phone number.
