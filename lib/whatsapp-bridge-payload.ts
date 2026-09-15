@@ -19,6 +19,20 @@ export function splitTicketKeys(value: string | null | undefined): string[] {
   return (value ?? '').split(',').map((key) => key.trim()).filter(Boolean);
 }
 
+// Up to two agents take part in a conversation, stored comma-separated in
+// whatsapp_conversations.assigned_to. The first one is the principal; if the
+// principal leaves, the other one moves up.
+export const MAX_CONVERSATION_PARTICIPANTS = 2;
+
+export function changeParticipants(current: string | null | undefined, email: string, action: 'join' | 'leave'): { participants: string[] } | { error: string } {
+  const participants = splitTicketKeys(current).map((item) => item.toLowerCase());
+  const me = email.trim().toLowerCase();
+  if (action === 'leave') return { participants: participants.filter((item) => item !== me) };
+  if (participants.includes(me)) return { participants };
+  if (participants.length >= MAX_CONVERSATION_PARTICIPANTS) return { error: 'Esta conversa já tem dois participantes.' };
+  return { participants: [...participants, me] };
+}
+
 // Kind a WhatsApp file gets in ticket_evidence (the N1 validation store).
 // RAT accepts photo or PDF; plain evidence accepts photo or video.
 export function ticketEvidenceKind(kind: 'evidence' | 'rat', mimeType: string): 'photo' | 'video' | 'rat' | null {

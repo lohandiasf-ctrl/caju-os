@@ -8,12 +8,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ phone
     const current = await requireWhatsappUser(request);
     const { phone } = await context.params;
     const contactPhone = decodeURIComponent(phone);
-    const body = await request.json().catch(() => null) as { ticketKey?: unknown; assignedTo?: unknown } | null;
+    const body = await request.json().catch(() => null) as { ticketKey?: unknown } | null;
     if (!body || typeof body !== 'object') return Response.json({ error: 'Dados inválidos.' }, { status: 400 });
     const now = new Date().toISOString();
     const set: Record<string, string | null> = { updatedAt: now };
     if ('ticketKey' in body) set.ticketKey = typeof body.ticketKey === 'string' ? body.ticketKey.trim().toUpperCase().slice(0, 40) || null : null;
-    if ('assignedTo' in body) set.assignedTo = typeof body.assignedTo === 'string' ? body.assignedTo.trim().toLowerCase().slice(0, 200) || null : current.email;
+    // Participants (assigned_to) change only through ./participants.
     const db = getDb();
     const existing = await db.select().from(whatsappConversations).where(eq(whatsappConversations.contactPhone, contactPhone)).get();
     if (!existing) return Response.json({ error: 'Conversa não encontrada.' }, { status: 404 });
