@@ -11,6 +11,18 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: resync de contatos precisa vir do zero
+
+O resync do #35 não trouxe nada (`Contatos sincronizados: 0`, log
+`resyncing critical_unblock_low from v1`): o WhatsApp só manda o que mudou
+desde a versão guardada. Agora `resyncContacts({ full: true })` apaga os
+arquivos `app-state-sync-version-*.json` (nunca a chave
+`app-state-sync-key-*`) antes de sincronizar, o que faz o WhatsApp reenviar
+o snapshot inteiro. `POST /resync-contacts?full=1`; o botão "Buscar
+números" usa esse modo.
+
+**Pendente:** merge e `flyctl deploy` do bridge.
+
 ### WhatsApp: puxar os números da agenda do WhatsApp
 
 `resyncAppState(['critical_unblock_low', ...])` no bridge relê a agenda do
