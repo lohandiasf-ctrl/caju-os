@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link2, Loader2, MessageCircle, Send, Unlink } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { ArrowLeft, Check, Link2, Loader2, MessageCircle, Send, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { roleLabels, isUserRole } from '@/lib/permissions';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type Ticket = { id: string; title: string; store: string; city: string };
@@ -14,6 +15,7 @@ type Conversation = {
   lastMessage: { body: string | null; direction: string; occurredAt: string; messageType: string } | null;
 };
 type Message = { id: number; direction: string; messageType: string; body: string | null; senderEmail: string | null; occurredAt: string };
+type Colleague = { email: string; role: string | null; displayName: string | null };
 
 export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tickets: Ticket[]; onOpenTicket: (ticketId: string) => void }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -75,6 +77,13 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   </section>;
 }
 
+function senderLabel(email: string, colleaguesByEmail: Record<string, Colleague>) {
+  const colleague = colleaguesByEmail[email];
+  const firstName = (colleague?.displayName || email.split('@')[0]).trim().split(/\s+/)[0];
+  const role = colleague?.role && isUserRole(colleague.role) ? roleLabels[colleague.role] : null;
+  return role ? `${firstName} · ${role}` : firstName;
+}
+
 function messageTypeLabel(type?: string) {
   if (!type) return 'Sem mensagens ainda';
   if (type === 'text') return '';
@@ -90,6 +99,24 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
   const [sending, setSending] = useState(false);
   const [ticketKey, setTicketKey] = useState('');
   const [error, setError] = useState('');
+  const [colleaguesByEmail, setColleaguesByEmail] = useState<Record<string, Colleague>>({});
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastMessageId = messages[messages.length - 1]?.id;
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [lastMessageId, loading]);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const response = await fetch('/api/colleagues', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = await response.json() as { colleagues?: Colleague[] };
+      setColleaguesByEmail(Object.fromEntries((payload.colleagues ?? []).map((item) => [item.email, item])));
+    })();
+  }, [user]);
 
   const load = useCallback(async () => {
     if (!user || !conversation) return;
@@ -137,33 +164,99 @@ function ConversationDialog({ conversation, user, tickets, onClose, onUpdated, o
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível vincular o chamado.'); }
   }
 
+  const title = conversation?.contactName || conversation?.contactPhone || '';
+
   return <Dialog open={Boolean(conversation)} onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent className="flex max-h-[min(88dvh,760px)] flex-col overflow-hidden sm:max-w-lg">
-      <DialogHeader>
-        <DialogTitle>{conversation?.contactName || conversation?.contactPhone}</DialogTitle>
-        <DialogDescription>{conversation?.contactPhone}</DialogDescription>
-      </DialogHeader>
-      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-3">
-        <select value={ticketKey} onChange={(event) => void link(event.target.value)} className="field h-9 flex-1 text-xs" aria-label="Vincular a um chamado">
+    <DialogContent showCloseButton={false} className="flex h-[min(88dvh,760px)] flex-col gap-0 overflow-hidden bg-[#0b141a] p-0 text-neutral-100 ring-white/10 sm:max-w-lg">
+      <div className="flex shrink-0 items-center gap-2.5 bg-[#202c33] px-3 py-2.5">
+        <button type="button" onClick={onClose} className="grid size-9 place-items-center rounded-full text-neutral-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]" aria-label="Fechar conversa">
+          <ArrowLeft className="size-5" />
+        </button>
+        <div className="grid size-10 shrink-0 place-items-center rounded-full bg-[#00a884]/20 text-sm font-bold text-[#25d366]" aria-hidden="true">
+          {initials(title)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <DialogTitle className="truncate text-[15px] leading-tight font-semibold text-neutral-100">{title}</DialogTitle>
+          <DialogDescription className="truncate text-xs text-neutral-400">{conversation?.contactPhone}</DialogDescription>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2 border-b border-white/5 bg-[#111b21] px-3 py-2">
+        <select value={ticketKey} onChange={(event) => void link(event.target.value)} className="h-8 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#2a3942] px-2 text-xs text-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]" aria-label="Vincular a um chamado">
           <option value="">Sem chamado vinculado</option>
           {tickets.slice(0, 200).map((item) => <option key={item.id} value={item.id}>{item.id} · {item.store}</option>)}
         </select>
-        {ticket && <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => { onClose(); onOpenTicket(ticket.id); }}><Link2 className="size-3.5" />Abrir {ticket.id}</Button>}
-        {ticketKey && <Button type="button" size="sm" variant="ghost" className="h-9" onClick={() => void link('')} aria-label="Desvincular chamado"><Unlink className="size-3.5" /></Button>}
+        {ticket && <Button type="button" size="sm" variant="outline" className="h-8 border-white/10 bg-transparent text-neutral-200" onClick={() => { onClose(); onOpenTicket(ticket.id); }}><Link2 className="size-3.5" />Abrir {ticket.id}</Button>}
+        {ticketKey && <Button type="button" size="sm" variant="ghost" className="h-8 text-neutral-300" onClick={() => void link('')} aria-label="Desvincular chamado"><Unlink className="size-3.5" /></Button>}
       </div>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto py-3" role="log" aria-label="Mensagens">
-        {loading ? <Loader2 className="mx-auto size-5 animate-spin text-primary" /> : messages.length ? messages.map((message) => (
-          <div key={message.id} className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${message.direction === 'outgoing' ? 'ml-auto bg-primary text-primary-foreground' : 'bg-muted'}`}>
-            <p className="whitespace-pre-wrap break-words">{message.body || `[${message.messageType}]`}</p>
-            <p className="mt-1 text-[10px] opacity-70">{new Date(message.occurredAt).toLocaleString('pt-BR')}{message.senderEmail ? ` · ${message.senderEmail.split('@')[0]}` : ''}</p>
-          </div>
-        )) : <p className="text-center text-sm text-muted-foreground">Nenhuma mensagem ainda.</p>}
+
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3 [background-image:radial-gradient(rgba(255,255,255,.035)_1px,transparent_1px)] [background-size:18px_18px]" role="log" aria-label="Mensagens">
+        {loading ? <Loader2 className="mx-auto mt-6 size-5 animate-spin text-[#00a884]" /> : messages.length ? (
+          <AnimatePresence initial={false}>
+            {messages.map((message, index) => {
+              const outgoing = message.direction === 'outgoing';
+              const sender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : null;
+              const day = dayLabel(message.occurredAt);
+              const showDay = index === 0 || dayLabel(messages[index - 1].occurredAt) !== day;
+              return (
+                <div key={message.id}>
+                  {showDay && <div className="my-2 flex justify-center"><span className="rounded-lg bg-[#182229] px-2.5 py-1 text-[11px] font-medium text-neutral-400 shadow-sm">{day}</span></div>}
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 420, damping: 30 }}
+                    className={`mb-1 flex ${outgoing ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`relative max-w-[85%] rounded-lg px-2.5 pt-1.5 pb-1 text-[14px] leading-snug shadow-sm ${outgoing ? 'rounded-tr-none bg-[#005c4b]' : 'rounded-tl-none bg-[#202c33]'}`}>
+                      {sender && <p className="mb-0.5 text-[12.5px] font-semibold text-[#53bdeb]">{sender}</p>}
+                      <p className="whitespace-pre-wrap break-words text-neutral-100">{message.body || `[${message.messageType}]`}</p>
+                      <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-neutral-400">
+                        <span>{timeLabel(message.occurredAt)}</span>
+                        {outgoing && <Check className="size-3.5" aria-label="Enviada" />}
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              );
+            })}
+          </AnimatePresence>
+        ) : <p className="mt-6 text-center text-sm text-neutral-400">Nenhuma mensagem ainda.</p>}
       </div>
-      {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
-      <div className="flex gap-2 border-t border-border pt-3">
-        <Input value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="Responder pelo WhatsApp..." disabled={sending} className="min-h-11" />
-        <Button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="min-h-11">{sending ? <Loader2 className="animate-spin" /> : <Send />}</Button>
+
+      {error && <p role="alert" className="shrink-0 bg-[#111b21] px-4 pt-2 text-xs text-rose-300">{error}</p>}
+      <div className="flex shrink-0 items-center gap-2 bg-[#202c33] px-3 py-2.5">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); } }}
+          placeholder="Mensagem"
+          disabled={sending}
+          aria-label="Responder pelo WhatsApp"
+          className="h-11 min-w-0 flex-1 rounded-full bg-[#2a3942] px-4 text-[15px] text-neutral-100 placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] disabled:opacity-60"
+        />
+        <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} aria-label="Enviar" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">
+          {sending ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
+        </button>
       </div>
     </DialogContent>
   </Dialog>;
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter((part) => /[\p{L}]/u.test(part));
+  if (!parts.length) return '#';
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+
+function timeLabel(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function dayLabel(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return 'Hoje';
+  if (date.toDateString() === yesterday.toDateString()) return 'Ontem';
+  return date.toLocaleDateString('pt-BR');
 }
