@@ -9,6 +9,50 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-15
+
+### Bridge não-oficial do WhatsApp (Baileys) como alternativa ao Cloud API
+
+A integração oficial (Meta Cloud API, `app/api/whatsapp/`) exige migrar o
+número ou usar o fluxo de coexistência via Embedded Signup — que por sua vez
+exige o produto WhatsApp anexado a um app Meta, o que ficou travado num
+estado inconsistente do lado da Meta ao tentar configurar (dashboard do app
+"Caju OS" perde o produto da lista de "adicionar" sem nunca completar o
+anexo; reproduzido tanto nesta sessão quanto pelo usuário, mesmo estado).
+
+Como alternativa, explicitamente pedida pelo usuário ciente do risco:
+`whatsapp-bridge/`, um serviço Node.js separado com
+[Baileys](https://github.com/WhiskeySockets/Baileys) (protocolo do WhatsApp
+Web, não a API oficial). Conecta como aparelho vinculado — o app do celular
+continua funcionando normalmente.
+
+- `whatsapp-bridge/index.js` — conecta, mostra QR no terminal, encaminha
+  mensagens recebidas para `app/api/whatsapp/bridge-webhook/route.ts` e expõe
+  `POST /send` pra envio, ambos autenticados por segredo compartilhado
+  (`WHATSAPP_BRIDGE_SECRET`).
+- `app/api/whatsapp/bridge-webhook/route.ts` (novo) — grava nas mesmas
+  tabelas `whatsapp_messages`/`whatsapp_conversations` que a integração
+  oficial usa, então a tela de WhatsApp do app funciona igual com qualquer
+  uma das duas.
+- `app/api/whatsapp/conversations/[phone]/send/route.ts` — agora usa o bridge
+  automaticamente quando `WHATSAPP_BRIDGE_URL`/`WHATSAPP_BRIDGE_SECRET`
+  estão configurados, sem isso cai no caminho antigo (Graph API da Meta).
+- `db/env.d.ts` — `WHATSAPP_BRIDGE_URL`, `WHATSAPP_BRIDGE_SECRET`.
+
+**Risco, documentado em `whatsapp-bridge/README.md`:** viola os Termos de Uso
+do WhatsApp, risco de banimento do número, menos estável que a API oficial
+(quebra quando a Meta muda algo no protocolo).
+
+**Pendente:** o bridge precisa rodar num host próprio, sempre ativo (VPS,
+Railway, Render, Fly.io — não roda em Cloudflare Workers, precisa de
+WebSocket persistente e disco pra sessão). Ninguém ainda fez esse deploy nem
+escaneou o QR code. Depois disso, configurar `WHATSAPP_BRIDGE_URL` e
+`WHATSAPP_BRIDGE_SECRET` como secrets do Worker `caju-os`. Não testado
+ponta-a-ponta.
+
+Verificado: `npm test` (50/50), `npx tsc --noEmit`, `npm run build`. O
+`whatsapp-bridge/` em si não tem testes (serviço isolado, sem CI aqui).
+
 ## 2026-09-13
 
 ### Validação sem peça obrigatória
