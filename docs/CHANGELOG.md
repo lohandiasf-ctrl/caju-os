@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: foto de quem enviou nas mensagens de grupo
+
+Grupos mostravam só o nome do participante. O bridge agora envia
+`senderJid` (`key.participantPn` ou `key.participant`) nas mensagens
+recebidas em grupo, gravado em `whatsapp_messages.sender_jid` (migration
+`0031_whatsapp_sender_jid.sql`). No inbox, a primeira bolha de cada sequência
+do mesmo participante mostra foto e nome, igual ao WhatsApp. Bridge ganhou
+`GET /photo`, que busca a foto sem assinar presença; avatares da lista e dos
+grupos usam `presence?photo=1` (com fallback para `/presence` em bridge
+antigo).
+
+**Pendente, nesta ordem:** 1) `npm run db:migrate:remote` ANTES do merge —
+sem a coluna, leitura e gravação de mensagens quebram; 2) merge; 3)
+`cd whatsapp-bridge; flyctl deploy`. Mensagens antigas ficam só com
+iniciais (não têm `sender_jid`).
+
 ### WhatsApp: botão direito na mídia derrubava a página
 
 O menu "Adicionar como evidência" usava `ContextMenuLabel` fora de

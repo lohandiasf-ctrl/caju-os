@@ -115,6 +115,9 @@ async function handleMessage(message, type) {
     // subject instead.
     contactName: fromMe ? null : (message.pushName || null),
     conversationName: isGroup(jid) ? await groupSubject(jid) : undefined,
+    // Who wrote it inside a group, so the inbox can show their photo. The
+    // phone-number JID resolves profile photos more reliably than "@lid".
+    senderJid: isGroup(jid) && !fromMe ? (message.key.participantPn || message.key.participant || null) : undefined,
     direction: fromMe ? 'outgoing' : 'incoming',
     messageType: parsed.type,
     body: parsed.body,
@@ -291,6 +294,14 @@ http.createServer(async (request, response) => {
       let state = current?.state ?? null;
       if ((state === 'composing' || state === 'recording') && Date.now() - current.at > TYPING_TTL_MS) state = 'available';
       return json(response, 200, { state, photoUrl: await profilePhoto(jid) });
+    }
+
+    // Profile photo only. Unlike /presence it doesn't subscribe to the JID's
+    // presence, so looking up every group participant stays cheap.
+    if (request.method === 'GET' && url.pathname === '/photo') {
+      const jid = jidFor(url.searchParams.get('jid'));
+      if (!jid) return json(response, 400, { error: 'jid é obrigatório.' });
+      return json(response, 200, { photoUrl: await profilePhoto(jid) });
     }
 
     if (request.method === 'POST' && url.pathname === '/typing') {

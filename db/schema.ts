@@ -184,6 +184,8 @@ export const whatsappMessages = sqliteTable('whatsapp_messages', {
   mediaId: text('media_id'),
   deliveryStatus: text('delivery_status'),
   senderEmail: text('sender_email'),
+  // Group participant who wrote an incoming message (bridge only).
+  senderJid: text('sender_jid'),
   occurredAt: text('occurred_at').notNull(),
   createdAt: text('created_at').notNull(),
 }, (table) => [

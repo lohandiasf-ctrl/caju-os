@@ -17,7 +17,7 @@ type Conversation = {
   lastMessageAt: string; lastReadAt: string | null; unread: number;
   lastMessage: { body: string | null; direction: string; occurredAt: string; messageType: string } | null;
 };
-type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderEmail: string | null; occurredAt: string };
+type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderJid: string | null; senderEmail: string | null; occurredAt: string };
 type Colleague = { email: string; role: string | null; displayName: string | null };
 type Presence = { state: string | null; photoUrl: string | null };
 type Recording = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; startedAt: number; cancelled: boolean };
@@ -396,11 +396,18 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
         <AnimatePresence initial={false}>
           {messages.map((message, index) => {
             const outgoing = message.direction === 'outgoing';
-            const sender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : !outgoing && isGroup(contactPhone) ? message.contactName : null;
+            const agentSender = message.senderEmail ? senderLabel(message.senderEmail, colleaguesByEmail) : null;
             const day = dayLabel(message.occurredAt);
             const showDay = index === 0 || dayLabel(messages[index - 1].occurredAt) !== day;
             const isMedia = Boolean(MEDIA_TYPES[message.messageType]);
             const caption = message.messageType === 'document' ? null : message.body;
+            // Group bubbles carry the sender's photo on the first message of
+            // each run from that person, like WhatsApp.
+            const groupIncoming = !outgoing && isGroup(contactPhone);
+            const previous = messages[index - 1];
+            const senderKey = message.senderJid || message.contactName || '';
+            const firstOfRun = groupIncoming && (showDay || !previous || previous.direction === 'outgoing' || (previous.senderJid || previous.contactName || '') !== senderKey);
+            const sender = agentSender ?? (firstOfRun ? message.contactName : null);
             return (
               <div key={message.wamid ?? message.id}>
                 {showDay && <div className="my-2 flex justify-center"><span className="rounded-lg bg-[#182229] px-2.5 py-1 text-[11px] font-medium text-neutral-400 shadow-sm">{day}</span></div>}
@@ -408,8 +415,13 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
                   initial={{ opacity: 0, y: 8, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-                  className={`mb-1 flex ${outgoing ? 'justify-end' : 'justify-start'}`}
+                  className={`mb-1 flex ${outgoing ? 'justify-end' : 'justify-start'} ${groupIncoming ? 'gap-2' : ''}`}
                 >
+                  {groupIncoming && (firstOfRun
+                    ? (message.senderJid
+                      ? <ContactAvatar contactPhone={message.senderJid} name={message.contactName || 'Participante'} authHeaders={authHeaders} className="size-8" />
+                      : <div className="grid size-8 shrink-0 place-items-center rounded-full bg-[#00a884]/20 text-xs font-bold text-[#25d366]" aria-hidden="true">{initials(message.contactName || '#')}</div>)
+                    : <div className="w-8 shrink-0" aria-hidden="true" />)}
                   <div
                     className={`relative max-w-[85%] px-1.5 pt-1.5 pb-1 text-[14px] leading-snug shadow-sm md:max-w-[65%] ${outgoing ? 'bg-[#005c4b]' : 'bg-[#202c33]'} ${message.messageType === 'sticker' ? '!bg-transparent !shadow-none' : ''}`}
                     style={{ borderRadius: outgoing ? '8px 0 8px 8px' : '0 8px 8px 8px' }}
@@ -565,7 +577,7 @@ function ContactAvatar({ contactPhone, name, authHeaders, photoUrl, className }:
       let pending = photoCache.get(contactPhone);
       if (!pending) {
         pending = (async () => {
-          const response = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(contactPhone)}/presence`, { headers: await authHeaders(), cache: 'no-store' });
+          const response = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(contactPhone)}/presence?photo=1`, { headers: await authHeaders(), cache: 'no-store' });
           if (!response.ok) return null;
           return (await response.json() as Presence).photoUrl ?? null;
         })().catch(() => null);

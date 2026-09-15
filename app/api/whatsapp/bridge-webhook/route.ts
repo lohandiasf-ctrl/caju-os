@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   }
 
   const payload = await request.json().catch(() => null) as {
-    wamid?: unknown; contactPhone?: unknown; contactName?: unknown; conversationName?: unknown;
+    wamid?: unknown; contactPhone?: unknown; contactName?: unknown; conversationName?: unknown; senderJid?: unknown;
     direction?: unknown; messageType?: unknown; body?: unknown; mediaId?: unknown; occurredAt?: unknown;
   } | null;
   if (!payload) return Response.json({ error: 'Carga inválida.' }, { status: 400 });
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   // Groups carry their FSAs in the subject; the subject wins over a manual
   // link, but a subject without FSAs leaves the current link alone.
   const groupTicketKeys = contactPhone.endsWith('@g.us') ? ticketKeysFromGroupName(conversationName).join(',') || null : null;
+  const senderJid = string(payload.senderJid) || null;
   const messageType = string(payload.messageType) || 'text';
   const body = string(payload.body) || null;
   const mediaId = string(payload.mediaId) || null;
@@ -39,8 +40,8 @@ export async function POST(request: Request) {
   // wamid; whichever row lands first stays, and the send route fills in
   // sender_email on conflict.
   await env.DB.batch([
-    env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (wamid, phone_number_id, contact_phone, contact_name, direction, message_type, body, media_id, delivery_status, occurred_at, created_at) VALUES (?, 'bridge', ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
-      .bind(wamid, contactPhone, contactName, direction, messageType, body, mediaId, occurredAt, now),
+    env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (wamid, phone_number_id, contact_phone, contact_name, sender_jid, direction, message_type, body, media_id, delivery_status, occurred_at, created_at) VALUES (?, 'bridge', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
+      .bind(wamid, contactPhone, contactName, senderJid, direction, messageType, body, mediaId, occurredAt, now),
     env.DB.prepare(`
       INSERT INTO whatsapp_conversations (contact_phone, contact_name, ticket_key, last_message_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
