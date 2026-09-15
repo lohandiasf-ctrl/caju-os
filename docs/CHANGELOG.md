@@ -11,6 +11,28 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: citação, mensagem apagada/editada, selo de evidência, RAT e N1
+
+Migration `0032_whatsapp_quotes_edits_evidence.sql` (colunas novas em
+`whatsapp_messages`: `quoted_wamid`, `quoted_body`, `quoted_name`,
+`edited_at`, `deleted_at`, `evidence_ticket_keys`).
+
+- **Citação.** Bridge envia prévia da mensagem respondida; bolha mostra o
+  bloco citado e clicar rola até a original.
+- **Apagada/editada.** Bridge encaminha `protocolMessage` REVOKE/MESSAGE_EDIT
+  como `{ type: 'revoke' | 'edit' }`. Apagada fica riscada com aviso
+  "mantida para registro"; editada troca o texto e mostra "editada".
+- **Selo de evidência.** Mídia anexada mostra "Evidência · FSA-x"; o menu
+  marca FSA já anexada e a rota recusa duplicata (409).
+- **RAT.** Foto ou PDF ganha "Adicionar como RAT".
+- **Fluxo N1.** Além do Jira, a rota grava em `ticket_evidence`
+  (photo/video/rat) quando o arquivo cabe no limite dessa tabela
+  (~1,3 MB), e registra em `operational_audit`.
+
+**Pendente, nesta ordem:** 1) `npm.cmd run db:migrate:remote` ANTES do
+merge; 2) merge (depois do PR anterior, #25); 3)
+`cd whatsapp-bridge; flyctl deploy`. Reações continuam fora.
+
 ### WhatsApp: grupos sincronizados, menções com nome, aviso de bridge caído
 
 - **Grupos na hora.** Ao conectar, o bridge envia a lista de grupos

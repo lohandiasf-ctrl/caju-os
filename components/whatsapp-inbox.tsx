@@ -17,7 +17,8 @@ type Conversation = {
   lastMessageAt: string; lastReadAt: string | null; unread: number;
   lastMessage: { body: string | null; direction: string; occurredAt: string; messageType: string } | null;
 };
-type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderJid: string | null; senderEmail: string | null; occurredAt: string };
+type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderJid: string | null; senderEmail: string | null;
+  quotedWamid: string | null; quotedBody: string | null; quotedName: string | null; editedAt: string | null; deletedAt: string | null; evidenceTicketKeys: string | null; occurredAt: string };
 type Colleague = { email: string; role: string | null; displayName: string | null };
 type Presence = { state: string | null; photoUrl: string | null };
 type Recording = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; startedAt: number; cancelled: boolean };
@@ -347,16 +348,26 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     if (recording.recorder.state !== 'inactive') recording.recorder.stop();
   }
 
-  async function addEvidence(message: Message, key: string) {
+  function scrollToMessage(wamid: string | null) {
+    if (!wamid) return;
+    const element = scrollRef.current?.querySelector<HTMLElement>(`[data-wamid="${CSS.escape(wamid)}"]`);
+    if (!element) return;
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    element.animate([{ backgroundColor: 'rgba(37,211,102,.18)' }, { backgroundColor: 'transparent' }], { duration: 1400 });
+  }
+
+  async function addEvidence(message: Message, key: string, kind: 'evidence' | 'rat') {
     if (!user || attaching) return;
     setAttaching(message.wamid); setError(''); setNotice('');
     try {
       const response = await fetch(`${basePath}/evidence`, {
-        method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ wamid: message.wamid, ticketKey: key }),
+        method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ wamid: message.wamid, ticketKey: key, kind }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const payload = await response.json().catch(() => ({})) as { error?: string; storedForN1?: boolean };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível anexar a evidência.');
-      setNotice(`Evidência anexada no Jira da ${key}.`);
+      const label = kind === 'rat' ? 'RAT anexado' : 'Evidência anexada';
+      setNotice(`${label} no Jira da ${key}${payload.storedForN1 ? ' e na validação N1' : ''}.`);
+      await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível anexar a evidência.'); }
     finally { setAttaching(null); }
   }
@@ -417,7 +428,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
             const firstOfRun = groupIncoming && (showDay || !previous || previous.direction === 'outgoing' || (previous.senderJid || previous.contactName || '') !== senderKey);
             const sender = agentSender ?? (firstOfRun ? message.contactName : null);
             return (
-              <div key={message.wamid ?? message.id}>
+              <div key={message.wamid ?? message.id} data-wamid={message.wamid}>
                 {showDay && <div className="my-2 flex justify-center"><span className="rounded-lg bg-[#182229] px-2.5 py-1 text-[11px] font-medium text-neutral-400 shadow-sm">{day}</span></div>}
                 <motion.div
                   initial={{ opacity: 0, y: 8, scale: 0.97 }}
@@ -435,35 +446,60 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
                     style={{ borderRadius: outgoing ? '8px 0 8px 8px' : '0 8px 8px 8px' }}
                   >
                     {sender && <p className="mb-0.5 px-1 text-[12.5px] font-semibold text-[#53bdeb]">{sender}</p>}
+                    {message.quotedBody && (
+                      <button
+                        type="button"
+                        onClick={() => scrollToMessage(message.quotedWamid)}
+                        className="mb-1 block w-full rounded-md border-l-4 border-[#06cf9c] bg-black/20 px-2 py-1 text-left hover:bg-black/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]"
+                        aria-label="Ir para a mensagem respondida"
+                      >
+                        {message.quotedName && <span className="block truncate text-[12px] font-semibold text-[#06cf9c]">{message.quotedName}</span>}
+                        <span className="line-clamp-2 text-[12.5px] text-neutral-300">{message.quotedBody}</span>
+                      </button>
+                    )}
                     {isMedia && (EVIDENCE_TYPES[message.messageType] && message.mediaId ? (
                       <ContextMenu>
                         <ContextMenuTrigger className="block select-auto"><MediaContent message={message} authHeaders={authHeaders} /></ContextMenuTrigger>
                         <ContextMenuContent className="min-w-52">
                           {linkedKeys.length ? (
-                            <ContextMenuSub>
-                              <ContextMenuSubTrigger disabled={Boolean(attaching)}><ClipboardCheck />Adicionar como evidência</ContextMenuSubTrigger>
-                              <ContextMenuSubContent>
-                                {/* Base UI throws (and blanks the page) if a label sits outside a Group. */}
-                                <ContextMenuGroup>
-                                  <ContextMenuLabel>Anexar no Jira da FSA</ContextMenuLabel>
-                                  {linkedKeys.map((key) => <ContextMenuItem key={key} onClick={() => void addEvidence(message, key)}>{key}</ContextMenuItem>)}
-                                </ContextMenuGroup>
-                              </ContextMenuSubContent>
-                            </ContextMenuSub>
+                            ([['evidence', 'Adicionar como evidência'], ['rat', 'Adicionar como RAT']] as const)
+                              .filter(([kind]) => kind === 'evidence' || canBeRat(message))
+                              .map(([kind, label]) => (
+                                <ContextMenuSub key={kind}>
+                                  <ContextMenuSubTrigger disabled={Boolean(attaching)}>{kind === 'rat' ? <FileText /> : <ClipboardCheck />}{label}</ContextMenuSubTrigger>
+                                  <ContextMenuSubContent>
+                                    {/* Base UI throws (and blanks the page) if a label sits outside a Group. */}
+                                    <ContextMenuGroup>
+                                      <ContextMenuLabel>Anexar no Jira da FSA</ContextMenuLabel>
+                                      {linkedKeys.map((key) => {
+                                        const done = splitTicketKeys(message.evidenceTicketKeys).includes(key);
+                                        return <ContextMenuItem key={key} disabled={done} onClick={() => void addEvidence(message, key, kind)}>{done && <Check />}{key}{done ? ' · já anexada' : ''}</ContextMenuItem>;
+                                      })}
+                                    </ContextMenuGroup>
+                                  </ContextMenuSubContent>
+                                </ContextMenuSub>
+                              ))
                           ) : <ContextMenuItem disabled><ClipboardCheck />Vincule uma FSA para adicionar evidência</ContextMenuItem>}
                         </ContextMenuContent>
                       </ContextMenu>
                     ) : <MediaContent message={message} authHeaders={authHeaders} />)}
                     {attaching === message.wamid && <p className="mt-1 flex items-center gap-1.5 px-1 text-[12px] text-[#53bdeb]"><Loader2 className="size-3 animate-spin" />Anexando no Jira...</p>}
+                    {message.evidenceTicketKeys && (
+                      <div className="mt-1 flex flex-wrap gap-1 px-1">
+                        {splitTicketKeys(message.evidenceTicketKeys).map((key) => <span key={key} className="inline-flex items-center gap-1 rounded-full bg-[#25d366]/15 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#25d366]"><ClipboardCheck className="size-3" aria-hidden="true" />Evidência · {key}</span>)}
+                      </div>
+                    )}
                     {!isMedia && message.messageType === 'location' && message.body && (
                       <a href={message.body} target="_blank" rel="noreferrer" className="block px-1 text-[#53bdeb] underline">📍 Ver localização</a>
                     )}
                     {!isMedia && message.messageType === 'contact' && <p className="px-1">👤 {message.body}</p>}
                     {(!isMedia && message.messageType !== 'location' && message.messageType !== 'contact') && (
-                      <p className="whitespace-pre-wrap break-words px-1 text-neutral-100">{message.body || '[mensagem não suportada]'}</p>
+                      <p className={`whitespace-pre-wrap break-words px-1 ${message.deletedAt ? 'text-neutral-400 line-through decoration-neutral-500' : 'text-neutral-100'}`}>{message.body || '[mensagem não suportada]'}</p>
                     )}
                     {isMedia && caption && <p className="mt-1 whitespace-pre-wrap break-words px-1 text-neutral-100">{caption}</p>}
+                    {message.deletedAt && <p className="mt-0.5 px-1 text-[11.5px] text-neutral-400 italic">🚫 Apagada pelo remetente · mantida para registro</p>}
                     <div className="mt-0.5 flex items-center justify-end gap-1 px-1 text-[11px] text-neutral-400">
+                      {message.editedAt && !message.deletedAt && <span className="italic">editada</span>}
                       <span>{timeLabel(message.occurredAt)}</span>
                       {outgoing && <Check className="size-3.5" aria-label="Enviada" />}
                     </div>
@@ -611,6 +647,11 @@ function ContactAvatar({ contactPhone, name, authHeaders, photoUrl, className }:
 const MEDIA_TYPES: Record<string, true> = { image: true, video: true, audio: true, document: true, sticker: true };
 // Media that can be attached to an FSA as evidence (right-click menu).
 const EVIDENCE_TYPES: Record<string, true> = { image: true, video: true, document: true };
+
+// A RAT is a photo of the signed form or its PDF.
+function canBeRat(message: Message) {
+  return message.messageType === 'image' || (message.messageType === 'document' && /\.pdf$/i.test(message.body ?? ''));
+}
 
 // Media needs the Firebase token, so it can't be a plain <img src>: fetch it
 // once per session and hand the element a blob URL.

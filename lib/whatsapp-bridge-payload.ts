@@ -19,6 +19,15 @@ export function splitTicketKeys(value: string | null | undefined): string[] {
   return (value ?? '').split(',').map((key) => key.trim()).filter(Boolean);
 }
 
+// Kind a WhatsApp file gets in ticket_evidence (the N1 validation store).
+// RAT accepts photo or PDF; plain evidence accepts photo or video.
+export function ticketEvidenceKind(kind: 'evidence' | 'rat', mimeType: string): 'photo' | 'video' | 'rat' | null {
+  if (kind === 'rat') return mimeType === 'application/pdf' || mimeType.startsWith('image/') ? 'rat' : null;
+  if (mimeType.startsWith('image/')) return 'photo';
+  if (mimeType.startsWith('video/')) return 'video';
+  return null;
+}
+
 // Pure parsing for app/api/whatsapp/bridge-webhook, kept apart from the D1
 // writes so it can be unit tested.
 
@@ -26,7 +35,12 @@ export type BridgeMessage = {
   wamid: string; contactPhone: string; contactName: string | null; conversationName: string | null;
   ticketKeys: string | null; senderJid: string | null; direction: 'incoming' | 'outgoing';
   messageType: string; body: string | null; mediaId: string | null; occurredAt: string;
+  quotedWamid: string | null; quotedBody: string | null; quotedName: string | null;
 };
+
+export type BridgeMessageEvent =
+  | { type: 'revoke'; contactPhone: string; wamid: string }
+  | { type: 'edit'; contactPhone: string; wamid: string; body: string };
 
 export type BridgeGroup = { jid: string; name: string | null; ticketKeys: string | null; createdAt: string | null };
 
@@ -52,7 +66,21 @@ export function parseBridgeMessage(payload: Record<string, unknown>, now: string
     body: text(payload.body) || null,
     mediaId: text(payload.mediaId) || null,
     occurredAt: text(payload.occurredAt) || now,
+    quotedWamid: text(payload.quotedWamid) || null,
+    quotedBody: text(payload.quotedBody).slice(0, 500) || null,
+    quotedName: text(payload.quotedName) || null,
   };
+}
+
+// Sender deleted or edited an earlier message.
+export function parseBridgeMessageEvent(payload: Record<string, unknown>): BridgeMessageEvent | null {
+  const contactPhone = text(payload.contactPhone);
+  const wamid = text(payload.wamid);
+  if (!contactPhone || !wamid) return null;
+  if (payload.type === 'revoke') return { type: 'revoke', contactPhone, wamid };
+  const body = text(payload.body);
+  if (payload.type === 'edit' && body) return { type: 'edit', contactPhone, wamid, body };
+  return null;
 }
 
 export function parseBridgeGroups(payload: Record<string, unknown>): BridgeGroup[] {

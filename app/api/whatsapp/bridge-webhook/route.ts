@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { parseBridgeGroups, parseBridgeMessage } from '@/lib/whatsapp-bridge-payload';
+import { parseBridgeGroups, parseBridgeMessage, parseBridgeMessageEvent } from '@/lib/whatsapp-bridge-payload';
 
 // Ingest endpoint for whatsapp-bridge/ (Baileys, non-official) — the unofficial
 // counterpart to app/api/whatsapp/webhook/route.ts (Meta Cloud API). Same
@@ -16,6 +16,16 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
 
   if (payload.type === 'groups') return syncGroups(payload, now);
+  if (payload.type === 'revoke' || payload.type === 'edit') {
+    const event = parseBridgeMessageEvent(payload);
+    if (!event) return Response.json({ error: 'Evento inválido.' }, { status: 400 });
+    // The text is kept on delete so the operation still has the record.
+    await (event.type === 'revoke'
+      ? env.DB.prepare('UPDATE whatsapp_messages SET deleted_at = ? WHERE wamid = ? AND contact_phone = ?').bind(now, event.wamid, event.contactPhone)
+      : env.DB.prepare('UPDATE whatsapp_messages SET body = ?, edited_at = ? WHERE wamid = ? AND contact_phone = ?').bind(event.body, now, event.wamid, event.contactPhone)
+    ).run();
+    return Response.json({ received: true });
+  }
 
   const message = parseBridgeMessage(payload, now);
   if (!message) return Response.json({ error: 'wamid e contactPhone são obrigatórios.' }, { status: 400 });
@@ -24,8 +34,8 @@ export async function POST(request: Request) {
   // wamid; whichever row lands first stays, and the send route fills in
   // sender_email on conflict.
   await env.DB.batch([
-    env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (wamid, phone_number_id, contact_phone, contact_name, sender_jid, direction, message_type, body, media_id, delivery_status, occurred_at, created_at) VALUES (?, 'bridge', ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
-      .bind(message.wamid, message.contactPhone, message.contactName, message.senderJid, message.direction, message.messageType, message.body, message.mediaId, message.occurredAt, now),
+    env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (wamid, phone_number_id, contact_phone, contact_name, sender_jid, direction, message_type, body, media_id, quoted_wamid, quoted_body, quoted_name, delivery_status, occurred_at, created_at) VALUES (?, 'bridge', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`)
+      .bind(message.wamid, message.contactPhone, message.contactName, message.senderJid, message.direction, message.messageType, message.body, message.mediaId, message.quotedWamid, message.quotedBody, message.quotedName, message.occurredAt, now),
     env.DB.prepare(`
       INSERT INTO whatsapp_conversations (contact_phone, contact_name, ticket_key, last_message_at, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
