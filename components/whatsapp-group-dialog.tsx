@@ -5,7 +5,7 @@ import { CheckCircle2, Loader2, MessageCirclePlus, Plus, RefreshCw, Search, X } 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { participantJid, WHATSAPP_GROUP_NAME_MAX, whatsappGroupName, type GroupNameTicket } from '@/lib/whatsapp-group-name';
+import { groupTicketsConflict, participantJid, WHATSAPP_GROUP_NAME_MAX, whatsappGroupName, type GroupNameTicket } from '@/lib/whatsapp-group-name';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type Contact = { jid: string; name: string; phone?: string | null };
@@ -51,6 +51,9 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
     setSubject(whatsappGroupName(ticketsRef.current)); setSelected([]); setQuery(''); setPhone(''); setError(''); setCreated(null);
     void loadContacts();
   }, [open, loadContacts]);
+
+  // One group per visit: same city, same schedule.
+  const conflict = useMemo(() => groupTicketsConflict(tickets), [tickets]);
 
   const matches = useMemo(() => {
     const term = normalize(query);
@@ -142,6 +145,8 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
             <p className="mt-1 break-words">{created.subject}</p>
             {created.missing.length > 0 && <p className="mt-2 text-amber-200">Não foi possível adicionar: {created.missing.join(', ')}. Confira se o número tem WhatsApp ou adicione pelo celular.</p>}
           </div>
+        ) : conflict ? (
+          <p role="alert" className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">{conflict}</p>
         ) : (
           <div className="space-y-4">
             <div>
@@ -215,7 +220,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
         <DialogFooter>
           {created ? <Button type="button" onClick={() => onOpenChange(false)}>Fechar</Button> : <>
             <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="button" disabled={saving || !selected.length || !subject.trim()} onClick={() => void create()}>
+            <Button type="button" disabled={saving || Boolean(conflict) || !selected.length || !subject.trim()} onClick={() => void create()}>
               {saving ? <Loader2 className="animate-spin" /> : <MessageCirclePlus />}Criar grupo
             </Button>
           </>}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { cityTetragram, participantJid, splitCityUf, storeCode, whatsappGroupName } from '../lib/whatsapp-group-name.ts';
+import { cityTetragram, groupTicketsConflict, participantJid, splitCityUf, storeCode, whatsappGroupName } from '../lib/whatsapp-group-name.ts';
 
 test('participants accept JIDs and Brazilian phones with or without 55', () => {
   assert.equal(participantJid('(73) 98818-1339'), '5573988181339@s.whatsapp.net');
@@ -13,7 +13,10 @@ test('participants accept JIDs and Brazilian phones with or without 55', () => {
 test('city becomes its first four consonants, keeping Ç', () => {
   assert.equal(cityTetragram('Camaçari'), 'CMÇR');
   assert.equal(cityTetragram('Salvador'), 'SLVD');
-  assert.equal(cityTetragram('Ilhéus'), 'LHS');
+  // Fewer than four consonants: the vowels fill in, in the name's order.
+  assert.equal(cityTetragram('Itabuna'), 'ITBN');
+  assert.equal(cityTetragram('Rio'), 'RIO');
+  assert.equal(cityTetragram('Ilhéus'), 'ILHS');
 });
 
 test('city and UF are split from the usual spellings', () => {
@@ -49,4 +52,14 @@ test('several tickets take the earliest schedule and write the FSA prefix once',
 
 test('missing schedule or city is left out instead of guessed', () => {
   assert.equal(whatsappGroupName([{ id: 'FSA-1', store: 'Código da loja: L10', city: 'Cidade não informada' }]), 'AMERICANAS L10 - (FSA-1)');
+});
+
+test('a group serves one city and one schedule', () => {
+  const base = { store: 'Código da loja: L1', city: 'Itabuna - BA', scheduledAt: '2026-09-16T14:00:00.000Z' };
+  assert.equal(groupTicketsConflict([{ id: 'FSA-1', ...base }, { id: 'FSA-2', ...base }]), null);
+  assert.match(groupTicketsConflict([{ id: 'FSA-1', ...base }, { id: 'FSA-2', ...base, city: 'Camaçari/BA' }]) ?? '', /cidades diferentes/);
+  assert.match(groupTicketsConflict([{ id: 'FSA-1', ...base }, { id: 'FSA-2', ...base, scheduledAt: '2026-09-16T17:00:00.000Z' }]) ?? '', /agendamentos diferentes/);
+  assert.match(groupTicketsConflict([{ id: 'FSA-1', ...base }, { id: 'FSA-2', ...base, scheduledAt: null }]) ?? '', /agendamentos diferentes/);
+  // The same city written with and without UF is still one city.
+  assert.equal(groupTicketsConflict([{ id: 'FSA-1', ...base }, { id: 'FSA-2', ...base, city: 'Itabuna' }]), null);
 });

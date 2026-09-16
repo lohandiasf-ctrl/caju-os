@@ -1,9 +1,10 @@
 import { desc, notLike } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { whatsappConversations } from '@/db/schema';
+import { getJiraIssue } from '@/lib/server/jira';
 import { logSecurityEvent } from '@/lib/server/security-log';
 import { bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
-import { participantJid, WHATSAPP_GROUP_NAME_MAX } from '@/lib/whatsapp-group-name';
+import { groupTicketsConflict, participantJid, WHATSAPP_GROUP_NAME_MAX } from '@/lib/whatsapp-group-name';
 
 // Contacts that can go into a new group: the inbox's direct conversations,
 // each with the phone the bridge knows for it (WhatsApp often addresses a
@@ -23,6 +24,15 @@ export async function GET(request: Request) {
     if (error instanceof Response) return error;
     return Response.json({ error: 'Não foi possível carregar os contatos do WhatsApp.' }, { status: 500 });
   }
+}
+
+// Reads the tickets from Jira so the rule holds even if the request doesn't
+// come from the dialog. A ticket that can't be read is left out of the check.
+async function ticketsConflict(keys: string[]) {
+  if (keys.length < 2) return null;
+  const issues = await Promise.all(keys.map((key) => getJiraIssue(key).catch(() => null)));
+  const tickets = issues.flatMap((issue) => (issue ? [{ id: issue.key, city: issue.city, scheduledAt: issue.scheduledAt }] : []));
+  return tickets.length > 1 ? groupTicketsConflict(tickets) : null;
 }
 
 async function fetchPhones(jids: string[]): Promise<Record<string, string | null>> {
@@ -56,6 +66,9 @@ export async function POST(request: Request) {
     if (!raw.length || participants.includes(null)) return Response.json({ error: 'Revise os participantes: use números com DDD.' }, { status: 400 });
     if (participants.length > MAX_PARTICIPANTS) return Response.json({ error: `Adicione no máximo ${MAX_PARTICIPANTS} participantes.` }, { status: 400 });
     const ticketKeys = Array.isArray(body?.ticketKeys) ? body.ticketKeys.filter((key): key is string => typeof key === 'string').slice(0, MAX_TICKETS) : [];
+    // A group serves one visit: same city, same schedule.
+    const conflict = await ticketsConflict(ticketKeys);
+    if (conflict) return Response.json({ error: conflict }, { status: 400 });
 
     const upstream = await bridgeFetch('/groups', {
       method: 'POST',

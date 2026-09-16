@@ -11,15 +11,22 @@ export const WHATSAPP_GROUP_NAME_MAX = 100;
 const TIME_ZONE = 'America/Sao_Paulo';
 const UFS = new Set('AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' '));
 
-// "Camaçari" -> "CMÇR". Ç counts as a consonant and is kept.
+// "Camaçari" -> "CMÇR": the first four consonants, Ç kept as is. A city with
+// fewer than four consonants takes its vowels too, keeping the order of the
+// name: "Itabuna" -> "ITBN".
 export function cityTetragram(city: string) {
   const letters = [...city.toLocaleUpperCase('pt-BR')].filter((char) => /\p{L}/u.test(char));
-  const consonants = letters.filter((char) => {
-    if (char === 'Ç') return true;
-    const base = char.normalize('NFD').replace(/\p{Diacritic}/gu, '');
-    return /^[B-DF-HJ-NP-TV-Z]$/.test(base);
-  });
-  return consonants.slice(0, 4).map((char) => (char === 'Ç' ? 'Ç' : char.normalize('NFD').replace(/\p{Diacritic}/gu, ''))).join('');
+  const isConsonant = (char: string) => char === 'Ç' || /^[B-DF-HJ-NP-TV-Z]$/.test(withoutAccent(char));
+  const picked = letters.map((char, index) => index).filter((index) => isConsonant(letters[index]));
+  for (let index = 0; index < letters.length && picked.length < 4; index += 1) {
+    if (!picked.includes(index)) picked.push(index);
+  }
+  return picked.sort((a, b) => a - b).slice(0, 4)
+    .map((index) => (letters[index] === 'Ç' ? 'Ç' : withoutAccent(letters[index]))).join('');
+}
+
+function withoutAccent(char: string) {
+  return char.normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
 
 // Accepts "Camaçari - BA", "Camaçari/BA", "Camaçari (BA)", "BA - Camaçari",
@@ -55,6 +62,23 @@ function scheduleParts(iso: string | null | undefined) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('pt-BR', { timeZone: TIME_ZONE, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
     .formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
   return { date: `${parts.day}/${parts.month}`, time: parts.minute === '00' ? `${Number(parts.hour)}h` : `${Number(parts.hour)}h${parts.minute}` };
+}
+
+// A group serves one visit: same city, same date and time. Mixing tickets
+// from different cities or schedules is refused, here and on the server.
+export function groupTicketsConflict(tickets: GroupNameTicket[]): string | null {
+  const cities = new Set(tickets.map((ticket) => {
+    const city = ticket.city && !/não informad|nao informad|atualizado em/i.test(ticket.city) ? splitCityUf(ticket.city).city : '';
+    return city.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
+  }).filter(Boolean));
+  if (cities.size > 1) return 'Os chamados selecionados são de cidades diferentes. Crie um grupo por cidade.';
+
+  const schedules = new Set(tickets.map((ticket) => {
+    const parts = scheduleParts(ticket.scheduledAt);
+    return parts ? `${parts.date} ${parts.time}` : 'sem agendamento';
+  }));
+  if (schedules.size > 1) return 'Os chamados selecionados têm agendamentos diferentes. Crie um grupo por horário.';
+  return null;
 }
 
 export function whatsappGroupName(tickets: GroupNameTicket[], client = 'AMERICANAS') {
