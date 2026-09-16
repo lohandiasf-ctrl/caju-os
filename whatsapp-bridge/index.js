@@ -328,6 +328,18 @@ function learnPhone(lid, phoneJid) {
 }
 
 // A group can only be created with phone JIDs.
+// The address book as the inbox searches it. Contacts learned before this
+// file existed are still on the volume as a lid -> phone pair plus a name, so
+// they count too — otherwise a redeploy would look like an empty agenda.
+function addressBook() {
+  const book = new Map(contacts);
+  for (const [lidUser, phoneJid] of phones) {
+    const name = names.get(jidUser(phoneJid)) ?? names.get(lidUser);
+    if (name && !book.has(phoneJid)) book.set(phoneJid, name);
+  }
+  return book;
+}
+
 function phoneJidFor(jid) {
   const value = String(jid ?? '');
   if (value.endsWith('@s.whatsapp.net')) return value;
@@ -597,9 +609,10 @@ http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/contacts') {
       const term = (url.searchParams.get('q') ?? '').trim().toLowerCase();
       const matches = (name, jid) => !term || `${name} ${jidUser(jid)}`.toLowerCase().includes(term);
-      const people = [...contacts].filter(([jid, name]) => matches(name, jid)).map(([jid, name]) => ({ jid, name, type: 'contact' }));
-      const groups = [...groupCache].filter(([jid, value]) => value.subject && matches(value.subject, jid)).map(([jid, value]) => ({ jid, name: value.subject, type: 'group' }));
-      return json(response, 200, { contacts: [...people, ...groups].slice(0, 200) });
+      const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
+      const people = [...addressBook()].filter(([jid, name]) => matches(name, jid)).map(([jid, name]) => ({ jid, name, type: 'contact' })).sort(byName);
+      const groups = [...groupCache].filter(([jid, value]) => value.subject && matches(value.subject, jid)).map(([jid, value]) => ({ jid, name: value.subject, type: 'group' })).sort(byName);
+      return json(response, 200, { contacts: [...groups, ...people].slice(0, 200) });
     }
 
     if (request.method === 'POST' && url.pathname === '/resync-contacts') {
