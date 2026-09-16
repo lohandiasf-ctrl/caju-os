@@ -11,6 +11,14 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: formato do nome do grupo
+
+Padrão definido pela operação:
+`DD/MM às HH:MM - TETRAGRAMA/UF - PROJETO CÓDIGO DA UNIDADE (ATENDIMENTO 1 | 2 | 3)`.
+Exemplo: `16/09 às 11:30 - ITBN/BA - AMERICANAS L441 (FSA-132659 | 132660 |
+132661)`. Mudou a hora (antes `16h`, agora `11:30` sempre com minutos), o
+"às" e a remoção do travessão antes dos parênteses.
+
 ### WhatsApp: um grupo por cidade e por horário
 
 Criar grupo com FSAs de cidades diferentes ou com agendamentos diferentes

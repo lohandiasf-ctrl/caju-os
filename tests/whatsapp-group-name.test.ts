@@ -36,7 +36,7 @@ test('store label becomes the L code', () => {
 test('one ticket follows the operation pattern', () => {
   assert.equal(
     whatsappGroupName([{ id: 'FSA-132495', store: 'Código da loja: L1608', city: 'Camaçari - BA', scheduledAt: '2026-09-15T19:00:00.000Z' }]),
-    '15/09- 16h - CMÇR/BA - AMERICANAS L1608 - (FSA-132495)',
+    '15/09 às 16:00 - CMÇR/BA - AMERICANAS L1608 (FSA-132495)',
   );
 });
 
@@ -46,12 +46,12 @@ test('several tickets take the earliest schedule and write the FSA prefix once',
       { id: 'FSA-132034', store: 'Código da loja: L252', city: 'Camaçari/BA', scheduledAt: '2026-09-15T20:30:00.000Z' },
       { id: 'FSA-132030', store: 'Código da loja: L252', city: 'Camaçari/BA', scheduledAt: '2026-09-15T17:00:00.000Z' },
     ]),
-    '15/09- 14h - CMÇR/BA - AMERICANAS L252 - (FSA-132030 | 132034)',
+    '15/09 às 14:00 - CMÇR/BA - AMERICANAS L252 (FSA-132030 | 132034)',
   );
 });
 
 test('missing schedule or city is left out instead of guessed', () => {
-  assert.equal(whatsappGroupName([{ id: 'FSA-1', store: 'Código da loja: L10', city: 'Cidade não informada' }]), 'AMERICANAS L10 - (FSA-1)');
+  assert.equal(whatsappGroupName([{ id: 'FSA-1', store: 'Código da loja: L10', city: 'Cidade não informada' }]), 'AMERICANAS L10 (FSA-1)');
 });
 
 test('a group serves one city and one schedule', () => {

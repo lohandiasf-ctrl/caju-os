@@ -1,8 +1,9 @@
 // Name for the WhatsApp group of one or more tickets, following the
 // operation's pattern:
-//   "15/09- 16h - CMÇR/BA - AMERICANAS L1608 - (FSA-132495)"
-// date and time of the schedule, the city as its first four consonants plus
-// UF, client and store code(s), and the FSAs (prefix written once).
+//   "DD/MM às HH:MM - TETRAGRAMA/UF - PROJETO UNIDADE (ATENDIMENTO 1 | 2)"
+//   "15/09 às 16:00 - CMÇR/BA - AMERICANAS L1608 (FSA-132495)"
+// schedule, the city as four letters plus UF, project and store code(s),
+// and the tickets (the FSA prefix written once).
 // The dialog lets people edit it before creating the group.
 
 export type GroupNameTicket = { id: string; store?: string | null; city?: string | null; scheduledAt?: string | null };
@@ -61,7 +62,7 @@ function scheduleParts(iso: string | null | undefined) {
   if (!iso || Number.isNaN(Date.parse(iso))) return null;
   const parts = Object.fromEntries(new Intl.DateTimeFormat('pt-BR', { timeZone: TIME_ZONE, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
     .formatToParts(new Date(iso)).map((part) => [part.type, part.value]));
-  return { date: `${parts.day}/${parts.month}`, time: parts.minute === '00' ? `${Number(parts.hour)}h` : `${Number(parts.hour)}h${parts.minute}` };
+  return { date: `${parts.day}/${parts.month}`, time: `${parts.hour}:${parts.minute}` };
 }
 
 // A group serves one visit: same city, same date and time. Mixing tickets
@@ -91,8 +92,8 @@ export function whatsappGroupName(tickets: GroupNameTicket[], client = 'AMERICAN
   const keys = [...new Set(tickets.map((ticket) => ticket.id.toUpperCase()))].sort((a, b) => (Number(a.replace(/\D/g, '')) || 0) - (Number(b.replace(/\D/g, '')) || 0));
   const fsas = `(${keys.map((key, index) => (index === 0 ? key : key.replace(/^FSA-/, ''))).join(' | ')})`;
 
-  const head = when ? `${when.date}- ${when.time}` : null;
+  const head = when ? `${when.date} às ${when.time}` : null;
   const location = cityUf ? [cityTetragram(cityUf.city), cityUf.uf].filter(Boolean).join('/') : null;
-  const storePart = [client.toUpperCase(), stores.join(' / ')].filter(Boolean).join(' ');
-  return [head, location, storePart, fsas].filter(Boolean).join(' - ');
+  const storePart = [[client.toUpperCase(), stores.join(' / ')].filter(Boolean).join(' '), fsas].filter(Boolean).join(' ');
+  return [head, location, storePart].filter(Boolean).join(' - ');
 }
