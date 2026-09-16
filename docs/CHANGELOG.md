@@ -27,6 +27,38 @@ Caju OS. Quem valida no grupo SUP precisa do chamado no Jira. Agora copia
 (`jiraTicketUrl`, em `lib/ticket-links.ts`, com testes). "Abrir no Jira" passa a
 usar o mesmo helper em vez da URL escrita à mão. O link de compartilhamento
 ("Enviar por chat", ações em lote) continua sendo o do Caju OS.
+### Resumo para mensagem apontava para o domínio antigo
+
+"Copiar resumo" montava `https://app.cajutech.net/?ticket=FSA-...`, endereço que
+não é mais a produção — quem recebia no WhatsApp, e-mail ou Teams clicava e não
+chegava no chamado. Agora sai `https://operacoes.cajutech.net/?ticket=FSA-...`,
+o mesmo de `lib/ticket-links.ts`. Um teste novo prende as duas cópias do link ao
+mesmo endereço, porque `lib/bulk-actions.ts` roda direto no Node nos testes e
+não consegue importar o helper.
+
+### RAT: leitura automática trocou de modelo
+
+Primeiro teste com foto de RAT real (FSA-132555, monitor com mancha na tela)
+devolveu "Resposta do modelo sem JSON.". Reproduzido localmente com a mesma
+foto, chamando os modelos direto por um Worker de teste:
+
+- `@cf/meta/llama-3.2-11b-vision-instruct` (o que estava em uso) responde em
+  prosa com bullets, ignora a instrução de JSON e ainda resume em vez de
+  transcrever ("Não foram realizados testes", quando o campo estava preenchido);
+- `@cf/mistralai/mistral-small-3.1-24b-instruct` transcreveu os três campos
+  quase palavra por palavra e devolveu `partToReplace: "Monitor"`;
+- `@cf/meta/llama-4-scout-17b-16e-instruct` acertou, com transcrição mais curta.
+
+A rota agora tenta os modelos nessa ordem e para no primeiro que devolver JSON
+com conteúdo; o llama-3.2 fica por último. Formato de entrada dos dois novos é
+`messages` com `image_url` em base64 — o antigo continua com `{ prompt, image }`.
+O `response` do scout às vezes já vem como objeto, então o parser aceita objeto,
+JSON em texto e JSON dentro de markdown (`lib/rat-extraction.ts`, com testes).
+Quando nenhum modelo entrega JSON, a mensagem passa a mostrar o que o modelo
+respondeu, em vez de só "sem JSON".
+
+Prompt também mudou: diz onde cada campo está no formulário e que
+`partToReplace` é só o nome da peça, não a frase inteira da solução.
 
 ## 2026-09-15
 

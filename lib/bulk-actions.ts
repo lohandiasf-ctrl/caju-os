@@ -17,7 +17,11 @@ export type BulkTicket = {
 
 export const MAX_BULK_TICKETS = 40;
 
-const sharedTicketUrl = (key: string) => `https://app.cajutech.net/?ticket=${encodeURIComponent(key)}`;
+// Mesmo endereço público de `lib/ticket-links.ts` — era `app.cajutech.net`, que
+// não é mais a produção. Repetido aqui porque este módulo roda direto no Node
+// nos testes, que não resolvem import relativo sem extensão, e a extensão .ts
+// quebra o `tsc`. `tests/bulk-actions.test.ts` cobre os dois juntos.
+const sharedTicketUrl = (key: string) => `https://operacoes.cajutech.net/?ticket=${encodeURIComponent(key)}`;
 
 const TRANSITION_ROLES = new Set(['gerencia', 'coordenador', 'n1', 'analista']);
 
