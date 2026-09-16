@@ -278,6 +278,9 @@
     /* E-mail, URL e código de chamado não têm onde quebrar: sem isto, uma
        palavra comprida vira largura mínima do container. */
     .app-main :where(p, h1, h2, h3, h4, span, a, li, dd, dt, td) { overflow-wrap: anywhere; }
+    /* Com a barra de seleção aberta, a barra ocupa a largura da tela e os
+       atalhos flutuantes saem da frente — no celular não cabem os dois. */
+    body:has([role='toolbar'][aria-label='Ações em lote']) .app-float-launcher { display: none; }
   }
 }
 

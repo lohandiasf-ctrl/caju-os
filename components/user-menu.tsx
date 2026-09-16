@@ -813,7 +813,7 @@ export function ColleaguesPanel({
           setMobileOpen(true);
           setMessageDot(false);
         }}
-        className="fixed bottom-4 right-4 z-(--z-float) grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden"
+        className="app-float-launcher fixed bottom-4 right-4 z-(--z-float) grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden"
         aria-label={
           messageDot ? "Abrir colegas, nova atividade no chat" : "Abrir colegas"
         }
@@ -1946,7 +1946,7 @@ function TeamVoiceControl({
     // Idle, this is just a launcher and must stay under dialogs; once a call is
     // live the surface has to outrank them so mute/hang-up stay reachable.
     <div
-      className="pointer-events-none fixed bottom-20 right-4 sm:right-5"
+      className="app-float-launcher pointer-events-none fixed bottom-20 right-4 sm:right-5"
       style={{ zIndex: state === "idle" ? "var(--z-float)" : "var(--z-live-call)" }}
     >
       {state === "idle" ? (
