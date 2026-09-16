@@ -64,6 +64,23 @@ function scheduleParts(iso: string | null | undefined) {
   return { date: `${parts.day}/${parts.month}`, time: parts.minute === '00' ? `${Number(parts.hour)}h` : `${Number(parts.hour)}h${parts.minute}` };
 }
 
+// A group serves one visit: same city, same date and time. Mixing tickets
+// from different cities or schedules is refused, here and on the server.
+export function groupTicketsConflict(tickets: GroupNameTicket[]): string | null {
+  const cities = new Set(tickets.map((ticket) => {
+    const city = ticket.city && !/não informad|nao informad|atualizado em/i.test(ticket.city) ? splitCityUf(ticket.city).city : '';
+    return city.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR').trim();
+  }).filter(Boolean));
+  if (cities.size > 1) return 'Os chamados selecionados são de cidades diferentes. Crie um grupo por cidade.';
+
+  const schedules = new Set(tickets.map((ticket) => {
+    const parts = scheduleParts(ticket.scheduledAt);
+    return parts ? `${parts.date} ${parts.time}` : 'sem agendamento';
+  }));
+  if (schedules.size > 1) return 'Os chamados selecionados têm agendamentos diferentes. Crie um grupo por horário.';
+  return null;
+}
+
 export function whatsappGroupName(tickets: GroupNameTicket[], client = 'AMERICANAS') {
   if (!tickets.length) return '';
   const scheduled = tickets.map((ticket) => ticket.scheduledAt).filter((value): value is string => Boolean(value && !Number.isNaN(Date.parse(value)))).sort()[0];

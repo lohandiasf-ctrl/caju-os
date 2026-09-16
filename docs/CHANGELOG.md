@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: um grupo por cidade e por horário
+
+Criar grupo com FSAs de cidades diferentes ou com agendamentos diferentes
+passa a ser bloqueado. Regra em `groupTicketsConflict`
+(`lib/whatsapp-group-name.ts`, com testes): cidade comparada sem acento e
+sem UF; horário comparado por data e hora do agendamento, e chamado sem
+agendamento não entra junto com chamado agendado. A janela mostra o motivo
+e desabilita "Criar grupo"; a rota relê os chamados no Jira e recusa com
+400, para a regra valer fora da tela.
+
 ### WhatsApp: tetragrama do grupo completa com vogais
 
 Cidade com menos de quatro consoantes agora usa as vogais para completar,
