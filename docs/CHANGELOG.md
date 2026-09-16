@@ -9,6 +9,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-16
+
+### Validar copia o link do Jira
+
+O botão "Validar" copiava `operacoes.cajutech.net/?ticket=FSA-...`, a tela do
+Caju OS. Quem valida no grupo SUP precisa do chamado no Jira. Agora copia
+`details.jiraUrl` ou `https://delfia.atlassian.net/browse/<FSA>`
+(`jiraTicketUrl`, em `lib/ticket-links.ts`, com testes). "Abrir no Jira" passa a
+usar o mesmo helper em vez da URL escrita à mão. O link de compartilhamento
+("Enviar por chat", ações em lote) continua sendo o do Caju OS.
+
 ## 2026-09-15
 
 ### WhatsApp: formato do nome do grupo
