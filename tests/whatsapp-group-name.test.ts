@@ -13,7 +13,10 @@ test('participants accept JIDs and Brazilian phones with or without 55', () => {
 test('city becomes its first four consonants, keeping Ç', () => {
   assert.equal(cityTetragram('Camaçari'), 'CMÇR');
   assert.equal(cityTetragram('Salvador'), 'SLVD');
-  assert.equal(cityTetragram('Ilhéus'), 'LHS');
+  // Fewer than four consonants: the vowels fill in, in the name's order.
+  assert.equal(cityTetragram('Itabuna'), 'ITBN');
+  assert.equal(cityTetragram('Rio'), 'RIO');
+  assert.equal(cityTetragram('Ilhéus'), 'ILHS');
 });
 
 test('city and UF are split from the usual spellings', () => {

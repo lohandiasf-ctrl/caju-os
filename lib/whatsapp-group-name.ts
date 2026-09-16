@@ -11,15 +11,22 @@ export const WHATSAPP_GROUP_NAME_MAX = 100;
 const TIME_ZONE = 'America/Sao_Paulo';
 const UFS = new Set('AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' '));
 
-// "Camaçari" -> "CMÇR". Ç counts as a consonant and is kept.
+// "Camaçari" -> "CMÇR": the first four consonants, Ç kept as is. A city with
+// fewer than four consonants takes its vowels too, keeping the order of the
+// name: "Itabuna" -> "ITBN".
 export function cityTetragram(city: string) {
   const letters = [...city.toLocaleUpperCase('pt-BR')].filter((char) => /\p{L}/u.test(char));
-  const consonants = letters.filter((char) => {
-    if (char === 'Ç') return true;
-    const base = char.normalize('NFD').replace(/\p{Diacritic}/gu, '');
-    return /^[B-DF-HJ-NP-TV-Z]$/.test(base);
-  });
-  return consonants.slice(0, 4).map((char) => (char === 'Ç' ? 'Ç' : char.normalize('NFD').replace(/\p{Diacritic}/gu, ''))).join('');
+  const isConsonant = (char: string) => char === 'Ç' || /^[B-DF-HJ-NP-TV-Z]$/.test(withoutAccent(char));
+  const picked = letters.map((char, index) => index).filter((index) => isConsonant(letters[index]));
+  for (let index = 0; index < letters.length && picked.length < 4; index += 1) {
+    if (!picked.includes(index)) picked.push(index);
+  }
+  return picked.sort((a, b) => a - b).slice(0, 4)
+    .map((index) => (letters[index] === 'Ç' ? 'Ç' : withoutAccent(letters[index]))).join('');
+}
+
+function withoutAccent(char: string) {
+  return char.normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
 
 // Accepts "Camaçari - BA", "Camaçari/BA", "Camaçari (BA)", "BA - Camaçari",

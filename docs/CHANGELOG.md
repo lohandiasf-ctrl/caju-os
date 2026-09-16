@@ -11,6 +11,12 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-15
 
+### WhatsApp: tetragrama do grupo completa com vogais
+
+Cidade com menos de quatro consoantes agora usa as vogais para completar,
+na ordem do nome: Itabuna vira `ITBN` (era `TBN`) e Ilhéus vira `ILHS`.
+Cidade com quatro consoantes ou mais não muda (`Camaçari` → `CMÇR`).
+
 ### WhatsApp: resync de contatos precisa vir do zero
 
 O resync do #35 não trouxe nada (`Contatos sincronizados: 0`, log
