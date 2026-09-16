@@ -185,6 +185,14 @@ todos os perfis, exportação/backup administrativo.
   `PLAYWRIGHT_MODULE` e um servidor vinext disponível na porta 3000. Ele usa
   dados sintéticos e não faz login nem escreve no Jira — rode-o antes de
   entregar mudança visual; ele falha se alguma tela rolar de lado.
+- **O celular ganhou uma passada inteira em 16/09/2026** (ver CHANGELOG): a
+  página rolava de lado porque filho de grid/flex não encolhe abaixo do
+  conteúdo mínimo. As regras de celular vivem no bloco
+  `@media (max-width: 639px)` do `app/globals.css`; a que esconde os atalhos
+  flutuantes fica **fora das camadas**, porque dentro de `@layer` as utilidades
+  do Tailwind vencem. O `scripts/ui-review.mjs` passou a usar dados sintéticos
+  no pior caso (título longo, cidade longa, e-mail longo) — era por usar texto
+  curto que ele não pegava esse tipo de quebra.
 - **Z-index tem escala nomeada** em `app/globals.css` (`--z-content`,
   `--z-sticky`, `--z-float`, `--z-sidebar`, `--z-modal`, `--z-live-call`,
   `--z-incoming-call`, `--z-window-chrome`). Elemento fixo ou flutuante novo
