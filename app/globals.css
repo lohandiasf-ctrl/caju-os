@@ -270,6 +270,14 @@
     [data-slot='button']:not([data-size='xs']):not([data-size='icon-xs']), .app-nav-link { min-height: 44px; }
     [data-slot='button'][data-size^='icon'] { min-width: 44px; }
     [data-slot='dialog-content'] { max-width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
+    /* Nada pode empurrar a página para fora da tela. Filho de grid ou flex
+       nasce com min-width:auto, que é o conteúdo mínimo — uma coluna do
+       kanban ou um card de e-mail longo esticava a página inteira e tudo
+       rolava para o lado (era o que a foto do celular mostrava). */
+    .app-main :is(.grid, .flex) > * { min-width: 0; }
+    /* E-mail, URL e código de chamado não têm onde quebrar: sem isto, uma
+       palavra comprida vira largura mínima do container. */
+    .app-main :where(p, h1, h2, h3, h4, span, a, li, dd, dt, td) { overflow-wrap: anywhere; }
   }
 }
 
