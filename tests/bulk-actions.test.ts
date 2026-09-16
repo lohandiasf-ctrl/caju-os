@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bulkIneligibleReason, canBulkTransition, isBulkEligible, ticketsToClipboard, ticketsToClipboardHtml } from '../lib/bulk-actions.ts';
+import { sharedTicketUrl } from '../lib/ticket-links.ts';
 
 test('bulk scheduling only takes tickets waiting to be scheduled', () => {
   assert.equal(isBulkEligible('AGENDAMENTO', 'scheduled'), true);
@@ -41,7 +42,7 @@ test('copying as a sheet keeps one row per ticket even with tabs in a title', ()
 
 test('copying as a message puts each ticket in its own block', () => {
   const message = ticketsToClipboard(tickets, 'message');
-  assert.match(message, /FSA-1 · AGENDAMENTO\n\nhttps:\/\/app\.cajutech\.net\/\?ticket=FSA-1/);
+  assert.match(message, /FSA-1 · AGENDAMENTO\n\nhttps:\/\/operacoes\.cajutech\.net\/\?ticket=FSA-1/);
   assert.match(message, /L300 - Governador Valadares/);
   assert.match(message, /Resumo do problema "PC travando constantemente"/);
   assert.match(message, /CPU\n\nResumo do problema "Performance - Lentidão, Self Checkout\?: Não"/);
@@ -51,6 +52,14 @@ test('copying as a message puts each ticket in its own block', () => {
 
 test('copying as a message can include rich clickable links', () => {
   const html = ticketsToClipboardHtml(tickets, 'message') ?? '';
-  assert.match(html, /<a href="https:\/\/app\.cajutech\.net\/\?ticket=FSA-1">https:\/\/app\.cajutech\.net\/\?ticket=FSA-1<\/a>/);
+  assert.match(html, /<a href="https:\/\/operacoes\.cajutech\.net\/\?ticket=FSA-1">https:\/\/operacoes\.cajutech\.net\/\?ticket=FSA-1<\/a>/);
   assert.match(html, /<b>Resumo do problema<\/b>/);
+});
+
+// O resumo já saiu com o domínio antigo uma vez; este teste prende as duas
+// cópias do link ao mesmo endereço.
+test('link do resumo é o mesmo link público do resto do app', () => {
+  const message = ticketsToClipboard(tickets, 'message');
+  assert.ok(message.includes(sharedTicketUrl('FSA-1')), message);
+  assert.ok((ticketsToClipboardHtml(tickets, 'message') ?? '').includes(sharedTicketUrl('FSA-2')));
 });
