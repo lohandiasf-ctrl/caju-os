@@ -1633,10 +1633,10 @@ export default function Home() {
                 </div>
               )}
               {selected && <TicketTeamCard key={selected.id} ticketKey={selected.id} user={user} />}
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
+                  className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal p-3 text-left"
                   onClick={() => setDetailsVisible((value) => !value)}
                   disabled={!details}
                 >
@@ -1645,7 +1645,7 @@ export default function Home() {
                     <span className="block break-words font-bold">
                       {detailsVisible ? "Ocultar detalhes" : "Ver detalhes"}
                     </span>
-                    <span className="block break-words text-xs font-normal text-muted-foreground">
+                    <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
                       Editar e sincronizar com o Jira
                     </span>
                   </span>
@@ -1654,13 +1654,13 @@ export default function Home() {
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
+                    className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal p-3 text-left"
                     onClick={() => void openJira()}
                   >
                     <ExternalLink className="size-5 shrink-0 text-primary" />
                     <span className="min-w-0 flex-1">
                       <span className="block break-words font-bold">Abrir no Jira</span>
-                      <span className="block break-words text-xs font-normal text-muted-foreground">
+                      <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
                         Chamado original
                       </span>
                     </span>
@@ -1668,7 +1668,7 @@ export default function Home() {
                 )}
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
+                  className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal p-3 text-left"
                   render={
                     <a
                       href={whatsappUrl || "#"}
@@ -1682,7 +1682,7 @@ export default function Home() {
                   <MessageCircle className="size-5 shrink-0 text-emerald-400" />
                   <span className="min-w-0 flex-1">
                     <span className="block break-words font-bold">Abrir WhatsApp</span>
-                    <span className="block break-words text-xs font-normal text-muted-foreground">
+                    <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
                       {whatsappUrl ? "Ir para o grupo" : "Link não cadastrado"}
                     </span>
                   </span>
@@ -1690,7 +1690,7 @@ export default function Home() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50"
+                  className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal border-emerald-400/25 p-3 text-left enabled:hover:border-emerald-400/50"
                   onClick={() => void copyJiraLinkForValidation()}
                   disabled={!validationReady || validationSending}
                   aria-describedby="validation-requirements"
@@ -1698,7 +1698,7 @@ export default function Home() {
                   <ShieldCheck className="size-5 shrink-0 text-emerald-300" />
                   <span className="min-w-0 flex-1">
                     <span className="block break-words font-bold">Validar</span>
-                    <span className="block break-words text-xs font-normal text-muted-foreground">
+                    <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
                       {validationReady
                         ? "Copiar link do Jira para enviar no grupo SUP"
                         : `Falta: ${validationRequirements.join(", ")}`}
@@ -1707,7 +1707,7 @@ export default function Home() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
+                  className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal p-3 text-left"
                   onClick={() =>
                     selected &&
                     setTicketToShare({
@@ -1722,7 +1722,7 @@ export default function Home() {
                   <Users className="size-5 shrink-0 text-violet-300" />
                   <span className="min-w-0 flex-1">
                     <span className="block break-words font-bold">Enviar por chat</span>
-                    <span className="block break-words text-xs font-normal text-muted-foreground">
+                    <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
                       Compartilhar com colega
                     </span>
                   </span>
@@ -1730,14 +1730,14 @@ export default function Home() {
                 {role !== "n1" && (
                   <Button
                     variant="outline"
-                    className="h-auto min-h-16 min-w-0 justify-start gap-3 whitespace-normal p-3 text-left"
+                    className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal p-3 text-left"
                     onClick={() => setOperationOpen(true)}
                     disabled={!selected}
                   >
                     <Wrench className="size-5 shrink-0 text-amber-300" />
                     <span className="min-w-0 flex-1">
                       <span className="block break-words font-bold">Gerir operação</span>
-                      <span className="block break-words text-xs font-normal text-muted-foreground">
+                      <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
                         Agenda, spare e pagamento
                       </span>
                     </span>

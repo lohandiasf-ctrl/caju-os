@@ -157,7 +157,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
     {tickets.length > 0 && <>
       {/* Espaço para a barra fixa não cobrir os últimos cards. */}
       <div aria-hidden="true" className="h-20" />
-      <div role="toolbar" aria-label="Ações em lote" className="fixed bottom-4 left-4 right-20 z-(--z-float) flex flex-wrap items-center gap-2 rounded-2xl border border-violet-400/30 bg-card/95 p-2 shadow-2xl backdrop-blur-xl xl:left-1/2 xl:right-auto xl:-translate-x-1/2">
+      <div role="toolbar" aria-label="Ações em lote" className="fixed bottom-4 left-2 right-2 z-(--z-float) sm:left-4 sm:right-20 flex flex-wrap items-center gap-2 rounded-2xl border border-violet-400/30 bg-card/95 p-2 shadow-2xl backdrop-blur-xl xl:left-1/2 xl:right-auto xl:-translate-x-1/2">
         <span className="px-2 text-sm font-semibold"><b className="text-violet-200">{tickets.length}</b> {tickets.length === 1 ? 'selecionado' : 'selecionados'}</span>
         <DropdownMenu>
           <DropdownMenuTrigger className={buttonVariants({ variant: 'outline', className: 'h-9' })}>

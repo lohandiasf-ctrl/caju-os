@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Mobile: diálogo do chamado e barra de seleção
+
+O diálogo do chamado tinha 3.480px de rolagem no celular — as cinco ações do
+topo, com descrição embaixo de cada uma, comiam 400px antes de qualquer
+conteúdo. No celular as ações passam a ficar duas por linha, sem a linha de
+explicação (que continua no texto de status logo abaixo do bloco) e com botão
+mais baixo. Desktop segue igual: era 2 colunas em `sm` e 3 em `xl`, e continua.
+
+A barra de "selecionado(s)" ficava espremida em 279px, com quatro linhas, para
+deixar espaço aos atalhos flutuantes. Agora ela ocupa a largura da tela no
+celular, e os atalhos flutuantes se escondem enquanto há seleção ativa
+(`body:has([role='toolbar'])`), porque os dois não cabem juntos.
+
 ### Mobile: kanban com uma coluna por vez
 
 Cinco colunas empilhadas, com até 45 cards em "Direcionado", davam uma rolagem
