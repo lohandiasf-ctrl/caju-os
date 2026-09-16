@@ -11,6 +11,18 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Mobile: kanban com uma coluna por vez
+
+Cinco colunas empilhadas, com até 45 cards em "Direcionado", davam uma rolagem
+sem fim no celular — e comparar colunas lado a lado, que é a razão de existir do
+kanban, nunca coube em 375px. Abaixo de `sm` o quadro mostra só a coluna
+escolhida numa fila de abas roláveis com a contagem de cada status, e guarda a
+última aberta no `localStorage`. As abas reaproveitam a mesma lista de colunas
+visíveis do filtro; se o filtro tirar a coluna aberta, cai na primeira.
+
+Desktop continua com todas as colunas: as abas são `sm:hidden` e as demais
+colunas só ficam escondidas abaixo de `sm`.
+
 ### Mobile: página não rola mais para o lado
 
 No celular o quadro aparecia cortado: cards passando da tela, "Filtros" e os
