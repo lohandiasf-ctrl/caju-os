@@ -44,3 +44,28 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Não foi possível carregar as conversas do WhatsApp.' }, { status: 500 });
   }
 }
+
+// Opens a conversation with a contact or group picked from the address book,
+// so it shows in the inbox before anyone writes in it.
+export async function POST(request: Request) {
+  try {
+    await requireWhatsappUser(request);
+    const body = await request.json().catch(() => null) as { contactPhone?: unknown; contactName?: unknown } | null;
+    const contactPhone = typeof body?.contactPhone === 'string' ? body.contactPhone.trim() : '';
+    if (!/^[\w.:+-]+@(s\.whatsapp\.net|lid|g\.us)$/.test(contactPhone)) return Response.json({ error: 'Contato inválido.' }, { status: 400 });
+    const contactName = typeof body?.contactName === 'string' ? body.contactName.trim().slice(0, 120) || null : null;
+    const now = new Date().toISOString();
+    await env.DB.prepare(`
+      INSERT INTO whatsapp_conversations (contact_phone, contact_name, last_message_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(contact_phone) DO UPDATE SET
+        contact_name = COALESCE(whatsapp_conversations.contact_name, excluded.contact_name),
+        updated_at = excluded.updated_at
+    `).bind(contactPhone, contactName, now, now, now).run();
+    return Response.json({ contactPhone });
+  } catch (error) {
+    if (error instanceof Response) return error;
+    console.error('Falha ao abrir conversa do WhatsApp', error);
+    return Response.json({ error: 'Não foi possível abrir a conversa.' }, { status: 500 });
+  }
+}

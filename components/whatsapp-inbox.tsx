@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, MessageCirclePlus, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { isUserRole, roleLabels } from '@/lib/permissions';
@@ -38,6 +38,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [bridge, setBridge] = useState<BridgeHealth | null>(null);
+  const [newChatOpen, setNewChatOpen] = useState(false);
   const bridgeWarning = bridgeWarningText(bridge);
 
   const authHeaders = useCallback<AuthHeaders>(async (): Promise<Record<string, string>> => (user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}), [user]);
@@ -77,10 +78,24 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
       <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-white/10 bg-[#111b21] md:w-[340px] lg:w-[380px]`}>
         <div className="flex h-16 shrink-0 items-center justify-between bg-[#202c33] px-4">
           <h2 className="text-lg font-bold tracking-tight">Conversas</h2>
-          {conversations.some((conversation) => conversation.unread > 0) && (
-            <span className="rounded-full bg-[#00a884] px-2 py-0.5 text-xs font-bold text-[#111b21]">{conversations.filter((conversation) => conversation.unread > 0).length} não lida(s)</span>
-          )}
+          <div className="flex items-center gap-2">
+            {conversations.some((conversation) => conversation.unread > 0) && (
+              <span className="rounded-full bg-[#00a884] px-2 py-0.5 text-xs font-bold text-[#111b21]">{conversations.filter((conversation) => conversation.unread > 0).length} não lida(s)</span>
+            )}
+            <button
+              type="button"
+              onClick={() => setNewChatOpen((current) => !current)}
+              aria-expanded={newChatOpen}
+              aria-label="Nova conversa"
+              title="Nova conversa"
+              className={`grid size-9 place-items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] ${newChatOpen ? 'bg-[#00a884] text-white' : 'text-neutral-300 hover:bg-white/10 hover:text-white'}`}
+            >
+              <MessageCirclePlus className="size-5" />
+            </button>
+          </div>
         </div>
+
+        {newChatOpen && <NewChatPanel authHeaders={authHeaders} onPicked={async (jid) => { setNewChatOpen(false); await load(); setSelectedPhone(jid); }} />}
 
         <div className="shrink-0 space-y-2 px-3 py-2.5">
           <div className="relative">
@@ -578,6 +593,80 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
       )}
     </div>
   </>;
+}
+
+// Search the number's address book and groups, and open a conversation with
+// whoever is picked — even someone who never wrote to the operation.
+function NewChatPanel({ authHeaders, onPicked }: { authHeaders: AuthHeaders; onPicked: (jid: string) => void | Promise<void> }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Array<{ jid: string; name: string; type: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [opening, setOpening] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    // Typing a name shouldn't fire a request per keystroke.
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/whatsapp/contacts?${new URLSearchParams({ q: query })}`, { headers: await authHeaders(), cache: 'no-store' });
+        const payload = await response.json().catch(() => ({})) as { contacts?: Array<{ jid: string; name: string; type: string }>; error?: string };
+        if (!active) return;
+        if (!response.ok) throw new Error(payload.error ?? 'Não foi possível buscar contatos.');
+        setResults(payload.contacts ?? []); setError('');
+      } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : 'Não foi possível buscar contatos.'); }
+      finally { if (active) setLoading(false); }
+    }, 300);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [query, authHeaders]);
+
+  async function open(item: { jid: string; name: string }) {
+    if (opening) return;
+    setOpening(item.jid); setError('');
+    try {
+      const response = await fetch('/api/whatsapp/conversations', {
+        method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ contactPhone: item.jid, contactName: item.name }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível abrir a conversa.');
+      await onPicked(item.jid);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível abrir a conversa.'); }
+    finally { setOpening(null); }
+  }
+
+  return (
+    <div className="shrink-0 border-b border-white/5 bg-[#111b21] px-3 py-2.5">
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" aria-hidden="true" />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          autoFocus
+          placeholder="Buscar na agenda: nome, número ou grupo"
+          aria-label="Buscar contato ou grupo no WhatsApp"
+          className="h-9 w-full rounded-lg bg-[#202c33] pr-3 pl-10 text-sm text-neutral-100 placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884]"
+        />
+      </div>
+      {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
+      {loading ? (
+        <p className="mt-2 flex items-center gap-2 text-xs text-neutral-400"><Loader2 className="size-3.5 animate-spin" />Buscando...</p>
+      ) : results.length ? (
+        <ul className="mt-2 max-h-64 overflow-y-auto">
+          {results.slice(0, 50).map((item) => (
+            <li key={item.jid}>
+              <button type="button" disabled={Boolean(opening)} onClick={() => void open(item)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white/5 disabled:opacity-60">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#00a884]/20 text-[11px] font-bold text-[#25d366]" aria-hidden="true">{initials(item.name)}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{item.name}</span>
+                <span className="shrink-0 text-[11px] text-neutral-400">{item.type === 'group' ? 'grupo' : displayPhone(item.jid)}</span>
+                {opening === item.jid && <Loader2 className="size-3.5 animate-spin text-[#25d366]" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="mt-2 text-xs text-neutral-400">{query ? 'Nada encontrado na agenda do número.' : 'Digite para buscar na agenda do WhatsApp.'}</p>}
+    </div>
+  );
 }
 
 // Pairing the operation's number from the inbox: shows the bridge's QR code
