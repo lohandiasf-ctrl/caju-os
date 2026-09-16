@@ -255,6 +255,16 @@ const dots: Record<Status, string> = {
   Direcionado: "bg-cyan-400",
   "Técnico em campo": "bg-emerald-400",
 };
+// No celular o kanban mostra uma coluna por vez, e a aba precisa caber na
+// largura da tela.
+const shortColumn: Record<Status, string> = {
+  "Pendente de agendamento": "Pendente",
+  Agendado: "Agendado",
+  "Aguardando spare": "Spare",
+  Direcionado: "Direcionado",
+  "Técnico em campo": "Em campo",
+};
+const KANBAN_TAB_KEY = "caju-kanban-mobile-column";
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   feedback: [
     "Voz da equipe",
@@ -319,6 +329,7 @@ export default function Home() {
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
+  const [mobileColumn, setMobileColumn] = useState<Status>(columns[0]);
   const [jiraFilterPreset, setJiraFilterPreset] =
     useState<JiraFilterPreset>("operational");
   const [menu, setMenu] = useState(false);
@@ -478,6 +489,28 @@ export default function Home() {
     );
     return statusesWithTickets.length ? statusesWithTickets : columns;
   }, [filtered, jiraFilterPreset, statusFilter]);
+  // A coluna aberta no celular tem que existir no filtro atual; se o filtro
+  // mudou, cai na primeira disponível.
+  const activeMobileColumn = visibleKanbanColumns.includes(mobileColumn)
+    ? mobileColumn
+    : visibleKanbanColumns[0];
+  // Guarda a última coluna aberta para não recomeçar sempre na primeira.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(KANBAN_TAB_KEY);
+      if (saved && (columns as string[]).includes(saved)) setMobileColumn(saved as Status);
+    } catch {
+      // Navegador com armazenamento bloqueado: segue no padrão.
+    }
+  }, []);
+  function openMobileColumn(column: Status) {
+    setMobileColumn(column);
+    try {
+      localStorage.setItem(KANBAN_TAB_KEY, column);
+    } catch {
+      // Sem armazenamento a escolha vale só para esta visita.
+    }
+  }
   const allTicketActivities = useMemo(
     () =>
       tickets
@@ -1375,6 +1408,36 @@ export default function Home() {
                 </div>
               )}
               {view === "kanban" ? (
+                <>
+                {/* Celular: uma coluna por vez. Lado a lado não cabe em 375px,
+                    e empilhar as cinco dava uma rolagem interminável. */}
+                {visibleKanbanColumns.length > 1 && (
+                  <div
+                    className="no-scrollbar -mx-4 mt-4 flex gap-2 overflow-x-auto px-4 sm:hidden"
+                    role="group"
+                    aria-label="Coluna do quadro"
+                  >
+                    {visibleKanbanColumns.map((column) => {
+                      const count = filtered.filter((ticket) => ticket.status === column).length;
+                      const active = column === activeMobileColumn;
+                      return (
+                        <button
+                          key={column}
+                          type="button"
+                          onClick={() => openMobileColumn(column)}
+                          aria-pressed={active}
+                          className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition ${active ? "border-primary/40 bg-primary/15 text-foreground" : "border-border bg-card text-muted-foreground"}`}
+                        >
+                          <span className={`size-2 rounded-full ${dots[column]}`} aria-hidden="true" />
+                          {shortColumn[column]}
+                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-primary/20" : "bg-black/20"}`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
                 <div
                   className={`mt-4 grid gap-4 ${visibleKanbanColumns.length > 1 ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5" : "grid-cols-1"}`}
                 >
@@ -1386,7 +1449,7 @@ export default function Home() {
                       return (
                         <section
                           key={column}
-                          className="surface-panel min-h-[280px] rounded-2xl p-2.5"
+                          className={`surface-panel min-h-[280px] rounded-2xl p-2.5 ${column === activeMobileColumn ? "" : "hidden sm:block"}`}
                         >
                           <div className="mb-3 flex items-center justify-between px-1">
                             <div className="flex items-center gap-2">
@@ -1436,6 +1499,7 @@ export default function Home() {
                     },
                   )}
                 </div>
+                </>
               ) : (
                 <div className="surface-panel mt-4 overflow-hidden rounded-2xl">
                   {filtered.length > 0 && (
