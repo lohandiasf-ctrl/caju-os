@@ -22,8 +22,12 @@ await page.setViewportSize({ width: 375, height: 812 });
 await page.screenshot({ path: `${output}/login-mobile.png`, fullPage: true });
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Login overflows');
 const now = new Date().toISOString();
-const issues = ['AGENDAMENTO', 'AGENDADO', 'Aguardando Spare', 'DIRECIONADO', 'TEC-CAMPO'].map((status, i) => ({ key: `FSA-${900001 + i}`, summary: `Loja L${250 + i} | CPU com lentidão — diagnóstico e manutenção`, status, statusCategory: 'In Progress', priority: 'Medium', assignee: 'Ana Souza', updatedAt: now, createdAt: now, store: `L${250 + i}`, city: 'Salvador / BA', scheduledAt: now, partnerTriggeredAt: now }));
-const technician = { id: 1, name: 'Ana Souza', city: 'Salvador', state: 'BA', status: 'Disponível', approved: true, phone: '', specialties: 'CPU e periféricos', availableTools: 'Multímetro', fullAddress: '', cpf: '', email: 'ana@example.invalid' };
+// Títulos e cidades no pior caso real: foi texto comprido assim que esticou a
+// página no celular em setembro/2026 (coluna do kanban com largura mínima de
+// 436px numa tela de 375px).
+const issues = ['AGENDAMENTO', 'AGENDADO', 'Aguardando Spare', 'DIRECIONADO', 'TEC-CAMPO'].map((status, i) => ({ key: `FSA-${900001 + i}`, summary: `Código da loja L${250 + i} | CPU - Hardware - Offline ou Sem rede, Self Checkout?: Não`, status, statusCategory: 'In Progress', priority: 'Medium', assignee: 'Ana Souza', updatedAt: now, createdAt: now, store: `L${250 + i}`, city: 'Vitória da Conquista / BA', scheduledAt: now, partnerTriggeredAt: now }));
+// E-mail longo de propósito: sem quebra, ele vira a largura mínima do card.
+const technician = { id: 1, name: 'Ana Carolina de Souza Albuquerque', city: 'Vitória da Conquista', state: 'BA', status: 'Disponível', approved: true, phone: '', specialties: 'CPU e periféricos', availableTools: 'Multímetro', fullAddress: '', cpf: '', email: 'anacarolinadesouzaalbuquerque@example.invalid' };
 const mock = {
   '/api/jira/issues': { issues, isLast: true },
   '/api/operational-dashboard': { metrics: { active: 5, overdue: 0, visits: 8, revenueCents: 240000, marginCents: 95000 }, alerts: [], validationQueue: [{ ticketKey: issues[4].key, submittedByName: 'Ana Souza', submittedByEmail: 'ana@example.invalid', submittedAt: now }], recentAudit: [], collaborators: [], n1: [] },
@@ -31,7 +35,7 @@ const mock = {
   '/api/operations/intelligence': { requesters: [], shipments: [], tasks: [], snapshots: [], audit: [] },
   '/api/technicians': { technicians: [technician] },
   '/api/colleagues': { colleagues: [] },
-  '/api/users/n1': { users: [{ email: 'ana@example.invalid', role: 'n1' }] },
+  '/api/users/n1': { users: [{ email: 'anacarolinadesouzaalbuquerque@example.invalid', role: 'n1' }] },
   '/api/chat-groups': { groups: [] },
   '/api/messages': { messages: [] },
   '/api/communication-preferences': {},
