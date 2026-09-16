@@ -11,6 +11,13 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Mobile: atalho de pergunta que passava 2px da tela
+
+Na Visão geral, o atalho "quantos chamados estão sem mandar para validação"
+tinha 340px e não quebrava linha: a página ficava com 377px numa tela de 375.
+No celular o atalho passa a quebrar em duas linhas; de `sm` para cima segue em
+uma linha só.
+
 ### Mobile: atalhos flutuantes somem de verdade, e anexo com alvo de 44px
 
 A regra que escondia os atalhos flutuantes durante a seleção estava dentro de
