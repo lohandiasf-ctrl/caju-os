@@ -3516,7 +3516,16 @@ function OperationalQuestionBox({
           />
           <div className="mt-3 flex flex-wrap gap-2">
             {examples.map((example) => (
-              <Button key={example} type="button" size="sm" variant="ghost" onClick={() => onChange(example)}>
+              <Button
+                key={example}
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => onChange(example)}
+                /* Em 375px a pergunta mais longa passava da tela: no celular
+                   ela quebra em duas linhas. */
+                className="h-auto max-w-full whitespace-normal text-left sm:whitespace-nowrap"
+              >
                 {example}
               </Button>
             ))}
