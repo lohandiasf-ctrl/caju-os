@@ -241,6 +241,20 @@ npm run deploy
 Binding `AI` presente no `wrangler.json` publicado, junto de D1, entry point e
 cron; rota devolve 401 sem token; `tsc` limpo; app servindo normalmente.
 
-**Não verificado:** a extração de ponta a ponta com uma imagem real — o teste
-automatizado via navegador não completou. Precisa de um teste manual com uma
-foto de RAT de verdade.
+## Teste com RAT real (2026-09-16)
+
+Feito com a foto da RAT da FSA-132555. O modelo original
+(`@cf/meta/llama-3.2-11b-vision-instruct`) respondeu em prosa, sem JSON, e
+resumiu em vez de transcrever. Troca aplicada:
+
+1. `@cf/mistralai/mistral-small-3.1-24b-instruct` (melhor transcrição)
+2. `@cf/meta/llama-4-scout-17b-16e-instruct`
+3. `@cf/meta/llama-3.2-11b-vision-instruct` (último recurso)
+
+Os dois primeiros recebem a imagem como `messages` + `image_url` em base64; só
+o llama-3.2 usa `{ prompt, image: number[] }`. O `response` do scout pode vir
+como objeto já parseado.
+
+Para repetir o teste sem depender do login do app: um Worker mínimo com o
+binding `AI`, `npx wrangler dev --local=false`, e um POST com os bytes da foto.
+Workers AI roda remoto mesmo em dev.
