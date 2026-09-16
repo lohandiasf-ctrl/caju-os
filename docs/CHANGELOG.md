@@ -29,7 +29,13 @@ agendamento não entra junto com chamado agendado. A janela mostra o motivo
 e desabilita "Criar grupo"; a rota relê os chamados no Jira e recusa com
 400, para a regra valer fora da tela.
 
-### WhatsApp: tetragrama do grupo completa com vogais
+### WhatsApp: tetragrama pela regra da operação
+
+Primeira letra do nome + as consoantes seguintes, cada uma usada uma vez;
+consoante dobrada conta uma (`Camaçari` -> `CMÇR`, `Itabuna` -> `ITBN`,
+`Barreiras` -> `BRRS`). Faltando consoante, entra a vogal da sílaba tônica
+(`Ipiaú` -> `IPIU`); se a tônica vier antes da segunda consoante, entra a
+última vogal.
 
 Cidade com menos de quatro consoantes agora usa as vogais para completar,
 na ordem do nome: Itabuna vira `ITBN` (era `TBN`) e Ilhéus vira `ILHS`.

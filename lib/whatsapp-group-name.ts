@@ -12,18 +12,51 @@ export const WHATSAPP_GROUP_NAME_MAX = 100;
 const TIME_ZONE = 'America/Sao_Paulo';
 const UFS = new Set('AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' '));
 
-// "Camaçari" -> "CMÇR": the first four consonants, Ç kept as is. A city with
-// fewer than four consonants takes its vowels too, keeping the order of the
-// name: "Itabuna" -> "ITBN".
+// Four letters for the city, as the operation writes them: the first letter
+// of the name plus the consonants that follow it, each one used once, a
+// doubled consonant counting as one ("Camaçari" -> "CMÇR", "Itabuna" ->
+// "ITBN"). When the name runs out of consonants, the stressed vowel fills
+// in — or the last vowel, if the stress falls before the second consonant.
 export function cityTetragram(city: string) {
   const letters = [...city.toLocaleUpperCase('pt-BR')].filter((char) => /\p{L}/u.test(char));
-  const isConsonant = (char: string) => char === 'Ç' || /^[B-DF-HJ-NP-TV-Z]$/.test(withoutAccent(char));
-  const picked = letters.map((char, index) => index).filter((index) => isConsonant(letters[index]));
-  for (let index = 0; index < letters.length && picked.length < 4; index += 1) {
-    if (!picked.includes(index)) picked.push(index);
+  if (!letters.length) return '';
+  const picked = [0];
+  for (let index = 1; index < letters.length && picked.length < 4; index += 1) {
+    // "RR", "SS": a consonant written twice in a row counts once.
+    if (isConsonant(letters[index]) && letters[index] !== letters[index - 1]) picked.push(index);
   }
+
+  if (picked.length < 4) {
+    const vowels = letters.map((char, index) => index).filter((index) => !isConsonant(letters[index]));
+    const stressed = stressedVowelIndex(letters);
+    const secondConsonant = picked[2];
+    // Stress before the second consonant would repeat the start of the name.
+    const first = stressed !== null && (secondConsonant === undefined || stressed > secondConsonant) ? stressed : vowels[vowels.length - 1];
+    for (const index of [first, ...vowels].filter((value): value is number => value !== undefined)) {
+      if (picked.length >= 4) break;
+      if (!picked.includes(index)) picked.push(index);
+    }
+  }
+
   return picked.sort((a, b) => a - b).slice(0, 4)
     .map((index) => (letters[index] === 'Ç' ? 'Ç' : withoutAccent(letters[index]))).join('');
+}
+
+function isConsonant(char: string) {
+  return char === 'Ç' || /^[B-DF-HJ-NP-TV-Z]$/.test(withoutAccent(char));
+}
+
+// Where the stress falls, by the usual Portuguese rules: an accent marks it;
+// otherwise words ending in a, e, o, em, ens (with or without s) stress the
+// next-to-last vowel, and the rest stress the last one.
+function stressedVowelIndex(letters: string[]): number | null {
+  const accented = letters.findIndex((char) => char !== withoutAccent(char) && !isConsonant(char));
+  if (accented >= 0) return accented;
+  const vowels = letters.map((char, index) => index).filter((index) => !isConsonant(letters[index]));
+  if (!vowels.length) return null;
+  const word = letters.map(withoutAccent).join('');
+  const paroxytone = /(?:[AEO]|EM|ENS)S?$/.test(word);
+  return vowels[Math.max(0, vowels.length - (paroxytone ? 2 : 1))] ?? null;
 }
 
 function withoutAccent(char: string) {

@@ -10,13 +10,16 @@ test('participants accept JIDs and Brazilian phones with or without 55', () => {
   assert.equal(participantJid('abc@g.us'), null);
 });
 
-test('city becomes its first four consonants, keeping Ç', () => {
+test('city code is the first letter plus the consonants that follow', () => {
   assert.equal(cityTetragram('Camaçari'), 'CMÇR');
   assert.equal(cityTetragram('Salvador'), 'SLVD');
-  // Fewer than four consonants: the vowels fill in, in the name's order.
   assert.equal(cityTetragram('Itabuna'), 'ITBN');
+  // A doubled consonant counts once, the later one still counts.
+  assert.equal(cityTetragram('Barreiras'), 'BRRS');
+  // Out of consonants: the stressed vowel fills in.
+  assert.equal(cityTetragram('Ipiaú'), 'IPIU');
+  assert.equal(cityTetragram('Ubatã'), 'UBTA');
   assert.equal(cityTetragram('Rio'), 'RIO');
-  assert.equal(cityTetragram('Ilhéus'), 'ILHS');
 });
 
 test('city and UF are split from the usual spellings', () => {
