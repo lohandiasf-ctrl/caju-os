@@ -577,8 +577,8 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
               aria-label={pendingFile ? 'Legenda do arquivo' : 'Responder pelo WhatsApp'}
               className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-neutral-100 placeholder:text-neutral-400 focus-visible:outline-none disabled:opacity-60"
             />
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending} className="grid size-9 place-items-center rounded-full text-neutral-400 hover:text-neutral-100" aria-label="Anexar arquivo"><Paperclip className="size-5" /></button>
-            <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={sending} className="grid size-9 place-items-center rounded-full text-neutral-400 hover:text-neutral-100" aria-label="Foto ou vídeo"><Camera className="size-5" /></button>
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={sending} className="grid size-11 place-items-center rounded-full text-neutral-400 hover:text-neutral-100 sm:size-9" aria-label="Anexar arquivo"><Paperclip className="size-5" /></button>
+            <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={sending} className="grid size-11 place-items-center rounded-full text-neutral-400 hover:text-neutral-100 sm:size-9" aria-label="Foto ou vídeo"><Camera className="size-5" /></button>
           </div>
           {canSend ? (
             <button type="button" onClick={() => { if (pendingFile) void sendFile(pendingFile, { caption: draft.trim() }); else void sendText(); }} disabled={sending} aria-label="Enviar" className="grid size-11 shrink-0 place-items-center rounded-full bg-[#00a884] text-white transition hover:bg-[#06cf9c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">

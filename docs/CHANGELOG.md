@@ -11,6 +11,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Mobile: atalhos flutuantes somem de verdade, e anexo com alvo de 44px
+
+A regra que escondia os atalhos flutuantes durante a seleção estava dentro de
+`@layer components`: no Tailwind v4 a camada de utilidades vem depois, então o
+`.grid` do botão redondo vencia o `display: none` e ele continuava na tela.
+Regra movida para fora das camadas — camada nenhuma perde para estilo sem
+camada.
+
+No campo de mensagem do WhatsApp, os botões de anexo e de foto tinham 36px.
+No celular passam a 44px; no desktop continuam com 36.
+
 ### Mobile: diálogo do chamado e barra de seleção
 
 O diálogo do chamado tinha 3.480px de rolagem no celular — as cinco ações do
