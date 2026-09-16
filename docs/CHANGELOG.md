@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Busca aceita vários chamados de uma vez
+
+Colar `FSA-132030 | FSA-132032 | FSA-132034` na busca agora traz os três. Vale
+para a busca do topo (chamados), o histórico e a tela de spares. Separadores:
+`|`, vírgula, ponto e vírgula e quebra de linha; espaço só separa quando todos
+os pedaços são códigos de chamado, para "loja 441" continuar sendo uma busca só.
+Regra em `lib/search-terms.ts`, com testes.
+
+### Validar copia o link do Jira
+
+O botão "Validar" copiava `operacoes.cajutech.net/?ticket=FSA-...`, a tela do
+Caju OS. Quem valida no grupo SUP precisa do chamado no Jira. Agora copia
+`details.jiraUrl` ou `https://delfia.atlassian.net/browse/<FSA>`
+(`jiraTicketUrl`, em `lib/ticket-links.ts`, com testes). "Abrir no Jira" passa a
+usar o mesmo helper em vez da URL escrita à mão. O link de compartilhamento
+("Enviar por chat", ações em lote) continua sendo o do Caju OS.
 ### Resumo para mensagem apontava para o domínio antigo
 
 "Copiar resumo" montava `https://app.cajutech.net/?ticket=FSA-...`, endereço que

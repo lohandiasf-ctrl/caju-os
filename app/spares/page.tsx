@@ -25,6 +25,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { matchesSearch, searchTerms } from '@/lib/search-terms';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/components/auth-provider';
@@ -420,13 +421,9 @@ export default function Page() {
       : filter === 'TODOS'
         ? all
         : all.filter((x) => x.status === filter);
-  const normalizedQuery = query.toLowerCase();
+  const queryTerms = searchTerms(query);
   const rows = baseRows
-    .filter((x) =>
-      [x.fsa, x.city, x.equipment, x.technician, x.tracking].some((value) =>
-        value.toLowerCase().includes(normalizedQuery),
-      ),
-    )
+    .filter((x) => matchesSearch([x.fsa, x.city, x.equipment, x.technician, x.tracking], queryTerms))
     .sort((a, b) => {
       const stamp = (item: S) => {
         const value = item.updatedAt || item.service || item.delivery;

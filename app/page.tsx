@@ -65,7 +65,8 @@ import { BulkTicketActions } from "@/components/bulk-ticket-actions";
 import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
 import { openExternalUrl } from "@/lib/open-external";
-import { sharedTicketUrl } from "@/lib/ticket-links";
+import { jiraTicketUrl, sharedTicketUrl } from "@/lib/ticket-links";
+import { matchesSearch, searchTerms } from "@/lib/search-terms";
 import { notifyDesktop } from "@/lib/desktop-notifications";
 import {
   JiraTicketDetails,
@@ -405,14 +406,13 @@ export default function Home() {
     return () => { delete document.documentElement.dataset.view; };
   }, [activeView]);
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const terms = searchTerms(query);
     return tickets.filter((ticket) => {
       if (archivedKeys.has(ticket.id)) return false;
-      const matchesQuery =
-        !q ||
-        [ticket.id, ticket.title, ticket.store, ticket.city, ticket.technician]
-          .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(q));
+      const matchesQuery = matchesSearch(
+        [ticket.id, ticket.title, ticket.store, ticket.city, ticket.technician],
+        terms,
+      );
       const matchesDate =
         activeView !== "tickets" ||
         !ticketDate ||
@@ -868,7 +868,7 @@ export default function Home() {
   async function openJira() {
     if (!selected) return;
     const url =
-      details?.jiraUrl || `https://delfia.atlassian.net/browse/${selected.id}`;
+      details?.jiraUrl || jiraTicketUrl(selected.id);
     if ((await openExternalUrl(url)) === "blocked") {
       const copied = await copyToClipboard(url).catch(() => false);
       setJiraError(
@@ -897,7 +897,8 @@ export default function Home() {
 
   async function copyJiraLinkForValidation() {
     if (!selected || !user) return;
-    const link = sharedTicketUrl(selected.id);
+    // O grupo SUP valida pelo chamado no Jira, não pela tela do Caju OS.
+    const link = details?.jiraUrl || jiraTicketUrl(selected.id);
     setValidationSending(true);
     try {
       // O app desktop precisa do comando do Tauri; no navegador vale o helper
@@ -1635,7 +1636,7 @@ export default function Home() {
                     <span className="block break-words font-bold">Validar</span>
                     <span className="block break-words text-xs font-normal text-muted-foreground">
                       {validationReady
-                        ? "Copiar link do chamado para enviar no grupo SUP"
+                        ? "Copiar link do Jira para enviar no grupo SUP"
                         : `Falta: ${validationRequirements.join(", ")}`}
                     </span>
                   </span>
