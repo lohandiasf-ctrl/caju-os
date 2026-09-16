@@ -45,6 +45,10 @@ const PHONES_FILE = './auth/phones.json';
 // "@lid" (linked ID) -> phone JID, learned from the sender_pn WhatsApp sends
 // with each message. Creating a group needs the phone JID, not the "@lid".
 const phones = new Map(Object.entries(JSON.parse(await readFile(PHONES_FILE, 'utf8').catch(() => '{}'))));
+const CONTACTS_FILE = './auth/contacts.json';
+// Phone JID -> saved name, the address book the phone syncs to this device.
+const contacts = new Map(Object.entries(JSON.parse(await readFile(CONTACTS_FILE, 'utf8').catch(() => '{}'))));
+let contactsSaveTimer;
 let phonesSaveTimer;
 // What the Caju OS inbox shows when the WhatsApp session is down.
 let connectionState = { status: 'connecting', since: new Date().toISOString() };
@@ -296,8 +300,19 @@ function nameFor(jid) { return jid ? names.get(jidUser(jid)) ?? null : null; }
 // A contact (also each group participant) carries both of its IDs.
 function learnContact(contact) {
   if (!contact?.id) return;
-  learnName(contact.notify || contact.name, contact.id, contact.lid, contact.jid);
-  learnPhone(contact.lid ?? contact.id, contact.jid ?? (String(contact.id).endsWith('@s.whatsapp.net') ? contact.id : null));
+  const name = contact.notify || contact.name;
+  learnName(name, contact.id, contact.lid, contact.jid);
+  const phoneJid = contact.jid ?? (String(contact.id).endsWith('@s.whatsapp.net') ? contact.id : null);
+  learnPhone(contact.lid ?? contact.id, phoneJid);
+  // The address book itself, so the inbox can start a chat with someone who
+  // never wrote to the operation.
+  if (phoneJid && name && contacts.get(phoneJid) !== name) {
+    contacts.set(phoneJid, name);
+    clearTimeout(contactsSaveTimer);
+    contactsSaveTimer = setTimeout(() => {
+      writeFile(CONTACTS_FILE, JSON.stringify(Object.fromEntries(contacts))).catch((error) => console.error('Falha ao salvar contatos:', error?.message ?? error));
+    }, 5_000);
+  }
 }
 
 function learnPhone(lid, phoneJid) {
@@ -576,6 +591,15 @@ http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/qr') {
       const qr = connectionState.status === 'qr' && currentQr ? await QRCode.toDataURL(currentQr, { margin: 1, width: 320 }) : null;
       return json(response, 200, { ...connectionState, qr });
+    }
+
+    // Address book + known groups, for starting a chat from the inbox.
+    if (request.method === 'GET' && url.pathname === '/contacts') {
+      const term = (url.searchParams.get('q') ?? '').trim().toLowerCase();
+      const matches = (name, jid) => !term || `${name} ${jidUser(jid)}`.toLowerCase().includes(term);
+      const people = [...contacts].filter(([jid, name]) => matches(name, jid)).map(([jid, name]) => ({ jid, name, type: 'contact' }));
+      const groups = [...groupCache].filter(([jid, value]) => value.subject && matches(value.subject, jid)).map(([jid, value]) => ({ jid, name: value.subject, type: 'group' }));
+      return json(response, 200, { contacts: [...people, ...groups].slice(0, 200) });
     }
 
     if (request.method === 'POST' && url.pathname === '/resync-contacts') {
