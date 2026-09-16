@@ -11,6 +11,14 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Busca aceita vários chamados de uma vez
+
+Colar `FSA-132030 | FSA-132032 | FSA-132034` na busca agora traz os três. Vale
+para a busca do topo (chamados), o histórico e a tela de spares. Separadores:
+`|`, vírgula, ponto e vírgula e quebra de linha; espaço só separa quando todos
+os pedaços são códigos de chamado, para "loja 441" continuar sendo uma busca só.
+Regra em `lib/search-terms.ts`, com testes.
+
 ### Validar copia o link do Jira
 
 O botão "Validar" copiava `operacoes.cajutech.net/?ticket=FSA-...`, a tela do

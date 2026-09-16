@@ -5,6 +5,7 @@ import { Archive, ArrowDownAZ, ArrowUpAZ, CalendarClock, ChevronRight, FileCheck
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { matchesSearch, searchTerms } from '@/lib/search-terms';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type ArchiveItem = {
@@ -51,8 +52,8 @@ export function TicketHistory({ user }: { user: User }) {
   }, [user]);
 
   const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    const current = !normalized ? items : items.filter((item) => [item.ticketKey, item.title, item.storeName, item.city, item.jiraStatus, item.operationalStatus].some((value) => value?.toLowerCase().includes(normalized)));
+    const terms = searchTerms(query);
+    const current = items.filter((item) => matchesSearch([item.ticketKey, item.title, item.storeName, item.city, item.jiraStatus, item.operationalStatus], terms));
     return [...current].sort((a, b) => ascending ? Date.parse(a.capturedAt) - Date.parse(b.capturedAt) : Date.parse(b.capturedAt) - Date.parse(a.capturedAt));
   }, [ascending, items, query]);
 

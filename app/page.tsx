@@ -66,6 +66,7 @@ import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
 import { openExternalUrl } from "@/lib/open-external";
 import { jiraTicketUrl, sharedTicketUrl } from "@/lib/ticket-links";
+import { matchesSearch, searchTerms } from "@/lib/search-terms";
 import { notifyDesktop } from "@/lib/desktop-notifications";
 import {
   JiraTicketDetails,
@@ -405,14 +406,13 @@ export default function Home() {
     return () => { delete document.documentElement.dataset.view; };
   }, [activeView]);
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const terms = searchTerms(query);
     return tickets.filter((ticket) => {
       if (archivedKeys.has(ticket.id)) return false;
-      const matchesQuery =
-        !q ||
-        [ticket.id, ticket.title, ticket.store, ticket.city, ticket.technician]
-          .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(q));
+      const matchesQuery = matchesSearch(
+        [ticket.id, ticket.title, ticket.store, ticket.city, ticket.technician],
+        terms,
+      );
       const matchesDate =
         activeView !== "tickets" ||
         !ticketDate ||
