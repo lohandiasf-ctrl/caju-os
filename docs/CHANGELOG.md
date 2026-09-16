@@ -11,6 +11,27 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Mobile: página não rola mais para o lado
+
+No celular o quadro aparecia cortado: cards passando da tela, "Filtros" e os
+botões flutuantes por cima do conteúdo. Medido no navegador a 375px, a página
+tinha 452px de largura em Visão geral, Chamados e Central N1, e 465px em Equipe.
+
+Causa: filho de grid ou flex nasce com `min-width: auto`, ou seja, não encolhe
+abaixo do próprio conteúdo mínimo. Uma coluna do kanban (cujo conteúdo mínimo é
+~436px) e um card com e-mail longo esticavam a página inteira; os elementos
+`fixed` acompanhavam a rolagem lateral e caíam em cima dos cards.
+
+Correção no bloco `@media (max-width: 639px)` do `globals.css`: filho de grid ou
+flex dentro de `.app-main` recebe `min-width: 0`, e texto recebe
+`overflow-wrap: anywhere` para e-mail e URL poderem quebrar. Ícones dos cards de
+chamado ganharam `shrink-0` para não amassar em tela estreita.
+
+Verificado a 375px em Visão geral, Chamados, Histórico, Agenda, Central N1,
+Equipe, Projetos, Spares, Financeiro, Mapa e WhatsApp: todas com 375px de
+largura de documento, nenhum elemento ultrapassando a tela. Desktop não muda —
+a regra vive dentro da media query de celular.
+
 ### Busca aceita vários chamados de uma vez
 
 Colar `FSA-132030 | FSA-132032 | FSA-132034` na busca agora traz os três. Vale

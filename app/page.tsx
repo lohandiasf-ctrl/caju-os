@@ -1898,22 +1898,22 @@ function TicketCard({
       </h4>
       <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
         <p className="flex items-center gap-1.5">
-          <Building2 className="size-3.5" />
+          <Building2 className="size-3.5 shrink-0" />
           {ticket.store}
         </p>
         <p className="flex items-center gap-1.5">
-          <MapPin className="size-3.5" />
+          <MapPin className="size-3.5 shrink-0" />
           {ticket.city}
         </p>
         {ticket.schedule && (
           <p className="flex items-center gap-1.5 text-blue-300">
-            <CalendarClock className="size-3.5" />
+            <CalendarClock className="size-3.5 shrink-0" />
             Agendamento: {ticket.schedule}
           </p>
         )}
         {ticket.partnerTriggeredAt && (
           <p className="flex items-center gap-1.5 text-amber-300">
-            <CalendarClock className="size-3.5" />
+            <CalendarClock className="size-3.5 shrink-0" />
             Acionamento: {ticket.partnerTriggeredAt}
           </p>
         )}
