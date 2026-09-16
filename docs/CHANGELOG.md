@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### Resumo para mensagem apontava para o domínio antigo
+
+"Copiar resumo" montava `https://app.cajutech.net/?ticket=FSA-...`, endereço que
+não é mais a produção — quem recebia no WhatsApp, e-mail ou Teams clicava e não
+chegava no chamado. Agora sai `https://operacoes.cajutech.net/?ticket=FSA-...`,
+o mesmo de `lib/ticket-links.ts`. Um teste novo prende as duas cópias do link ao
+mesmo endereço, porque `lib/bulk-actions.ts` roda direto no Node nos testes e
+não consegue importar o helper.
+
 ### RAT: leitura automática trocou de modelo
 
 Primeiro teste com foto de RAT real (FSA-132555, monitor com mancha na tela)
