@@ -46,10 +46,19 @@ chave PIX (regra 9 do `WORKFLOW_RULES`), e o que sobra passa por `redact()`.
 **Modelo:** Gemini no plano gratuito. Estouro de cota vira mensagem explicando
 que é cota, não erro genérico.
 
-**Pendente, e bloqueia o teste:** criar a chave no Google AI Studio e gravá-la
-como secret do Worker (`npx wrangler secret put GEMINI_API_KEY`). Sem ela a
-rota devolve `code: "sem_chave"` e o painel continua usando o assistente da
-fila — ou seja, o deploy é seguro antes da chave, mas nada muda até ela existir.
+A chave saiu do Google AI Studio e foi gravada como secret do Worker no mesmo
+dia. O comando precisa do nome do Worker, porque a config do wrangler não fica
+na raiz — é gerada no build pelo `patch-wrangler.mjs`:
+
+```
+wrangler secret put GEMINI_API_KEY --name caju-os
+```
+
+Sem a chave, a rota devolve `code: "sem_chave"` e o painel volta para o
+assistente da fila, então o deploy era seguro antes dela existir.
+
+**Pendente:** conferir em produção, logado, que a pergunta aberta responde —
+"quem atende em Itabuna?" é uma que o assistente da fila não respondia.
 
 ## 2026-09-17
 
