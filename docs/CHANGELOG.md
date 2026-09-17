@@ -11,6 +11,34 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente de chamados (resumo, próximo passo e perguntas sobre a fila)
+
+Pedido de usar o Rovo do Jira dentro do Caju OS. O Rovo não expõe API pública
+de chat — o que a Atlassian oferece é o caminho inverso (levar agente externo
+para dentro do Jira, via Forge/`rovo:agentConnector`). A funcionalidade foi
+feita aqui, com os dados do Jira que o app já lê e com o **Workers AI** (binding
+`AI`), o mesmo já usado na leitura da RAT: sem credencial nova, sem provedor
+novo.
+
+- `lib/assistant.ts`: parte pura — contexto do chamado, contexto da fila,
+  prompts por tarefa, leitura da resposta e **redação de dados pessoais**
+  (CPF, RG, telefone e e-mail viram marcadores antes de virar prompt; o campo
+  "Dados dos Técnicos" carrega CPF/RG/TEL).
+- `app/api/assistant/route.ts`: `requireApiUser` (gerência, coordenação, N1,
+  analista) + `enforceRateLimit` (20/min por IP). Em `queue`, o servidor relê a
+  fila pelo Jira — o contexto do modelo nunca vem do cliente.
+- `components/assistant-panel.tsx`: `TicketAssistant` (Resumir / Próximo passo)
+  na tela do chamado e `QueueAssistant` (pergunta livre) na lista.
+- `tests/assistant.test.ts`: 12 testes, com foco na redação de dados pessoais.
+
+**Somente leitura:** o assistente descreve e sugere; nada grava no Jira. Por
+isso não entra na regra de validação de fluxo Jira.
+
+**Pendente:** o Workers AI só responde de verdade em produção — aqui dá para
+verificar contexto, prompt, permissão e limite, não a qualidade da resposta.
+Validar em produção se o texto ajuda e ajustar os prompts em `lib/assistant.ts`.
+
+
 ### Copiar "Resumo para mensagem" falhava com mais de um chamado
 
 `Copiar → Resumo para mensagem` mostrava "Falhou" a partir de dois chamados

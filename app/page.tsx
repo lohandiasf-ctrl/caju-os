@@ -62,6 +62,7 @@ import { WhatsAppInbox } from "@/components/whatsapp-inbox";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
+import { QueueAssistant } from "@/components/assistant-panel";
 import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
 import { openExternalUrl } from "@/lib/open-external";
@@ -1407,6 +1408,11 @@ export default function Home() {
                   </div>
                 </div>
               )}
+              {/* Pergunta livre sobre a fila. O servidor relê os chamados pela
+                  mesma busca; o contexto do modelo não vem do cliente. */}
+              <div className="mt-4">
+                <QueueAssistant user={user} query={query} />
+              </div>
               {view === "kanban" ? (
                 <>
                 {/* Celular: uma coluna por vez. Lado a lado não cabe em 375px,
