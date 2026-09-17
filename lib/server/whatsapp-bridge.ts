@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { employeePresence, whatsappConversations, whatsappMessages } from '@/db/schema';
-import { canUseWhatsapp } from '@/lib/navigation';
+import { canUseWhatsapp, WHATSAPP_ROLES } from '@/lib/navigation';
 import { roleLabels, type UserRole } from '@/lib/permissions';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
@@ -13,13 +13,14 @@ export async function senderLabelFor(user: { email: string; role: UserRole }) {
   return whatsappSenderLabel(user.email, presence?.displayName, roleLabels[user.role]);
 }
 
-export const WHATSAPP_SUPPORT_ROLES = ['gerencia', 'coordenador', 'n1', 'analista'] as const;
+export const WHATSAPP_SUPPORT_ROLES = WHATSAPP_ROLES;
 
-// Role check plus the closed-pilot allowlist (lib/navigation.ts).
+// Cargos com acesso ao WhatsApp (lib/navigation.ts): gerência, coordenação e
+// analistas. N1 e técnicos de campo não entram.
 export async function requireWhatsappUser(request: Request) {
   const current = await requireApiUser(request, [...WHATSAPP_SUPPORT_ROLES]);
-  if (!canUseWhatsapp(current.email)) {
-    throw Response.json({ error: 'O WhatsApp está em teste e ainda não está liberado para o seu acesso.' }, { status: 403 });
+  if (!canUseWhatsapp(current.role)) {
+    throw Response.json({ error: 'O WhatsApp não está liberado para o seu acesso.' }, { status: 403 });
   }
   return current;
 }

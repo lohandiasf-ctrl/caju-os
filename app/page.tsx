@@ -400,7 +400,7 @@ export default function Home() {
   useEffect(() => {
     const syncView = () => {
       const requested = dashboardViewFromLocation();
-      const next = canUseDashboardView(role, requested, user?.email)
+      const next = canUseDashboardView(role, requested)
         ? requested
         : defaultDashboardView(role);
       setActiveView(next);
@@ -996,7 +996,7 @@ export default function Home() {
       return;
     event.preventDefault();
     const requested = dashboardViewFromHref(href);
-    if (requested && !canUseDashboardView(role, requested, user?.email)) {
+    if (requested && !canUseDashboardView(role, requested)) {
       event.preventDefault();
       window.history.pushState(null, "", `/?view=${defaultDashboardView(role)}`);
       setActiveView(defaultDashboardView(role));
