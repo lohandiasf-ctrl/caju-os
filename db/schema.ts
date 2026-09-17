@@ -918,3 +918,30 @@ export const feedbackVotes = sqliteTable(
     uniqueIndex('idx_feedback_votes_unique').on(table.feedbackId, table.email),
   ],
 );
+
+// Escrita assistida: toda proposta do assistente, confirmada ou não, fica
+// registrada aqui. É a trilha que a coordenação e a gerência auditam — por
+// isso a linha nasce no momento da PROPOSTA, não da execução: uma sugestão
+// recusada também é informação.
+export const assistantActions = sqliteTable(
+  'assistant_actions',
+  {
+    id: text('id').primaryKey(),
+    ticketKey: text('ticket_key').notNull(),
+    kind: text('kind', { enum: ['comment', 'transition', 'schedule'] }).notNull(),
+    // Payload da ação como proposto, em JSON. A confirmação relê daqui: o
+    // cliente manda só o id, nunca o que será escrito.
+    payload: text('payload').notNull(),
+    description: text('description').notNull(),
+    status: text('status', { enum: ['pending', 'applied', 'failed', 'cancelled'] }).notNull().default('pending'),
+    proposedTo: text('proposed_to').notNull(),
+    confirmedBy: text('confirmed_by'),
+    error: text('error'),
+    createdAt: text('created_at').notNull(),
+    resolvedAt: text('resolved_at'),
+  },
+  (table) => [
+    index('idx_assistant_actions_created').on(table.createdAt),
+    index('idx_assistant_actions_ticket').on(table.ticketKey, table.createdAt),
+  ],
+);

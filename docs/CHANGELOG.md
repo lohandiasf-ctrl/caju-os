@@ -11,6 +11,70 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Escrita assistida no Jira: propor → confirmar → auditar
+
+O assistente passa a poder **escrever** no Jira, sempre com confirmação e
+sempre deixando rastro. O desenho tem três portas e nenhuma pode ser pulada:
+
+1. **Propor** — `POST /api/assistant/actions` pede uma sugestão ao modelo. A
+   ação vem num bloco JSON de uma **lista fechada**: comentário interno, mudança
+   de etapa ou data/hora de agendamento. Fechar, validar, cancelar e resolver
+   ficam de fora de propósito (fecham chamado e mexem em financeiro).
+2. **Confirmar** — `POST /api/assistant/actions/[id]`. A pessoa lê exatamente o
+   que vai mudar e aceita. O corpo da requisição **não carrega o que será
+   escrito**: o servidor relê a proposta pelo id, então não há como confirmar
+   uma coisa e executar outra. Só quem recebeu a sugestão pode confirmá-la, uma
+   única vez, e ela expira em 30 minutos.
+3. **Auditar** — `GET /api/assistant/actions`, restrito a coordenação e
+   gerência, com tela em Configurações. Mostra o que foi aplicado, recusado e
+   falhou: a linha nasce na **proposta**, então uma sugestão recusada também
+   aparece.
+
+- `lib/assistant-actions.ts`: parte pura — lista fechada, leitura do bloco do
+  modelo, descrição do que vai mudar, regra de confirmação única e expiração.
+- `lib/server/assistant-actions.ts`: gravação, confirmação e execução no Jira.
+- `lib/server/jira.ts`: `addJiraInternalComment`, que assina o comentário com
+  quem confirmou (a credencial do Jira é a da integração; sem assinar, o rastro
+  pararia em "Caju OS").
+- `db/schema.ts` + `drizzle/0034_assistant_actions.sql`: tabela
+  `assistant_actions`.
+- `components/assistant-panel.tsx`, `components/assistant-audit.tsx`.
+- `tests/assistant-actions.test.ts`: 13 testes nas travas.
+
+**Pendente:** rodar `npm run db:migrate:remote` para criar `assistant_actions`
+no D1 remoto. O deploy **não depende** dessa ordem: enquanto a tabela não
+existe, a escrita assistida responde "falta rodar a migration" em vez de
+estourar 500, e resumo, próximo passo e pergunta sobre a fila seguem normais.
+
+
+### Assistente de chamados (resumo, próximo passo e perguntas sobre a fila)
+
+Pedido de usar o Rovo do Jira dentro do Caju OS. O Rovo não expõe API pública
+de chat — o que a Atlassian oferece é o caminho inverso (levar agente externo
+para dentro do Jira, via Forge/`rovo:agentConnector`). A funcionalidade foi
+feita aqui, com os dados do Jira que o app já lê e com o **Workers AI** (binding
+`AI`), o mesmo já usado na leitura da RAT: sem credencial nova, sem provedor
+novo.
+
+- `lib/assistant.ts`: parte pura — contexto do chamado, contexto da fila,
+  prompts por tarefa, leitura da resposta e **redação de dados pessoais**
+  (CPF, RG, telefone e e-mail viram marcadores antes de virar prompt; o campo
+  "Dados dos Técnicos" carrega CPF/RG/TEL).
+- `app/api/assistant/route.ts`: `requireApiUser` (gerência, coordenação, N1,
+  analista) + `enforceRateLimit` (20/min por IP). Em `queue`, o servidor relê a
+  fila pelo Jira — o contexto do modelo nunca vem do cliente.
+- `components/assistant-panel.tsx`: `TicketAssistant` (Resumir / Próximo passo)
+  na tela do chamado e `QueueAssistant` (pergunta livre) na lista.
+- `tests/assistant.test.ts`: 12 testes, com foco na redação de dados pessoais.
+
+**Somente leitura:** o assistente descreve e sugere; nada grava no Jira. Por
+isso não entra na regra de validação de fluxo Jira.
+
+**Pendente:** o Workers AI só responde de verdade em produção — aqui dá para
+verificar contexto, prompt, permissão e limite, não a qualidade da resposta.
+Validar em produção se o texto ajuda e ajustar os prompts em `lib/assistant.ts`.
+
+
 ### Copiar "Resumo para mensagem" falhava com mais de um chamado
 
 `Copiar → Resumo para mensagem` mostrava "Falhou" a partir de dois chamados

@@ -381,6 +381,17 @@ export async function addJiraInternalEvidence(key: string, files: Array<{ name: 
   await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) }).catch(() => null);
 }
 
+// Comentário interno escrito pelo Caju OS. Sempre assinado com quem confirmou:
+// no Jira a credencial é a da integração, então sem a assinatura o rastro
+// pararia em "Caju OS" e a auditoria perderia a pessoa.
+export async function addJiraInternalComment(key: string, body: string, author: string) {
+  const normalizedKey = validIssueKey(key);
+  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, {
+    method: 'POST',
+    body: JSON.stringify({ body: `${body}\n\n— Caju OS, confirmado por ${author}`, public: false }),
+  });
+}
+
 export async function uploadJiraAttachments(key: string, files: File[], author: string) {
   const normalizedKey = validIssueKey(key);
   let finalizingInternalComment = false;
