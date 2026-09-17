@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import {
-  buildMessages, parseAnswer, queueContext, ticketContext, ticketKeysIn, validQuestion,
+  buildMessages, parseAnswer, queueContext, statusesIn, ticketContext, ticketKeysIn, validQuestion,
   type AssistantTask,
 } from '@/lib/assistant';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
@@ -22,6 +22,8 @@ const TASKS: AssistantTask[] = ['summary', 'next_step', 'queue'];
 const QUEUE_SIZE = 60;
 // Teto para as FSAs citadas na pergunta (a pergunta tem 400 caracteres).
 const ASKED_LIMIT = 30;
+// Teto por status citado na pergunta (o Jira devolve no máximo 100 por busca).
+const STATUS_SIZE = 100;
 
 type Runner = { run: (model: string, input: unknown) => Promise<unknown> };
 
@@ -50,18 +52,26 @@ export async function POST(request: Request) {
       // As FSAs citadas na pergunta são buscadas à parte, porque podem estar
       // fora da fila (outro status, ou além dos mais recentes).
       const asked = ticketKeysIn(body.question, ASKED_LIMIT);
-      const [queue, named] = await Promise.all([
+      // Status citado na pergunta: sem isto, "quais estão com técnico em
+      // campo?" responderia só os que couberam nos mais recentes.
+      const statuses = body?.status?.trim() ? [] : statusesIn(body.question);
+      const [queue, named, byStatus] = await Promise.all([
         searchJiraIssues({ status: body?.status, query: body?.query, maxResults: QUEUE_SIZE, withAttachments: true }),
         asked.length
           ? searchJiraIssues({ keys: asked, maxResults: asked.length, withAttachments: true }).then((result) => result.issues).catch(() => [])
           : Promise.resolve([]),
+        Promise.all(statuses.map((status) =>
+          searchJiraIssues({ status, query: body?.query, maxResults: STATUS_SIZE, withAttachments: true })
+            .then((result) => result.issues).catch(() => []),
+        )).then((lists) => lists.flat()),
       ]);
-      const issues = [...named, ...queue.issues.filter((issue) => !named.some((item) => item.key === issue.key))];
+      const wanted = [...named, ...byStatus.filter((issue) => !named.some((item) => item.key === issue.key))];
+      const issues = [...wanted, ...queue.issues.filter((issue) => !wanted.some((item) => item.key === issue.key))];
       if (!issues.length) {
         return Response.json({ error: 'Nenhum chamado na fila para consultar.' }, { status: 404 });
       }
       // Os chamados citados vêm primeiro e nunca entram no corte da fila.
-      context = queueContext(issues, QUEUE_SIZE + named.length);
+      context = queueContext(issues, QUEUE_SIZE + wanted.length);
     } else {
       if (typeof body?.ticketKey !== 'string' || !body.ticketKey.trim()) {
         return Response.json({ error: 'Informe o chamado.' }, { status: 400 });
