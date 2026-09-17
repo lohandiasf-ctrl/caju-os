@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente: FSAs citadas na pergunta e status com a palavra da tela
+
+Perguntando o status de 25 FSAs, 8 receberam "não consta", e as outras vieram
+como "TEC-CAMPO".
+
+- **FSA citada é buscada no Jira.** As 8 estavam fora da fila carregada (a fila
+  são os 60 chamados operacionais atualizados mais recentemente). Agora o
+  servidor extrai as FSAs da pergunta (`ticketKeysIn`, até 30) e busca essas no
+  Jira com `searchJiraIssues({ keys })`, **sem filtro de status** — chamado
+  citado pelo nome vale mesmo resolvido ou cancelado. Elas entram no começo do
+  contexto e nunca caem no corte da fila.
+- **Status com a palavra da tela.** `statusLabel()` traduz o nome do Jira para o
+  da interface ("TEC-CAMPO" → "Técnico em campo", "DIRECIONADO" →
+  "Direcionado"). Status fora da operação (resolvido, cancelado) fica como veio.
+  Vale na fila, no contexto do chamado e na contagem de "sem anexo".
+- `tests/assistant.test.ts`: 2 testes novos.
+
+**Pendente:** repetir em produção a pergunta com a lista de FSAs.
+
 ### Assistente: evidências (anexos) na fila
 
 "Quais chamados que estão com técnico em campo não estão com evidências

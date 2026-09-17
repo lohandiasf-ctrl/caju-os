@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, describeAttachments, onlyDate, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, describeAttachments, onlyDate, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -165,6 +165,27 @@ test('os anexos viram texto curto por tipo', () => {
   assert.equal(describeAttachments(['image/jpeg']), '1 foto');
   assert.equal(describeAttachments(['video/mp4', 'video/mp4', 'text/plain']), '2 vídeos, 1 outro');
   assert.match(ticketContext(issue({ attachmentTypes: ['application/pdf'] }), 6, TODAY), /Anexos \(evidências\): 1 PDF/);
+});
+
+// A tela mostra "Técnico em campo"; o Jira chama de "TEC-CAMPO", e era isso
+// que o assistente devolvia.
+test('o status sai com a palavra que a tela usa', () => {
+  assert.equal(statusLabel('TEC-CAMPO'), 'Técnico em campo');
+  assert.equal(statusLabel('DIRECIONADO'), 'Direcionado');
+  assert.equal(statusLabel('AGENDAMENTO PEDIDO PELO CLIENTE'), 'Pendente de agendamento');
+  assert.equal(statusLabel('Agendado'), 'Agendado');
+  assert.equal(statusLabel('Aguardando Spare'), 'Aguardando spare');
+  assert.equal(statusLabel('Resolvido'), 'Resolvido', 'status fora da operação fica como veio');
+  assert.match(queueContext([ticket({ status: 'TEC-CAMPO' })], 60, TODAY), /FSA-1 \| Técnico em campo \|/);
+});
+
+// Perguntando o status de 25 FSAs, 8 receberam "não consta": estavam fora da
+// fila carregada. Agora o servidor busca no Jira as FSAs citadas.
+test('as FSAs citadas na pergunta são extraídas', () => {
+  assert.deepEqual(ticketKeysIn('quais o status desses: FSA-132424 fsa-132593, FSA-132424?'), ['FSA-132424', 'FSA-132593']);
+  assert.deepEqual(ticketKeysIn('quantos caíram ontem'), []);
+  assert.equal(ticketKeysIn(Array.from({ length: 40 }, (_, index) => `FSA-${index}`).join(' ')).length, 30, 'no máximo 30');
+  assert.equal(ticketKeysIn('FSA-1 FSA-2 FSA-3', 2).length, 2);
 });
 
 test('as FSAs da resposta viram links, e o resto continua texto', () => {
