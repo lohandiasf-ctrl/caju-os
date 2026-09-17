@@ -48,8 +48,9 @@ function line(label: string, value: string | null | undefined) {
   return clean ? `${label}: ${redact(clean)}\n` : '';
 }
 
-export function ticketContext(issue: AssistantIssue, maxComments = 6): string {
-  let text = `Chamado ${issue.key}\n`;
+export function ticketContext(issue: AssistantIssue, maxComments = 6, today = new Date()): string {
+  // Sem a data de hoje o modelo não sabe se o agendamento já passou.
+  let text = `Hoje é ${onlyDate(today.toISOString())}.\nChamado ${issue.key}\n`;
   text += line('Título', issue.summary);
   text += line('Status', issue.status);
   text += line('Prioridade', issue.priority);
@@ -73,7 +74,14 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6): string {
   return text.trimEnd();
 }
 
-export function queueContext(tickets: AssistantTicket[], limit = 60): string {
+// Datas do Jira vêm com hora e fuso ("2026-09-16T10:23:00.000-0300"). Na fila
+// só o dia interessa, e a linha fica legível.
+export function onlyDate(value: string | null | undefined): string | null {
+  const match = value?.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : (value?.trim() || null);
+}
+
+export function queueContext(tickets: AssistantTicket[], limit = 60, today = new Date()): string {
   const rows = tickets.slice(0, limit).map((ticket) => [
     ticket.key,
     ticket.status,
@@ -81,12 +89,18 @@ export function queueContext(tickets: AssistantTicket[], limit = 60): string {
     ticket.store ?? '-',
     ticket.city ?? '-',
     ticket.technicianName ?? 'sem técnico',
-    ticket.scheduledAt ?? 'sem agendamento',
+    // Sem a data de abertura o assistente não consegue responder "quantos
+    // entraram hoje" — e respondia, corretamente, que não constava.
+    onlyDate(ticket.createdAt) ?? '-',
+    onlyDate(ticket.scheduledAt) ?? 'sem agendamento',
     redact(ticket.summary),
   ].join(' | '));
-  const header = 'FSA | status | prioridade | loja | cidade | técnico | agendamento | título';
+  const header = 'FSA | status | prioridade | loja | cidade | técnico | aberto em | agendamento | título';
   const cut = tickets.length > limit ? `\n(${tickets.length - limit} chamados a mais não listados)` : '';
-  return [`${tickets.length} chamados na fila.`, header, ...rows].join('\n') + cut;
+  // O modelo não tem relógio: sem esta linha, "hoje" e "ontem" não significam
+  // nada para ele.
+  const stamp = `Hoje é ${onlyDate(today.toISOString())}. As datas abaixo estão no formato AAAA-MM-DD.`;
+  return [stamp, `${tickets.length} chamados na fila.`, header, ...rows].join('\n') + cut;
 }
 
 const BASE = `Você é o assistente de operações do Caju OS, que atende chamados de suporte de TI em lojas de varejo no Brasil.
@@ -108,7 +122,8 @@ Formato: uma linha "Próximo passo:" com a ação concreta, depois até três ma
   queue: `${BASE}
 
 Tarefa: responder a pergunta da pessoa sobre a fila de chamados listada.
-Formato: resposta direta primeiro. Ao citar chamados, use a FSA. Se a pergunta pedir contagem ou ordenação, confira na lista antes de responder. Se a lista não permitir responder, diga isso.`,
+Formato: resposta direta primeiro. Ao citar chamados, use a FSA. Se a pergunta pedir contagem ou ordenação, confira na lista antes de responder. Se a lista não permitir responder, diga isso.
+Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do contexto diz a data de hoje, e cada chamado traz a coluna "aberto em". Conte a partir delas.`,
 };
 
 export function buildMessages(task: AssistantTask, context: string, question?: string) {
