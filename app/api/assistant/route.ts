@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import {
-  buildMessages, parseAnswer, queueContext, statusesIn, ticketContext, ticketKeysIn, validQuestion,
+  buildMessages, parseAnswer, queueContext, ticketContext, ticketKeysIn, validQuestion,
   type AssistantTask,
 } from '@/lib/assistant';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
@@ -19,13 +19,32 @@ const MODELS = [
   '@cf/mistralai/mistral-small-3.1-24b-instruct',
 ];
 const TASKS: AssistantTask[] = ['summary', 'next_step', 'queue'];
-const QUEUE_SIZE = 60;
+// A fila inteira, não uma amostra. Com 60 chamados, "quantos caíram ontem?"
+// respondia 8 de 17 e "quais estão em campo?" 22 de 30: a conta certa exige
+// ver todos. O Jira devolve 100 por página; a operação tem ~170 chamados.
+const PAGE_SIZE = 100;
+const QUEUE_MAX = 300;
 // Teto para as FSAs citadas na pergunta (a pergunta tem 400 caracteres).
 const ASKED_LIMIT = 30;
-// Teto por status citado na pergunta (o Jira devolve no máximo 100 por busca).
-const STATUS_SIZE = 100;
 
 type Runner = { run: (model: string, input: unknown) => Promise<unknown> };
+
+// A fila operacional inteira, página por página. Falha de página seguinte não
+// derruba a resposta: vale o que já veio, e o contexto avisa quantos são.
+async function loadQueue(status?: string, query?: string) {
+  const issues = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < Math.ceil(QUEUE_MAX / PAGE_SIZE); page += 1) {
+    const result: Awaited<ReturnType<typeof searchJiraIssues>> | null = await searchJiraIssues({
+      status, query, maxResults: PAGE_SIZE, withAttachments: true, ...(cursor ? { nextPageToken: cursor } : {}),
+    }).catch(() => null);
+    if (!result) break;
+    issues.push(...result.issues);
+    cursor = result.nextPageToken;
+    if (!cursor || result.isLast || issues.length >= QUEUE_MAX) break;
+  }
+  return issues.slice(0, QUEUE_MAX);
+}
 
 export async function POST(request: Request) {
   try {
@@ -52,26 +71,18 @@ export async function POST(request: Request) {
       // As FSAs citadas na pergunta são buscadas à parte, porque podem estar
       // fora da fila (outro status, ou além dos mais recentes).
       const asked = ticketKeysIn(body.question, ASKED_LIMIT);
-      // Status citado na pergunta: sem isto, "quais estão com técnico em
-      // campo?" responderia só os que couberam nos mais recentes.
-      const statuses = body?.status?.trim() ? [] : statusesIn(body.question);
-      const [queue, named, byStatus] = await Promise.all([
-        searchJiraIssues({ status: body?.status, query: body?.query, maxResults: QUEUE_SIZE, withAttachments: true }),
+      const [queue, named] = await Promise.all([
+        loadQueue(body?.status, body?.query),
         asked.length
           ? searchJiraIssues({ keys: asked, maxResults: asked.length, withAttachments: true }).then((result) => result.issues).catch(() => [])
           : Promise.resolve([]),
-        Promise.all(statuses.map((status) =>
-          searchJiraIssues({ status, query: body?.query, maxResults: STATUS_SIZE, withAttachments: true })
-            .then((result) => result.issues).catch(() => []),
-        )).then((lists) => lists.flat()),
       ]);
-      const wanted = [...named, ...byStatus.filter((issue) => !named.some((item) => item.key === issue.key))];
-      const issues = [...wanted, ...queue.issues.filter((issue) => !wanted.some((item) => item.key === issue.key))];
+      const issues = [...named, ...queue.filter((issue) => !named.some((item) => item.key === issue.key))];
       if (!issues.length) {
         return Response.json({ error: 'Nenhum chamado na fila para consultar.' }, { status: 404 });
       }
       // Os chamados citados vêm primeiro e nunca entram no corte da fila.
-      context = queueContext(issues, QUEUE_SIZE + wanted.length);
+      context = queueContext(issues, QUEUE_MAX + named.length);
     } else {
       if (typeof body?.ticketKey !== 'string' || !body.ticketKey.trim()) {
         return Response.json({ error: 'Informe o chamado.' }, { status: 400 });

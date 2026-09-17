@@ -11,6 +11,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente: a fila inteira, não uma amostra de 60
+
+Testando em produção: "quantos chamados caíram ontem?" respondeu 8, e na tela
+são 17. Mesma causa da contagem de status: o contexto levava só os 60 chamados
+operacionais atualizados mais recentemente. Buscar o status citado (a correção
+anterior) resolvia a pergunta de status e deixava a de data errada.
+
+- `app/api/assistant/route.ts`: `loadQueue()` lê a fila operacional inteira,
+  página por página (100 por página, teto de 300; a operação tem ~170). Falha
+  numa página seguinte não derruba a resposta — vale o que já veio.
+- `lib/assistant.ts`: `statusesIn()` saiu junto com a busca por status, que
+  virou código morto.
+- As FSAs citadas na pergunta continuam buscadas à parte, porque podem estar
+  fora da fila operacional (resolvidas, canceladas).
+
+**Verificado em produção (17/09):** depois do deploy anterior, "quais chamados
+estão com técnico em campo?" passou a responder 30 — as mesmas 30 FSAs da
+coluna do quadro — e a pergunta de data voltou a trazer o rodapé "(pela data de
+acionamento)", que sai nas demais.
+
+**Pendente:** conferir em produção que "quantos caíram ontem?" passa a
+responder 17.
+
 ### Assistente: status citado na pergunta é buscado inteiro no Jira
 
 Depois da correção do formato, "quais chamados estão com técnico em campo?"

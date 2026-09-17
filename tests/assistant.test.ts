@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, describeAttachments, onlyDate, statusesIn, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, describeAttachments, onlyDate, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -168,19 +168,6 @@ test('os anexos viram texto curto por tipo', () => {
   assert.equal(describeAttachments(['image/jpeg']), '1 foto');
   assert.equal(describeAttachments(['video/mp4', 'video/mp4', 'text/plain']), '2 vídeos, 1 outro');
   assert.match(ticketContext(issue({ attachmentTypes: ['application/pdf'] }), 6, TODAY), /Anexos \(evidências\): 1 PDF/);
-});
-
-// "Quais estão com técnico em campo?" respondeu 22 de 30: os outros estavam
-// fora dos 60 mais recentes. O status citado é buscado inteiro no Jira.
-test('o status citado na pergunta vira nome do Jira', () => {
-  assert.deepEqual(statusesIn('quais chamados estao com tecnico em campo?'), ['TEC-CAMPO']);
-  assert.deepEqual(statusesIn('quantos estão em campo agora'), ['TEC-CAMPO']);
-  assert.deepEqual(statusesIn('quais estão direcionados?'), ['DIRECIONADO']);
-  assert.deepEqual(statusesIn('quantos aguardando spare'), ['Aguardando Spare']);
-  assert.deepEqual(statusesIn('quais estão agendados para amanhã'), ['Agendado']);
-  assert.deepEqual(statusesIn('quantos pendentes de agendamento'), ['AGENDAMENTO', 'AGENDAMENTO PEDIDO PELO CLIENTE']);
-  assert.deepEqual(statusesIn('quantos caíram ontem'), [], 'pergunta sem status não dispara busca');
-  assert.equal(statusesIn('em campo, direcionado e spare').length, 2, 'no máximo dois status por pergunta');
 });
 
 // "Quais chamados estão com técnico em campo?" listou 26 dos 30 e ainda
