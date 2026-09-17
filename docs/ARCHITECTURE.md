@@ -230,6 +230,18 @@ Pontos-chave:
 
 ## Inteligência operacional / IA
 
+- Assistente geral (`/api/assistant/ask`): responde pergunta aberta sobre a
+  operação. Roda no **Gemini** (REST, sem SDK) com **chamada de função**: o
+  modelo não recebe contexto pronto, ele consulta o sistema por
+  `lib/assistant-tools.ts` — `consultar_chamados`, `detalhar_chamado`,
+  `consultar_tecnicos`, `resumo_operacao`, `consultar_historico`. Quem executa
+  é `lib/server/assistant-data.ts`; o formato da API fica em
+  `lib/gemini-protocol.ts` (puro, testado). **Somente leitura**, nenhum dado
+  pessoal sai (as consultas não selecionam documento, telefone, endereço ou
+  PIX, e o resto passa por `redact()`). Teto de 5 rodadas por pergunta. Sem
+  `GEMINI_API_KEY` a rota devolve `code: "sem_chave"` e o painel usa o
+  assistente da fila.
+
 - `lib/operational-intelligence.ts`: recomendação de técnico, artigos de base
   de conhecimento (`knowledgeArticles()`, `KNOWLEDGE_ARTICLES`), estado de
   tarefa delegada. Tudo determinístico, sem LLM.

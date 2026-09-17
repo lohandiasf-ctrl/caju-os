@@ -22,6 +22,23 @@ async function ask(user: User, body: Record<string, unknown>) {
   return payload.answer;
 }
 
+// Assistente geral: a pergunta pode ser qualquer uma, e o servidor consulta o
+// sistema até saber responder. Enquanto a chave do Gemini não estiver posta,
+// `sem_chave` faz a pergunta voltar para o assistente da fila — que responde
+// menos, mas responde.
+async function askGeneral(user: User, question: string, fallback: Record<string, unknown>) {
+  if (!user) throw new Error('Sessão expirada. Entre de novo.');
+  const response = await fetch('/api/assistant/ask', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+  const payload = await response.json() as { answer?: string; error?: string; code?: string };
+  if (payload.code === 'sem_chave') return ask(user, { ...fallback, task: 'queue', question });
+  if (!response.ok || !payload.answer) throw new Error(payload.error || 'O assistente não respondeu.');
+  return payload.answer;
+}
+
 // Com `onOpenTicket`, cada FSA citada vira botão que abre o chamado.
 function Answer({ text, onOpenTicket }: { text: string; onOpenTicket?: (ticketKey: string) => void }) {
   return <div className="mt-3 whitespace-pre-wrap rounded-xl border border-border bg-background/70 p-3 text-sm leading-relaxed">
@@ -158,19 +175,19 @@ export function QueueAssistant({ user, status, query, onOpenTicket }: { user: Us
   async function submit() {
     if (busy || question.trim().length < 3) return;
     setBusy(true); setError(''); setAnswer('');
-    try { setAnswer(await ask(user, { task: 'queue', question, status, query })); }
+    try { setAnswer(await askGeneral(user, question, { status, query })); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'O assistente falhou.'); }
     finally { setBusy(false); }
   }
 
-  return <Shell hint="Pergunte sobre os chamados desta fila. Responde só com o que está listado.">
+  return <Shell hint="Pergunte sobre a operação: chamados, técnicos, prazos, histórico. Ele consulta o sistema para responder.">
     <form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <Input
         value={question}
         onChange={(event) => setQuestion(event.target.value)}
         maxLength={MAX_QUESTION_LENGTH}
-        placeholder="Ex.: quais chamados estão sem técnico há mais de dois dias?"
-        aria-label="Pergunta sobre a fila"
+        placeholder="Ex.: quem atende em Itabuna e está livre agora?"
+        aria-label="Pergunta sobre a operação"
         className="min-h-11 min-w-0 flex-1"
         disabled={busy}
       />
@@ -180,6 +197,6 @@ export function QueueAssistant({ user, status, query, onOpenTicket }: { user: Us
     </form>
     {error && <p role="alert" className="mt-3 rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
     {answer && <Answer text={answer} onOpenTicket={onOpenTicket} />}
-    {answer && <p className="mt-2 text-xs text-muted-foreground">Resposta gerada por IA sobre os chamados carregados. Toque numa FSA para abrir o chamado. Confira antes de agir.</p>}
+    {answer && <p className="mt-2 text-xs text-muted-foreground">Resposta gerada por IA a partir do que ela consultou no sistema. Toque numa FSA para abrir o chamado. Confira antes de agir.</p>}
   </Shell>;
 }
