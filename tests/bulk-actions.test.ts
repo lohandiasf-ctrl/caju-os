@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { bulkIneligibleReason, canBulkTransition, isBulkEligible, ticketsToClipboard, ticketsToClipboardHtml } from '../lib/bulk-actions.ts';
-import { sharedTicketUrl } from '../lib/ticket-links.ts';
+import { jiraTicketUrl, sharedTicketUrl } from '../lib/ticket-links.ts';
 
 test('bulk scheduling only takes tickets waiting to be scheduled', () => {
   assert.equal(isBulkEligible('AGENDAMENTO', 'scheduled'), true);
@@ -54,6 +54,15 @@ test('copying as a message can include rich clickable links', () => {
   const html = ticketsToClipboardHtml(tickets, 'message') ?? '';
   assert.match(html, /<a href="https:\/\/operacoes\.cajutech\.net\/\?ticket=FSA-1">https:\/\/operacoes\.cajutech\.net\/\?ticket=FSA-1<\/a>/);
   assert.match(html, /<b>Resumo do problema<\/b>/);
+});
+
+// "Só os links do Jira": o que se cola no grupo para quem vai abrir o chamado
+// lá. Sem título e sem status, para caber numa lista.
+test('copiar só os links do Jira dá um link por linha', () => {
+  const text = ticketsToClipboard(tickets, 'jira');
+  assert.equal(text, `${jiraTicketUrl('FSA-1')}\n${jiraTicketUrl('FSA-2')}`);
+  assert.doesNotMatch(text, /operacoes\.cajutech\.net/, 'é o link do Jira, não o do Caju OS');
+  assert.equal(ticketsToClipboardHtml(tickets, 'jira'), undefined, 'texto puro: cola em qualquer campo');
 });
 
 // O resumo já saiu com o domínio antigo uma vez; este teste prende as duas

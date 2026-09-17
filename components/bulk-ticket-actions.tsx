@@ -18,6 +18,7 @@ type Result = { key: string; ok: boolean; queued?: boolean; error?: string };
 const SOURCE_LABEL: Record<BulkStatus, string> = { scheduled: 'Pendente de agendamento', in_service: 'Agendado' };
 const COPY_OPTIONS: Array<[ClipboardFormat, string, string]> = [
   ['keys', 'Só as FSAs', 'Uma por linha'],
+  ['jira', 'Só os links do Jira', 'Um por linha'],
   ['message', 'Resumo para mensagem', 'WhatsApp, e-mail, Teams'],
   ['sheet', 'Planilha', 'Colunas para colar no Excel'],
 ];
