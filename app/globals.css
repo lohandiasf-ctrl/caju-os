@@ -108,6 +108,11 @@
 
 @layer base {
   * { @apply border-border; scrollbar-color: #53627c transparent; scrollbar-width: thin; }
+  /* O gesto de arrastar para baixo no topo de qualquer lista chegava à raiz
+     do documento e disparava o pull-to-refresh nativo do Chrome Android — no
+     WhatsApp, subir as conversas recarregava a página. `contain` mantém o
+     overscroll dentro do app; os scrollers internos já usam overscroll-contain. */
+  html, body { overscroll-behavior-y: contain; }
   html { @apply font-sans; scroll-padding-top: 6rem; }
   body {
     @apply bg-background text-foreground;

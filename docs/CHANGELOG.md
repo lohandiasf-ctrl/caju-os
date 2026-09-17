@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Mobile: puxar a lista para cima recarregava a página
+
+No celular, arrastar para ver conversas mais antigas disparava o
+pull-to-refresh nativo do Chrome Android e recarregava o app. Os scrollers
+internos já tinham `overscroll-contain`, mas a raiz do documento não tinha
+regra nenhuma — o gesto chegava até ela.
+
+`app/globals.css`: `html, body { overscroll-behavior-y: contain; }`. Vale para
+o app inteiro, não só a aba WhatsApp.
+
 ### WhatsApp: acesso por cargo (fim do piloto por e-mail)
 
 A aba WhatsApp estava presa a uma allowlist de e-mail (`WHATSAPP_PILOT_EMAILS`,
