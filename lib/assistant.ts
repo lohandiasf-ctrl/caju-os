@@ -231,7 +231,7 @@ Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do conte
 - Se não der para saber qual é, use "acionado em".
 Para "hoje" e "ontem", copie a linha certa das "Contagens prontas" (número e FSAs), sem recontar. Para outros períodos, conte pela coluna.
 Evidência, foto, vídeo, RAT, anexo, comprovante: use a coluna "anexos" (arquivos anexados ao chamado no Jira). "Sem evidência" = "nenhum". Para "sem evidência" num status, copie a linha "Sem nenhum anexo em ..." das contagens prontas; se o status não aparecer ali, nenhum chamado nele está sem anexo. Status: compare com a coluna "status" sem diferenciar maiúsculas ("técnico em campo" = "Técnico em campo").
-Diga em poucas palavras qual data usou (ex.: "pela data de acionamento") e cite as FSAs.`,
+Só quando a pergunta for sobre data, diga em poucas palavras qual coluna usou (ex.: "pela data de acionamento"). Em pergunta que não é sobre data, não escreva isso. Cite sempre as FSAs.`,
 };
 
 export function buildMessages(task: AssistantTask, context: string, question?: string) {

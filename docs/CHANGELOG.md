@@ -28,7 +28,14 @@ como "TEC-CAMPO".
   Vale na fila, no contexto do chamado e na contagem de "sem anexo".
 - `tests/assistant.test.ts`: 2 testes novos.
 
-**Pendente:** repetir em produção a pergunta com a lista de FSAs.
+**Verificado em produção (17/09):** a pergunta com as 27 FSAs foi repetida no
+app. As 27 vieram como "Técnico em campo" — nenhuma "não consta" — e o clique
+na FSA abriu o chamado. Conferido na mão: FSA-127365 e FSA-128340, duas das
+que antes faltavam, estão mesmo em TEC-CAMPO.
+
+Um defeito apareceu no teste: a resposta terminou com "(pela data de
+acionamento)" numa pergunta que não era sobre data. O prompt passa a pedir
+essa linha só em pergunta de data.
 
 ### Assistente: evidências (anexos) na fila
 

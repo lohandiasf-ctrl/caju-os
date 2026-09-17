@@ -118,6 +118,9 @@ test('a fila também traz as contagens de ontem prontas', () => {
   assert.match(text, /- Acionados ontem \(2026-09-16\): 1 — FSA-7/);
   assert.match(text, /- Abertos no Jira ontem \(2026-09-16\): 1 — FSA-8/);
   assert.match(buildMessages('queue', 'x', 'y')[0].content, /"hoje" e "ontem", copie a linha certa/);
+  // Perguntando o status de 27 FSAs, a resposta terminou com "(pela data de
+  // acionamento)" — pergunta que não é sobre data não leva esse rodapé.
+  assert.match(buildMessages('queue', 'x', 'y')[0].content, /pergunta que não é sobre data, não escreva isso/);
 });
 
 test('ontem é o dia anterior no fuso de Brasília', () => {
