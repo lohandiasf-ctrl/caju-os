@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente: status citado na pergunta é buscado inteiro no Jira
+
+Depois da correção do formato, "quais chamados estão com técnico em campo?"
+respondeu 22, e são 30. O formato estava certo (copiou a linha pronta); a lista
+é que estava curta: a fila são os 60 chamados operacionais atualizados mais
+recentemente, e 8 dos que estão em campo ficaram fora dessa janela.
+
+- `lib/assistant.ts`: `statusesIn()` reconhece o status citado na pergunta e o
+  devolve no nome do Jira ("em campo" → `TEC-CAMPO`, "pendente de agendamento"
+  → `AGENDAMENTO` e `AGENDAMENTO PEDIDO PELO CLIENTE`). No máximo dois status
+  por pergunta.
+- `app/api/assistant/route.ts`: esses status são buscados no Jira (até 100 por
+  status) junto com a fila e com as FSAs citadas. Os três resultados são unidos
+  sem repetição, e nada disso entra no corte da fila. Quando a tela já está
+  filtrada por status, a busca extra não acontece.
+- `tests/assistant.test.ts`: 1 teste novo.
+
+**Pendente:** conferir em produção que a resposta traz os 30.
+
 ### Assistente: FSAs citadas na pergunta e status com a palavra da tela
 
 Perguntando o status de 25 FSAs, 8 receberam "não consta", e as outras vieram

@@ -135,6 +135,23 @@ export function statusLabel(status: string): string {
   return STATUS_LABELS.find(([pattern]) => pattern.test(normalized))?.[1] ?? status.trim();
 }
 
+// Status citado na pergunta, no nome que o Jira usa. "Quais estão com técnico
+// em campo?" respondia 22 de 30: os outros 8 estavam fora dos 60 mais
+// recentes. O servidor busca no Jira o status inteiro antes de responder.
+const STATUS_QUESTION: Array<[RegExp, string[]]> = [
+  [/tec-?campo|tecnico em campo|em campo|em atendimento/, ['TEC-CAMPO']],
+  [/direcionad/, ['DIRECIONADO']],
+  [/spare/, ['Aguardando Spare']],
+  [/\bagendados?\b/, ['Agendado']],
+  [/agendamento|pendente de agenda/, ['AGENDAMENTO', 'AGENDAMENTO PEDIDO PELO CLIENTE']],
+];
+
+export function statusesIn(question: string, limit = 2): string[] {
+  const normalized = question.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const found = STATUS_QUESTION.filter(([pattern]) => pattern.test(normalized)).flatMap(([, statuses]) => statuses);
+  return [...new Set(found)].slice(0, limit);
+}
+
 // FSAs citadas na pergunta. O servidor busca essas no Jira, porque podem estar
 // fora da fila carregada (outro status, ou além dos 60 mais recentes).
 export function ticketKeysIn(text: string, limit = 30): string[] {
