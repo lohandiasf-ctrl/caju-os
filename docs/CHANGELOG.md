@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Copiar só os links do Jira
+
+O menu "Copiar" da barra de seleção ganhou **"Só os links do Jira"**: um
+`https://delfia.atlassian.net/browse/FSA-…` por linha, sem título e sem status,
+para colar numa lista ou num grupo.
+
+- `lib/bulk-actions.ts`: formato `jira` em `ticketsToClipboard`. O endereço do
+  Jira é repetido aqui pelo mesmo motivo do link público (o módulo roda direto
+  no Node nos testes); `tests/bulk-actions.test.ts` prende as duas cópias ao
+  mesmo endereço de `lib/ticket-links.ts`.
+- `components/bulk-ticket-actions.tsx`: a opção nova entra logo depois de "Só
+  as FSAs".
+
 ### Assistente: a fila inteira, não uma amostra de 60
 
 Testando em produção: "quantos chamados caíram ontem?" respondeu 8, e na tela

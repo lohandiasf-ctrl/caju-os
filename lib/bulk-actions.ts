@@ -2,7 +2,7 @@
 // Módulo puro: usado pela rota /api/jira/issues/batch, pela tela e pelos testes.
 
 export type BulkStatus = 'scheduled' | 'in_service';
-export type ClipboardFormat = 'keys' | 'message' | 'sheet';
+export type ClipboardFormat = 'keys' | 'jira' | 'message' | 'sheet';
 export type BulkTicket = {
   id: string;
   title: string;
@@ -22,6 +22,7 @@ export const MAX_BULK_TICKETS = 40;
 // nos testes, que não resolvem import relativo sem extensão, e a extensão .ts
 // quebra o `tsc`. `tests/bulk-actions.test.ts` cobre os dois juntos.
 const sharedTicketUrl = (key: string) => `https://operacoes.cajutech.net/?ticket=${encodeURIComponent(key)}`;
+const jiraTicketUrl = (key: string) => `https://delfia.atlassian.net/browse/${encodeURIComponent(key)}`;
 
 const TRANSITION_ROLES = new Set(['gerencia', 'coordenador', 'n1', 'analista']);
 
@@ -60,6 +61,9 @@ export function bulkIneligibleReason(rawStatus: string, target: BulkStatus) {
 
 export function ticketsToClipboard(tickets: BulkTicket[], format: ClipboardFormat) {
   if (format === 'keys') return tickets.map((ticket) => ticket.id).join('\n');
+  // Só os links, um por linha: é o que se cola no grupo para quem vai abrir no
+  // Jira. Sem título e sem status, senão não dá para colar numa lista.
+  if (format === 'jira') return tickets.map((ticket) => jiraTicketUrl(ticket.id)).join('\n');
   if (format === 'sheet') {
     const header = ['FSA', 'Título', 'Loja', 'Cidade', 'Status', 'Agendamento', 'Técnico'];
     const rows = tickets.map((ticket) => [ticket.id, ticket.title, ticket.store, ticket.city, ticket.rawStatus, ticket.schedule ?? '', ticket.technician ?? '']);
