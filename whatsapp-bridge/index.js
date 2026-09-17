@@ -280,6 +280,14 @@ async function forwardGroups(groups) {
 
 function jidUser(jid) { return String(jid ?? '').split('@')[0].split(':')[0]; }
 
+// Brazilian mobiles may come back with or without the ninth digit, so they
+// compare by country + area code + last eight digits.
+function memberKey(jid) {
+  const user = jidUser(jid);
+  if (String(jid).endsWith('@lid')) return `lid:${user}`;
+  return /^55\d{10,11}$/.test(user) ? `${user.slice(0, 4)}${user.slice(-8)}` : user;
+}
+
 function learnName(name, ...jids) {
   const clean = typeof name === 'string' ? name.trim() : '';
   if (!clean) return;
@@ -648,9 +656,18 @@ http.createServer(async (request, response) => {
         .catch((error) => { throw Object.assign(new Error(`O WhatsApp recusou criar o grupo (${error?.data ?? error?.message ?? 'erro'}).`), { status: 502, expose: true }); });
       groupCache.set(group.id, { subject: group.subject || subject, at: Date.now() });
       await forwardGroups([{ ...group, subject: group.subject || subject, creation: group.creation ?? Math.floor(Date.now() / 1000) }]);
-      const added = new Set((group.participants ?? []).map((participant) => jidUser(participant.id)));
       const photoSet = photo ? await setGroupPhoto(group.id, photo) : undefined;
-      return json(response, 200, { jid: group.id, subject: group.subject || subject, missing: participants.filter((jid) => !added.has(jidUser(jid))), photoSet });
+      // Groups in LID addressing mode list members by "@lid", with the phone
+      // in a separate field, so compare every ID a member has. The fresh
+      // metadata is the real membership; the create reply is the fallback.
+      const members = (await sock.groupMetadata(group.id).catch(() => null))?.participants ?? group.participants ?? [];
+      const added = new Set();
+      for (const member of members) {
+        if (member.lid && member.jid) learnPhone(member.lid, member.jid);
+        for (const id of [member.id, member.jid, member.lid, phoneJidFor(member.id)]) if (id) added.add(memberKey(id));
+      }
+      const missing = resolved.filter((item) => !added.has(memberKey(item.jid)) && !added.has(memberKey(item.phone))).map((item) => item.jid);
+      return json(response, 200, { jid: group.id, subject: group.subject || subject, missing, photoSet });
     }
 
     // Start over with a new QR. Refused while connected so a click can't
