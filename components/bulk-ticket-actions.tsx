@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { canBulkTransition, isBulkEligible, MAX_BULK_TICKETS, ticketsToClipboard, ticketsToClipboardHtml, type BulkStatus, type BulkTicket, type ClipboardFormat } from '@/lib/bulk-actions';
-import { copyToClipboard } from '@/lib/clipboard';
+import { copyToClipboardLazy } from '@/lib/clipboard';
 import { canUseWhatsapp } from '@/lib/navigation';
 import { WhatsAppGroupDialog } from '@/components/whatsapp-group-dialog';
 
@@ -92,24 +92,30 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
     setTechnicianData(`Nome: ${technician.name}\nCPF: ${technician.cpf || 'Não informado'}\nRG: Não informado\nTEL: .`);
   }
 
+  // Busca o defeito alegado de cada FSA para o resumo de mensagem. Em paralelo:
+  // era uma ida ao Jira por chamado, em fila, e a demora estourava a janela do
+  // gesto que autoriza a escrita na área de transferência.
+  async function enrich(): Promise<BulkTicket[]> {
+    if (!user) return tickets;
+    const token = await user.getIdToken();
+    return Promise.all(tickets.map(async (ticket) => {
+      try {
+        const response = await fetch(`/api/jira/issues/${encodeURIComponent(ticket.id)}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+        if (!response.ok) return ticket;
+        const payload = await response.json() as { operationalFields?: { allegedDefect?: string | null } };
+        return { ...ticket, allegedDefect: payload.operationalFields?.allegedDefect ?? null };
+      } catch { return ticket; }
+    }));
+  }
+
   async function copy(format: ClipboardFormat) {
     setCopyState('copying');
-    let source = tickets;
-    if (format === 'message' && user) {
-      try {
-        const token = await user.getIdToken();
-        const enriched: BulkTicket[] = [];
-        for (const ticket of tickets) {
-          try {
-            const response = await fetch(`/api/jira/issues/${encodeURIComponent(ticket.id)}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
-            const payload = await response.json() as { operationalFields?: { allegedDefect?: string | null } };
-            enriched.push(response.ok ? { ...ticket, allegedDefect: payload.operationalFields?.allegedDefect ?? null } : ticket);
-          } catch { enriched.push(ticket); }
-        }
-        source = enriched;
-      } catch { /* Usa o título como fallback se a sessão expirar. */ }
-    }
-    const ok = await copyToClipboard(ticketsToClipboard(source, format), ticketsToClipboardHtml(source, format)).catch(() => false);
+    const load = async () => {
+      // Usa o título como fallback se a sessão expirar ou o Jira falhar.
+      const source = format === 'message' ? await enrich().catch(() => tickets) : tickets;
+      return { text: ticketsToClipboard(source, format), html: ticketsToClipboardHtml(source, format) };
+    };
+    const ok = await copyToClipboardLazy(load).catch(() => false);
     setCopyState(ok ? 'ok' : 'fail');
   }
 
