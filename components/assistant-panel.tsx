@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Check, Loader2, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MAX_QUESTION_LENGTH, type AssistantTask } from '@/lib/assistant';
+import { MAX_QUESTION_LENGTH, splitTicketKeys, type AssistantTask } from '@/lib/assistant';
 
 type Proposal = { id: string; description: string; kind: string; preview: Record<string, unknown> };
 
@@ -22,8 +22,21 @@ async function ask(user: User, body: Record<string, unknown>) {
   return payload.answer;
 }
 
-function Answer({ text }: { text: string }) {
-  return <div className="mt-3 whitespace-pre-wrap rounded-xl border border-border bg-background/70 p-3 text-sm leading-relaxed">{text}</div>;
+// Com `onOpenTicket`, cada FSA citada vira botão que abre o chamado.
+function Answer({ text, onOpenTicket }: { text: string; onOpenTicket?: (ticketKey: string) => void }) {
+  return <div className="mt-3 whitespace-pre-wrap rounded-xl border border-border bg-background/70 p-3 text-sm leading-relaxed">
+    {onOpenTicket
+      ? splitTicketKeys(text).map((part, index) => part.ticketKey
+        ? <button
+            key={index}
+            type="button"
+            onClick={() => onOpenTicket(part.ticketKey!)}
+            aria-label={`Abrir chamado ${part.ticketKey}`}
+            className="inline rounded font-semibold text-violet-300 underline decoration-violet-300/40 underline-offset-2 transition hover:text-violet-200 hover:decoration-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >{part.text}</button>
+        : <span key={index}>{part.text}</span>)
+      : text}
+  </div>;
 }
 
 function Shell({ children, hint }: { children: React.ReactNode; hint: string }) {
@@ -136,7 +149,7 @@ export function TicketAssistant({ ticketKey, user, onApplied }: { ticketKey: str
 
 // Pergunta livre sobre a fila. O servidor relê a fila; o contexto do modelo
 // nunca vem do cliente.
-export function QueueAssistant({ user, status, query }: { user: User; status?: string; query?: string }) {
+export function QueueAssistant({ user, status, query, onOpenTicket }: { user: User; status?: string; query?: string; onOpenTicket?: (ticketKey: string) => void }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
@@ -166,7 +179,7 @@ export function QueueAssistant({ user, status, query }: { user: User; status?: s
       </Button>
     </form>
     {error && <p role="alert" className="mt-3 rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
-    {answer && <Answer text={answer} />}
-    {answer && <p className="mt-2 text-xs text-muted-foreground">Resposta gerada por IA sobre os chamados carregados. Confira antes de agir.</p>}
+    {answer && <Answer text={answer} onOpenTicket={onOpenTicket} />}
+    {answer && <p className="mt-2 text-xs text-muted-foreground">Resposta gerada por IA sobre os chamados carregados. Toque numa FSA para abrir o chamado. Confira antes de agir.</p>}
   </Shell>;
 }

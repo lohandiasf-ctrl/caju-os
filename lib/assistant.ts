@@ -101,18 +101,22 @@ export function operationDate(now: Date = new Date()): string {
 }
 
 // Modelo pequeno erra contagem numa tabela de 60 linhas. As contagens de hoje
-// saem prontas daqui; o modelo só escolhe qual delas a pergunta pede.
-function todayCounts(tickets: AssistantTicket[], day: string): string[] {
-  const count = (label: string, pick: (ticket: AssistantTicket) => string | null) => {
+// e de ontem saem prontas daqui; o modelo só escolhe qual delas a pergunta pede.
+function dayCounts(tickets: AssistantTicket[], day: string, label: string): string[] {
+  const count = (kind: string, pick: (ticket: AssistantTicket) => string | null) => {
     const keys = tickets.filter((ticket) => onlyDate(pick(ticket)) === day).map((ticket) => ticket.key);
-    return `- ${label} hoje: ${keys.length}${keys.length ? ` (${keys.join(', ')})` : ''}`;
+    return `- ${kind} ${label} (${day}): ${keys.length}${keys.length ? ` — ${keys.join(', ')}` : ''}`;
   };
   return [
-    'Contagens de hoje nesta lista:',
     count('Acionados', (ticket) => ticket.partnerTriggeredAt),
     count('Abertos no Jira', (ticket) => ticket.createdAt),
     count('Agendados para', (ticket) => ticket.scheduledAt),
   ];
+}
+
+// Brasil não tem horário de verão desde 2019, então 24h atrás é sempre ontem.
+export function previousOperationDate(now: Date = new Date()): string {
+  return operationDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
 }
 
 export function queueContext(tickets: AssistantTicket[], limit = 60, today = new Date()): string {
@@ -136,8 +140,10 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
   // O modelo não tem relógio: sem esta linha, "hoje" e "ontem" não significam
   // nada para ele.
   const day = operationDate(today);
-  const stamp = `Hoje é ${day}. As datas abaixo estão no formato AAAA-MM-DD.`;
-  return [stamp, `${tickets.length} chamados na fila.`, ...todayCounts(listed, day), '', header, ...rows].join('\n') + cut;
+  const yesterday = previousOperationDate(today);
+  const stamp = `Hoje é ${day}; ontem foi ${yesterday}. As datas abaixo estão no formato AAAA-MM-DD.`;
+  const counts = ['Contagens prontas nesta lista (já conferidas):', ...dayCounts(listed, day, 'hoje'), ...dayCounts(listed, yesterday, 'ontem')];
+  return [stamp, `${tickets.length} chamados na fila.`, ...counts, '', header, ...rows].join('\n') + cut;
 }
 
 const BASE = `Você é o assistente de operações do Caju OS, que atende chamados de suporte de TI em lojas de varejo no Brasil.
@@ -165,7 +171,7 @@ Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do conte
 - Criação no Jira — só quando a pergunta fala em aberto, abertura, criado ou criação → coluna "aberto em".
 - Visita marcada — agendado, agendamento, visita, atendimento marcado → coluna "agendamento".
 - Se não der para saber qual é, use "acionado em".
-Para "hoje", use as "Contagens de hoje" do contexto: já estão conferidas. Para outros períodos, conte pela coluna.
+Para "hoje" e "ontem", copie a linha certa das "Contagens prontas" (número e FSAs), sem recontar. Para outros períodos, conte pela coluna.
 Diga em poucas palavras qual data usou (ex.: "pela data de acionamento") e cite as FSAs.`,
 };
 
@@ -187,6 +193,23 @@ export function parseAnswer(raw: unknown): string {
   const payload = raw as { response?: unknown; result?: { response?: unknown } };
   const value = payload.response ?? payload.result?.response;
   return typeof value === 'string' ? value.trim() : '';
+}
+
+// FSAs citadas na resposta viram links para abrir o chamado. A separação fica
+// aqui, pura, para o componente só desenhar.
+export type AnswerPart = { text: string; ticketKey?: string };
+
+export function splitTicketKeys(text: string): AnswerPart[] {
+  const parts: AnswerPart[] = [];
+  let last = 0;
+  for (const match of text.matchAll(/\b[A-Z][A-Z0-9]+-\d+\b/g)) {
+    const start = match.index ?? 0;
+    if (start > last) parts.push({ text: text.slice(last, start) });
+    parts.push({ text: match[0], ticketKey: match[0] });
+    last = start + match[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last) });
+  return parts;
 }
 
 export const MAX_QUESTION_LENGTH = 400;
