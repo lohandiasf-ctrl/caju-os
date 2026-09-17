@@ -4,6 +4,7 @@ import { whatsappConversations } from '@/db/schema';
 import { getJiraIssue } from '@/lib/server/jira';
 import { logSecurityEvent } from '@/lib/server/security-log';
 import { bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
+import { isWhatsappGroupPhoto } from '@/lib/whatsapp-group-photos';
 import { groupTicketsConflict, participantJid, WHATSAPP_GROUP_NAME_MAX } from '@/lib/whatsapp-group-name';
 
 // Contacts that can go into a new group: the inbox's direct conversations,
@@ -56,9 +57,12 @@ const MAX_TICKETS = 40;
 export async function POST(request: Request) {
   try {
     const user = await requireWhatsappUser(request);
-    const body = await request.json().catch(() => null) as { subject?: unknown; participants?: unknown; ticketKeys?: unknown } | null;
+    const body = await request.json().catch(() => null) as { subject?: unknown; photo?: unknown; participants?: unknown; ticketKeys?: unknown } | null;
     const subject = typeof body?.subject === 'string' ? body.subject.trim() : '';
     if (!subject) return Response.json({ error: 'Informe o nome do grupo.' }, { status: 400 });
+    // Only the photos Caju OS ships; the bridge fetches the file from here.
+    const photo = body?.photo == null ? null : isWhatsappGroupPhoto(body.photo) ? body.photo : undefined;
+    if (photo === undefined) return Response.json({ error: 'Foto do grupo inválida.' }, { status: 400 });
     if (subject.length > WHATSAPP_GROUP_NAME_MAX) return Response.json({ error: `O nome do grupo pode ter até ${WHATSAPP_GROUP_NAME_MAX} caracteres.` }, { status: 400 });
 
     const raw = Array.isArray(body?.participants) ? body.participants.filter((item): item is string => typeof item === 'string') : [];
@@ -73,15 +77,17 @@ export async function POST(request: Request) {
     const upstream = await bridgeFetch('/groups', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject, participants }),
+      body: JSON.stringify({ subject, participants, photo }),
       signal: AbortSignal.timeout(30_000),
     });
-    const payload = await upstream.json().catch(() => ({})) as { jid?: string; subject?: string; missing?: string[]; unknown?: string[]; error?: string };
-    logSecurityEvent({ request, user, action: 'whatsapp_group_create', outcome: upstream.ok ? 'allowed' : 'denied', details: { subject, participants: participants.length, ticketKeys, status: upstream.status } });
+    const payload = await upstream.json().catch(() => ({})) as { jid?: string; subject?: string; missing?: string[]; unknown?: string[]; photoSet?: boolean; error?: string };
+    logSecurityEvent({ request, user, action: 'whatsapp_group_create', outcome: upstream.ok ? 'allowed' : 'denied', details: { subject, photo, participants: participants.length, ticketKeys, status: upstream.status } });
     if (!upstream.ok || !payload.jid) {
       return Response.json({ error: payload.error ?? 'O WhatsApp não criou o grupo.', unknown: payload.unknown ?? [] }, { status: upstream.status === 400 ? 400 : 502 });
     }
-    return Response.json({ jid: payload.jid, subject: payload.subject ?? subject, missing: payload.missing ?? [] });
+    // photoSet is only false when a photo was asked for and not applied; an
+    // older bridge that ignores photos doesn't send it.
+    return Response.json({ jid: payload.jid, subject: payload.subject ?? subject, missing: payload.missing ?? [], photoSet: photo ? payload.photoSet ?? false : undefined });
   } catch (error) {
     if (error instanceof Response) return error;
     console.error('Falha ao criar grupo do WhatsApp', error);

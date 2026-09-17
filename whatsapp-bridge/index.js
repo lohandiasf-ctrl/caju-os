@@ -461,6 +461,21 @@ function toOggOpus(buffer) {
   });
 }
 
+// The group already exists at this point, so a photo that fails is reported
+// back instead of failing the request.
+async function setGroupPhoto(groupJid, photo) {
+  try {
+    const source = new URL(`/whatsapp-group-photos/${photo}.jpg`, CAJU_WEBHOOK_URL);
+    const file = await fetch(source, { signal: AbortSignal.timeout(10_000) });
+    if (!file.ok) throw new Error(`HTTP ${file.status}`);
+    await sock.updateProfilePicture(groupJid, Buffer.from(await file.arrayBuffer()));
+    return true;
+  } catch (error) {
+    console.error('Falha ao aplicar a foto do grupo:', error?.message ?? error);
+    return false;
+  }
+}
+
 async function readBody(request, limit) {
   const chunks = []; let size = 0;
   for await (const chunk of request) {
@@ -623,6 +638,8 @@ http.createServer(async (request, response) => {
       const body = JSON.parse((await readBody(request, 16 * 1024)).toString('utf8') || '{}');
       const subject = typeof body?.subject === 'string' ? body.subject.trim().slice(0, 100) : '';
       const participants = Array.isArray(body?.participants) ? [...new Set(body.participants.map(jidFor).filter(Boolean))] : [];
+      // One of the photos Caju OS serves under /whatsapp-group-photos/.
+      const photo = typeof body?.photo === 'string' && /^[a-z0-9-]{1,40}$/.test(body.photo) ? body.photo : null;
       if (!subject || !participants.length) return json(response, 400, { error: 'Nome do grupo e participantes são obrigatórios.' });
       const resolved = await Promise.all(participants.map(async (jid) => ({ jid, phone: phoneJidFor(jid) ?? await resolveLidPhone(jid) })));
       const unknown = resolved.filter((item) => !item.phone).map((item) => item.jid);
@@ -632,7 +649,8 @@ http.createServer(async (request, response) => {
       groupCache.set(group.id, { subject: group.subject || subject, at: Date.now() });
       await forwardGroups([{ ...group, subject: group.subject || subject, creation: group.creation ?? Math.floor(Date.now() / 1000) }]);
       const added = new Set((group.participants ?? []).map((participant) => jidUser(participant.id)));
-      return json(response, 200, { jid: group.id, subject: group.subject || subject, missing: participants.filter((jid) => !added.has(jidUser(jid))) });
+      const photoSet = photo ? await setGroupPhoto(group.id, photo) : undefined;
+      return json(response, 200, { jid: group.id, subject: group.subject || subject, missing: participants.filter((jid) => !added.has(jidUser(jid))), photoSet });
     }
 
     // Start over with a new QR. Refused while connected so a click can't

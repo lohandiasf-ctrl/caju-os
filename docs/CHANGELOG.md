@@ -11,6 +11,21 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-16
 
+### WhatsApp: foto do grupo escolhida na criação
+
+O diálogo "Criar grupo no WhatsApp" ganhou uma linha de miniaturas com as cinco
+artes da operação (Atendimento agendado, Agendar com técnico, Técnico em
+atendimento, Retorno ao atendimento, Pendência técnica) e "Sem foto" (padrão).
+As artes ficam em `public/whatsapp-group-photos/` (640×640), listadas em
+`lib/whatsapp-group-photos.ts`. A rota só aceita ids dessa lista; a ponte
+baixa o arquivo de `operacoes.cajutech.net` e aplica com
+`updateProfilePicture` logo depois de criar o grupo. Se a foto falhar, o grupo
+continua criado e o diálogo avisa.
+
+**Pendente:** redeploy da ponte (`cd whatsapp-bridge && fly deploy`) — sem
+isso a foto é ignorada e o diálogo avisa que não foi aplicada. O web precisa
+estar no ar antes (a ponte baixa a imagem dele).
+
 ### Mobile: atalho de pergunta que passava 2px da tela
 
 Na Visão geral, o atalho "quantos chamados estão sem mandar para validação"

@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Loader2, MessageCirclePlus, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { Check, CheckCircle2, ImageOff, Loader2, MessageCirclePlus, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { WHATSAPP_GROUP_PHOTOS, whatsappGroupPhotoSrc, type WhatsappGroupPhotoId } from '@/lib/whatsapp-group-photos';
 import { groupTicketsConflict, participantJid, WHATSAPP_GROUP_NAME_MAX, whatsappGroupName, type GroupNameTicket } from '@/lib/whatsapp-group-name';
 
 type User = { getIdToken: () => Promise<string> } | null;
@@ -20,6 +21,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
   user: User;
 }) {
   const [subject, setSubject] = useState('');
+  const [photo, setPhoto] = useState<WhatsappGroupPhotoId | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selected, setSelected] = useState<Contact[]>([]);
   const [query, setQuery] = useState('');
@@ -29,7 +31,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [created, setCreated] = useState<{ subject: string; missing: string[] } | null>(null);
+  const [created, setCreated] = useState<{ subject: string; missing: string[]; photoFailed: boolean } | null>(null);
 
   // The ticket list refreshes in the background; only suggest the name when
   // the dialog opens, so an edit in progress isn't overwritten.
@@ -48,7 +50,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
 
   useEffect(() => {
     if (!open) return;
-    setSubject(whatsappGroupName(ticketsRef.current)); setSelected([]); setQuery(''); setPhone(''); setError(''); setCreated(null);
+    setSubject(whatsappGroupName(ticketsRef.current)); setPhoto(null); setSelected([]); setQuery(''); setPhone(''); setError(''); setCreated(null);
     void loadContacts();
   }, [open, loadContacts]);
 
@@ -118,15 +120,15 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
       const response = await fetch('/api/whatsapp/groups', {
         method: 'POST',
         headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject: subject.trim(), participants: selected.map((item) => item.jid), ticketKeys: tickets.map((ticket) => ticket.id) }),
+        body: JSON.stringify({ subject: subject.trim(), photo, participants: selected.map((item) => item.jid), ticketKeys: tickets.map((ticket) => ticket.id) }),
       });
-      const payload = await response.json().catch(() => ({})) as { subject?: string; missing?: string[]; unknown?: string[]; error?: string };
+      const payload = await response.json().catch(() => ({})) as { subject?: string; missing?: string[]; unknown?: string[]; photoSet?: boolean; error?: string };
       if (!response.ok) {
         // Contacts the bridge only knows by "@lid" have to be typed as phones.
         const pending = (payload.unknown ?? []).map((jid) => selected.find((item) => item.jid === jid)?.name ?? displayJid(jid));
         throw new Error(pending.length ? `${payload.error ?? 'Não foi possível criar o grupo.'} Faltam: ${pending.join(', ')}.` : payload.error ?? 'Não foi possível criar o grupo.');
       }
-      setCreated({ subject: payload.subject ?? subject.trim(), missing: (payload.missing ?? []).map((jid) => selected.find((item) => item.jid === jid)?.name ?? displayJid(jid)) });
+      setCreated({ subject: payload.subject ?? subject.trim(), photoFailed: Boolean(photo) && payload.photoSet === false, missing: (payload.missing ?? []).map((jid) => selected.find((item) => item.jid === jid)?.name ?? displayJid(jid)) });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível criar o grupo.'); }
     finally { setSaving(false); }
   }
@@ -143,6 +145,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
           <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/8 p-4 text-sm">
             <p className="flex items-center gap-2 font-semibold text-emerald-200"><CheckCircle2 className="size-4" />Grupo criado</p>
             <p className="mt-1 break-words">{created.subject}</p>
+            {created.photoFailed && <p className="mt-2 text-amber-200">A foto do grupo não foi aplicada. Defina pelo celular, se precisar.</p>}
             {created.missing.length > 0 && <p className="mt-2 text-amber-200">Não foi possível adicionar: {created.missing.join(', ')}. Confira se o número tem WhatsApp ou adicione pelo celular.</p>}
           </div>
         ) : conflict ? (
@@ -154,6 +157,21 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
               <Input id="whatsapp-group-subject" value={subject} maxLength={WHATSAPP_GROUP_NAME_MAX} onChange={(event) => setSubject(event.target.value)} />
               <p className="mt-1 text-xs text-muted-foreground">Sugestão: data/hora do agendamento · 4 consoantes da cidade/UF · cliente e loja · FSAs. {subject.length}/{WHATSAPP_GROUP_NAME_MAX}</p>
             </div>
+
+            <fieldset>
+              <legend className="mb-1 text-sm font-semibold">Foto do grupo</legend>
+              <div role="radiogroup" aria-label="Foto do grupo" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                <PhotoOption selected={photo === null} label="Sem foto" onSelect={() => setPhoto(null)}>
+                  <span className="grid size-full place-items-center bg-white/5 text-muted-foreground"><ImageOff className="size-6" /></span>
+                </PhotoOption>
+                {WHATSAPP_GROUP_PHOTOS.map((item) => (
+                  <PhotoOption key={item.id} selected={photo === item.id} label={item.label} onSelect={() => setPhoto(item.id)}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={whatsappGroupPhotoSrc(item.id)} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
+                  </PhotoOption>
+                ))}
+              </div>
+            </fieldset>
 
             <div>
               <p className="mb-1 text-sm font-semibold">Participantes</p>
@@ -227,6 +245,24 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// One square choice in the group photo picker.
+function PhotoOption({ selected, label, onSelect, children }: { selected: boolean; label: string; onSelect: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      aria-label={label}
+      title={label}
+      onClick={onSelect}
+      className={`relative aspect-square overflow-hidden rounded-xl border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 ${selected ? 'border-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.18)]' : 'border-transparent opacity-80 hover:opacity-100'}`}
+    >
+      {children}
+      {selected && <span className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-emerald-400 text-emerald-950"><Check className="size-3.5" strokeWidth={3} /></span>}
+    </button>
   );
 }
 
