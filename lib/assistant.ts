@@ -18,6 +18,9 @@ export type AssistantTicket = {
   city: string | null;
   createdAt: string;
   scheduledAt: string | null;
+  // "Acionado" na operação é o parceiro acionado (customfield_12278), não a
+  // abertura do chamado.
+  partnerTriggeredAt: string | null;
   technicianName: string | null;
 };
 
@@ -57,6 +60,7 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   text += line('Loja', issue.store);
   text += line('Cidade', issue.city);
   text += line('Aberto em', issue.createdAt);
+  text += line('Parceiro acionado em', issue.partnerTriggeredAt);
   text += line('Agendado para', issue.scheduledAt);
   text += line('Técnico', issue.technicianName);
   text += line('Categoria do problema', issue.problemCategory);
@@ -74,11 +78,15 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   return text.trimEnd();
 }
 
-// Datas do Jira vêm com hora e fuso ("2026-09-16T10:23:00.000-0300"). Na fila
-// só o dia interessa, e a linha fica legível.
+// Datas do Jira vêm com hora e fuso ("2026-09-16T10:23:00.000-0300"); campos
+// de texto podem vir em DD/MM/AAAA. Na fila só o dia interessa, sempre em
+// AAAA-MM-DD para o modelo comparar com "Hoje é".
 export function onlyDate(value: string | null | undefined): string | null {
-  const match = value?.match(/^(\d{4}-\d{2}-\d{2})/);
-  return match ? match[1] : (value?.trim() || null);
+  const iso = value?.match(/^\s*(\d{4}-\d{2}-\d{2})/);
+  if (iso) return iso[1];
+  const br = value?.match(/^\s*(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  return value?.trim() || null;
 }
 
 // "Hoje" é o hoje de quem está perguntando, não o do servidor. O Worker roda em
@@ -92,26 +100,44 @@ export function operationDate(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: OPERATION_TIMEZONE }).format(now);
 }
 
+// Modelo pequeno erra contagem numa tabela de 60 linhas. As contagens de hoje
+// saem prontas daqui; o modelo só escolhe qual delas a pergunta pede.
+function todayCounts(tickets: AssistantTicket[], day: string): string[] {
+  const count = (label: string, pick: (ticket: AssistantTicket) => string | null) => {
+    const keys = tickets.filter((ticket) => onlyDate(pick(ticket)) === day).map((ticket) => ticket.key);
+    return `- ${label} hoje: ${keys.length}${keys.length ? ` (${keys.join(', ')})` : ''}`;
+  };
+  return [
+    'Contagens de hoje nesta lista:',
+    count('Acionados', (ticket) => ticket.partnerTriggeredAt),
+    count('Abertos no Jira', (ticket) => ticket.createdAt),
+    count('Agendados para', (ticket) => ticket.scheduledAt),
+  ];
+}
+
 export function queueContext(tickets: AssistantTicket[], limit = 60, today = new Date()): string {
-  const rows = tickets.slice(0, limit).map((ticket) => [
+  const listed = tickets.slice(0, limit);
+  const rows = listed.map((ticket) => [
     ticket.key,
     ticket.status,
     ticket.priority,
     ticket.store ?? '-',
     ticket.city ?? '-',
     ticket.technicianName ?? 'sem técnico',
-    // Sem a data de abertura o assistente não consegue responder "quantos
-    // entraram hoje" — e respondia, corretamente, que não constava.
+    // Abertura no Jira, acionamento do parceiro e visita: três datas
+    // diferentes, e a operação pergunta por todas.
     onlyDate(ticket.createdAt) ?? '-',
+    onlyDate(ticket.partnerTriggeredAt) ?? 'não acionado',
     onlyDate(ticket.scheduledAt) ?? 'sem agendamento',
     redact(ticket.summary),
   ].join(' | '));
-  const header = 'FSA | status | prioridade | loja | cidade | técnico | aberto em | agendamento | título';
+  const header = 'FSA | status | prioridade | loja | cidade | técnico | aberto em | acionado em | agendamento | título';
   const cut = tickets.length > limit ? `\n(${tickets.length - limit} chamados a mais não listados)` : '';
   // O modelo não tem relógio: sem esta linha, "hoje" e "ontem" não significam
   // nada para ele.
-  const stamp = `Hoje é ${operationDate(today)}. As datas abaixo estão no formato AAAA-MM-DD.`;
-  return [stamp, `${tickets.length} chamados na fila.`, header, ...rows].join('\n') + cut;
+  const day = operationDate(today);
+  const stamp = `Hoje é ${day}. As datas abaixo estão no formato AAAA-MM-DD.`;
+  return [stamp, `${tickets.length} chamados na fila.`, ...todayCounts(listed, day), '', header, ...rows].join('\n') + cut;
 }
 
 const BASE = `Você é o assistente de operações do Caju OS, que atende chamados de suporte de TI em lojas de varejo no Brasil.
@@ -134,7 +160,13 @@ Formato: uma linha "Próximo passo:" com a ação concreta, depois até três ma
 
 Tarefa: responder a pergunta da pessoa sobre a fila de chamados listada.
 Formato: resposta direta primeiro. Ao citar chamados, use a FSA. Se a pergunta pedir contagem ou ordenação, confira na lista antes de responder. Se a lista não permitir responder, diga isso.
-Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do contexto diz a data de hoje, e cada chamado traz a coluna "aberto em". Conte a partir delas.`,
+Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do contexto diz a data de hoje. Decida pelo SENTIDO da pergunta, não por palavra exata; as listas abaixo são exemplos:
+- Chegada do chamado para a operação — acionado, acionamento, caiu, caíram, colocado, colocaram, entrou, entraram, chegou, chegaram, veio, recebemos, novos → coluna "acionado em".
+- Criação no Jira — só quando a pergunta fala em aberto, abertura, criado ou criação → coluna "aberto em".
+- Visita marcada — agendado, agendamento, visita, atendimento marcado → coluna "agendamento".
+- Se não der para saber qual é, use "acionado em".
+Para "hoje", use as "Contagens de hoje" do contexto: já estão conferidas. Para outros períodos, conte pela coluna.
+Diga em poucas palavras qual data usou (ex.: "pela data de acionamento") e cite as FSAs.`,
 };
 
 export function buildMessages(task: AssistantTask, context: string, question?: string) {

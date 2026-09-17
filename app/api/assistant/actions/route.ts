@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { buildMessages, parseAnswer, ticketContext, type AssistantIssue } from '@/lib/assistant';
+import { buildMessages, parseAnswer, ticketContext } from '@/lib/assistant';
 import { ActionError, canAudit, extractActionBlock, parseAction, stripActionBlock } from '@/lib/assistant-actions';
 import { listAudit, MigrationPendingError, recordProposal } from '@/lib/server/assistant-actions';
+import { toAssistantIssue } from '@/lib/server/assistant-issue';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { getJiraIssue, isJiraConfigured, JiraError } from '@/lib/server/jira';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
@@ -100,17 +101,4 @@ function errorResponse(error: unknown, fallback: string) {
   if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
   console.error(fallback, error);
   return Response.json({ error: fallback }, { status: 500 });
-}
-
-function toAssistantIssue(issue: Awaited<ReturnType<typeof getJiraIssue>>): AssistantIssue {
-  return {
-    key: issue.key, summary: issue.summary, status: issue.status, priority: issue.priority,
-    store: issue.operationalFields.storeName ?? issue.store, city: issue.city,
-    createdAt: issue.createdAt, scheduledAt: issue.operationalFields.scheduledDateTime ?? issue.scheduledAt,
-    technicianName: issue.technicianName, description: issue.description,
-    allegedDefect: issue.operationalFields.allegedDefect, problemCategory: issue.operationalFields.problemCategory,
-    equipmentModel: issue.operationalFields.equipmentModel, defectSummary: issue.operationalFields.defectSummary,
-    technicianData: issue.operationalFields.technicianData,
-    internalComments: (issue.internalComments ?? []).map((comment) => ({ author: comment.author, createdAt: comment.createdAt, body: comment.body })),
-  };
 }

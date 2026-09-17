@@ -7,7 +7,7 @@ const TODAY = new Date('2026-09-17T12:00:00.000Z');
 function ticket(partial: Partial<AssistantTicket> = {}): AssistantTicket {
   return {
     key: 'FSA-1', summary: 'PDV 3 não liga', status: 'Agendado', priority: 'Alta',
-    store: 'Loja Centro', city: 'Recife', createdAt: '2026-09-10', scheduledAt: null,
+    store: 'Loja Centro', city: 'Recife', createdAt: '2026-09-10', scheduledAt: null, partnerTriggeredAt: null,
     technicianName: null, ...partial,
   };
 }
@@ -74,6 +74,43 @@ test('a fila leva a data de abertura de cada chamado', () => {
   assert.match(text, /\| 2026-09-16 \|/, 'a data entra só com o dia');
 });
 
+// "Quantos chamados foram acionados hoje?" recebia "a lista não fornece a data
+// de acionamento" — e não fornecia: só ia a abertura e o agendamento.
+test('a fila leva a data de acionamento do parceiro', () => {
+  const text = queueContext([ticket({ partnerTriggeredAt: '2026-09-17T08:10:00.000-0300' }), ticket({ key: 'FSA-2' })], 60, TODAY);
+  assert.match(text, /aberto em \| acionado em \| agendamento/);
+  assert.match(text, /FSA-1 .*\| 2026-09-10 \| 2026-09-17 \| sem agendamento \|/);
+  assert.match(text, /FSA-2 .*\| não acionado \|/);
+  assert.match(ticketContext(issue({ partnerTriggeredAt: '17/09/2026 08:10' }), 6, TODAY), /Parceiro acionado em: 17\/09\/2026 08:10/);
+});
+
+// A operação pergunta de vários jeitos: "quantos caíram", "quantos foram
+// colocados", "quantos entraram". Tudo isso é acionamento.
+test('o prompt da fila trata caiu, colocado e entrou como acionamento', () => {
+  const prompt = buildMessages('queue', 'x', 'y')[0].content;
+  const chegada = prompt.split('\n').find((text) => text.includes('coluna "acionado em"')) ?? '';
+  for (const word of ['acionado', 'caíram', 'colocado', 'entraram', 'chegaram']) {
+    assert.match(chegada, new RegExp(word), `"${word}" conta pelo acionamento`);
+  }
+  assert.match(prompt, /SENTIDO da pergunta/);
+  assert.match(prompt, /Se não der para saber qual é, use "acionado em"/);
+});
+
+test('a fila traz as contagens de hoje prontas, com as FSAs', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-1', partnerTriggeredAt: '2026-09-17T08:10:00.000-0300', createdAt: '2026-09-17T07:00:00.000-0300' }),
+    ticket({ key: 'FSA-2', partnerTriggeredAt: '17/09/2026 09:00' }),
+    ticket({ key: 'FSA-3', partnerTriggeredAt: '2026-09-16T18:00:00.000-0300', scheduledAt: '2026-09-17 14:00' }),
+  ], 60, TODAY);
+  assert.match(text, /- Acionados hoje: 2 \(FSA-1, FSA-2\)/);
+  assert.match(text, /- Abertos no Jira hoje: 1 \(FSA-1\)/);
+  assert.match(text, /- Agendados para hoje: 1 \(FSA-3\)/);
+});
+
+test('contagem zerada não inventa lista', () => {
+  assert.match(queueContext([ticket()], 60, TODAY), /- Acionados hoje: 0\n/);
+});
+
 test('o contexto diz que dia é hoje', () => {
   assert.match(queueContext([ticket()], 60, TODAY), /^Hoje é 2026-09-17\./);
   assert.match(ticketContext(issue(), 6, TODAY), /^Hoje é 2026-09-17\./);
@@ -90,6 +127,7 @@ test('"hoje" é o dia de Brasília, não o do servidor em UTC', () => {
 test('a data vem do Jira com hora e fuso, e sai só o dia', () => {
   assert.equal(onlyDate('2026-09-16T10:23:00.000-0300'), '2026-09-16');
   assert.equal(onlyDate('2026-09-16'), '2026-09-16');
+  assert.equal(onlyDate('17/09/2026 08:10'), '2026-09-17', 'data em texto BR vira AAAA-MM-DD');
   assert.equal(onlyDate(null), null);
   assert.equal(onlyDate('  '), null);
 });
