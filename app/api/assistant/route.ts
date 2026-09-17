@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import {
-  buildMessages, parseAnswer, queueContext, ticketContext, validQuestion,
+  buildMessages, parseAnswer, queueContext, ticketContext, ticketKeysIn, validQuestion,
   type AssistantTask,
 } from '@/lib/assistant';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
@@ -20,6 +20,8 @@ const MODELS = [
 ];
 const TASKS: AssistantTask[] = ['summary', 'next_step', 'queue'];
 const QUEUE_SIZE = 60;
+// Teto para as FSAs citadas na pergunta (a pergunta tem 400 caracteres).
+const ASKED_LIMIT = 30;
 
 type Runner = { run: (model: string, input: unknown) => Promise<unknown> };
 
@@ -45,11 +47,21 @@ export async function POST(request: Request) {
         return Response.json({ error: 'Escreva a pergunta (de 3 a 400 caracteres).' }, { status: 400 });
       }
       // A fila é relida no servidor: o contexto do modelo nunca vem do cliente.
-      const { issues } = await searchJiraIssues({ status: body?.status, query: body?.query, maxResults: QUEUE_SIZE, withAttachments: true });
+      // As FSAs citadas na pergunta são buscadas à parte, porque podem estar
+      // fora da fila (outro status, ou além dos mais recentes).
+      const asked = ticketKeysIn(body.question, ASKED_LIMIT);
+      const [queue, named] = await Promise.all([
+        searchJiraIssues({ status: body?.status, query: body?.query, maxResults: QUEUE_SIZE, withAttachments: true }),
+        asked.length
+          ? searchJiraIssues({ keys: asked, maxResults: asked.length, withAttachments: true }).then((result) => result.issues).catch(() => [])
+          : Promise.resolve([]),
+      ]);
+      const issues = [...named, ...queue.issues.filter((issue) => !named.some((item) => item.key === issue.key))];
       if (!issues.length) {
         return Response.json({ error: 'Nenhum chamado na fila para consultar.' }, { status: 404 });
       }
-      context = queueContext(issues, QUEUE_SIZE);
+      // Os chamados citados vêm primeiro e nunca entram no corte da fila.
+      context = queueContext(issues, QUEUE_SIZE + named.length);
     } else {
       if (typeof body?.ticketKey !== 'string' || !body.ticketKey.trim()) {
         return Response.json({ error: 'Informe o chamado.' }, { status: 400 });

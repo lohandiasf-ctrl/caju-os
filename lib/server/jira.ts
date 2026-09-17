@@ -174,8 +174,11 @@ function jiraIssuePreset(preset: JiraIssuePreset, projectKey: string) {
 
 // `withAttachments` traz a lista de anexos de cada chamado. Fica de fora da
 // lista principal: chamado com dezenas de fotos pesa, e a tela não usa isso.
-export async function searchJiraIssues(options: { query?: string; status?: string; preset?: JiraIssuePreset; nextPageToken?: string; maxResults?: number; withAttachments?: boolean }) {
-  const cacheKey = JSON.stringify({ q: options.query?.trim() ?? '', s: options.status?.trim() ?? '', p: options.preset ?? '', c: options.nextPageToken ?? '', m: options.maxResults ?? 50, a: options.withAttachments ? 1 : 0 });
+// `keys` busca chamados nomeados, em qualquer status — é o que o assistente
+// usa quando a pergunta cita FSAs que podem estar fora da fila operacional.
+export async function searchJiraIssues(options: { query?: string; status?: string; preset?: JiraIssuePreset; nextPageToken?: string; maxResults?: number; withAttachments?: boolean; keys?: string[] }) {
+  const keys = [...new Set((options.keys ?? []).map((key) => key.toUpperCase()).filter((key) => /^[A-Z][A-Z0-9_]+-\d+$/.test(key)))];
+  const cacheKey = JSON.stringify({ q: options.query?.trim() ?? '', s: options.status?.trim() ?? '', p: options.preset ?? '', c: options.nextPageToken ?? '', m: options.maxResults ?? 50, a: options.withAttachments ? 1 : 0, k: keys });
   const cached = issuesCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
@@ -186,7 +189,11 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
     if (/^[A-Z][A-Z0-9_]+-\d+$/i.test(query)) clauses.push(`key = "${jqlString(query.toUpperCase())}"`);
     else clauses.push(`text ~ "${jqlString(query)}"`);
   }
-  if (!preset && options.status?.trim()) {
+  if (keys.length) {
+    // Chamado citado pelo nome vale mesmo já resolvido ou cancelado, então
+    // aqui não entra filtro de status.
+    clauses.push(`key IN (${keys.map((key) => `"${jqlString(key)}"`).join(', ')})`);
+  } else if (!preset && options.status?.trim()) {
     clauses.push(`status = "${jqlString(options.status.trim())}"`);
   } else if (!preset) {
     const operationalStatuses = await getOperationalStatusNames(projectKey);

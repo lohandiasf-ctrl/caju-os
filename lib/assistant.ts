@@ -58,7 +58,7 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   // Sem a data de hoje o modelo não sabe se o agendamento já passou.
   let text = `Hoje é ${operationDate(today)}.\nChamado ${issue.key}\n`;
   text += line('Título', issue.summary);
-  text += line('Status', issue.status);
+  text += line('Status', statusLabel(issue.status));
   text += line('Prioridade', issue.priority);
   text += line('Loja', issue.store);
   text += line('Cidade', issue.city);
@@ -118,6 +118,29 @@ function dayCounts(tickets: AssistantTicket[], day: string, label: string): stri
   ];
 }
 
+// O Jira chama de "TEC-CAMPO" o que a tela mostra como "Técnico em campo". O
+// assistente responde para quem lê a tela, então usa a palavra da tela. Status
+// desconhecido (resolvido, cancelado…) fica como veio.
+const STATUS_LABELS: Array<[RegExp, string]> = [
+  [/^agendado$/, 'Agendado'],
+  [/agendamento/, 'Pendente de agendamento'],
+  [/spare/, 'Aguardando spare'],
+  [/direcion/, 'Direcionado'],
+  [/tec-campo|tecnico em campo|em atendimento/, 'Técnico em campo'],
+  [/pendencia/, 'Pendência técnica'],
+];
+
+export function statusLabel(status: string): string {
+  const normalized = status.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return STATUS_LABELS.find(([pattern]) => pattern.test(normalized))?.[1] ?? status.trim();
+}
+
+// FSAs citadas na pergunta. O servidor busca essas no Jira, porque podem estar
+// fora da fila carregada (outro status, ou além dos 60 mais recentes).
+export function ticketKeysIn(text: string, limit = 30): string[] {
+  return [...new Set((text.toUpperCase().match(/\b[A-Z][A-Z0-9]+-\d+\b/g) ?? []))].slice(0, limit);
+}
+
 // "2 fotos, 1 vídeo, 1 PDF" — o modelo lê melhor que uma lista de MIME types.
 export function describeAttachments(types: string[]): string {
   if (!types.length) return 'nenhum';
@@ -141,7 +164,8 @@ function withoutAttachments(tickets: AssistantTicket[]): string[] {
   const byStatus = new Map<string, string[]>();
   for (const ticket of tickets) {
     if (!ticket.attachmentTypes || ticket.attachmentTypes.length) continue;
-    byStatus.set(ticket.status, [...(byStatus.get(ticket.status) ?? []), ticket.key]);
+    const label = statusLabel(ticket.status);
+    byStatus.set(label, [...(byStatus.get(label) ?? []), ticket.key]);
   }
   if (!byStatus.size) return ['- Sem nenhum anexo: 0'];
   return [...byStatus].map(([status, keys]) => `- Sem nenhum anexo em "${status}": ${keys.length} — ${keys.join(', ')}`);
@@ -156,7 +180,7 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
   const listed = tickets.slice(0, limit);
   const rows = listed.map((ticket) => [
     ticket.key,
-    ticket.status,
+    statusLabel(ticket.status),
     ticket.priority,
     ticket.store ?? '-',
     ticket.city ?? '-',
