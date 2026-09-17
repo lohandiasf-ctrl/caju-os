@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Mobile: pull-to-refresh barrado no JS (o CSS não bastou)
+
+O `overscroll-behavior-y: contain` em `html, body` foi publicado e o gesto
+continuou recarregando o app no aparelho do usuário (vídeo: a lista rola, o
+arco branco do Chrome aparece e a tela cai em "Verificando acesso..."). Alguns
+aparelhos/WebViews ignoram a propriedade, então o gesto passa a ser barrado
+também no JS.
+
+- `lib/pull-refresh-guard.ts`: `canScrollUp()` puro, percorre a cadeia de
+  scroll e diz se algo ainda pode rolar para cima.
+- `components/pull-refresh-guard.tsx`: listener global. No `touchstart`
+  decide se o gesto nasceu sem nada para rolar acima; só nesse caso o
+  `touchmove` para baixo leva `preventDefault()`. Rolagem legítima não é
+  tocada, e gesto com dois dedos (zoom) é ignorado.
+- Montado em `app/layout.tsx`; `tests/pull-refresh-guard.test.ts` cobre a
+  regra.
+
+O CSS continua no lugar — onde ele funciona, o JS nem chega a agir.
+
 ### Mobile: puxar a lista para cima recarregava a página
 
 No celular, arrastar para ver conversas mais antigas disparava o
