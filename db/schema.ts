@@ -947,3 +947,27 @@ export const assistantActions = sqliteTable(
     index('idx_assistant_actions_ticket').on(table.ticketKey, table.createdAt),
   ],
 );
+
+// Ponte com o Rovo. A pergunta sai para o webhook de Automation do Jira e a
+// resposta volta por callback — assíncrono —, então a pergunta precisa existir
+// em algum lugar enquanto espera.
+export const rovoRequests = sqliteTable(
+  'rovo_requests',
+  {
+    id: text('id').primaryKey(),
+    question: text('question').notNull(),
+    ticketKey: text('ticket_key'),
+    askedBy: text('asked_by').notNull(),
+    status: text('status', { enum: ['pending', 'answered', 'failed', 'expired'] }).notNull().default('pending'),
+    answer: text('answer'),
+    error: text('error'),
+    // Ação proposta pelo Rovo, quando houver: vira uma linha em
+    // assistant_actions e passa pela mesma confirmação.
+    actionId: text('action_id'),
+    createdAt: text('created_at').notNull(),
+    answeredAt: text('answered_at'),
+  },
+  (table) => [
+    index('idx_rovo_requests_asked_by').on(table.askedBy, table.createdAt),
+  ],
+);

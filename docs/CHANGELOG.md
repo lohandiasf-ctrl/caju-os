@@ -11,6 +11,37 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Ponte com o Rovo (assíncrona, via Jira Automation)
+
+O Rovo não expõe API pública de chat — não há endpoint para chamar de fora. O
+caminho suportado é dar a volta por uma regra de **Jira Automation**, que
+responde por callback. Ver `docs/ROVO_BRIDGE.md` para a regra que precisa
+existir no Jira (essa metade não é código deste repositório).
+
+- `lib/rovo.ts`: parte pura — payload de ida, leitura do callback (tratado como
+  entrada hostil), comparação do segredo em **tempo constante**, resposta única
+  por pergunta e expiração em 2 min.
+- `app/api/rovo/route.ts`: dispara a pergunta ao webhook. A linha nasce antes do
+  disparo, senão um callback rápido chegaria a uma pergunta inexistente.
+- `app/api/rovo/[id]/route.ts`: consulta enquanto espera; marca expirada na
+  leitura (não há cron no Worker).
+- `app/api/rovo/callback/route.ts`: **endpoint público** — o Jira não manda
+  token do Firebase. A porta é `ROVO_CALLBACK_SECRET`. Retentativa da regra
+  responde 409 em vez de sobrescrever.
+- `db/schema.ts` + `drizzle/0035_rovo_requests.sql`: tabela `rovo_requests`.
+- `components/rovo-panel.tsx`: pergunta e espera, na tela do chamado.
+- `tests/rovo.test.ts`: 10 testes, com foco no segredo e na resposta única.
+
+**A ação que o Rovo propõe não é aplicada pelo callback.** Vira proposta
+pendente e passa pela mesma confirmação e auditoria do assistente local.
+
+**Pendente:** `npm run db:migrate:remote` (tabelas 0034 e 0035) e os segredos
+`ROVO_WEBHOOK_URL` / `ROVO_CALLBACK_SECRET` no Cloudflare.
+
+**Pendente:** a regra de Automation no Jira, que não consigo criar daqui. Sem
+ela a tela responde "a ponte não está configurada" e nada quebra.
+
+
 ### Escrita assistida no Jira: propor → confirmar → auditar
 
 O assistente passa a poder **escrever** no Jira, sempre com confirmação e
