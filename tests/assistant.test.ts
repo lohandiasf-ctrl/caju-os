@@ -84,9 +84,31 @@ test('a fila leva a data de acionamento do parceiro', () => {
   assert.match(ticketContext(issue({ partnerTriggeredAt: '17/09/2026 08:10' }), 6, TODAY), /Parceiro acionado em: 17\/09\/2026 08:10/);
 });
 
-test('o prompt da fila separa aberto, acionado e agendado', () => {
+// A operação pergunta de vários jeitos: "quantos caíram", "quantos foram
+// colocados", "quantos entraram". Tudo isso é acionamento.
+test('o prompt da fila trata caiu, colocado e entrou como acionamento', () => {
   const prompt = buildMessages('queue', 'x', 'y')[0].content;
-  assert.match(prompt, /"acionado".*coluna "acionado em"/);
+  const chegada = prompt.split('\n').find((text) => text.includes('coluna "acionado em"')) ?? '';
+  for (const word of ['acionado', 'caíram', 'colocado', 'entraram', 'chegaram']) {
+    assert.match(chegada, new RegExp(word), `"${word}" conta pelo acionamento`);
+  }
+  assert.match(prompt, /SENTIDO da pergunta/);
+  assert.match(prompt, /Se não der para saber qual é, use "acionado em"/);
+});
+
+test('a fila traz as contagens de hoje prontas, com as FSAs', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-1', partnerTriggeredAt: '2026-09-17T08:10:00.000-0300', createdAt: '2026-09-17T07:00:00.000-0300' }),
+    ticket({ key: 'FSA-2', partnerTriggeredAt: '17/09/2026 09:00' }),
+    ticket({ key: 'FSA-3', partnerTriggeredAt: '2026-09-16T18:00:00.000-0300', scheduledAt: '2026-09-17 14:00' }),
+  ], 60, TODAY);
+  assert.match(text, /- Acionados hoje: 2 \(FSA-1, FSA-2\)/);
+  assert.match(text, /- Abertos no Jira hoje: 1 \(FSA-1\)/);
+  assert.match(text, /- Agendados para hoje: 1 \(FSA-3\)/);
+});
+
+test('contagem zerada não inventa lista', () => {
+  assert.match(queueContext([ticket()], 60, TODAY), /- Acionados hoje: 0\n/);
 });
 
 test('o contexto diz que dia é hoje', () => {

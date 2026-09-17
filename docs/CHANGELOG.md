@@ -21,15 +21,21 @@ lista não fornece a data de acionamento". A resposta estava certa. Na operaçã
 - `lib/assistant.ts`: nova coluna "acionado em" na fila ("não acionado" quando
   vazia) e linha "Parceiro acionado em" no contexto do chamado. O campo já vinha
   em `searchJiraIssues`/`getJiraIssue`; só não chegava ao modelo.
-- O prompt da fila diz qual coluna usar para cada verbo: aberto/entrou →
-  "aberto em"; acionado → "acionado em"; agendado → "agendamento". Também pede
-  que o modelo cite as FSAs que contou, para dar para conferir.
+- O prompt da fila decide pelo **sentido** da pergunta, não pela palavra exata.
+  Chegada do chamado (acionado, caiu, colocado, entrou, chegou, veio, novos…)
+  → "acionado em"; "aberto"/"criado" → "aberto em"; agendado/visita →
+  "agendamento". Na dúvida, usa acionamento (decisão do usuário em 17/09). O
+  modelo diz qual data usou e cita as FSAs.
+- Contagens de hoje prontas no contexto ("Acionados hoje: 2 (FSA-1, FSA-2)",
+  abertos e agendados): modelo pequeno erra contagem numa tabela de 60 linhas,
+  então o servidor conta e o modelo só escolhe a linha.
 - `onlyDate()` também converte `DD/MM/AAAA` para `AAAA-MM-DD`, para comparar
   com "Hoje é".
 - `lib/server/assistant-issue.ts`: `toAssistantIssue` estava copiado nas duas
   rotas (`/api/assistant` e `/api/assistant/actions`), e a cópia da escrita
   ficaria sem o campo novo. Agora existe uma só.
-- `tests/assistant.test.ts`: 2 testes novos e um caso a mais em `onlyDate`.
+- `tests/assistant.test.ts`: 4 testes novos (coluna, sinônimos, contagens,
+  contagem zerada) e um caso a mais em `onlyDate`.
 
 **Limite que continua:** a fila enviada é a da tela (filtro de status e busca),
 com no máximo 60 chamados. Um chamado acionado hoje que não esteja nessa lista

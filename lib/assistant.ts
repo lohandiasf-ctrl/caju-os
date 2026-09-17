@@ -100,16 +100,32 @@ export function operationDate(now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: OPERATION_TIMEZONE }).format(now);
 }
 
+// Modelo pequeno erra contagem numa tabela de 60 linhas. As contagens de hoje
+// saem prontas daqui; o modelo só escolhe qual delas a pergunta pede.
+function todayCounts(tickets: AssistantTicket[], day: string): string[] {
+  const count = (label: string, pick: (ticket: AssistantTicket) => string | null) => {
+    const keys = tickets.filter((ticket) => onlyDate(pick(ticket)) === day).map((ticket) => ticket.key);
+    return `- ${label} hoje: ${keys.length}${keys.length ? ` (${keys.join(', ')})` : ''}`;
+  };
+  return [
+    'Contagens de hoje nesta lista:',
+    count('Acionados', (ticket) => ticket.partnerTriggeredAt),
+    count('Abertos no Jira', (ticket) => ticket.createdAt),
+    count('Agendados para', (ticket) => ticket.scheduledAt),
+  ];
+}
+
 export function queueContext(tickets: AssistantTicket[], limit = 60, today = new Date()): string {
-  const rows = tickets.slice(0, limit).map((ticket) => [
+  const listed = tickets.slice(0, limit);
+  const rows = listed.map((ticket) => [
     ticket.key,
     ticket.status,
     ticket.priority,
     ticket.store ?? '-',
     ticket.city ?? '-',
     ticket.technicianName ?? 'sem técnico',
-    // Sem a data de abertura o assistente não consegue responder "quantos
-    // entraram hoje" — e respondia, corretamente, que não constava.
+    // Abertura no Jira, acionamento do parceiro e visita: três datas
+    // diferentes, e a operação pergunta por todas.
     onlyDate(ticket.createdAt) ?? '-',
     onlyDate(ticket.partnerTriggeredAt) ?? 'não acionado',
     onlyDate(ticket.scheduledAt) ?? 'sem agendamento',
@@ -119,8 +135,9 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
   const cut = tickets.length > limit ? `\n(${tickets.length - limit} chamados a mais não listados)` : '';
   // O modelo não tem relógio: sem esta linha, "hoje" e "ontem" não significam
   // nada para ele.
-  const stamp = `Hoje é ${operationDate(today)}. As datas abaixo estão no formato AAAA-MM-DD.`;
-  return [stamp, `${tickets.length} chamados na fila.`, header, ...rows].join('\n') + cut;
+  const day = operationDate(today);
+  const stamp = `Hoje é ${day}. As datas abaixo estão no formato AAAA-MM-DD.`;
+  return [stamp, `${tickets.length} chamados na fila.`, ...todayCounts(listed, day), '', header, ...rows].join('\n') + cut;
 }
 
 const BASE = `Você é o assistente de operações do Caju OS, que atende chamados de suporte de TI em lojas de varejo no Brasil.
@@ -143,11 +160,13 @@ Formato: uma linha "Próximo passo:" com a ação concreta, depois até três ma
 
 Tarefa: responder a pergunta da pessoa sobre a fila de chamados listada.
 Formato: resposta direta primeiro. Ao citar chamados, use a FSA. Se a pergunta pedir contagem ou ordenação, confira na lista antes de responder. Se a lista não permitir responder, diga isso.
-Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do contexto diz a data de hoje. Escolha a coluna pelo verbo:
-- "aberto", "entrou", "criado" → coluna "aberto em";
-- "acionado", "acionamento" → coluna "acionado em" (data em que o parceiro/técnico foi acionado);
-- "agendado", "visita" → coluna "agendamento".
-Conte comparando a coluna com a data de hoje e cite as FSAs contadas.`,
+Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do contexto diz a data de hoje. Decida pelo SENTIDO da pergunta, não por palavra exata; as listas abaixo são exemplos:
+- Chegada do chamado para a operação — acionado, acionamento, caiu, caíram, colocado, colocaram, entrou, entraram, chegou, chegaram, veio, recebemos, novos → coluna "acionado em".
+- Criação no Jira — só quando a pergunta fala em aberto, abertura, criado ou criação → coluna "aberto em".
+- Visita marcada — agendado, agendamento, visita, atendimento marcado → coluna "agendamento".
+- Se não der para saber qual é, use "acionado em".
+Para "hoje", use as "Contagens de hoje" do contexto: já estão conferidas. Para outros períodos, conte pela coluna.
+Diga em poucas palavras qual data usou (ex.: "pela data de acionamento") e cite as FSAs.`,
 };
 
 export function buildMessages(task: AssistantTask, context: string, question?: string) {
