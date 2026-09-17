@@ -119,3 +119,10 @@ export const AUDIT_ROLES = ['gerencia', 'coordenador'] as const;
 export function canAudit(role: string | null | undefined) {
   return Boolean(role && (AUDIT_ROLES as readonly string[]).includes(role));
 }
+
+// A tabela de auditoria é criada por migration, que roda separado do deploy.
+// Reconhecer esse erro deixa a tela avisar "falta a migration" em vez de
+// estourar um 500 — e tira a dependência de ordem entre deploy e migration.
+export function isMissingTable(error: unknown) {
+  return /no such table/i.test(error instanceof Error ? error.message : String(error));
+}

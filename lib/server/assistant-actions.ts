@@ -2,25 +2,37 @@ import { and, desc, eq, gte } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { assistantActions } from '@/db/schema';
 import {
-  canConfirm, describeAction, parseAction, type AssistantAction,
+  canConfirm, describeAction, isMissingTable, parseAction, type AssistantAction,
 } from '@/lib/assistant-actions';
 import { addJiraInternalComment, transitionJiraIssue, updateJiraIssue } from '@/lib/server/jira';
+
+// A tabela é criada por migration (0034), que roda separado do deploy. Enquanto
+// não rodar, a escrita assistida precisa dizer isso em vez de estourar um 500 —
+// assim o deploy e a migration deixam de depender de ordem.
+export class MigrationPendingError extends Error {
+  constructor() { super('A escrita assistida ainda não foi liberada: falta rodar a migration do banco.'); }
+}
 
 // Guarda a proposta e devolve o id. A linha nasce aqui, na proposta, para que
 // uma sugestão recusada também apareça na auditoria.
 export async function recordProposal(action: AssistantAction, proposedTo: string) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  await getDb().insert(assistantActions).values({
-    id,
-    ticketKey: action.ticketKey,
-    kind: action.kind,
-    payload: JSON.stringify(action),
-    description: describeAction(action),
-    status: 'pending',
-    proposedTo,
-    createdAt: now,
-  });
+  try {
+    await getDb().insert(assistantActions).values({
+      id,
+      ticketKey: action.ticketKey,
+      kind: action.kind,
+      payload: JSON.stringify(action),
+      description: describeAction(action),
+      status: 'pending',
+      proposedTo,
+      createdAt: now,
+    });
+  } catch (error) {
+    if (isMissingTable(error)) throw new MigrationPendingError();
+    throw error;
+  }
   return { id, description: describeAction(action), createdAt: now };
 }
 
@@ -80,6 +92,15 @@ function toJiraDateTime(value: string) {
 }
 
 export async function listAudit(options: { days?: number; ticketKey?: string; limit?: number } = {}) {
+  try {
+    return await queryAudit(options);
+  } catch (error) {
+    if (isMissingTable(error)) throw new MigrationPendingError();
+    throw error;
+  }
+}
+
+async function queryAudit(options: { days?: number; ticketKey?: string; limit?: number }) {
   const since = new Date(Date.now() - (options.days ?? 30) * 86_400_000).toISOString();
   const filters = [gte(assistantActions.createdAt, since)];
   if (options.ticketKey) filters.push(eq(assistantActions.ticketKey, options.ticketKey));

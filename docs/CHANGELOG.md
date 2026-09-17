@@ -41,8 +41,10 @@ sempre deixando rastro. O desenho tem três portas e nenhuma pode ser pulada:
 - `components/assistant-panel.tsx`, `components/assistant-audit.tsx`.
 - `tests/assistant-actions.test.ts`: 13 testes nas travas.
 
-**Pendente:** rodar `npm run db:migrate:remote` antes de usar em produção — a
-tabela `assistant_actions` não existe ainda no D1 remoto.
+**Pendente:** rodar `npm run db:migrate:remote` para criar `assistant_actions`
+no D1 remoto. O deploy **não depende** dessa ordem: enquanto a tabela não
+existe, a escrita assistida responde "falta rodar a migration" em vez de
+estourar 500, e resumo, próximo passo e pergunta sobre a fila seguem normais.
 
 
 ### Assistente de chamados (resumo, próximo passo e perguntas sobre a fila)

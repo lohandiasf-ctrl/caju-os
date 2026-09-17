@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ActionError, canAudit, canConfirm, describeAction, EXPIRY_MS, extractActionBlock,
-  MAX_COMMENT_LENGTH, parseAction, stripActionBlock,
+  isMissingTable, MAX_COMMENT_LENGTH, parseAction, stripActionBlock,
 } from '../lib/assistant-actions.ts';
 
 const KEY = 'FSA-1';
@@ -84,4 +84,13 @@ test('auditoria é da coordenação e da gerência', () => {
   assert.equal(canAudit('n1'), false);
   assert.equal(canAudit('analista'), false);
   assert.equal(canAudit(null), false);
+});
+
+// A migration roda separado do deploy; enquanto a tabela não existe, a escrita
+// assistida avisa em vez de estourar 500.
+test('erro de tabela ausente é reconhecido', () => {
+  assert.equal(isMissingTable(new Error('D1_ERROR: no such table: assistant_actions')), true);
+  assert.equal(isMissingTable(new Error('NO SUCH TABLE: x')), true);
+  assert.equal(isMissingTable(new Error('UNIQUE constraint failed')), false);
+  assert.equal(isMissingTable('no such table'), true);
 });

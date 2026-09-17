@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { buildMessages, parseAnswer, ticketContext, type AssistantIssue } from '@/lib/assistant';
 import { ActionError, canAudit, extractActionBlock, parseAction, stripActionBlock } from '@/lib/assistant-actions';
-import { listAudit, recordProposal } from '@/lib/server/assistant-actions';
+import { listAudit, MigrationPendingError, recordProposal } from '@/lib/server/assistant-actions';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { getJiraIssue, isJiraConfigured, JiraError } from '@/lib/server/jira';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
@@ -96,6 +96,7 @@ export async function GET(request: Request) {
 
 function errorResponse(error: unknown, fallback: string) {
   if (error instanceof Response) return error;
+  if (error instanceof MigrationPendingError) return Response.json({ error: error.message }, { status: 503 });
   if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
   console.error(fallback, error);
   return Response.json({ error: fallback }, { status: 500 });
