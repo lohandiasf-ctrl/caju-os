@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, onlyDate, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, onlyDate, operationDate, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -77,6 +77,14 @@ test('a fila leva a data de abertura de cada chamado', () => {
 test('o contexto diz que dia é hoje', () => {
   assert.match(queueContext([ticket()], 60, TODAY), /^Hoje é 2026-09-17\./);
   assert.match(ticketContext(issue(), 6, TODAY), /^Hoje é 2026-09-17\./);
+});
+
+// O Worker roda em UTC. Às 22h de Brasília o dia UTC já virou, e o assistente
+// responderia sobre amanhã.
+test('"hoje" é o dia de Brasília, não o do servidor em UTC', () => {
+  assert.equal(operationDate(new Date('2026-09-17T23:30:00-03:00')), '2026-09-17');
+  assert.equal(operationDate(new Date('2026-09-18T02:30:00Z')), '2026-09-17', 'madrugada em UTC ainda é ontem aqui');
+  assert.equal(operationDate(new Date('2026-09-17T09:00:00-03:00')), '2026-09-17');
 });
 
 test('a data vem do Jira com hora e fuso, e sai só o dia', () => {

@@ -50,7 +50,7 @@ function line(label: string, value: string | null | undefined) {
 
 export function ticketContext(issue: AssistantIssue, maxComments = 6, today = new Date()): string {
   // Sem a data de hoje o modelo não sabe se o agendamento já passou.
-  let text = `Hoje é ${onlyDate(today.toISOString())}.\nChamado ${issue.key}\n`;
+  let text = `Hoje é ${operationDate(today)}.\nChamado ${issue.key}\n`;
   text += line('Título', issue.summary);
   text += line('Status', issue.status);
   text += line('Prioridade', issue.priority);
@@ -81,6 +81,17 @@ export function onlyDate(value: string | null | undefined): string | null {
   return match ? match[1] : (value?.trim() || null);
 }
 
+// "Hoje" é o hoje de quem está perguntando, não o do servidor. O Worker roda em
+// UTC: depois das 21h de Brasília o `toISOString()` já devolve o dia seguinte, e
+// o assistente responderia sobre amanhã. Os chamados também são operados neste
+// fuso, então é ele que vale.
+export const OPERATION_TIMEZONE = 'America/Sao_Paulo';
+
+export function operationDate(now: Date = new Date()): string {
+  // en-CA formata como AAAA-MM-DD, o mesmo formato das datas do Jira.
+  return new Intl.DateTimeFormat('en-CA', { timeZone: OPERATION_TIMEZONE }).format(now);
+}
+
 export function queueContext(tickets: AssistantTicket[], limit = 60, today = new Date()): string {
   const rows = tickets.slice(0, limit).map((ticket) => [
     ticket.key,
@@ -99,7 +110,7 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
   const cut = tickets.length > limit ? `\n(${tickets.length - limit} chamados a mais não listados)` : '';
   // O modelo não tem relógio: sem esta linha, "hoje" e "ontem" não significam
   // nada para ele.
-  const stamp = `Hoje é ${onlyDate(today.toISOString())}. As datas abaixo estão no formato AAAA-MM-DD.`;
+  const stamp = `Hoje é ${operationDate(today)}. As datas abaixo estão no formato AAAA-MM-DD.`;
   return [stamp, `${tickets.length} chamados na fila.`, header, ...rows].join('\n') + cut;
 }
 
