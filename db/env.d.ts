@@ -11,6 +11,9 @@ declare namespace Cloudflare {
     TURN_KEY_API_TOKEN?: string;
     // Shared secret so only the scheduled handler can trigger the task sweep.
     CRON_SECRET?: string;
+    // Kill switch for the watchdog agent: "off" stops its notices without a
+    // deploy. Anything else (or unset) keeps it running.
+    AGENT_MODE?: string;
     // Power Automate connectors for the SharePoint spare workbook. The URLs
     // and token are secrets because trigger URLs can contain signatures.
     SPARES_SYNC_PUSH_URL?: string;

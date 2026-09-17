@@ -9,6 +9,41 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-18
+
+### Agente de vigilância: avisa a equipe sobre chamado atrasado
+
+Pedido de "uma IA que age sozinha", **só com notificação dentro do sistema** —
+nada de escrever no Jira. Como não toca em etapa, campo nem financeiro, o
+agente fica fora das regras de fluxo do Jira.
+
+Roda no cron de 10 minutos que já existe (`scripts/worker-entry.js`), junto com
+a varredura de tarefas.
+
+- `lib/agent-rules.ts` (puro): as quatro regras, determinísticas —
+  1. parado na etapa além do SLA (mesmos limites da Inteligência operacional;
+     o dobro do SLA vira crítico);
+  2. agendamento vencido (passou da hora e o chamado continua Agendado);
+  3. em campo há mais de 4 h sem nenhum anexo no Jira (a validação exigiria);
+  4. spare com entrega atrasada.
+- `lib/agent-notice.ts` (puro): agrupa por regra e monta o texto. A IA (Workers
+  AI, os mesmos modelos do assistente) só **redige**; se falhar, sai o texto de
+  reserva com as mesmas FSAs. Quem decide são as regras, então modelo ruim
+  produz texto ruim, nunca alarme inventado.
+- `app/api/agent/sweep/route.ts`: protegida por `x-cron-secret`. Manda **um
+  aviso resumido por rodada** para gerência, coordenação, N1 e analistas
+  ativos, pelo canal de mensagens internas (sino + notificação no desktop).
+- `tests/agent-rules.test.ts`: 11 testes, incluindo o caso de chamado sem dado
+  de anexo (não pode ser acusado de estar sem evidência) e data ilegível.
+
+**Travas:** aviso no máximo de hora em hora; o mesmo chamado não repete na
+mesma regra por 20 h; teto de 25 achados por rodada; auditoria `agente_aviso`
+por chamado (regra 11 do `WORKFLOW_RULES`); `AGENT_MODE=off` no secret do
+Worker desliga sem deploy.
+
+**Pendente:** validar em produção o volume e a qualidade do texto no primeiro
+dia. Se incomodar, `AGENT_MODE=off`.
+
 ## 2026-09-17
 
 ### Copiar só os links do Jira

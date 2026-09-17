@@ -140,7 +140,8 @@ hardcoded para o Railway em `lib/voice-chat.ts`).
 | Nome | Uso | Estado |
 |---|---|---|
 | `JIRA_API_TOKEN` | token da API do Jira | necessário |
-| `CRON_SECRET` | protege `/api/tasks/sweep` | necessário para a varredura |
+| `CRON_SECRET` | protege `/api/tasks/sweep` e `/api/agent/sweep` | necessário para a varredura |
+| `AGENT_MODE` | `off` desliga os avisos do agente sem deploy | opcional (sem ele: agente ligado) |
 | `TURN_KEY_ID` | Cloudflare Realtime TURN | opcional (sem ele: só STUN) |
 | `TURN_KEY_API_TOKEN` | idem | opcional |
 | `TRACKINGMORE_API_KEY` | rastreio automático de spares (TrackingMore, API v4) | opcional (sem ele: spare é cadastrado sem consulta) |

@@ -35,7 +35,15 @@ export default {
       env,
       ctx,
     );
-    const run = Promise.all([sweep, spareSync, spareTracking]);
+    const agent = handler.fetch(
+      new Request('https://cron.internal/api/agent/sweep', {
+        method: 'POST',
+        headers: { 'x-cron-secret': env.CRON_SECRET ?? '' },
+      }),
+      env,
+      ctx,
+    );
+    const run = Promise.all([sweep, spareSync, spareTracking, agent]);
     ctx.waitUntil(run);
     await run;
   },
