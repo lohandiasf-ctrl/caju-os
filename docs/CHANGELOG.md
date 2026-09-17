@@ -9,6 +9,48 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-18
+
+### Assistente geral: pergunta aberta, consultando o sistema
+
+O assistente da fila só respondia sobre a lista que o servidor mandava pronta;
+qualquer pergunta fora dela batia em "não consta". O pedido foi outro: uma IA
+que responda pergunta não prevista, com acesso ao sistema, como o Rovo faz
+dentro do Jira.
+
+A diferença não é o modelo, é **chamada de função**: o modelo não recebe
+contexto pronto, ele consulta o sistema até saber responder.
+
+- `lib/assistant-tools.ts` (puro): as cinco consultas que ele pode fazer —
+  `consultar_chamados`, `detalhar_chamado`, `consultar_tecnicos`,
+  `resumo_operacao`, `consultar_historico` — e a instrução do sistema, que
+  carrega o que a operação já ensinou ao assistente da fila (vocabulário de
+  "acionado/caiu/colocado/entrou", rótulo de status da tela, não listar status
+  que ninguém pediu, usar contagem pronta em vez de contar a lista).
+- `lib/gemini-protocol.ts` (puro): como montar o pedido e ler a resposta do
+  Gemini. Separado do cliente para ser testável sem rede.
+- `lib/server/gemini.ts`: cliente REST, sem SDK (o runtime é Workers). Tenta
+  `gemini-2.5-flash`, `gemini-2.0-flash` e `gemini-1.5-flash` nessa ordem;
+  modelo inexistente (404) cai para o próximo. Teto de 5 rodadas por pergunta.
+- `lib/server/assistant-data.ts`: executa as consultas. Reaproveita
+  `queueContext` e `ticketContext`, que já foram validados em produção.
+- `app/api/assistant/ask/route.ts`: mesmos papéis do assistente da fila,
+  limite de 8 perguntas por minuto por IP.
+- `components/assistant-panel.tsx`: o painel passa a perguntar aqui.
+- `tests/assistant-tools.test.ts`: 12 testes.
+
+**Somente leitura.** Nenhuma consulta escreve no Jira ou no banco. Nenhum dado
+pessoal sai: as consultas não selecionam documento, telefone, endereço nem
+chave PIX (regra 9 do `WORKFLOW_RULES`), e o que sobra passa por `redact()`.
+
+**Modelo:** Gemini no plano gratuito. Estouro de cota vira mensagem explicando
+que é cota, não erro genérico.
+
+**Pendente, e bloqueia o teste:** criar a chave no Google AI Studio e gravá-la
+como secret do Worker (`npx wrangler secret put GEMINI_API_KEY`). Sem ela a
+rota devolve `code: "sem_chave"` e o painel continua usando o assistente da
+fila — ou seja, o deploy é seguro antes da chave, mas nada muda até ela existir.
+
 ## 2026-09-17
 
 ### Copiar só os links do Jira

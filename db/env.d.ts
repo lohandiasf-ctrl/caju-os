@@ -11,6 +11,8 @@ declare namespace Cloudflare {
     TURN_KEY_API_TOKEN?: string;
     // Shared secret so only the scheduled handler can trigger the task sweep.
     CRON_SECRET?: string;
+    // Google Gemini API para assistente genérico.
+    GEMINI_API_KEY?: string;
     // Power Automate connectors for the SharePoint spare workbook. The URLs
     // and token are secrets because trigger URLs can contain signatures.
     SPARES_SYNC_PUSH_URL?: string;

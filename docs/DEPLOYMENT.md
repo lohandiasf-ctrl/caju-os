@@ -143,6 +143,8 @@ hardcoded para o Railway em `lib/voice-chat.ts`).
 | `CRON_SECRET` | protege `/api/tasks/sweep` | necessário para a varredura |
 | `TURN_KEY_ID` | Cloudflare Realtime TURN | opcional (sem ele: só STUN) |
 | `TURN_KEY_API_TOKEN` | idem | opcional |
+| `GEMINI_API_KEY` | assistente geral (`/api/assistant/ask`) | opcional (sem ela: o painel volta para o assistente da fila) |
+| `GEMINI_MODEL` | força um modelo do Gemini em vez da lista padrão | opcional |
 | `TRACKINGMORE_API_KEY` | rastreio automático de spares (TrackingMore, API v4) | opcional (sem ele: spare é cadastrado sem consulta) |
 | `WHATSAPP_GROUP_DEFAULT_PARTICIPANTS` | JSON `[{"name","phone"}]` das pessoas que entram em todo grupo de WhatsApp criado pelo sistema. Fica fora do Git porque o repositório é público. | necessário para os contatos fixos. Sem ele, o diálogo avisa e o grupo sai só com quem foi escolhido. |
 | `GOOGLE_MAPS_API_KEY` | **obsoleto** (mapa é Leaflet) | secret órfão; pode remover |
