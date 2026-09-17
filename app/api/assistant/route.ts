@@ -45,7 +45,7 @@ export async function POST(request: Request) {
         return Response.json({ error: 'Escreva a pergunta (de 3 a 400 caracteres).' }, { status: 400 });
       }
       // A fila é relida no servidor: o contexto do modelo nunca vem do cliente.
-      const { issues } = await searchJiraIssues({ status: body?.status, query: body?.query, maxResults: QUEUE_SIZE });
+      const { issues } = await searchJiraIssues({ status: body?.status, query: body?.query, maxResults: QUEUE_SIZE, withAttachments: true });
       if (!issues.length) {
         return Response.json({ error: 'Nenhum chamado na fila para consultar.' }, { status: 404 });
       }

@@ -22,6 +22,8 @@ export type JiraIssueSummary = {
   city: string | null;
   scheduledAt: string | null;
   partnerTriggeredAt: string | null;
+  // Só com `withAttachments`: o tipo (MIME) de cada anexo do chamado.
+  attachmentTypes?: string[];
 };
 
 export type JiraAttachmentSummary = {
@@ -170,8 +172,10 @@ function jiraIssuePreset(preset: JiraIssuePreset, projectKey: string) {
   };
 }
 
-export async function searchJiraIssues(options: { query?: string; status?: string; preset?: JiraIssuePreset; nextPageToken?: string; maxResults?: number }) {
-  const cacheKey = JSON.stringify({ q: options.query?.trim() ?? '', s: options.status?.trim() ?? '', p: options.preset ?? '', c: options.nextPageToken ?? '', m: options.maxResults ?? 50 });
+// `withAttachments` traz a lista de anexos de cada chamado. Fica de fora da
+// lista principal: chamado com dezenas de fotos pesa, e a tela não usa isso.
+export async function searchJiraIssues(options: { query?: string; status?: string; preset?: JiraIssuePreset; nextPageToken?: string; maxResults?: number; withAttachments?: boolean }) {
+  const cacheKey = JSON.stringify({ q: options.query?.trim() ?? '', s: options.status?.trim() ?? '', p: options.preset ?? '', c: options.nextPageToken ?? '', m: options.maxResults ?? 50, a: options.withAttachments ? 1 : 0 });
   const cached = issuesCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   const projectKey = requiredEnv('JIRA_PROJECT_KEY').toUpperCase();
@@ -191,7 +195,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
 
   const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316'],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', ...(options.withAttachments ? ['attachment'] : [])],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
@@ -200,7 +204,12 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
   }
 
   const value = {
-    issues: (response.issues ?? []).map(toSummary).filter((issue): issue is JiraIssueSummary => Boolean(issue)),
+    issues: (response.issues ?? []).map((issue) => {
+      const summary = toSummary(issue);
+      return options.withAttachments
+        ? { ...summary, attachmentTypes: (issue.fields?.attachment ?? []).map((attachment) => attachment.mimeType ?? '') }
+        : summary;
+    }).filter((issue): issue is JiraIssueSummary => Boolean(issue)),
     nextPageToken: response.nextPageToken ?? null,
     isLast: response.isLast ?? !response.nextPageToken,
   };

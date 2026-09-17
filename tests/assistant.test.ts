@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, onlyDate, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, describeAttachments, onlyDate, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -128,6 +128,43 @@ test('ontem é o dia anterior no fuso de Brasília', () => {
 
 test('contagem zerada não inventa lista', () => {
   assert.match(queueContext([ticket()], 60, TODAY), /- Acionados hoje \(2026-09-17\): 0\n/);
+});
+
+// "Quais chamados com técnico em campo não estão com evidências anexadas?"
+// recebia "não consta": a fila não dizia nada sobre anexos.
+test('a fila diz os anexos de cada chamado', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-1', attachmentTypes: ['image/jpeg', 'image/png', 'application/pdf'] }),
+    ticket({ key: 'FSA-2', attachmentTypes: [] }),
+  ], 60, TODAY);
+  assert.match(text, /\| anexos \| título/);
+  assert.match(text, /FSA-1 .*\| 2 fotos, 1 PDF \|/);
+  assert.match(text, /FSA-2 .*\| nenhum \|/);
+});
+
+test('chamados sem anexo saem contados por status', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-1', status: 'Técnico em campo', attachmentTypes: [] }),
+    ticket({ key: 'FSA-2', status: 'Técnico em campo', attachmentTypes: ['image/jpeg'] }),
+    ticket({ key: 'FSA-3', status: 'Técnico em campo', attachmentTypes: [] }),
+    ticket({ key: 'FSA-4', status: 'Agendado', attachmentTypes: [] }),
+  ], 60, TODAY);
+  assert.match(text, /- Sem nenhum anexo em "Técnico em campo": 2 — FSA-1, FSA-3/);
+  assert.match(text, /- Sem nenhum anexo em "Agendado": 1 — FSA-4/);
+  assert.match(buildMessages('queue', 'x', 'y')[0].content, /Evidência, foto, vídeo, RAT.*coluna "anexos"/);
+});
+
+test('sem dado de anexo, a fila não finge que ninguém tem anexo', () => {
+  const text = queueContext([ticket()], 60, TODAY);
+  assert.doesNotMatch(text, /Sem nenhum anexo/);
+  assert.match(text, /FSA-1 .*\| - \| PDV 3/);
+});
+
+test('os anexos viram texto curto por tipo', () => {
+  assert.equal(describeAttachments([]), 'nenhum');
+  assert.equal(describeAttachments(['image/jpeg']), '1 foto');
+  assert.equal(describeAttachments(['video/mp4', 'video/mp4', 'text/plain']), '2 vídeos, 1 outro');
+  assert.match(ticketContext(issue({ attachmentTypes: ['application/pdf'] }), 6, TODAY), /Anexos \(evidências\): 1 PDF/);
 });
 
 test('as FSAs da resposta viram links, e o resto continua texto', () => {

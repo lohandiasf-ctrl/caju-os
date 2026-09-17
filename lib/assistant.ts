@@ -22,6 +22,9 @@ export type AssistantTicket = {
   // abertura do chamado.
   partnerTriggeredAt: string | null;
   technicianName: string | null;
+  // Tipo (MIME) de cada anexo do Jira. Toda evidência do Caju OS (N1, WhatsApp,
+  // tela do chamado) sobe como anexo, então é aqui que ela aparece.
+  attachmentTypes?: string[];
 };
 
 export type AssistantIssue = AssistantTicket & {
@@ -63,6 +66,7 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   text += line('Parceiro acionado em', issue.partnerTriggeredAt);
   text += line('Agendado para', issue.scheduledAt);
   text += line('Técnico', issue.technicianName);
+  if (issue.attachmentTypes) text += line('Anexos (evidências)', describeAttachments(issue.attachmentTypes));
   text += line('Categoria do problema', issue.problemCategory);
   text += line('Equipamento', issue.equipmentModel);
   text += line('Defeito alegado', issue.allegedDefect);
@@ -114,6 +118,35 @@ function dayCounts(tickets: AssistantTicket[], day: string, label: string): stri
   ];
 }
 
+// "2 fotos, 1 vídeo, 1 PDF" — o modelo lê melhor que uma lista de MIME types.
+export function describeAttachments(types: string[]): string {
+  if (!types.length) return 'nenhum';
+  const tally = { foto: 0, vídeo: 0, PDF: 0, outro: 0 };
+  for (const type of types) {
+    if (type.startsWith('image/')) tally.foto += 1;
+    else if (type.startsWith('video/')) tally.vídeo += 1;
+    else if (type === 'application/pdf') tally.PDF += 1;
+    else tally.outro += 1;
+  }
+  const plural: Record<string, string> = { foto: 'fotos', vídeo: 'vídeos', PDF: 'PDFs', outro: 'outros' };
+  return Object.entries(tally)
+    .filter(([, total]) => total > 0)
+    .map(([kind, total]) => `${total} ${total === 1 ? kind : plural[kind]}`)
+    .join(', ');
+}
+
+// Chamados sem nenhum anexo, por status. Mesma razão das contagens por data:
+// "quais em campo estão sem evidência" é filtro duplo, e o modelo pequeno erra.
+function withoutAttachments(tickets: AssistantTicket[]): string[] {
+  const byStatus = new Map<string, string[]>();
+  for (const ticket of tickets) {
+    if (!ticket.attachmentTypes || ticket.attachmentTypes.length) continue;
+    byStatus.set(ticket.status, [...(byStatus.get(ticket.status) ?? []), ticket.key]);
+  }
+  if (!byStatus.size) return ['- Sem nenhum anexo: 0'];
+  return [...byStatus].map(([status, keys]) => `- Sem nenhum anexo em "${status}": ${keys.length} — ${keys.join(', ')}`);
+}
+
 // Brasil não tem horário de verão desde 2019, então 24h atrás é sempre ontem.
 export function previousOperationDate(now: Date = new Date()): string {
   return operationDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
@@ -133,16 +166,17 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
     onlyDate(ticket.createdAt) ?? '-',
     onlyDate(ticket.partnerTriggeredAt) ?? 'não acionado',
     onlyDate(ticket.scheduledAt) ?? 'sem agendamento',
+    ticket.attachmentTypes ? describeAttachments(ticket.attachmentTypes) : '-',
     redact(ticket.summary),
   ].join(' | '));
-  const header = 'FSA | status | prioridade | loja | cidade | técnico | aberto em | acionado em | agendamento | título';
+  const header = 'FSA | status | prioridade | loja | cidade | técnico | aberto em | acionado em | agendamento | anexos | título';
   const cut = tickets.length > limit ? `\n(${tickets.length - limit} chamados a mais não listados)` : '';
   // O modelo não tem relógio: sem esta linha, "hoje" e "ontem" não significam
   // nada para ele.
   const day = operationDate(today);
   const yesterday = previousOperationDate(today);
   const stamp = `Hoje é ${day}; ontem foi ${yesterday}. As datas abaixo estão no formato AAAA-MM-DD.`;
-  const counts = ['Contagens prontas nesta lista (já conferidas):', ...dayCounts(listed, day, 'hoje'), ...dayCounts(listed, yesterday, 'ontem')];
+  const counts = ['Contagens prontas nesta lista (já conferidas):', ...dayCounts(listed, day, 'hoje'), ...dayCounts(listed, yesterday, 'ontem'), ...(listed.some((ticket) => ticket.attachmentTypes) ? withoutAttachments(listed) : [])];
   return [stamp, `${tickets.length} chamados na fila.`, ...counts, '', header, ...rows].join('\n') + cut;
 }
 
@@ -172,6 +206,7 @@ Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do conte
 - Visita marcada — agendado, agendamento, visita, atendimento marcado → coluna "agendamento".
 - Se não der para saber qual é, use "acionado em".
 Para "hoje" e "ontem", copie a linha certa das "Contagens prontas" (número e FSAs), sem recontar. Para outros períodos, conte pela coluna.
+Evidência, foto, vídeo, RAT, anexo, comprovante: use a coluna "anexos" (arquivos anexados ao chamado no Jira). "Sem evidência" = "nenhum". Para "sem evidência" num status, copie a linha "Sem nenhum anexo em ..." das contagens prontas; se o status não aparecer ali, nenhum chamado nele está sem anexo. Status: compare com a coluna "status" sem diferenciar maiúsculas ("técnico em campo" = "Técnico em campo").
 Diga em poucas palavras qual data usou (ex.: "pela data de acionamento") e cite as FSAs.`,
 };
 
