@@ -644,7 +644,7 @@ http.createServer(async (request, response) => {
       const resolved = await Promise.all(participants.map(async (jid) => ({ jid, phone: phoneJidFor(jid) ?? await resolveLidPhone(jid) })));
       const unknown = resolved.filter((item) => !item.phone).map((item) => item.jid);
       if (unknown.length) return json(response, 400, { error: 'Não sei o telefone destes contatos; digite o número com DDD.', unknown });
-      const group = await sock.groupCreate(subject, resolved.map((item) => item.phone))
+      const group = await sock.groupCreate(subject, [...new Set(resolved.map((item) => item.phone))])
         .catch((error) => { throw Object.assign(new Error(`O WhatsApp recusou criar o grupo (${error?.data ?? error?.message ?? 'erro'}).`), { status: 502, expose: true }); });
       groupCache.set(group.id, { subject: group.subject || subject, at: Date.now() });
       await forwardGroups([{ ...group, subject: group.subject || subject, creation: group.creation ?? Math.floor(Date.now() / 1000) }]);

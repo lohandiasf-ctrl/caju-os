@@ -27,6 +27,9 @@ declare namespace Cloudflare {
     // When set, the send route uses the bridge instead of the Graph API.
     WHATSAPP_BRIDGE_URL?: string;
     WHATSAPP_BRIDGE_SECRET?: string;
+    // JSON [{ name, phone }] of people added to every new WhatsApp group
+    // (lib/whatsapp-group-name.ts). Secret: the repository is public.
+    WHATSAPP_GROUP_DEFAULT_PARTICIPANTS?: string;
     // Workers AI, usado para ler a RAT. `Ai` e um tipo global de
     // @cloudflare/workers-types: importar aqui transformaria este .d.ts em
     // modulo e quebraria a declaracao de namespace.

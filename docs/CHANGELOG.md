@@ -9,6 +9,28 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-17
+
+### WhatsApp: todo grupo sai com foto e com os contatos fixos da operação
+
+- A opção "Sem foto" saiu do diálogo. A foto padrão é **Agendar com técnico**,
+  e a rota usa essa mesma foto quando o cliente não manda nenhuma.
+- As pessoas que entram em todo grupo vêm do secret do Worker
+  `WHATSAPP_GROUP_DEFAULT_PARTICIPANTS` (JSON `[{ name, phone }]`). Os
+  telefones ficam fora do Git porque o repositório é público.
+- A rota soma essas pessoas aos participantes escolhidos, independentemente do
+  que o cliente enviar.
+- O diálogo mostra os contatos fixos com um cadeado e não os oferece de novo na
+  busca. Como eles já garantem participantes, dá para criar o grupo sem
+  escolher mais ninguém.
+- A ponte remove telefones repetidos antes do `groupCreate`.
+
+**Pendente:**
+- Gravar o secret com as 13 pessoas passadas pela operação em 16/09. O valor
+  está fora do repositório, com quem administra o Worker.
+- Redeploy da ponte (`fly deploy`) para aplicar a remoção de telefones
+  repetidos.
+
 ## 2026-09-16
 
 ### WhatsApp: foto do grupo escolhida na criação

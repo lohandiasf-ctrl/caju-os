@@ -1,11 +1,12 @@
+import { env } from 'cloudflare:workers';
 import { desc, notLike } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { whatsappConversations } from '@/db/schema';
 import { getJiraIssue } from '@/lib/server/jira';
 import { logSecurityEvent } from '@/lib/server/security-log';
 import { bridgeFetch, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
-import { isWhatsappGroupPhoto } from '@/lib/whatsapp-group-photos';
-import { groupTicketsConflict, participantJid, WHATSAPP_GROUP_NAME_MAX } from '@/lib/whatsapp-group-name';
+import { DEFAULT_WHATSAPP_GROUP_PHOTO, isWhatsappGroupPhoto } from '@/lib/whatsapp-group-photos';
+import { groupTicketsConflict, parseFixedParticipants, participantJid, WHATSAPP_GROUP_NAME_MAX, withFixedParticipants } from '@/lib/whatsapp-group-name';
 
 // Contacts that can go into a new group: the inbox's direct conversations,
 // each with the phone the bridge knows for it (WhatsApp often addresses a
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
     const phones = await fetchPhones(rows.filter((row) => !row.phoneJid).map((row) => row.jid));
     return Response.json({
       contacts: rows.map((row) => ({ jid: row.jid, name: row.name, phone: row.phoneJid ?? phones[row.jid] ?? null })),
+      fixed: parseFixedParticipants(env.WHATSAPP_GROUP_DEFAULT_PARTICIPANTS),
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
@@ -48,6 +50,7 @@ async function fetchPhones(jids: string[]): Promise<Record<string, string | null
   }
 }
 
+// Chosen in the dialog; the fixed people come on top of these.
 const MAX_PARTICIPANTS = 20;
 const MAX_TICKETS = 40;
 
@@ -61,14 +64,17 @@ export async function POST(request: Request) {
     const subject = typeof body?.subject === 'string' ? body.subject.trim() : '';
     if (!subject) return Response.json({ error: 'Informe o nome do grupo.' }, { status: 400 });
     // Only the photos Caju OS ships; the bridge fetches the file from here.
-    const photo = body?.photo == null ? null : isWhatsappGroupPhoto(body.photo) ? body.photo : undefined;
-    if (photo === undefined) return Response.json({ error: 'Foto do grupo inválida.' }, { status: 400 });
+    const photo = body?.photo == null ? DEFAULT_WHATSAPP_GROUP_PHOTO : isWhatsappGroupPhoto(body.photo) ? body.photo : null;
+    if (!photo) return Response.json({ error: 'Foto do grupo inválida.' }, { status: 400 });
     if (subject.length > WHATSAPP_GROUP_NAME_MAX) return Response.json({ error: `O nome do grupo pode ter até ${WHATSAPP_GROUP_NAME_MAX} caracteres.` }, { status: 400 });
 
     const raw = Array.isArray(body?.participants) ? body.participants.filter((item): item is string => typeof item === 'string') : [];
-    const participants = [...new Set(raw.map(participantJid))];
-    if (!raw.length || participants.includes(null)) return Response.json({ error: 'Revise os participantes: use números com DDD.' }, { status: 400 });
-    if (participants.length > MAX_PARTICIPANTS) return Response.json({ error: `Adicione no máximo ${MAX_PARTICIPANTS} participantes.` }, { status: 400 });
+    const chosen = [...new Set(raw.map(participantJid))];
+    if (chosen.includes(null)) return Response.json({ error: 'Revise os participantes: use números com DDD.' }, { status: 400 });
+    if (chosen.length > MAX_PARTICIPANTS) return Response.json({ error: `Adicione no máximo ${MAX_PARTICIPANTS} participantes.` }, { status: 400 });
+    // The operation's fixed people go into every group, whatever the client sent.
+    const participants = withFixedParticipants(chosen as string[], parseFixedParticipants(env.WHATSAPP_GROUP_DEFAULT_PARTICIPANTS));
+    if (!participants.length) return Response.json({ error: 'Adicione ao menos um participante.' }, { status: 400 });
     const ticketKeys = Array.isArray(body?.ticketKeys) ? body.ticketKeys.filter((key): key is string => typeof key === 'string').slice(0, MAX_TICKETS) : [];
     // A group serves one visit: same city, same schedule.
     const conflict = await ticketsConflict(ticketKeys);
@@ -85,9 +91,8 @@ export async function POST(request: Request) {
     if (!upstream.ok || !payload.jid) {
       return Response.json({ error: payload.error ?? 'O WhatsApp não criou o grupo.', unknown: payload.unknown ?? [] }, { status: upstream.status === 400 ? 400 : 502 });
     }
-    // photoSet is only false when a photo was asked for and not applied; an
-    // older bridge that ignores photos doesn't send it.
-    return Response.json({ jid: payload.jid, subject: payload.subject ?? subject, missing: payload.missing ?? [], photoSet: photo ? payload.photoSet ?? false : undefined });
+    // An older bridge that ignores photos doesn't send photoSet.
+    return Response.json({ jid: payload.jid, subject: payload.subject ?? subject, missing: payload.missing ?? [], photoSet: payload.photoSet ?? false });
   } catch (error) {
     if (error instanceof Response) return error;
     console.error('Falha ao criar grupo do WhatsApp', error);

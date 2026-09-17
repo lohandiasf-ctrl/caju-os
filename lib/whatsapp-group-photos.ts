@@ -11,6 +11,9 @@ export const WHATSAPP_GROUP_PHOTOS = [
 
 export type WhatsappGroupPhotoId = (typeof WHATSAPP_GROUP_PHOTOS)[number]['id'];
 
+// Every group gets a photo; this one unless someone picks another.
+export const DEFAULT_WHATSAPP_GROUP_PHOTO: WhatsappGroupPhotoId = 'agendar-com-tecnico';
+
 export function whatsappGroupPhotoSrc(id: WhatsappGroupPhotoId) {
   return `/whatsapp-group-photos/${id}.jpg`;
 }
