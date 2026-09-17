@@ -63,6 +63,7 @@ import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
 import { QueueAssistant } from "@/components/assistant-panel";
+import { AssistantAudit } from "@/components/assistant-audit";
 import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
 import { openExternalUrl } from "@/lib/open-external";
@@ -1585,6 +1586,8 @@ export default function Home() {
                 user={user}
               />
               {role === "gerencia" && <EmployeeInvitePanel user={user} />}
+              {/* Auditoria da escrita assistida: coordenação e gerência. */}
+              {(role === "gerencia" || role === "coordenador") && <AssistantAudit user={user} />}
             </>
           )}
         </div>
