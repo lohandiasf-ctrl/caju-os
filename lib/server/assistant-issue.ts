@@ -16,6 +16,7 @@ export function toAssistantIssue(issue: Awaited<ReturnType<typeof getJiraIssue>>
     scheduledAt: issue.operationalFields.scheduledDateTime ?? issue.scheduledAt,
     partnerTriggeredAt: issue.partnerTriggeredAt,
     technicianName: issue.technicianName,
+    attachmentTypes: issue.attachments.map((attachment) => attachment.mimeType),
     description: issue.description,
     allegedDefect: issue.operationalFields.allegedDefect,
     problemCategory: issue.operationalFields.problemCategory,

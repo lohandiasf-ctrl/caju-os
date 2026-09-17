@@ -11,6 +11,33 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente: evidências (anexos) na fila
+
+"Quais chamados que estão com técnico em campo não estão com evidências
+anexadas?" recebia "Não consta", e a resposta estava certa: a fila enviada ao
+modelo não tinha nada sobre anexos.
+
+- A fonte é o **anexo do Jira**. Toda evidência do Caju OS (N1, WhatsApp, tela
+  do chamado) sobe como anexo; o `ticket_evidence` do D1 às vezes fica sem o
+  arquivo por causa do limite de tamanho, então não serve para dizer "sem
+  evidência".
+- `lib/server/jira.ts`: `searchJiraIssues({ withAttachments })` pede o campo
+  `attachment` e devolve `attachmentTypes` (MIME de cada anexo). Só o
+  assistente usa; a lista principal continua sem esse campo, porque chamado com
+  dezenas de fotos pesa.
+- `lib/assistant.ts`: coluna "anexos" na fila ("2 fotos, 1 PDF", "nenhum"),
+  linha "Anexos (evidências)" no contexto do chamado, e contagem pronta
+  "Sem nenhum anexo em <status>" com as FSAs. O prompt associa evidência, foto,
+  vídeo, RAT e comprovante à coluna "anexos".
+- `tests/assistant.test.ts`: 4 testes novos.
+
+**Limites:** "anexo" é qualquer arquivo do chamado no Jira, inclusive um print
+que o cliente mandou na abertura, então um chamado com esse arquivo não aparece
+como "sem evidência". A fila tem no máximo 60 chamados (os atualizados mais
+recentemente); em "Técnico em campo" com mais que isso, parte fica de fora.
+
+**Pendente:** repetir a pergunta em produção.
+
 ### Assistente: FSAs clicáveis e contagem de "ontem" pronta
 
 - **FSA clicável:** na resposta do assistente da fila, cada FSA vira botão que
