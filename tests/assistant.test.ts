@@ -118,6 +118,9 @@ test('a fila também traz as contagens de ontem prontas', () => {
   assert.match(text, /- Acionados ontem \(2026-09-16\): 1 — FSA-7/);
   assert.match(text, /- Abertos no Jira ontem \(2026-09-16\): 1 — FSA-8/);
   assert.match(buildMessages('queue', 'x', 'y')[0].content, /"hoje" e "ontem", copie a linha certa/);
+  // Perguntando o status de 27 FSAs, a resposta terminou com "(pela data de
+  // acionamento)" — pergunta que não é sobre data não leva esse rodapé.
+  assert.match(buildMessages('queue', 'x', 'y')[0].content, /pergunta que não é sobre data, não escreva isso/);
 });
 
 test('ontem é o dia anterior no fuso de Brasília', () => {
@@ -165,6 +168,21 @@ test('os anexos viram texto curto por tipo', () => {
   assert.equal(describeAttachments(['image/jpeg']), '1 foto');
   assert.equal(describeAttachments(['video/mp4', 'video/mp4', 'text/plain']), '2 vídeos, 1 outro');
   assert.match(ticketContext(issue({ attachmentTypes: ['application/pdf'] }), 6, TODAY), /Anexos \(evidências\): 1 PDF/);
+});
+
+// "Quais chamados estão com técnico em campo?" listou 26 dos 30 e ainda
+// escreveu "Direcionado: não consta", que ninguém pediu.
+test('a fila traz os chamados agrupados por status', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-1', status: 'TEC-CAMPO' }),
+    ticket({ key: 'FSA-2', status: 'DIRECIONADO' }),
+    ticket({ key: 'FSA-3', status: 'TEC-CAMPO' }),
+  ], 60, TODAY);
+  assert.match(text, /- Técnico em campo: 2 — FSA-1, FSA-3/);
+  assert.match(text, /- Direcionado: 1 — FSA-2/);
+  const prompt = buildMessages('queue', 'x', 'y')[0].content;
+  assert.match(prompt, /copie a linha de X em "Chamados por status"/);
+  assert.match(prompt, /não liste outros status nem escreva "não consta" para status que ninguém pediu/);
 });
 
 // A tela mostra "Técnico em campo"; o Jira chama de "TEC-CAMPO", e era isso
