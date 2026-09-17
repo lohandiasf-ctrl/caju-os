@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### WhatsApp: aviso falso de "não foi possível adicionar"
+
+No primeiro grupo criado com os contatos fixos, o diálogo avisou que nenhum
+dos 13 tinha entrado, mas o grupo foi criado. A causa: grupos novos listam os
+membros pelo ID `@lid`, e a ponte comparava esse ID com os telefones.
+
+Agora a ponte:
+- relê a lista de membros do grupo (`groupMetadata`);
+- compara todos os IDs de cada membro (`id`, `jid`, `lid` e o telefone já
+  conhecido para aquele `lid`);
+- aproveita esses dados para aprender a relação `lid` → telefone;
+- para celulares brasileiros, compara DDD + últimos 8 dígitos, então a
+  diferença do nono dígito não gera alarme.
+
+**Pendente:** `fly deploy` da ponte.
+
 ### WhatsApp: todo grupo sai com foto e com os contatos fixos da operação
 
 - A opção "Sem foto" saiu do diálogo. A foto padrão é **Agendar com técnico**,
