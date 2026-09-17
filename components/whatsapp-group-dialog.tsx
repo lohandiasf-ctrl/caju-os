@@ -1,12 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CheckCircle2, ImageOff, Loader2, MessageCirclePlus, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { Check, CheckCircle2, Loader2, Lock, MessageCirclePlus, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { WHATSAPP_GROUP_PHOTOS, whatsappGroupPhotoSrc, type WhatsappGroupPhotoId } from '@/lib/whatsapp-group-photos';
-import { groupTicketsConflict, participantJid, WHATSAPP_GROUP_NAME_MAX, whatsappGroupName, type GroupNameTicket } from '@/lib/whatsapp-group-name';
+import { DEFAULT_WHATSAPP_GROUP_PHOTO, WHATSAPP_GROUP_PHOTOS, whatsappGroupPhotoSrc, type WhatsappGroupPhotoId } from '@/lib/whatsapp-group-photos';
+import { groupTicketsConflict, participantJid, WHATSAPP_GROUP_NAME_MAX, whatsappGroupName, type FixedParticipant, type GroupNameTicket } from '@/lib/whatsapp-group-name';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type Contact = { jid: string; name: string; phone?: string | null };
@@ -21,8 +21,9 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
   user: User;
 }) {
   const [subject, setSubject] = useState('');
-  const [photo, setPhoto] = useState<WhatsappGroupPhotoId | null>(null);
+  const [photo, setPhoto] = useState<WhatsappGroupPhotoId>(DEFAULT_WHATSAPP_GROUP_PHOTO);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [fixed, setFixed] = useState<FixedParticipant[] | null>(null);
   const [selected, setSelected] = useState<Contact[]>([]);
   const [query, setQuery] = useState('');
   const [phone, setPhone] = useState('');
@@ -42,28 +43,33 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
     if (!user) return;
     try {
       const response = await fetch('/api/whatsapp/groups', { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: 'no-store' });
-      const payload = await response.json() as { contacts?: Array<{ jid: string; name: string | null; phone: string | null }> };
+      const payload = await response.json() as { contacts?: Array<{ jid: string; name: string | null; phone: string | null }>; fixed?: FixedParticipant[] };
       if (!response.ok) return;
+      setFixed(payload.fixed ?? []);
       setContacts((payload.contacts ?? []).map((item) => ({ jid: item.jid, name: item.name || displayJid(item.phone ?? item.jid), phone: item.phone })));
     } catch { /* Typing numbers still works without the contact list. */ }
   }, [user]);
 
   useEffect(() => {
     if (!open) return;
-    setSubject(whatsappGroupName(ticketsRef.current)); setPhoto(null); setSelected([]); setQuery(''); setPhone(''); setError(''); setCreated(null);
+    setSubject(whatsappGroupName(ticketsRef.current)); setPhoto(DEFAULT_WHATSAPP_GROUP_PHOTO); setSelected([]); setQuery(''); setPhone(''); setError(''); setCreated(null);
     void loadContacts();
   }, [open, loadContacts]);
 
   // One group per visit: same city, same schedule.
   const conflict = useMemo(() => groupTicketsConflict(tickets), [tickets]);
 
+  // Fixed people are already in; don't offer them again.
+  const fixedPhones = useMemo(() => new Set((fixed ?? []).map((item) => phoneDigits(item.jid))), [fixed]);
+
   const matches = useMemo(() => {
     const term = normalize(query);
     return contacts
       .filter((contact) => !selected.some((item) => item.jid === contact.jid))
+      .filter((contact) => !fixedPhones.has(phoneDigits(contact.phone ?? contact.jid)))
       .filter((contact) => !term || normalize(`${contact.name} ${displayJid(contact.jid)}`).includes(term))
       .slice(0, 6);
-  }, [contacts, selected, query]);
+  }, [contacts, selected, query, fixedPhones]);
 
   // Pulls the WhatsApp address book, which is where most numbers come from.
   async function syncContacts() {
@@ -114,7 +120,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
   async function create() {
     if (!user || saving) return;
     if (!subject.trim()) { setError('Informe o nome do grupo.'); return; }
-    if (!selected.length) { setError('Adicione ao menos um participante.'); return; }
+    if (!selected.length && !fixed?.length) { setError('Adicione ao menos um participante.'); return; }
     setSaving(true); setError('');
     try {
       const response = await fetch('/api/whatsapp/groups', {
@@ -128,7 +134,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
         const pending = (payload.unknown ?? []).map((jid) => selected.find((item) => item.jid === jid)?.name ?? displayJid(jid));
         throw new Error(pending.length ? `${payload.error ?? 'Não foi possível criar o grupo.'} Faltam: ${pending.join(', ')}.` : payload.error ?? 'Não foi possível criar o grupo.');
       }
-      setCreated({ subject: payload.subject ?? subject.trim(), photoFailed: Boolean(photo) && payload.photoSet === false, missing: (payload.missing ?? []).map((jid) => selected.find((item) => item.jid === jid)?.name ?? displayJid(jid)) });
+      setCreated({ subject: payload.subject ?? subject.trim(), photoFailed: payload.photoSet === false, missing: (payload.missing ?? []).map((jid) => [...selected, ...(fixed ?? [])].find((item) => item.jid === jid)?.name ?? displayJid(jid)) });
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível criar o grupo.'); }
     finally { setSaving(false); }
   }
@@ -160,10 +166,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
 
             <fieldset>
               <legend className="mb-1 text-sm font-semibold">Foto do grupo</legend>
-              <div role="radiogroup" aria-label="Foto do grupo" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                <PhotoOption selected={photo === null} label="Sem foto" onSelect={() => setPhoto(null)}>
-                  <span className="grid size-full place-items-center bg-white/5 text-muted-foreground"><ImageOff className="size-6" /></span>
-                </PhotoOption>
+              <div role="radiogroup" aria-label="Foto do grupo" className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {WHATSAPP_GROUP_PHOTOS.map((item) => (
                   <PhotoOption key={item.id} selected={photo === item.id} label={item.label} onSelect={() => setPhoto(item.id)}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -175,6 +178,17 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
 
             <div>
               <p className="mb-1 text-sm font-semibold">Participantes</p>
+              {fixed && fixed.length > 0 && (
+                <div className="mb-2">
+                  <p className="mb-1 flex items-center gap-1 text-xs text-muted-foreground"><Lock className="size-3" />Entram em todo grupo ({fixed.length})</p>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {fixed.map((contact) => (
+                      <li key={contact.jid} title={displayJid(contact.jid)} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs text-muted-foreground">{contact.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {fixed && fixed.length === 0 && <p className="mb-2 text-xs text-amber-200">A lista de contatos fixos não está configurada no servidor.</p>}
               {selected.length > 0 && (
                 <ul className="mb-2 flex flex-wrap gap-1.5">
                   {selected.map((contact) => (
@@ -238,7 +252,7 @@ export function WhatsAppGroupDialog({ open, onOpenChange, tickets, user }: {
         <DialogFooter>
           {created ? <Button type="button" onClick={() => onOpenChange(false)}>Fechar</Button> : <>
             <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="button" disabled={saving || Boolean(conflict) || !selected.length || !subject.trim()} onClick={() => void create()}>
+            <Button type="button" disabled={saving || Boolean(conflict) || (!selected.length && !fixed?.length) || !subject.trim()} onClick={() => void create()}>
               {saving ? <Loader2 className="animate-spin" /> : <MessageCirclePlus />}Criar grupo
             </Button>
           </>}
@@ -271,6 +285,10 @@ function displayJid(jid: string) {
   if (jid.endsWith('@lid')) return 'contato do WhatsApp';
   const digits = jid.replace(/@.*$/, '').replace(/\D/g, '');
   return digits ? `+${digits}` : jid;
+}
+
+function phoneDigits(jid: string) {
+  return jid.endsWith('@lid') ? jid : jid.replace(/@.*$/, '').replace(/D/g, '');
 }
 
 function normalize(value: string) {

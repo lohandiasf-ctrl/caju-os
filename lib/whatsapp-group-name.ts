@@ -130,3 +130,33 @@ export function whatsappGroupName(tickets: GroupNameTicket[], client = 'AMERICAN
   const storePart = [[client.toUpperCase(), stores.join(' / ')].filter(Boolean).join(' '), fsas].filter(Boolean).join(' ');
   return [head, location, storePart].filter(Boolean).join(' - ');
 }
+
+export type FixedParticipant = { jid: string; name: string };
+
+// People who go into every group the operation creates. The list is personal
+// data and the repository is public, so it lives in the Worker secret
+// WHATSAPP_GROUP_DEFAULT_PARTICIPANTS as JSON:
+//   [{ "name": "Fulano", "phone": "+55 11 99999-0000" }, ...]
+// Invalid entries are skipped; a malformed secret yields an empty list.
+export function parseFixedParticipants(raw: string | null | undefined): FixedParticipant[] {
+  if (!raw?.trim()) return [];
+  let items: unknown;
+  try { items = JSON.parse(raw); } catch { return []; }
+  if (!Array.isArray(items)) return [];
+  const seen = new Set<string>();
+  const result: FixedParticipant[] = [];
+  for (const item of items) {
+    const phone = typeof item?.phone === 'string' ? item.phone : '';
+    const jid = participantJid(phone);
+    if (!jid || jid.endsWith('@lid') || seen.has(jid)) continue;
+    seen.add(jid);
+    const name = typeof item?.name === 'string' && item.name.trim() ? item.name.trim() : `+${jid.replace(/@.*$/, '')}`;
+    result.push({ jid, name });
+  }
+  return result;
+}
+
+// Adds the fixed people to the chosen ones, without repeating anybody.
+export function withFixedParticipants(chosen: string[], fixed: FixedParticipant[]) {
+  return [...new Set([...fixed.map((item) => item.jid), ...chosen])];
+}

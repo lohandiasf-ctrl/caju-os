@@ -144,6 +144,7 @@ hardcoded para o Railway em `lib/voice-chat.ts`).
 | `TURN_KEY_ID` | Cloudflare Realtime TURN | opcional (sem ele: só STUN) |
 | `TURN_KEY_API_TOKEN` | idem | opcional |
 | `TRACKINGMORE_API_KEY` | rastreio automático de spares (TrackingMore, API v4) | opcional (sem ele: spare é cadastrado sem consulta) |
+| `WHATSAPP_GROUP_DEFAULT_PARTICIPANTS` | JSON `[{"name","phone"}]` das pessoas que entram em todo grupo de WhatsApp criado pelo sistema. Fica fora do Git porque o repositório é público. | necessário para os contatos fixos. Sem ele, o diálogo avisa e o grupo sai só com quem foi escolhido. |
 | `GOOGLE_MAPS_API_KEY` | **obsoleto** (mapa é Leaflet) | secret órfão; pode remover |
 
 ### Bindings — definidos por `scripts/patch-wrangler.mjs`
