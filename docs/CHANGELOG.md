@@ -11,6 +11,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente: FSAs clicáveis e contagem de "ontem" pronta
+
+- **FSA clicável:** na resposta do assistente da fila, cada FSA vira botão que
+  abre o chamado no mesmo diálogo dos cards. Se o chamado não estiver carregado
+  na tela (a fila do assistente é relida no servidor), o diálogo abre com um
+  esboço e `openTicket` o troca pelos dados do Jira.
+  `splitTicketKeys()` (`lib/assistant.ts`) separa o texto; o componente só
+  desenha.
+- **"Quantos caíram ontem?"** foi respondido em produção pela data de
+  **abertura** (14 FSAs), apesar de o prompt mandar usar o acionamento. Só
+  "hoje" vinha contado pelo servidor; para ontem o modelo escolheu a coluna
+  sozinho e errou. Agora o contexto diz "ontem foi AAAA-MM-DD" e traz as
+  contagens de ontem prontas (acionados, abertos, agendados), e o prompt manda
+  copiar a linha em vez de recontar.
+- `tests/assistant.test.ts`: 4 testes novos (contagem de ontem, dia anterior
+  no fuso de Brasília, separação das FSAs).
+
+**Pendente:** repetir "quantos chamados caíram ontem?" em produção e conferir
+que a resposta usa o acionamento.
+
 ### Assistente não sabia quando o chamado foi "acionado"
 
 Validando em produção: "quantos chamados foram acionados hoje?" recebia "a

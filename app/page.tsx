@@ -1412,7 +1412,25 @@ export default function Home() {
               {/* Pergunta livre sobre a fila. O servidor relê os chamados pela
                   mesma busca; o contexto do modelo não vem do cliente. */}
               <div className="mt-4">
-                <QueueAssistant user={user} query={query} />
+                <QueueAssistant
+                  user={user}
+                  query={query}
+                  onOpenTicket={(ticketKey) => {
+                    // A fila do assistente é relida no servidor e pode citar um
+                    // chamado que não está carregado aqui. openTicket troca
+                    // este esboço pelos dados do Jira assim que eles chegam.
+                    const ticket = tickets.find((item) => item.id === ticketKey);
+                    void openTicket(ticket ?? {
+                      id: ticketKey,
+                      title: "Carregando chamado...",
+                      store: "",
+                      city: "",
+                      status: "Direcionado",
+                      rawStatus: "",
+                      priority: "Media",
+                    });
+                  }}
+                />
               </div>
               {view === "kanban" ? (
                 <>

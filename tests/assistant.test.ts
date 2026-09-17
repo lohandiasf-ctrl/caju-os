@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, onlyDate, operationDate, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, onlyDate, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -102,17 +102,48 @@ test('a fila traz as contagens de hoje prontas, com as FSAs', () => {
     ticket({ key: 'FSA-2', partnerTriggeredAt: '17/09/2026 09:00' }),
     ticket({ key: 'FSA-3', partnerTriggeredAt: '2026-09-16T18:00:00.000-0300', scheduledAt: '2026-09-17 14:00' }),
   ], 60, TODAY);
-  assert.match(text, /- Acionados hoje: 2 \(FSA-1, FSA-2\)/);
-  assert.match(text, /- Abertos no Jira hoje: 1 \(FSA-1\)/);
-  assert.match(text, /- Agendados para hoje: 1 \(FSA-3\)/);
+  assert.match(text, /- Acionados hoje \(2026-09-17\): 2 — FSA-1, FSA-2/);
+  assert.match(text, /- Abertos no Jira hoje \(2026-09-17\): 1 — FSA-1/);
+  assert.match(text, /- Agendados para hoje \(2026-09-17\): 1 — FSA-3/);
+});
+
+// "Quantos chamados caíram ontem?" foi respondido pela data de abertura: só
+// "hoje" vinha contado, e para ontem o modelo escolheu a coluna errada.
+test('a fila também traz as contagens de ontem prontas', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-7', partnerTriggeredAt: '2026-09-16T18:00:00.000-0300', createdAt: '2026-09-15T10:00:00.000-0300' }),
+    ticket({ key: 'FSA-8', createdAt: '2026-09-16T10:00:00.000-0300' }),
+  ], 60, TODAY);
+  assert.match(text, /ontem foi 2026-09-16/);
+  assert.match(text, /- Acionados ontem \(2026-09-16\): 1 — FSA-7/);
+  assert.match(text, /- Abertos no Jira ontem \(2026-09-16\): 1 — FSA-8/);
+  assert.match(buildMessages('queue', 'x', 'y')[0].content, /"hoje" e "ontem", copie a linha certa/);
+});
+
+test('ontem é o dia anterior no fuso de Brasília', () => {
+  assert.equal(previousOperationDate(new Date('2026-09-17T00:30:00-03:00')), '2026-09-16');
+  assert.equal(previousOperationDate(new Date('2026-09-18T01:30:00Z')), '2026-09-16', '22h30 de 17/09 em Brasília');
+  assert.equal(previousOperationDate(new Date('2026-10-01T12:00:00-03:00')), '2026-09-30');
 });
 
 test('contagem zerada não inventa lista', () => {
-  assert.match(queueContext([ticket()], 60, TODAY), /- Acionados hoje: 0\n/);
+  assert.match(queueContext([ticket()], 60, TODAY), /- Acionados hoje \(2026-09-17\): 0\n/);
+});
+
+test('as FSAs da resposta viram links, e o resto continua texto', () => {
+  assert.deepEqual(splitTicketKeys('14 chamados:\n- FSA-132531\n- FSA-132585.'), [
+    { text: '14 chamados:\n- ' },
+    { text: 'FSA-132531', ticketKey: 'FSA-132531' },
+    { text: '\n- ' },
+    { text: 'FSA-132585', ticketKey: 'FSA-132585' },
+    { text: '.' },
+  ]);
+  assert.deepEqual(splitTicketKeys('nenhum chamado'), [{ text: 'nenhum chamado' }]);
+  assert.deepEqual(splitTicketKeys('dia 2026-09-16, sem FSA'), [{ text: 'dia 2026-09-16, sem FSA' }]);
 });
 
 test('o contexto diz que dia é hoje', () => {
-  assert.match(queueContext([ticket()], 60, TODAY), /^Hoje é 2026-09-17\./);
+  assert.match(queueContext([ticket()], 60, TODAY), /^Hoje é 2026-09-17; ontem foi 2026-09-16\./);
   assert.match(ticketContext(issue(), 6, TODAY), /^Hoje é 2026-09-17\./);
 });
 
