@@ -8,7 +8,7 @@ import { addJiraInternalComment, transitionJiraIssue, updateJiraIssue } from '@/
 
 // Guarda a proposta e devolve o id. A linha nasce aqui, na proposta, para que
 // uma sugestão recusada também apareça na auditoria.
-export async function recordProposal(action: AssistantAction, proposedTo: string, source: 'assistant' | 'rovo') {
+export async function recordProposal(action: AssistantAction, proposedTo: string) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await getDb().insert(assistantActions).values({
@@ -17,7 +17,6 @@ export async function recordProposal(action: AssistantAction, proposedTo: string
     kind: action.kind,
     payload: JSON.stringify(action),
     description: describeAction(action),
-    source,
     status: 'pending',
     proposedTo,
     createdAt: now,

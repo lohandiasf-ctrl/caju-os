@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type AuditRow = {
-  id: string; ticketKey: string; kind: string; description: string; source: string;
+  id: string; ticketKey: string; kind: string; description: string;
   status: string; proposedTo: string; confirmedBy: string | null; error: string | null;
   createdAt: string; resolvedAt: string | null;
 };
@@ -69,7 +69,6 @@ export function AssistantAudit({ user }: { user: User }) {
             <Icon className="size-4 shrink-0" />
             <b className="font-mono">{row.ticketKey}</b>
             <span className="rounded-md border border-current/20 px-2 py-0.5 text-xs font-semibold">{status.label}</span>
-            {row.source === 'rovo' && <span className="rounded-md border border-current/20 px-2 py-0.5 text-xs">via Rovo</span>}
             <span className="ml-auto text-xs opacity-80">{formatWhen(row.createdAt)}</span>
           </div>
           <p className="mt-2 font-semibold">{row.description}</p>

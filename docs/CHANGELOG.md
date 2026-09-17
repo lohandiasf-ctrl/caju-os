@@ -37,16 +37,12 @@ sempre deixando rastro. O desenho tem três portas e nenhuma pode ser pulada:
   quem confirmou (a credencial do Jira é a da integração; sem assinar, o rastro
   pararia em "Caju OS").
 - `db/schema.ts` + `drizzle/0034_assistant_actions.sql`: tabela
-  `assistant_actions`, já com `source` ('assistant' | 'rovo') para a ponte.
+  `assistant_actions`.
 - `components/assistant-panel.tsx`, `components/assistant-audit.tsx`.
 - `tests/assistant-actions.test.ts`: 13 testes nas travas.
 
 **Pendente:** rodar `npm run db:migrate:remote` antes de usar em produção — a
 tabela `assistant_actions` não existe ainda no D1 remoto.
-
-**Pendente:** a ponte com o Rovo (assíncrona, via webhook de Jira Automation +
-`{{agentResponse}}` + callback) ainda não foi feita. A tabela e o fluxo de
-confirmação já estão prontos para recebê-la.
 
 
 ### Assistente de chamados (resumo, próximo passo e perguntas sobre a fila)

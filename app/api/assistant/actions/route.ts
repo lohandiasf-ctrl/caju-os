@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       if (!block) return Response.json({ answer: text, action: null });
       try {
         const action = parseAction(block, issue.key);
-        const proposal = await recordProposal(action, current.email, 'assistant');
+        const proposal = await recordProposal(action, current.email);
         return Response.json({ answer: text, action: { id: proposal.id, description: proposal.description, kind: action.kind, preview: action } });
       } catch (actionError) {
         // Proposta inválida não vira escrita: devolve o texto e avisa.

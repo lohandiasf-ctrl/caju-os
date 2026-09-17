@@ -933,8 +933,6 @@ export const assistantActions = sqliteTable(
     // cliente manda só o id, nunca o que será escrito.
     payload: text('payload').notNull(),
     description: text('description').notNull(),
-    // De onde veio a sugestão: o assistente local ou a ponte com o Rovo.
-    source: text('source', { enum: ['assistant', 'rovo'] }).notNull().default('assistant'),
     status: text('status', { enum: ['pending', 'applied', 'failed', 'cancelled'] }).notNull().default('pending'),
     proposedTo: text('proposed_to').notNull(),
     confirmedBy: text('confirmed_by'),
