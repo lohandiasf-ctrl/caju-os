@@ -11,6 +11,21 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente não respondia perguntas sobre data
+
+"Quantos chamados entraram hoje?" recebia "não consta" — e a resposta estava
+certa: a fila enviada ao modelo não tinha a data de abertura de cada chamado, e
+o modelo não tem relógio para saber que dia é hoje. Falha do contexto, não do
+modelo.
+
+- `lib/assistant.ts`: a tabela da fila ganha a coluna "aberto em", e o contexto
+  (da fila e do chamado) começa com "Hoje é AAAA-MM-DD". A data do chamado no
+  contexto do chamado também ajuda a julgar se o agendamento já passou.
+- `onlyDate()`: as datas do Jira vêm com hora e fuso; na fila só o dia importa.
+- O prompt da fila passa a dizer onde encontrar as datas para contar.
+- `tests/assistant.test.ts`: 4 testes novos, incluindo o que prende a regressão.
+
+
 ### Escrita assistida no Jira: propor → confirmar → auditar
 
 O assistente passa a poder **escrever** no Jira, sempre com confirmação e

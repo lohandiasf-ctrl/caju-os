@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, onlyDate, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+
+const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
 function ticket(partial: Partial<AssistantTicket> = {}): AssistantTicket {
   return {
@@ -57,15 +59,35 @@ test('os comentários internos entram redigidos e limitados aos mais recentes', 
 
 test('a fila vira tabela e avisa o que ficou de fora', () => {
   const tickets = Array.from({ length: 5 }, (_, index) => ticket({ key: `FSA-${index + 1}` }));
-  const text = queueContext(tickets, 3);
+  const text = queueContext(tickets, 3, TODAY);
   assert.match(text, /5 chamados na fila/);
   assert.match(text, /FSA-3 \| Agendado \| Alta/);
   assert.doesNotMatch(text, /FSA-4/);
   assert.match(text, /2 chamados a mais não listados/);
 });
 
+// O assistente respondia "não consta" a "quantos chamados entraram hoje?"
+// porque a data de abertura não ia no contexto e ele não sabia que dia era.
+test('a fila leva a data de abertura de cada chamado', () => {
+  const text = queueContext([ticket({ createdAt: '2026-09-16T10:23:00.000-0300' })], 60, TODAY);
+  assert.match(text, /aberto em/, 'a coluna existe no cabeçalho');
+  assert.match(text, /\| 2026-09-16 \|/, 'a data entra só com o dia');
+});
+
+test('o contexto diz que dia é hoje', () => {
+  assert.match(queueContext([ticket()], 60, TODAY), /^Hoje é 2026-09-17\./);
+  assert.match(ticketContext(issue(), 6, TODAY), /^Hoje é 2026-09-17\./);
+});
+
+test('a data vem do Jira com hora e fuso, e sai só o dia', () => {
+  assert.equal(onlyDate('2026-09-16T10:23:00.000-0300'), '2026-09-16');
+  assert.equal(onlyDate('2026-09-16'), '2026-09-16');
+  assert.equal(onlyDate(null), null);
+  assert.equal(onlyDate('  '), null);
+});
+
 test('a pergunta da fila entra no prompt, redigida', () => {
-  const messages = buildMessages('queue', queueContext([ticket()]), 'qual o chamado do (81) 99999-8888?');
+  const messages = buildMessages('queue', queueContext([ticket()], 60, TODAY), 'qual o chamado do (81) 99999-8888?');
   assert.equal(messages[0].role, 'system');
   assert.match(messages[0].content, /somente os dados fornecidos/i);
   assert.match(messages[1].content, /Pergunta: qual o chamado do \[TELEFONE\]\?/);
