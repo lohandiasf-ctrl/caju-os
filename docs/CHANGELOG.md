@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Copiar "Resumo para mensagem" falhava com mais de um chamado
+
+`Copiar → Resumo para mensagem` mostrava "Falhou" a partir de dois chamados
+selecionados. Causa: o resumo busca o defeito alegado de cada FSA no Jira, uma
+requisição por chamado e em fila; a escrita na área de transferência só
+acontecia depois de tudo isso, quando o navegador já havia encerrado a janela
+de permissão aberta pelo clique. Com um chamado dava tempo; com nove, não.
+
+- `lib/clipboard.ts`: novo `copyToClipboardLazy(load)`. O `navigator.clipboard.write()`
+  sai de dentro do gesto, recebendo Promise em cada tipo MIME — a espera pelos
+  dados passa a acontecer dentro da escrita, com a permissão ainda válida.
+- `components/bulk-ticket-actions.tsx`: as consultas ao Jira agora vão em
+  paralelo (`Promise.all`) em vez de em fila, e a cópia usa o caminho novo.
+- `tests/clipboard.test.ts`: 3 testes, incluindo o que prende a regressão — o
+  `write()` precisa ser chamado antes de o conteúdo ficar pronto.
+
+
 ### Mobile: pull-to-refresh barrado no JS (o CSS não bastou)
 
 O `overscroll-behavior-y: contain` em `html, body` foi publicado e o gesto
