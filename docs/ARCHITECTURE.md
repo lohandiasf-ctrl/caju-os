@@ -228,6 +228,15 @@ Pontos-chave:
     ativos, uma vez, + auditoria; marca `escalatedAt`.
 - A rota exige `x-cron-secret` = `CRON_SECRET`.
 
+- Agente de vigilância: o mesmo cron roda `POST /api/agent/sweep`. Ele aplica
+  as regras de `lib/agent-rules.ts` (parado na etapa além do SLA, agendamento
+  vencido, em campo sem anexo, spare atrasado) e manda **um aviso resumido por
+  rodada** a gerência, coordenação, N1 e analistas ativos. **Não escreve no
+  Jira.** A IA (Workers AI) só redige o texto; sem ela sai o texto de reserva
+  de `lib/agent-notice.ts`. Travas: aviso no máximo de hora em hora, mesmo
+  chamado não repete na mesma regra por 20 h, teto de 25 achados por rodada,
+  auditoria `agente_aviso` por chamado e `AGENT_MODE=off` desliga sem deploy.
+
 ## Inteligência operacional / IA
 
 - `lib/operational-intelligence.ts`: recomendação de técnico, artigos de base
