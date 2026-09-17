@@ -11,6 +11,33 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### Assistente não sabia quando o chamado foi "acionado"
+
+Validando em produção: "quantos chamados foram acionados hoje?" recebia "a
+lista não fornece a data de acionamento". A resposta estava certa. Na operação,
+"acionado" é a data em que o parceiro foi acionado (`customfield_12278`, o
+"Acionamento" da tela), e o contexto da fila só levava abertura e agendamento.
+
+- `lib/assistant.ts`: nova coluna "acionado em" na fila ("não acionado" quando
+  vazia) e linha "Parceiro acionado em" no contexto do chamado. O campo já vinha
+  em `searchJiraIssues`/`getJiraIssue`; só não chegava ao modelo.
+- O prompt da fila diz qual coluna usar para cada verbo: aberto/entrou →
+  "aberto em"; acionado → "acionado em"; agendado → "agendamento". Também pede
+  que o modelo cite as FSAs que contou, para dar para conferir.
+- `onlyDate()` também converte `DD/MM/AAAA` para `AAAA-MM-DD`, para comparar
+  com "Hoje é".
+- `lib/server/assistant-issue.ts`: `toAssistantIssue` estava copiado nas duas
+  rotas (`/api/assistant` e `/api/assistant/actions`), e a cópia da escrita
+  ficaria sem o campo novo. Agora existe uma só.
+- `tests/assistant.test.ts`: 2 testes novos e um caso a mais em `onlyDate`.
+
+**Limite que continua:** a fila enviada é a da tela (filtro de status e busca),
+com no máximo 60 chamados. Um chamado acionado hoje que não esteja nessa lista
+não entra na conta.
+
+**Pendente:** repetir a pergunta em produção depois do deploy e conferir a
+contagem com as FSAs citadas.
+
 ### "Hoje" do assistente era o hoje de UTC, não o de Brasília
 
 O Worker roda em UTC. Depois das 21h de Brasília o `toISOString()` já devolve o
@@ -69,10 +96,13 @@ sempre deixando rastro. O desenho tem três portas e nenhuma pode ser pulada:
 - `components/assistant-panel.tsx`, `components/assistant-audit.tsx`.
 - `tests/assistant-actions.test.ts`: 13 testes nas travas.
 
-**Pendente:** rodar `npm run db:migrate:remote` para criar `assistant_actions`
-no D1 remoto. O deploy **não depende** dessa ordem: enquanto a tabela não
-existe, a escrita assistida responde "falta rodar a migration" em vez de
-estourar 500, e resumo, próximo passo e pergunta sobre a fila seguem normais.
+Migration `0034` aplicada no D1 remoto em 17/09 (informado pelo usuário).
+Enquanto a tabela não existe, a escrita assistida responde "falta rodar a
+migration" em vez de estourar 500.
+
+**Pendente:** validar em produção. Como a escrita muda etapa e agendamento, ela
+entra na regra de validação de fluxo Jira (`docs/WORKFLOW_RULES.md`). Testar
+primeiro o comentário interno num chamado de teste.
 
 
 ### Assistente de chamados (resumo, próximo passo e perguntas sobre a fila)
@@ -95,8 +125,9 @@ novo.
   na tela do chamado e `QueueAssistant` (pergunta livre) na lista.
 - `tests/assistant.test.ts`: 12 testes, com foco na redação de dados pessoais.
 
-**Somente leitura:** o assistente descreve e sugere; nada grava no Jira. Por
-isso não entra na regra de validação de fluxo Jira.
+**Somente leitura** nesta entrada: resumo, próximo passo e pergunta não gravam
+nada. A escrita no Jira veio depois, na entrada "Escrita assistida no Jira", e
+essa parte entra na regra de validação de fluxo Jira.
 
 **Pendente:** o Workers AI só responde de verdade em produção — aqui dá para
 verificar contexto, prompt, permissão e limite, não a qualidade da resposta.

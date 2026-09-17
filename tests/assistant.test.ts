@@ -7,7 +7,7 @@ const TODAY = new Date('2026-09-17T12:00:00.000Z');
 function ticket(partial: Partial<AssistantTicket> = {}): AssistantTicket {
   return {
     key: 'FSA-1', summary: 'PDV 3 não liga', status: 'Agendado', priority: 'Alta',
-    store: 'Loja Centro', city: 'Recife', createdAt: '2026-09-10', scheduledAt: null,
+    store: 'Loja Centro', city: 'Recife', createdAt: '2026-09-10', scheduledAt: null, partnerTriggeredAt: null,
     technicianName: null, ...partial,
   };
 }
@@ -74,6 +74,21 @@ test('a fila leva a data de abertura de cada chamado', () => {
   assert.match(text, /\| 2026-09-16 \|/, 'a data entra só com o dia');
 });
 
+// "Quantos chamados foram acionados hoje?" recebia "a lista não fornece a data
+// de acionamento" — e não fornecia: só ia a abertura e o agendamento.
+test('a fila leva a data de acionamento do parceiro', () => {
+  const text = queueContext([ticket({ partnerTriggeredAt: '2026-09-17T08:10:00.000-0300' }), ticket({ key: 'FSA-2' })], 60, TODAY);
+  assert.match(text, /aberto em \| acionado em \| agendamento/);
+  assert.match(text, /FSA-1 .*\| 2026-09-10 \| 2026-09-17 \| sem agendamento \|/);
+  assert.match(text, /FSA-2 .*\| não acionado \|/);
+  assert.match(ticketContext(issue({ partnerTriggeredAt: '17/09/2026 08:10' }), 6, TODAY), /Parceiro acionado em: 17\/09\/2026 08:10/);
+});
+
+test('o prompt da fila separa aberto, acionado e agendado', () => {
+  const prompt = buildMessages('queue', 'x', 'y')[0].content;
+  assert.match(prompt, /"acionado".*coluna "acionado em"/);
+});
+
 test('o contexto diz que dia é hoje', () => {
   assert.match(queueContext([ticket()], 60, TODAY), /^Hoje é 2026-09-17\./);
   assert.match(ticketContext(issue(), 6, TODAY), /^Hoje é 2026-09-17\./);
@@ -90,6 +105,7 @@ test('"hoje" é o dia de Brasília, não o do servidor em UTC', () => {
 test('a data vem do Jira com hora e fuso, e sai só o dia', () => {
   assert.equal(onlyDate('2026-09-16T10:23:00.000-0300'), '2026-09-16');
   assert.equal(onlyDate('2026-09-16'), '2026-09-16');
+  assert.equal(onlyDate('17/09/2026 08:10'), '2026-09-17', 'data em texto BR vira AAAA-MM-DD');
   assert.equal(onlyDate(null), null);
   assert.equal(onlyDate('  '), null);
 });
