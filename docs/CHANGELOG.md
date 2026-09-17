@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### "Hoje" do assistente era o hoje de UTC, não o de Brasília
+
+O Worker roda em UTC. Depois das 21h de Brasília o `toISOString()` já devolve o
+dia seguinte, então uma pergunta às 22h ("quantos chamados entraram hoje?")
+seria respondida sobre o dia de amanhã — silenciosamente.
+
+- `lib/assistant.ts`: novo `operationDate()`, que formata a data em
+  `America/Sao_Paulo`. É o fuso em que os chamados são operados, e "hoje" é o de
+  quem pergunta, não o do servidor.
+- `tests/assistant.test.ts`: teste com horário noturno, que falharia com a
+  implementação anterior.
+
+
 ### Assistente não respondia perguntas sobre data
 
 "Quantos chamados entraram hoje?" recebia "não consta" — e a resposta estava
