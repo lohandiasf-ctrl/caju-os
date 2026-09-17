@@ -33,9 +33,16 @@ app. As 27 vieram como "Técnico em campo" — nenhuma "não consta" — e o cli
 na FSA abriu o chamado. Conferido na mão: FSA-127365 e FSA-128340, duas das
 que antes faltavam, estão mesmo em TEC-CAMPO.
 
-Um defeito apareceu no teste: a resposta terminou com "(pela data de
-acionamento)" numa pergunta que não era sobre data. O prompt passa a pedir
-essa linha só em pergunta de data.
+Dois defeitos apareceram no teste:
+
+1. A resposta terminou com "(pela data de acionamento)" numa pergunta que não
+   era sobre data. O prompt passa a pedir essa linha só em pergunta de data.
+2. "Quais chamados estão com técnico em campo?" listou 26 dos 30 e ainda
+   escreveu "Pendente de agendamento: não consta", "Aguardando spare: não
+   consta" e "Direcionado: não consta" — status que ninguém pediu. A tela está
+   certa (30 em TEC-CAMPO); era o modelo varrendo a tabela. Agora o contexto
+   traz "Chamados por status" pronto (rótulo, contagem e FSAs), o prompt manda
+   copiar a linha do status perguntado, inteira, e proíbe listar outros status.
 
 ### Assistente: evidências (anexos) na fila
 

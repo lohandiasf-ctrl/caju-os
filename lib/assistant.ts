@@ -158,6 +158,19 @@ export function describeAttachments(types: string[]): string {
     .join(', ');
 }
 
+// "Quais estão com técnico em campo?" veio com 26 dos 30, e com uma linha
+// "Direcionado: não consta" que ninguém pediu. Com os grupos prontos, o modelo
+// copia a linha em vez de varrer a tabela.
+function statusGroups(tickets: AssistantTicket[]): string[] {
+  const byStatus = new Map<string, string[]>();
+  for (const ticket of tickets) {
+    const label = statusLabel(ticket.status);
+    byStatus.set(label, [...(byStatus.get(label) ?? []), ticket.key]);
+  }
+  return ['Chamados por status nesta lista (já conferidos):',
+    ...[...byStatus].map(([status, keys]) => `- ${status}: ${keys.length} — ${keys.join(', ')}`)];
+}
+
 // Chamados sem nenhum anexo, por status. Mesma razão das contagens por data:
 // "quais em campo estão sem evidência" é filtro duplo, e o modelo pequeno erra.
 function withoutAttachments(tickets: AssistantTicket[]): string[] {
@@ -200,7 +213,7 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
   const day = operationDate(today);
   const yesterday = previousOperationDate(today);
   const stamp = `Hoje é ${day}; ontem foi ${yesterday}. As datas abaixo estão no formato AAAA-MM-DD.`;
-  const counts = ['Contagens prontas nesta lista (já conferidas):', ...dayCounts(listed, day, 'hoje'), ...dayCounts(listed, yesterday, 'ontem'), ...(listed.some((ticket) => ticket.attachmentTypes) ? withoutAttachments(listed) : [])];
+  const counts = [...statusGroups(listed), '', 'Contagens prontas nesta lista (já conferidas):', ...dayCounts(listed, day, 'hoje'), ...dayCounts(listed, yesterday, 'ontem'), ...(listed.some((ticket) => ticket.attachmentTypes) ? withoutAttachments(listed) : [])];
   return [stamp, `${tickets.length} chamados na fila.`, ...counts, '', header, ...rows].join('\n') + cut;
 }
 
@@ -224,6 +237,8 @@ Formato: uma linha "Próximo passo:" com a ação concreta, depois até três ma
 
 Tarefa: responder a pergunta da pessoa sobre a fila de chamados listada.
 Formato: resposta direta primeiro. Ao citar chamados, use a FSA. Se a pergunta pedir contagem ou ordenação, confira na lista antes de responder. Se a lista não permitir responder, diga isso.
+Responda SÓ o que foi perguntado: não liste outros status nem escreva "não consta" para status que ninguém pediu.
+Pergunta sobre status ("quais estão em X", "quantos estão em X"): copie a linha de X em "Chamados por status", inteira, sem recontar e sem deixar FSA de fora. Se X não aparecer ali, nenhum chamado da lista está nesse status.
 Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do contexto diz a data de hoje. Decida pelo SENTIDO da pergunta, não por palavra exata; as listas abaixo são exemplos:
 - Chegada do chamado para a operação — acionado, acionamento, caiu, caíram, colocado, colocaram, entrou, entraram, chegou, chegaram, veio, recebemos, novos → coluna "acionado em".
 - Criação no Jira — só quando a pergunta fala em aberto, abertura, criado ou criação → coluna "aberto em".

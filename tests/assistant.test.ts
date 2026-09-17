@@ -170,6 +170,21 @@ test('os anexos viram texto curto por tipo', () => {
   assert.match(ticketContext(issue({ attachmentTypes: ['application/pdf'] }), 6, TODAY), /Anexos \(evidências\): 1 PDF/);
 });
 
+// "Quais chamados estão com técnico em campo?" listou 26 dos 30 e ainda
+// escreveu "Direcionado: não consta", que ninguém pediu.
+test('a fila traz os chamados agrupados por status', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-1', status: 'TEC-CAMPO' }),
+    ticket({ key: 'FSA-2', status: 'DIRECIONADO' }),
+    ticket({ key: 'FSA-3', status: 'TEC-CAMPO' }),
+  ], 60, TODAY);
+  assert.match(text, /- Técnico em campo: 2 — FSA-1, FSA-3/);
+  assert.match(text, /- Direcionado: 1 — FSA-2/);
+  const prompt = buildMessages('queue', 'x', 'y')[0].content;
+  assert.match(prompt, /copie a linha de X em "Chamados por status"/);
+  assert.match(prompt, /não liste outros status nem escreva "não consta" para status que ninguém pediu/);
+});
+
 // A tela mostra "Técnico em campo"; o Jira chama de "TEC-CAMPO", e era isso
 // que o assistente devolvia.
 test('o status sai com a palavra que a tela usa', () => {
