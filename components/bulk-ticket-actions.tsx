@@ -47,7 +47,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
   const [results, setResults] = useState<Result[] | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'ok' | 'fail'>('idle');
   const [groupOpen, setGroupOpen] = useState(false);
-  const canCreateGroup = canUseWhatsapp(user?.email);
+  const canCreateGroup = canUseWhatsapp(role);
 
   const canTransition = canBulkTransition(role);
   const toSchedule = useMemo(() => tickets.filter((ticket) => isBulkEligible(ticket.rawStatus, 'scheduled')), [tickets]);

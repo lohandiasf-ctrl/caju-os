@@ -100,7 +100,7 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
     </div>
     <nav aria-label="Navegação principal" className="mt-5 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-1">
       <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[.14em] text-muted-foreground">Operação</p>
-      {items.filter(([, , , key]) => canUseNavItem(role, key, user?.email)).map(([label, Icon, href, key]) => <Link key={key} href={href} onClick={(event) => navigate(event, href)} aria-current={active === key ? 'page' : undefined} className="app-nav-link"><Icon aria-hidden="true" className="size-[18px] shrink-0" /><span>{label}</span></Link>)}
+      {items.filter(([, , , key]) => canUseNavItem(role, key)).map(([label, Icon, href, key]) => <Link key={key} href={href} onClick={(event) => navigate(event, href)} aria-current={active === key ? 'page' : undefined} className="app-nav-link"><Icon aria-hidden="true" className="size-[18px] shrink-0" /><span>{label}</span></Link>)}
     </nav>
     <div className="mt-3 shrink-0 border-t border-sidebar-border pt-3">
       <Link href="/?view=settings" onClick={(event) => navigate(event, '/?view=settings')} aria-current={active === 'settings' ? 'page' : undefined} className="app-nav-link"><Settings aria-hidden="true" className="size-[18px]" />Configurações</Link>

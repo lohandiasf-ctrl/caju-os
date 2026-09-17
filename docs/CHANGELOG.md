@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-17
 
+### WhatsApp: acesso por cargo (fim do piloto por e-mail)
+
+A aba WhatsApp estava presa a uma allowlist de e-mail (`WHATSAPP_PILOT_EMAILS`,
+só `lohandiasf@gmail.com`). Agora o acesso é por cargo: **gerência,
+coordenação e analistas** veem a aba, criam grupo em lote e passam no gate das
+rotas `/api/whatsapp/*`. **N1 e técnicos de campo continuam sem acesso**.
+
+- `lib/navigation.ts`: `WHATSAPP_PILOT_EMAILS` → `WHATSAPP_ROLES`;
+  `canUseWhatsapp(role)` no lugar de `canUseWhatsapp(email)`; o parâmetro
+  `email` saiu de `canUseDashboardView`/`canUseNavItem` e dos chamadores
+  (`app-navigation.tsx`, `app/page.tsx`, `bulk-ticket-actions.tsx`).
+- `lib/server/whatsapp-bridge.ts`: `WHATSAPP_SUPPORT_ROLES` passa a ser
+  `WHATSAPP_ROLES` (sai `n1`) e `requireWhatsappUser` checa o cargo do usuário.
+- `tests/navigation.test.ts` cobre os cinco cargos.
+
+Verificado: `npm test` (101 ok), `npx tsc --noEmit`, `npm run build`.
+
 ### WhatsApp: aviso falso de "não foi possível adicionar"
 
 No primeiro grupo criado com os contatos fixos, o diálogo avisou que nenhum

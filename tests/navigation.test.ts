@@ -16,12 +16,14 @@ test('shared navigation preserves financial and N1 access restrictions', () => {
   assert.equal(canUseNavItem('n1', 'projects'), false);
 });
 
-test('WhatsApp tab is limited to the pilot login, whatever the role', () => {
-  assert.equal(canUseNavItem('gerencia', 'whatsapp', 'lohandiasf@gmail.com'), true);
-  assert.equal(canUseNavItem('gerencia', 'whatsapp', ' LohanDiasF@gmail.com '), true);
-  assert.equal(canUseNavItem('gerencia', 'whatsapp', 'outro@cajutech.net'), false);
-  assert.equal(canUseNavItem('coordenador', 'whatsapp'), false);
-  assert.equal(canUseDashboardView('n1', 'whatsapp', null), false);
+test('WhatsApp tab is open to gerência, coordenação and analistas, closed to N1 and técnicos', () => {
+  assert.equal(canUseNavItem('gerencia', 'whatsapp'), true);
+  assert.equal(canUseNavItem('coordenador', 'whatsapp'), true);
+  assert.equal(canUseNavItem('analista', 'whatsapp'), true);
+  assert.equal(canUseNavItem('n1', 'whatsapp'), false);
+  assert.equal(canUseNavItem('tecnico', 'whatsapp'), false);
+  assert.equal(canUseDashboardView('n1', 'whatsapp'), false);
+  assert.equal(canUseDashboardView('analista', 'whatsapp'), true);
 });
 
 test('unknown navigation targets are never offered', () => {
