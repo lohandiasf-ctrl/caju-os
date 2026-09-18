@@ -154,10 +154,16 @@ async function converse(
     { role: 'user', parts: [{ text: options.question }] },
   ];
   const used: string[] = [];
-  for (let round = 0; round < (options.maxRounds ?? MAX_ROUNDS); round += 1) {
-    const payload = await callModel(model, buildRequest({ systemInstruction: options.systemInstruction, contents, declarations }));
+  const rounds = options.maxRounds ?? MAX_ROUNDS;
+  for (let round = 0; round < rounds; round += 1) {
+    // Na última rodada o modelo vai sem ferramentas: sem poder consultar de
+    // novo, ele responde com o que já tem. Antes disso, "quais caíram hoje
+    // após as 15h?" gastava as cinco rodadas e terminava em erro, sem
+    // devolver nada do que já havia consultado.
+    const last = round === rounds - 1;
+    const payload = await callModel(model, buildRequest({ systemInstruction: options.systemInstruction, contents, declarations: last ? [] : declarations }));
     const { text, calls, parts } = readCandidate(payload);
-    if (!calls.length) {
+    if (!calls.length || last) {
       if (text) return { answer: text, model, used };
       throw new GeminiError('O assistente não conseguiu responder agora.', 503);
     }
@@ -173,5 +179,5 @@ async function converse(
     }
     contents.push(toolResultContent(results));
   }
-  throw new GeminiError('O assistente consultou o sistema várias vezes e não chegou a uma resposta. Tente perguntar de forma mais específica.', 504);
+  throw new GeminiError('O assistente não conseguiu responder agora.', 503);
 }

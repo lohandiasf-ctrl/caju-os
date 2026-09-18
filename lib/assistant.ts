@@ -93,6 +93,19 @@ export function onlyDate(value: string | null | undefined): string | null {
   return value?.trim() || null;
 }
 
+// Data com hora, para a fila. Só o dia não basta: "quais caíram hoje após as
+// 15h?" fazia o assistente consultar de novo e de novo até estourar o limite de
+// rodadas, porque a hora não estava em lugar nenhum do contexto. A busca por
+// padrões que existia antes entendia horário, então isto é o mínimo.
+export function dateAndTime(value: string | null | undefined): string | null {
+  const iso = value?.match(/^\s*(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+  if (iso) return `${iso[1]} ${iso[2]}`;
+  const br = value?.match(/^\s*(\d{2})\/(\d{2})\/(\d{4})[,\s]+(\d{2}:\d{2})/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]} ${br[4]}`;
+  // Sem hora no dado: a data sozinha ainda vale.
+  return onlyDate(value);
+}
+
 // "Hoje" é o hoje de quem está perguntando, não o do servidor. O Worker roda em
 // UTC: depois das 21h de Brasília o `toISOString()` já devolve o dia seguinte, e
 // o assistente responderia sobre amanhã. Os chamados também são operados neste
@@ -200,9 +213,9 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
     ticket.technicianName ?? 'sem técnico',
     // Abertura no Jira, acionamento do parceiro e visita: três datas
     // diferentes, e a operação pergunta por todas.
-    onlyDate(ticket.createdAt) ?? '-',
-    onlyDate(ticket.partnerTriggeredAt) ?? 'não acionado',
-    onlyDate(ticket.scheduledAt) ?? 'sem agendamento',
+    dateAndTime(ticket.createdAt) ?? '-',
+    dateAndTime(ticket.partnerTriggeredAt) ?? 'não acionado',
+    dateAndTime(ticket.scheduledAt) ?? 'sem agendamento',
     ticket.attachmentTypes ? describeAttachments(ticket.attachmentTypes) : '-',
     redact(ticket.summary),
   ].join(' | '));
@@ -212,7 +225,7 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
   // nada para ele.
   const day = operationDate(today);
   const yesterday = previousOperationDate(today);
-  const stamp = `Hoje é ${day}; ontem foi ${yesterday}. As datas abaixo estão no formato AAAA-MM-DD.`;
+  const stamp = `Hoje é ${day}; ontem foi ${yesterday}. As datas abaixo estão no formato AAAA-MM-DD HH:MM, no horário de Brasília; algumas não têm hora.`;
   const counts = [...statusGroups(listed), '', 'Contagens prontas nesta lista (já conferidas):', ...dayCounts(listed, day, 'hoje'), ...dayCounts(listed, yesterday, 'ontem'), ...(listed.some((ticket) => ticket.attachmentTypes) ? withoutAttachments(listed) : [])];
   return [stamp, `${tickets.length} chamados na fila.`, ...counts, '', header, ...rows].join('\n') + cut;
 }
