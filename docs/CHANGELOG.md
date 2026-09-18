@@ -11,6 +11,37 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Cobertura de várias cidades numa pergunta
+
+Um vídeo da operação mostrou o trabalho: um cliente pediu técnico para oito
+cidades, e a resposta saiu abrindo a busca de cobertura uma vez por cidade,
+tirando print e mandando no WhatsApp — oito vezes.
+
+Agora isso é uma pergunta só: "temos técnico em Jaçanã, Marizópolis, São José
+de Mipibu...?" devolve, para cada cidade, quem está nela e quem está no raio,
+com a distância de cada um, em texto que se cola na conversa.
+
+- `lib/coverage.ts` (puro): a conta de distância e o agrupamento — na cidade,
+  próximos, e os mais próximos quando não há ninguém no raio. É a mesma regra
+  da tela do mapa, agora num lugar só, porque duas partes precisam dela.
+- `lib/server/geocode.ts`: a resolução de cidade saiu de dentro da rota
+  `/api/geocode` e virou módulo; a rota passou a usá-lo, em vez de existir uma
+  segunda cópia.
+- `lib/server/technician-directory.ts`: as coordenadas dos ~890 técnicos vivem
+  em `public/data/technician-directory.js`, que a tela carrega como script. O
+  servidor busca o mesmo arquivo na própria origem e guarda por 6 h.
+- `lib/assistant-tools.ts` + `lib/server/assistant-data.ts`:
+  `consultar_cobertura`, até 10 cidades por pergunta, com raio configurável
+  (padrão 55 km, o mesmo da tela).
+- `tests/coverage.test.ts`: 9 testes, com coordenadas reais.
+
+As consultas ao Nominatim são sequenciais de propósito: a política dele pede
+uma por vez, e a maioria das cidades já está em cache.
+
+**Pendente:** enviar a resposta direto na conversa do WhatsApp, com
+confirmação antes de cada envio — é o passo seguinte que a operação pediu.
+
+
 ### Pedir o agendamento pelo chat — o assistente prepara, a pessoa confirma
 
 **Verificado em produção (18/09):**

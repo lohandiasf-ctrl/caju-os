@@ -3,6 +3,9 @@ import { getDb } from '@/db';
 import { activeAttendances, activeAttendanceTickets, operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians, whatsappConversations, whatsappMessages } from '@/db/schema';
 import { onlyDate, operationDateTime, queueContext, redact, statusLabel, ticketContext } from '@/lib/assistant';
 import { MAX_ROWS, parseSchedule } from '@/lib/assistant-tools';
+import { COVERAGE_RADIUS_KM, coverageFor, coverageText } from '@/lib/coverage';
+import { geocodeCity } from '@/lib/server/geocode';
+import { loadTechnicianDirectory } from '@/lib/server/technician-directory';
 import { bulkIneligibleReason, isBulkEligible, MAX_BULK_TICKETS } from '@/lib/bulk-actions';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
 import { getJiraIssue, searchJiraIssues } from '@/lib/server/jira';
@@ -386,6 +389,46 @@ async function prepararAgendamento(args: Args) {
   };
 }
 
+// Quantas cidades por pergunta. Cada uma que ainda não esteja em cache custa
+// uma ida ao Nominatim, cuja política pede parcimônia.
+const COVERAGE_CITIES = 10;
+
+// Cobertura por cidade: a mesma conta da tela do mapa, para várias cidades de
+// uma vez. O trabalho que isso substitui era abrir a busca uma vez por cidade
+// e mandar um print de cada no WhatsApp.
+async function consultarCobertura(args: Args, origin: string) {
+  const pedidas = Array.isArray(args.cidades)
+    ? [...new Set(args.cidades.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean))].slice(0, COVERAGE_CITIES)
+    : [];
+  if (!pedidas.length) return { erro: 'Diga quais cidades conferir.' };
+  const radius = count(args, 'raio_km', COVERAGE_RADIUS_KM, 300);
+
+  const technicians = await loadTechnicianDirectory(origin);
+  const blocos: string[] = [];
+  const naoEncontradas: string[] = [];
+  // Sequencial de propósito: o Nominatim pede uma consulta por vez.
+  for (const cidade of pedidas) {
+    const place = await geocodeCity(cidade).catch(() => null);
+    if (!place) { naoEncontradas.push(cidade); continue; }
+    // O rótulo do geocode vem como "Cidade, Estado"; o estado importa para
+    // separar quem está na cidade de quem está numa homônima.
+    const [nome, estado] = place.label.split(',').map((part) => part.trim());
+    const coverage = coverageFor(
+      { city: nome || cidade, uf: (estado ?? '').slice(0, 2).toUpperCase(), lat: place.lat, lng: place.lng },
+      technicians,
+      radius,
+    );
+    blocos.push(coverageText(coverage, radius));
+  }
+  if (!blocos.length) return { erro: `Nenhuma cidade encontrada: ${naoEncontradas.join(', ')}.` };
+  return {
+    raio_km: radius,
+    cobertura: blocos,
+    cidades_nao_encontradas: naoEncontradas.length ? naoEncontradas : 'nenhuma',
+    instrucao_para_voce: 'Repasse a cobertura cidade por cidade, com os nomes e as distâncias como vieram. Não invente técnico nem distância.',
+  };
+}
+
 const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   consultar_chamados: consultarChamados,
   detalhar_chamado: detalharChamado,
@@ -401,11 +444,14 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
 // `canReadWhatsapp` é checado aqui também, e não só na hora de declarar as
 // consultas: se o modelo pedir a conversa mesmo assim, a porta continua
 // fechada.
-export function assistantToolRunner(canReadWhatsapp: boolean) {
+export function assistantToolRunner(options: { canReadWhatsapp: boolean; origin: string }) {
   return async function runAssistantTool(name: string, args: Args): Promise<unknown> {
-    if (name === 'consultar_whatsapp' && !canReadWhatsapp) {
+    if (name === 'consultar_whatsapp' && !options.canReadWhatsapp) {
       return { erro: 'Quem perguntou não tem acesso ao WhatsApp no Caju OS.' };
     }
+    // A cobertura precisa saber de onde buscar o diretório de técnicos, que é
+    // um arquivo servido pelo próprio app.
+    if (name === 'consultar_cobertura') return consultarCobertura(args, options.origin);
     const tool = TOOLS[name];
     if (!tool) return { erro: `Consulta desconhecida: ${name}.` };
     return tool(args);
