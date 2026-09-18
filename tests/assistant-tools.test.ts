@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanHistory, HISTORY_CHARS, HISTORY_TURNS, MAX_ROWS, systemInstruction, toolsFor, TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
+import { cleanHistory, HISTORY_CHARS, HISTORY_TURNS, MAX_ROWS, parseSchedule, systemInstruction, toolsFor, TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
 import { buildRequest, readCandidate, toolResultContent, type GeminiPayload } from '../lib/gemini-protocol.ts';
 
 const INSTRUCTION = systemInstruction('2026-09-18', '2026-09-17');
@@ -204,4 +204,34 @@ test('a consulta de atendimentos alcança o grupo de WhatsApp', () => {
 test('a instrução manda para a tela do Caju OS, não para o Jira', () => {
   assert.match(INSTRUCTION, /tela do chamado no próprio Caju OS/);
   assert.match(INSTRUCTION, /não mande ninguém para o Jira/);
+});
+
+const AGORA = new Date('2026-09-18T12:00:00-03:00');
+
+// "Agende esses chamados para amanhã às 15:50": quem converte "amanhã" é o
+// modelo, que sabe a data de hoje. Aqui entra o que ele devolveu.
+test('a data do agendamento vira o formato da tela', () => {
+  assert.deepEqual(parseSchedule('2026-09-19 15:50', AGORA), { at: '2026-09-19T15:50' });
+  assert.deepEqual(parseSchedule('2026-09-19T15:50', AGORA), { at: '2026-09-19T15:50' });
+  assert.deepEqual(parseSchedule('2026-09-18 23:59', AGORA), { at: '2026-09-18T23:59' }, 'ainda hoje, mais tarde');
+});
+
+// Agendar para trás costuma ser leitura errada da data — e a tela aceitaria.
+test('agendamento no passado é recusado antes de chegar à tela', () => {
+  assert.ok('erro' in parseSchedule('2026-09-17 15:50', AGORA));
+  assert.ok('erro' in parseSchedule('2026-09-18 11:59', AGORA), 'hoje, mas já passou');
+});
+
+test('data sem formato não vira agendamento', () => {
+  for (const value of ['amanhã às 15:50', '19/09/2026 15:50', '', null, 42, '2026-09-19 25:00']) {
+    assert.ok('erro' in parseSchedule(value, AGORA), String(value));
+  }
+});
+
+// A ferramenta prepara; quem agenda é a pessoa, com um técnico escolhido.
+test('preparar agendamento deixa claro que não agenda', () => {
+  const tool = TOOL_SCHEMAS.find((item) => item.name === 'preparar_agendamento')!;
+  assert.match(tool.description, /NÃO agenda/);
+  assert.match(tool.description, /confirmar na tela/);
+  assert.deepEqual(tool.parameters.required, ['chamados', 'data_hora']);
 });

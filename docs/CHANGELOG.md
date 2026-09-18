@@ -11,6 +11,40 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Pedir o agendamento pelo chat — o assistente prepara, a pessoa confirma
+
+Pedido: "agende esses chamados para amanhã às 15:50", com onze FSAs coladas.
+Selecionar onze chamados na mão é o trabalho que o chat pode poupar; agendar
+por conta própria é outra coisa, e continua fora — agendar exige um técnico, e
+onze transições erradas por leitura errada de um texto é estrago grande.
+
+O caminho é o mesmo de sempre, só que sem a seleção manual: o assistente
+entende o pedido, confere quem pode ser agendado, e a tela abre **o diálogo de
+agendamento em lote que já existe**, com os chamados marcados e a data
+preenchida. O técnico é escolhido ali, e o Jira só recebe depois do clique.
+
+- `lib/assistant-tools.ts`: `preparar_agendamento` (que não agenda) e
+  `parseSchedule()`, que recusa data no passado — erro típico de leitura de
+  "amanhã".
+- `lib/server/assistant-data.ts`: separa quem pode de quem não pode pela mesma
+  regra da tela (`isBulkEligible`), com o motivo de cada recusa, e avisa quando
+  o lote passa do teto.
+- `app/api/assistant/ask/route.ts`: a ação preparada volta num campo próprio,
+  separada do texto.
+- `components/operation-chat.tsx`: a resposta ganha um botão "Agendar N
+  chamados · escolher técnico".
+- `components/bulk-ticket-actions.tsx`: o diálogo aceita ser aberto de fora,
+  já com a data.
+
+**Nada aqui escreve no Jira.** As regras 1 e 2 do `WORKFLOW_RULES` continuam
+valendo: a transição só acontece por clique explícito, e só sai de "Pendente de
+agendamento".
+
+**Sobre o pedido do dia:** as onze FSAs estão em "Técnico em campo", então o
+lote seria recusado — na tela ou pelo chat. Agora o assistente diz isso, em vez
+de mandar abrir o Jira.
+
+
 ### Três acertos vindos do uso no celular
 
 O WhatsApp entrou em produção e a operação testou. Três coisas apareceram:

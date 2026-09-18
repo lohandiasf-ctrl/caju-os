@@ -439,6 +439,9 @@ export default function Home() {
       );
     });
   }, [activeView, archivedKeys, query, statusFilter, ticketDate, tickets]);
+  // Agendamento que o assistente preparou: marca os chamados e abre o
+  // diálogo de sempre, onde a pessoa escolhe o técnico e confirma.
+  const [scheduleRequest, setScheduleRequest] = useState<{ at: string; id: number } | null>(null);
   const selectedTickets = useMemo(
     () => tickets.filter((ticket) => selectedKeys.has(ticket.id)),
     [selectedKeys, tickets],
@@ -1267,6 +1270,10 @@ export default function Home() {
               onToggleSelected={toggleSelected}
               onToggleAll={toggleSelectedGroup}
               onOpenTicket={(ticket) => void openTicket(ticket)}
+              onPrepareSchedule={(keys, at) => {
+                setSelectedKeys(new Set(keys));
+                setScheduleRequest({ at, id: Date.now() });
+              }}
             />
           )}
           {activeView === "overview" && (
@@ -1905,6 +1912,7 @@ export default function Home() {
           user={user}
           onClear={() => setSelectedKeys(new Set())}
           onApplied={applyBulkResult}
+          scheduleRequest={scheduleRequest}
         />
       )}
     </main>
