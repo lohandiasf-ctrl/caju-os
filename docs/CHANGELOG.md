@@ -11,6 +11,32 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### O assistente passa a ler as conversas de WhatsApp
+
+Pedido depois de ele responder "não tenho acesso a mensagens de WhatsApp". A
+decisão é de quem opera, porque a conversa com cliente e técnico passa a ir
+para um serviço externo; levantado isso, o usuário autorizou.
+
+- `lib/assistant-tools.ts`: `consultar_whatsapp`, com recorte por chamado, por
+  contato e por janela de tempo.
+- `lib/server/assistant-data.ts`: a FSA não fica na mensagem e sim na conversa,
+  então a busca por chamado passa primeiro por `whatsapp_conversations`. Só
+  texto — mídia vira `[image]`, `[audio]`; mensagem apagada vira `[apagada]`,
+  porque o registro da operação a mantém. Recibo de entrega não é conversa e
+  fica de fora.
+
+**Três cortes, porque é o dado mais sensível que sai daqui:** janela de tempo
+(24 h por padrão), quantidade (30 no máximo) e tamanho de cada mensagem (400
+caracteres). Tudo passa por `redact()`, que mascara telefone, documento e
+e-mail.
+
+**Permissão respeitada.** O WhatsApp do Caju OS é restrito a gerência,
+coordenação e analistas (`canUseWhatsapp`). Para quem não tem esse acesso a
+consulta **não é sequer declarada** — o modelo não sabe que ela existe — e, se
+pedir mesmo assim, a execução recusa. O assistente não vira porta dos fundos
+para N1.
+
+
 ### O assistente passa a enxergar os spares
 
 Perguntado "quais spares já chegaram?", ele respondeu que não tinha acesso aos

@@ -1,7 +1,8 @@
 import { operationDate, previousOperationDate, validQuestion } from '@/lib/assistant';
-import { cleanHistory, systemInstruction, TOOL_SCHEMAS } from '@/lib/assistant-tools';
-import { runAssistantTool } from '@/lib/server/assistant-data';
+import { cleanHistory, systemInstruction, toolsFor } from '@/lib/assistant-tools';
+import { assistantToolRunner } from '@/lib/server/assistant-data';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { canUseWhatsapp } from '@/lib/navigation';
 import { askGemini, GeminiError } from '@/lib/server/gemini';
 import { isJiraConfigured, JiraError } from '@/lib/server/jira';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
@@ -14,7 +15,7 @@ import { enforceRateLimit } from '@/lib/server/rate-limit';
 export async function POST(request: Request) {
   try {
     // Mesmo alcance do assistente da fila: quem opera, usa.
-    await requireApiUser(request, ['gerencia', 'coordenador', 'n1', 'analista']);
+    const person = await requireApiUser(request, ['gerencia', 'coordenador', 'n1', 'analista']);
     // Uma pergunta gasta várias chamadas ao Gemini (uma por rodada de
     // consulta), e o plano gratuito tem cota por minuto. Limite curto aqui
     // evita queimar a cota de todo mundo num clique repetido.
@@ -33,8 +34,9 @@ export async function POST(request: Request) {
       systemInstruction: systemInstruction(operationDate(now), previousOperationDate(now)),
       question: body!.question!.trim(),
       history: cleanHistory(body?.history),
-      tools: TOOL_SCHEMAS,
-      runTool: runAssistantTool,
+      // Conversa de WhatsApp só para quem já a vê na tela.
+      tools: toolsFor(canUseWhatsapp(person.role)),
+      runTool: assistantToolRunner(canUseWhatsapp(person.role)),
     });
     // `used` diz quais consultas o modelo fez — é o que permite conferir uma
     // resposta estranha sem ter que reproduzir a pergunta.

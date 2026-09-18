@@ -73,6 +73,19 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
   {
+    name: 'consultar_whatsapp',
+    description: 'Conversas de WhatsApp da operação: quem falou, quando e o quê. Use para perguntas sobre o que o cliente ou o técnico disse, a última mensagem de uma conversa, ou se alguém respondeu. Só texto — mídia aparece como "[foto]" ou "[áudio]", e o telefone vem mascarado.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'Uma FSA, para ver a conversa ligada a ela.' },
+        contato: { type: 'string', description: 'Parte do nome de quem conversa.' },
+        horas: { type: 'integer', description: 'Quantas horas para trás olhar. Padrão 24.' },
+        quantidade: { type: 'integer', description: 'Quantas mensagens trazer, até 30. Padrão 20.' },
+      },
+    },
+  },
+  {
     name: 'consultar_historico',
     description: 'Histórico de auditoria: o que foi feito, por quem e quando. Use para perguntas sobre quem mexeu num chamado, o que aconteceu num período, ou o que uma pessoa fez.',
     parameters: {
@@ -114,7 +127,8 @@ VOCABULÁRIO DA OPERAÇÃO
 
 LIMITES
 - Você é somente leitura: descreve e sugere, nunca escreve no Jira nem muda nada. Se pedirem para mudar algo, diga onde a pessoa faz isso na tela.
-- Você não vê documento, telefone, endereço nem dado bancário de ninguém, e não deve pedir esses dados.`;
+- Você não vê documento, telefone, endereço nem dado bancário de ninguém, e não deve pedir esses dados.
+- Conversa de WhatsApp é de cliente e de técnico: use para responder o que foi perguntado e não repita mais do que o necessário.`;
 }
 
 // Conversa anterior mandada pela tela. Chega do cliente, então entra limitada:
@@ -137,4 +151,14 @@ export function cleanHistory(value: unknown): ChatTurn[] {
     // Os últimos, não os primeiros: a conversa recente é a que dá sentido à
     // pergunta de agora.
     .slice(-HISTORY_TURNS);
+}
+
+// O WhatsApp do Caju OS é restrito a gerência, coordenação e analistas
+// (`canUseWhatsapp`, aplicado na tela e no servidor). O assistente não pode
+// virar a porta dos fundos: para quem não tem esse acesso, a consulta não
+// existe — o modelo nem sabe que ela é possível.
+const WHATSAPP_TOOL = 'consultar_whatsapp';
+
+export function toolsFor(canReadWhatsapp: boolean): ToolSchema[] {
+  return canReadWhatsapp ? TOOL_SCHEMAS : TOOL_SCHEMAS.filter((tool) => tool.name !== WHATSAPP_TOOL);
 }

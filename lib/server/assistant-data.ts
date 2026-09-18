@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, like, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians } from '@/db/schema';
+import { operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians, whatsappConversations, whatsappMessages } from '@/db/schema';
 import { onlyDate, queueContext, redact, ticketContext } from '@/lib/assistant';
 import { MAX_ROWS } from '@/lib/assistant-tools';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
@@ -243,18 +243,86 @@ async function consultarHistorico(args: Args) {
   };
 }
 
+const WHATSAPP_ROWS = 30;
+// Mensagem longa vira parágrafo inteiro no contexto; o que importa é o teor.
+const WHATSAPP_CHARS = 400;
+
+// Conversa de WhatsApp. É o dado mais sensível que sai daqui: mensagem de
+// cliente e de técnico, indo para um serviço externo. Por isso entra com três
+// cortes — janela de tempo, quantidade e tamanho — e tudo passa por `redact()`,
+// que mascara telefone, documento e e-mail. Mídia não vai: só o tipo.
+async function consultarWhatsapp(args: Args) {
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  const contact = text(args, 'contato')?.toLowerCase();
+  const hours = count(args, 'horas', 24, 24 * 30);
+  const limit = count(args, 'quantidade', 20, WHATSAPP_ROWS);
+  const since = new Date(Date.now() - hours * 3_600_000).toISOString();
+  const db = getDb();
+
+  // A FSA não fica na mensagem, e sim na conversa: primeiro descobre de quem
+  // é a conversa daquele chamado.
+  let phones: string[] = [];
+  if (ticket) {
+    const conversas = await db.select({ contactPhone: whatsappConversations.contactPhone })
+      .from(whatsappConversations).where(eq(whatsappConversations.ticketKey, ticket)).limit(10).all();
+    if (!conversas.length) return { total: 0, mensagens: `Nenhuma conversa de WhatsApp ligada a ${ticket}.` };
+    phones = conversas.map((row) => row.contactPhone);
+  }
+
+  const conditions = [
+    gte(whatsappMessages.occurredAt, since),
+    phones.length ? inArray(whatsappMessages.contactPhone, phones) : undefined,
+    contact ? like(whatsappMessages.contactName, `%${contact}%`) : undefined,
+    // "status" é recibo de entrega, não conversa.
+    inArray(whatsappMessages.direction, ['incoming', 'outgoing']),
+  ].filter(Boolean);
+
+  const rows = await db.select({
+    contactName: whatsappMessages.contactName, direction: whatsappMessages.direction,
+    messageType: whatsappMessages.messageType, body: whatsappMessages.body,
+    senderEmail: whatsappMessages.senderEmail, occurredAt: whatsappMessages.occurredAt,
+    deletedAt: whatsappMessages.deletedAt,
+  }).from(whatsappMessages).where(and(...conditions))
+    .orderBy(desc(whatsappMessages.occurredAt)).limit(limit).all();
+  if (!rows.length) return { total: 0, mensagens: `Nenhuma mensagem nas últimas ${hours} horas com esse filtro.` };
+
+  return {
+    total: rows.length,
+    periodo: `últimas ${hours} horas`,
+    // Da mais antiga para a mais nova, que é como se lê uma conversa.
+    mensagens: rows.reverse().map((row) => {
+      const quem = row.direction === 'outgoing'
+        ? `nós${row.senderEmail ? ` (${row.senderEmail.split('@')[0]})` : ''}`
+        : row.contactName || 'contato';
+      const conteudo = row.deletedAt ? '[apagada]'
+        : row.messageType !== 'text' ? `[${row.messageType}]`
+        : (row.body ?? '').slice(0, WHATSAPP_CHARS);
+      return redact(`${row.occurredAt} · ${quem}: ${conteudo}`);
+    }),
+  };
+}
+
 const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   consultar_chamados: consultarChamados,
   detalhar_chamado: detalharChamado,
   consultar_tecnicos: consultarTecnicos,
   resumo_operacao: resumoOperacao,
   consultar_spares: consultarSpares,
+  consultar_whatsapp: consultarWhatsapp,
   consultar_historico: consultarHistorico,
 };
 
-export async function runAssistantTool(name: string, args: Args): Promise<unknown> {
-  const tool = TOOLS[name];
-  if (!tool) return { erro: `Consulta desconhecida: ${name}.` };
-  return tool(args);
+// `canReadWhatsapp` é checado aqui também, e não só na hora de declarar as
+// consultas: se o modelo pedir a conversa mesmo assim, a porta continua
+// fechada.
+export function assistantToolRunner(canReadWhatsapp: boolean) {
+  return async function runAssistantTool(name: string, args: Args): Promise<unknown> {
+    if (name === 'consultar_whatsapp' && !canReadWhatsapp) {
+      return { erro: 'Quem perguntou não tem acesso ao WhatsApp no Caju OS.' };
+    }
+    const tool = TOOLS[name];
+    if (!tool) return { erro: `Consulta desconhecida: ${name}.` };
+    return tool(args);
+  };
 }
 
