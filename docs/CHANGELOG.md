@@ -11,6 +11,31 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### O chat ganha cara de chat
+
+A caixa de pergunta era um campo de uma linha com um botão do lado — a mesma
+da busca antiga. Virou uma caixa de composição de verdade, no espírito de um
+referência que o usuário trouxe, mas com as cores do sistema: nada de branco
+sobre preto nem violeta solto, só `primary`, `card`, `border` e
+`muted-foreground`.
+
+- `components/operation-chat.tsx`:
+  - a caixa cresce com a pergunta (até 160px) em vez de rolar dentro de uma
+    linha;
+  - **Enter envia, Shift+Enter quebra linha**, e a dica fica visível na barra
+    de baixo;
+  - a borda acende no foco;
+  - "Consultando o sistema" ganhou os três pontos animados, porque a resposta
+    leva alguns segundos e a tela parecia travada;
+  - as mensagens entram com um deslize curto, e a conversa vazia mostra "Como
+    posso ajudar?" em vez de uma frase solta;
+  - as sugestões viraram chips com borda, no lugar de botões fantasma.
+
+Ficou de fora do que a referência trazia: anexos, paleta de comandos com `/`,
+e os brilhos que seguem o mouse. Nenhum dos três tem função aqui, e o último
+destoa do resto do sistema. As animações usam `motion/react`, que o app já usa
+na navegação e na caixa do WhatsApp.
+
 ### A fila leva a hora, e a última rodada sempre responde
 
 "Quais chamados caíram hoje após as 15h?" terminou em "o assistente consultou

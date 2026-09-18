@@ -1,19 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Loader2, Search, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { CornerDownLeft, Loader2, Search, SendHorizontal, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { MAX_QUESTION_LENGTH, splitTicketKeys } from '@/lib/assistant';
 import { HISTORY_TURNS, type ChatTurn } from '@/lib/assistant-tools';
+import { cn } from '@/lib/utils';
 
 // Conversa com o assistente, no lugar onde antes havia a busca por padrões
 // fixos. A busca antiga só entendia o que estava pré-programado ("quantos
-// chamados para amanhã"); esta aceita qualquer pergunta e consulta o sistema
-// para responder.
+// chamados para amanhã"); esta aceita qualquer pergunta e consulta o sistema.
 //
-// O painel da direita continua o mesmo de antes: os chamados citados viram
-// lista com seleção, porque é dela que saem as ações em lote.
+// O painel da direita continua o mesmo: os chamados citados viram lista com
+// seleção, porque é dela que saem as ações em lote.
 
 type ChatTicket = { id: string; title: string; status: string; schedule?: string; city: string };
 
@@ -25,6 +25,40 @@ const EXAMPLES = [
   'quais chamados estão em campo sem evidência?',
   'como está a operação agora?',
 ];
+
+// A caixa cresce com a pergunta em vez de rolar dentro de uma linha só: quem
+// pergunta precisa enxergar o que escreveu antes de enviar.
+function useGrowingTextarea(minHeight: number, maxHeight: number) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = useCallback((reset?: boolean) => {
+    const field = ref.current;
+    if (!field) return;
+    field.style.height = `${minHeight}px`;
+    if (reset) return;
+    field.style.height = `${Math.max(minHeight, Math.min(field.scrollHeight, maxHeight))}px`;
+  }, [minHeight, maxHeight]);
+  useEffect(() => { resize(); }, [resize]);
+  return { ref, resize };
+}
+
+// Os três pontos do "Consultando o sistema". A resposta demora alguns segundos
+// porque o assistente vai ao Jira e ao banco; sem movimento, a tela parece
+// travada.
+function TypingDots() {
+  return (
+    <span className="ml-0.5 inline-flex items-center gap-1" aria-hidden="true">
+      {[0, 1, 2].map((dot) => (
+        <motion.span
+          key={dot}
+          className="size-1.5 rounded-full bg-primary/80"
+          initial={{ opacity: 0.3 }}
+          animate={{ opacity: [0.3, 1, 0.3], scale: [0.85, 1.15, 0.85] }}
+          transition={{ duration: 1.2, repeat: Infinity, delay: dot * 0.15, ease: 'easeInOut' }}
+        />
+      ))}
+    </span>
+  );
+}
 
 export function OperationChat<T extends ChatTicket>({
   tickets,
@@ -44,7 +78,9 @@ export function OperationChat<T extends ChatTicket>({
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
+  const [focused, setFocused] = useState(false);
   const thread = useRef<HTMLDivElement>(null);
+  const { ref: field, resize } = useGrowingTextarea(56, 160);
 
   // A resposta nova precisa aparecer sem ninguém rolar atrás dela.
   useEffect(() => {
@@ -68,6 +104,7 @@ export function OperationChat<T extends ChatTicket>({
     const history = messages.filter((message) => !message.failed).slice(-HISTORY_TURNS).map(({ role, text: body }) => ({ role, text: body }));
     setMessages((current) => [...current, { role: 'user', text: asked }]);
     setQuestion('');
+    resize(true);
     setBusy(true);
     try {
       const response = await fetch('/api/assistant/ask', {
@@ -106,83 +143,122 @@ export function OperationChat<T extends ChatTicket>({
             role="log"
             aria-label="Conversa com o assistente"
             aria-live="polite"
-            className="mt-4 min-h-40 flex-1 space-y-3 overflow-y-auto rounded-xl border border-border bg-background/50 p-3 lg:max-h-96"
+            className="mt-4 min-h-40 flex-1 space-y-3 overflow-y-auto rounded-2xl border border-border/70 bg-background/40 p-3 lg:max-h-80"
           >
             {!messages.length && !busy && (
-              <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                Nenhuma pergunta ainda. Comece por uma das sugestões abaixo.
-              </p>
+              <div className="grid h-full min-h-32 place-items-center px-4 text-center">
+                <div>
+                  <Sparkles className="mx-auto size-5 text-primary/60" aria-hidden="true" />
+                  <p className="mt-2 text-sm font-medium">Como posso ajudar?</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Pergunte abaixo ou use uma das sugestões.</p>
+                </div>
+              </div>
             )}
-            {messages.map((message, index) => (
-              <div key={index} className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
-                <div
-                  className={`max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm leading-relaxed ${
-                    message.role === 'user'
-                      ? 'bg-primary/15 text-foreground'
-                      : message.failed
-                        ? 'border border-red-400/25 bg-red-400/10 text-red-200'
-                        : 'border border-border bg-card'
-                  }`}
+            <AnimatePresence initial={false}>
+              {messages.map((message, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
                 >
-                  {message.role === 'assistant' && !message.failed
-                    ? splitTicketKeys(message.text).map((part, position) => part.ticketKey
-                      ? <button
-                          key={position}
-                          type="button"
-                          onClick={() => {
-                            const ticket = tickets.find((item) => item.id === part.ticketKey);
-                            if (ticket) onOpenTicket(ticket);
-                          }}
-                          aria-label={`Abrir chamado ${part.ticketKey}`}
-                          className="inline rounded font-semibold text-violet-300 underline decoration-violet-300/40 underline-offset-2 transition hover:text-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        >{part.text}</button>
-                      : <span key={position}>{part.text}</span>)
-                    : message.text}
-                </div>
-              </div>
-            ))}
+                  <div
+                    className={cn(
+                      'max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm leading-relaxed',
+                      message.role === 'user'
+                        ? 'bg-primary/15 text-foreground'
+                        : message.failed
+                          ? 'border border-red-400/25 bg-red-400/10 text-red-200'
+                          : 'border border-border bg-card',
+                    )}
+                  >
+                    {message.role === 'assistant' && !message.failed
+                      ? splitTicketKeys(message.text).map((part, position) => part.ticketKey
+                        ? <button
+                            key={position}
+                            type="button"
+                            onClick={() => {
+                              const ticket = tickets.find((item) => item.id === part.ticketKey);
+                              if (ticket) onOpenTicket(ticket);
+                            }}
+                            aria-label={`Abrir chamado ${part.ticketKey}`}
+                            className="inline rounded font-semibold text-primary underline decoration-primary/40 underline-offset-2 transition hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >{part.text}</button>
+                        : <span key={position}>{part.text}</span>)
+                      : message.text}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
             {busy && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />Consultando o sistema...
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+                <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+                  Consultando o sistema<TypingDots />
                 </div>
-              </div>
+              </motion.div>
             )}
           </div>
 
+          {/* Caixa de composição: a borda acende no foco, e a barra de baixo
+              separa o atalho do botão de enviar. */}
           <form
-            className="mt-3 flex flex-wrap gap-2"
+            className={cn(
+              'mt-3 rounded-2xl border bg-card/60 transition-colors',
+              focused ? 'border-primary/50' : 'border-border',
+            )}
             onSubmit={(event) => { event.preventDefault(); void send(question); }}
           >
-            <Input
+            <textarea
+              ref={field}
               value={question}
-              onChange={(event) => setQuestion(event.target.value)}
+              onChange={(event) => { setQuestion(event.target.value); resize(); }}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              onKeyDown={(event) => {
+                // Enter envia; Shift+Enter quebra linha, como em qualquer chat.
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void send(question);
+                }
+              }}
               maxLength={MAX_QUESTION_LENGTH}
               placeholder='Ex: "quantos chamados caíram hoje?"'
               aria-label="Perguntar sobre a operação"
-              className="min-h-11 min-w-0 flex-1 bg-background/80"
+              rows={1}
               disabled={busy}
+              className="max-h-40 w-full resize-none bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground/70 disabled:opacity-60"
             />
-            <Button type="submit" className="h-11" disabled={busy || question.trim().length < 3}>
-              {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}Perguntar
-            </Button>
+            <div className="flex items-center justify-between gap-3 border-t border-border/70 px-3 py-2">
+              <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
+                <CornerDownLeft className="size-3" aria-hidden="true" />
+                Enter envia · Shift+Enter quebra linha
+              </span>
+              <span className="text-xs text-muted-foreground sm:hidden">
+                {question.length ? `${question.length}/${MAX_QUESTION_LENGTH}` : 'Toque em Perguntar'}
+              </span>
+              <Button type="submit" size="sm" className="h-9" disabled={busy || question.trim().length < 3}>
+                {busy ? <Loader2 className="animate-spin" /> : <SendHorizontal />}Perguntar
+              </Button>
+            </div>
           </form>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            {EXAMPLES.map((example) => (
-              <Button
+            {EXAMPLES.map((example, index) => (
+              <motion.button
                 key={example}
                 type="button"
-                size="sm"
-                variant="ghost"
                 disabled={busy}
                 onClick={() => void send(example)}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05, duration: 0.2 }}
                 /* Em 375px a pergunta mais longa passava da tela: no celular
                    ela quebra em duas linhas. */
-                className="h-auto max-w-full whitespace-normal text-left sm:whitespace-nowrap"
+                className="max-w-full rounded-lg border border-border/70 bg-card/40 px-3 py-2 text-left text-xs text-muted-foreground transition hover:border-primary/40 hover:bg-primary/8 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:whitespace-nowrap"
               >
                 {example}
-              </Button>
+              </motion.button>
             ))}
           </div>
           {answered?.used?.length ? (
@@ -221,7 +297,12 @@ export function OperationChat<T extends ChatTicket>({
             {cited.map((ticket) => (
               <div
                 key={ticket.id}
-                className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs transition ${selectedKeys.has(ticket.id) ? 'border-primary/60 bg-primary/15' : 'border-border bg-background/60 hover:border-primary/40 hover:bg-primary/8'}`}
+                className={cn(
+                  'flex items-start gap-2 rounded-lg border px-3 py-2 text-xs transition',
+                  selectedKeys.has(ticket.id)
+                    ? 'border-primary/60 bg-primary/15'
+                    : 'border-border bg-background/60 hover:border-primary/40 hover:bg-primary/8',
+                )}
               >
                 <input
                   type="checkbox"
