@@ -76,7 +76,10 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
     return unique.filter((technician) => `${technician.name} ${technician.technicianCode ?? ''} ${technician.cpf ?? ''} ${technician.phone ?? ''} ${technician.city} ${technician.state}`.toLocaleLowerCase('pt-BR').includes(query)).slice(0, 8);
   }, [technicianQuery, technicians]);
 
-  useEffect(() => setForm(initialForm), [initialForm]);
+  useEffect(() => {
+    const formWithFixedCost = { ...initialForm, visitCost1: '120' };
+    setForm(formWithFixedCost);
+  }, [initialForm]);
   useEffect(() => setStatusDraft(currentStatus), [currentStatus]);
   useEffect(() => {
     if (!user) return;
@@ -176,7 +179,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
 
   function input([key, label]: [keyof JiraOperationalFields, string], numeric = false) {
     const dateTime = ['scheduledDateTime', 'serviceStartedAt', 'serviceEndedAt'].includes(key);
-    return <label key={key} className="text-xs font-semibold text-muted-foreground">{label}<Input type={dateTime ? 'datetime-local' : numeric ? 'number' : 'text'} min={key === 'serviceEndedAt' ? form.serviceStartedAt || undefined : numeric ? 0 : undefined} step={numeric ? '0.01' : undefined} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey)} className="mt-1.5 min-h-11 text-foreground" /></label>;
+    const isVisitCost1 = key === 'visitCost1';
+    return <label key={key} className="text-xs font-semibold text-muted-foreground">{label}{isVisitCost1 && <span className="text-[11px] text-amber-200 ml-1">(fixo)</span>}<Input type={dateTime ? 'datetime-local' : numeric ? 'number' : 'text'} min={key === 'serviceEndedAt' ? form.serviceStartedAt || undefined : numeric ? 0 : undefined} step={numeric ? '0.01' : undefined} value={form[key] ?? ''} onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))} disabled={Boolean(savingKey) || isVisitCost1} className="mt-1.5 min-h-11 text-foreground" /></label>;
   }
 
   function queueEvidenceFiles(files: File[], source: 'selecionados' | 'arrastados' | 'colados') {
