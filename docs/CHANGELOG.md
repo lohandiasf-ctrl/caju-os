@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Gemini: tentar o próximo modelo quando o preferido está lotado
+
+Terceira falha em produção, e a primeira que não era erro de código:
+
+> This model is currently experiencing high demand.
+
+No plano gratuito isso vai acontecer. O cliente só trocava de modelo quando o
+nome não existia (404), então uma lotação passageira derrubava a pergunta.
+
+- `lib/gemini-models.ts`: `rankModels()` devolve a fila inteira em ordem de
+  preferência; `pickModel()` continua para quem só quer o primeiro.
+- `lib/server/gemini.ts`: tenta até três modelos. Troca em 404 (não existe),
+  429 (cota, que no plano gratuito é por modelo) e 503 (lotado). Se todos
+  falharem, a mensagem diz que os modelos estão ocupados e nomeia quais foram
+  tentados, em vez de repetir o texto do Google sobre um só.
+- `tests/gemini-models.test.ts`: 2 testes novos.
+
 ### Gemini: devolver o turno do modelo como ele veio
 
 Com o modelo já resolvido, a pergunta "quem atende em Itabuna?" chegou a
