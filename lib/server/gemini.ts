@@ -121,12 +121,14 @@ async function converse(
   const used: string[] = [];
   for (let round = 0; round < (options.maxRounds ?? MAX_ROUNDS); round += 1) {
     const payload = await callModel(model, buildRequest({ systemInstruction: options.systemInstruction, contents, declarations }));
-    const { text, calls } = readCandidate(payload);
+    const { text, calls, parts } = readCandidate(payload);
     if (!calls.length) {
       if (text) return { answer: text, model, used };
       throw new GeminiError('O assistente não conseguiu responder agora.', 503);
     }
-    contents.push({ role: 'model', parts: calls.map((call) => ({ functionCall: call })) });
+    // O turno do modelo volta como veio: `thoughtSignature` viaja junto e a
+    // API exige recebê-la de volta.
+    contents.push({ role: 'model', parts });
     const results = [];
     for (const call of calls) {
       used.push(call.name);

@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Gemini: devolver o turno do modelo como ele veio
+
+Com o modelo já resolvido, a pergunta "quem atende em Itabuna?" chegou a
+chamar a ferramenta certa (`consultar_tecnicos`) e falhou no turno seguinte:
+
+> Function call is missing a thought_signature in functionCall parts.
+
+Modelo que raciocina manda uma assinatura junto da chamada de função, e a API
+exige recebê-la de volta no histórico. O cliente remontava a chamada a partir
+do nome e dos argumentos, e a assinatura se perdia no caminho.
+
+- `lib/gemini-protocol.ts`: `readCandidate()` passa a devolver também as partes
+  cruas do turno.
+- `lib/server/gemini.ts`: o histórico recebe essas partes como vieram, em vez
+  de uma versão remontada. Vale para qualquer campo que a API acrescente
+  depois.
+
 ### Gemini: o modelo vem do catálogo da API, não de um nome escrito de cabeça
 
 Primeiro teste com a chave real em produção: os três nomes de modelo que o
