@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { pickModel, type ModelInfo } from '@/lib/gemini-models';
+import { rankModels, type ModelInfo } from '@/lib/gemini-models';
 import { buildRequest, readCandidate, toolResultContent, type GeminiContent, type GeminiPayload } from '@/lib/gemini-protocol';
 import type { ToolSchema } from '@/lib/assistant-tools';
 
@@ -19,7 +19,10 @@ const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 // 404 em produção. O catálogo é lido uma vez e guardado enquanto o isolate
 // viver, como o cache do Jira.
 const CATALOG_TTL_MS = 6 * 60 * 60_000;
-let catalog: { expiresAt: number; model: string } | null = null;
+let catalog: { expiresAt: number; models: string[] } | null = null;
+// Quantos modelos vale tentar numa pergunta. Mais que isso e a espera de quem
+// perguntou fica pior do que o erro.
+const MAX_MODELS = 3;
 
 // Teto de idas e voltas com o modelo. Cada rodada é uma consulta ao sistema;
 // sem teto, uma pergunta ruim consome a cota do dia.
@@ -44,11 +47,11 @@ function apiKey(): string {
   return key;
 }
 
-// O modelo a usar: o que o secret mandar, ou o melhor que a API oferecer.
-async function resolveModel(): Promise<string> {
+// Os modelos a tentar, em ordem: o que o secret mandar, ou o que a API oferecer.
+async function resolveModels(): Promise<string[]> {
   const forced = (env as unknown as { GEMINI_MODEL?: string }).GEMINI_MODEL?.trim();
-  if (forced) return forced;
-  if (catalog && catalog.expiresAt > Date.now()) return catalog.model;
+  if (forced) return [forced];
+  if (catalog && catalog.expiresAt > Date.now()) return catalog.models;
 
   const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(apiKey())}&pageSize=200`, {
     headers: { 'Content-Type': 'application/json' },
@@ -57,12 +60,19 @@ async function resolveModel(): Promise<string> {
   if (!response.ok || !payload?.models) {
     throw new GeminiError(payload?.error?.message ?? `Não foi possível listar os modelos do Gemini (HTTP ${response.status}).`, response.status === 429 ? 429 : 502, response.status === 429 ? 'cota' : 'falha');
   }
-  const model = pickModel(payload.models);
-  if (!model) {
+  const models = rankModels(payload.models).slice(0, MAX_MODELS);
+  if (!models.length) {
     throw new GeminiError('Nenhum modelo do Gemini disponível nesta chave serve para responder perguntas.', 503);
   }
-  catalog = { expiresAt: Date.now() + CATALOG_TTL_MS, model };
-  return model;
+  catalog = { expiresAt: Date.now() + CATALOG_TTL_MS, models };
+  return models;
+}
+
+// Erro que vale tentar em outro modelo: o nome não existe (404), o modelo está
+// lotado (503 "high demand") ou a cota dele acabou (429, que no plano gratuito
+// é por modelo).
+function worthRetrying(error: unknown): boolean {
+  return error instanceof GeminiError && [404, 429, 503].includes(error.status);
 }
 
 async function callModel(model: string, body: unknown): Promise<GeminiPayload> {
@@ -80,6 +90,9 @@ async function callModel(model: string, body: unknown): Promise<GeminiPayload> {
     throw new GeminiError('O assistente atingiu o limite de perguntas do plano gratuito do Gemini. Tente de novo mais tarde.', 429, 'cota');
   }
   const detail = payload?.error?.message ?? `HTTP ${response.status}`;
+  // 503 é o "This model is currently experiencing high demand" do Google.
+  // Precisa chegar como 503 para valer a tentativa no modelo seguinte.
+  if (response.status === 503) throw new GeminiError(detail, 503);
   throw new GeminiError(detail, response.status === 404 ? 404 : 502);
 }
 
@@ -99,17 +112,28 @@ export async function askGemini(options: {
     name: tool.name, description: tool.description, parameters: tool.parameters,
   }));
 
-  try {
-    return await converse(await resolveModel(), options, declarations);
-  } catch (error) {
-    // Modelo guardado que saiu do ar no meio do caminho: joga fora o que estava
-    // em cache e pergunta o catálogo de novo, uma vez só.
-    if (error instanceof GeminiError && error.status === 404) {
-      catalog = null;
-      return converse(await resolveModel(), options, declarations);
+  const models = await resolveModels();
+  let last: unknown = null;
+  for (const model of models) {
+    try {
+      return await converse(model, options, declarations);
+    } catch (error) {
+      if (!worthRetrying(error)) throw error;
+      // Nome que não existe mais invalida o catálogo guardado; lotação e cota
+      // são do momento e não dizem nada sobre o catálogo.
+      if (error instanceof GeminiError && error.status === 404) catalog = null;
+      last = error;
     }
-    throw error;
   }
+  if (last instanceof GeminiError) {
+    // Todos ocupados é o caso comum do plano gratuito, e a mensagem precisa
+    // dizer isso — não repetir o texto do Google sobre um modelo só.
+    if (last.status !== 404) {
+      throw new GeminiError(`O assistente não conseguiu responder: os modelos disponíveis do Gemini (${models.join(', ')}) estão ocupados ou sem cota agora. Tente de novo em alguns minutos.`, last.status, last.code);
+    }
+    throw last;
+  }
+  throw new GeminiError('Nenhum modelo do Gemini está disponível.', 503);
 }
 
 async function converse(

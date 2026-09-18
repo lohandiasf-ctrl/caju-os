@@ -31,7 +31,10 @@ function rank(name: string): number {
 // embedding, e as variantes experimentais//thinking, que mudam sem aviso.
 const UNUSABLE = /embedding|aqa|image|imagen|vision|tts|audio|native-audio|live|veo|learnlm|gemma/i;
 
-export function pickModel(models: ModelInfo[]): string | null {
+// A lista inteira, em ordem de preferência. Plural porque um modelo pode estar
+// indisponível na hora ("This model is currently experiencing high demand") ou
+// com a cota estourada — e aí vale tentar o seguinte em vez de desistir.
+export function rankModels(models: ModelInfo[]): string[] {
   const usable = models
     .filter((model) => (model.supportedGenerationMethods ?? []).includes('generateContent'))
     // `models/gemini-2.5-flash` → `gemini-2.5-flash`.
@@ -49,5 +52,10 @@ export function pickModel(models: ModelInfo[]): string | null {
       // `gemini-2.5-flash-preview-09-2025`.
       return a.length - b.length;
     });
-  return usable[0] ?? null;
+  return usable;
+}
+
+// O preferido, ou nulo quando nenhum serve.
+export function pickModel(models: ModelInfo[]): string | null {
+  return rankModels(models)[0] ?? null;
 }

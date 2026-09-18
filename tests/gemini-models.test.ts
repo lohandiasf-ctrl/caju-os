@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickModel, type ModelInfo } from '../lib/gemini-models.ts';
+import { pickModel, rankModels, type ModelInfo } from '../lib/gemini-models.ts';
 
 const chat = (name: string): ModelInfo => ({ name, supportedGenerationMethods: ['generateContent', 'countTokens'] });
 
@@ -74,4 +74,22 @@ test('num catálogo parecido com o real, sai um flash estável', () => {
     chat('models/gemma-3-1b-it'),
   ]);
   assert.equal(chosen, 'gemini-2.5-flash');
+});
+
+// Um modelo pode estar lotado ("This model is currently experiencing high
+// demand") ou sem cota. Nesse caso o cliente tenta o seguinte, então a escolha
+// precisa devolver a fila inteira, não só o primeiro.
+test('a fila de modelos sai inteira e em ordem', () => {
+  const fila = rankModels([
+    chat('models/gemini-2.5-pro'),
+    chat('models/gemini-2.5-flash-lite'),
+    chat('models/gemini-2.5-flash'),
+    { name: 'models/gemini-embedding-001', supportedGenerationMethods: ['embedContent'] },
+  ]);
+  assert.deepEqual(fila, ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro']);
+  assert.equal(pickModel([chat('models/gemini-2.5-flash')]), fila[0] && 'gemini-2.5-flash');
+});
+
+test('sem nada utilizável a fila vem vazia', () => {
+  assert.deepEqual(rankModels([chat('models/gemini-2.5-flash-image')]), []);
 });
