@@ -11,6 +11,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Cobertura: HTTP 524 em produção, e a razão
+
+A pergunta de cobertura entrou no ar e **travou**: 524, o timeout do
+Cloudflare, depois de 100 segundos esperando.
+
+A causa é do runtime, não da lógica. As coordenadas dos técnicos ficam em
+`public/data/technician-directory.js`, e eu as buscava com `fetch` na própria
+origem. No Cloudflare, o Worker que chama a própria rota **volta para si
+mesmo** e fica esperando até estourar o tempo.
+
+- `lib/server/technician-directory.ts`: o arquivo entra no bundle (`?raw`) em
+  vez de ser buscado pela rede. Sem ida à rede, sem recursão. A tela continua
+  carregando o mesmo arquivo como script — um dado só.
+- `lib/coverage.ts`: a leitura do formato (`window.TECHNICIAN_DIRECTORY=[...]`)
+  virou `parseDirectory()`, testável, com 3 testes — um deles lê o arquivo de
+  verdade do projeto, para o formato não mudar sem alguém perceber.
+- `types/raw.d.ts`: a declaração do import `?raw`.
+- A origem deixou de ser necessária no executor de consultas.
+
+
 ### Enviar no WhatsApp pelo chat, com o texto à vista
 
 A outra metade do que o vídeo mostrou: depois de levantar a cobertura, a

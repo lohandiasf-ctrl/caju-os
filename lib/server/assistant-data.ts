@@ -5,7 +5,7 @@ import { onlyDate, operationDateTime, queueContext, redact, statusLabel, ticketC
 import { MAX_ROWS, parseSchedule } from '@/lib/assistant-tools';
 import { COVERAGE_RADIUS_KM, coverageFor, coverageText } from '@/lib/coverage';
 import { geocodeCity } from '@/lib/server/geocode';
-import { loadTechnicianDirectory } from '@/lib/server/technician-directory';
+import { technicianDirectory } from '@/lib/server/technician-directory';
 import { bulkIneligibleReason, isBulkEligible, MAX_BULK_TICKETS } from '@/lib/bulk-actions';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
 import { getJiraIssue, searchJiraIssues } from '@/lib/server/jira';
@@ -396,14 +396,14 @@ const COVERAGE_CITIES = 10;
 // Cobertura por cidade: a mesma conta da tela do mapa, para várias cidades de
 // uma vez. O trabalho que isso substitui era abrir a busca uma vez por cidade
 // e mandar um print de cada no WhatsApp.
-async function consultarCobertura(args: Args, origin: string) {
+async function consultarCobertura(args: Args) {
   const pedidas = Array.isArray(args.cidades)
     ? [...new Set(args.cidades.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean))].slice(0, COVERAGE_CITIES)
     : [];
   if (!pedidas.length) return { erro: 'Diga quais cidades conferir.' };
   const radius = count(args, 'raio_km', COVERAGE_RADIUS_KM, 300);
 
-  const technicians = await loadTechnicianDirectory(origin);
+  const technicians = technicianDirectory();
   const blocos: string[] = [];
   const naoEncontradas: string[] = [];
   // Sequencial de propósito: o Nominatim pede uma consulta por vez.
@@ -478,6 +478,7 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   consultar_tecnicos: consultarTecnicos,
   resumo_operacao: resumoOperacao,
   consultar_spares: consultarSpares,
+  consultar_cobertura: consultarCobertura,
   consultar_whatsapp: consultarWhatsapp,
   preparar_mensagem_whatsapp: prepararMensagemWhatsapp,
   consultar_atendimentos: consultarAtendimentos,
@@ -488,14 +489,12 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
 // `canReadWhatsapp` é checado aqui também, e não só na hora de declarar as
 // consultas: se o modelo pedir a conversa mesmo assim, a porta continua
 // fechada.
-export function assistantToolRunner(options: { canReadWhatsapp: boolean; origin: string }) {
+export function assistantToolRunner(options: { canReadWhatsapp: boolean }) {
   return async function runAssistantTool(name: string, args: Args): Promise<unknown> {
     if ((name === 'consultar_whatsapp' || name === 'preparar_mensagem_whatsapp') && !options.canReadWhatsapp) {
       return { erro: 'Quem perguntou não tem acesso ao WhatsApp no Caju OS.' };
     }
-    // A cobertura precisa saber de onde buscar o diretório de técnicos, que é
-    // um arquivo servido pelo próprio app.
-    if (name === 'consultar_cobertura') return consultarCobertura(args, options.origin);
+
     const tool = TOOLS[name];
     if (!tool) return { erro: `Consulta desconhecida: ${name}.` };
     return tool(args);

@@ -90,3 +90,30 @@ export function coverageText(coverage: Coverage, radiusKm = COVERAGE_RADIUS_KM):
     ...(coverage.proximos.length > 8 ? [`  e mais ${coverage.proximos.length - 8} no raio.`] : []),
   ].join('\n');
 }
+
+// O diretório de técnicos é `window.TECHNICIAN_DIRECTORY=[...]`, não JSON
+// puro: o mesmo arquivo serve a tela (como script) e o servidor (embutido no
+// bundle). A leitura fica aqui para ser testável.
+type DirectoryEntry = { name?: unknown; city?: unknown; uf?: unknown; lat?: unknown; lng?: unknown; vehicle?: unknown };
+
+export function parseDirectory(raw: string): CoverageTechnician[] {
+  const start = raw.indexOf('[');
+  const end = raw.lastIndexOf(']');
+  if (start === -1 || end <= start) return [];
+  let rows: DirectoryEntry[];
+  try { rows = JSON.parse(raw.slice(start, end + 1)) as DirectoryEntry[]; }
+  catch { return []; }
+  return rows.flatMap((row) => {
+    const lat = Number(row.lat);
+    const lng = Number(row.lng);
+    if (typeof row.name !== 'string' || !Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+    return [{
+      name: row.name,
+      city: typeof row.city === 'string' ? row.city : '',
+      uf: typeof row.uf === 'string' ? row.uf : '',
+      lat,
+      lng,
+      vehicle: row.vehicle === true,
+    }];
+  });
+}
