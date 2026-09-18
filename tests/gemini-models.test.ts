@@ -122,3 +122,19 @@ test('a fila respeita o teto e nunca repete', () => {
   assert.equal(new Set(fila).size, 2);
   assert.deepEqual(fallbackQueue([]), []);
 });
+
+// O catálogo listava gemini-2.5-pro ao lado dos 3.x, e ele responde 404: "no
+// longer available to new users". Como era o único `pro`, entrava na fila e a
+// pergunta gastava 102 segundos para terminar em erro.
+test('geração anterior fica fora da fila quando há uma atual', () => {
+  const fila = fallbackQueue([
+    chat('models/gemini-3.8-flash'),
+    chat('models/gemini-3.5-flash-lite'),
+    chat('models/gemini-2.5-pro'),
+  ]);
+  assert.deepEqual(fila, ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+});
+
+test('só com geração antiga, ela ainda é usada', () => {
+  assert.deepEqual(fallbackQueue([chat('models/gemini-2.5-pro'), chat('models/gemini-2.5-flash')]), ['gemini-2.5-flash', 'gemini-2.5-pro']);
+});

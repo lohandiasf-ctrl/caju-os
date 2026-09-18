@@ -11,6 +11,32 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### O 524 era a fila de modelos, e o castigo de 5 minutos piorou
+
+A medição final mostrou o que realmente acontecia:
+
+```
+102 segundos · HTTP 404
+"This model models/gemini-2.5-pro is no longer available to new users"
+```
+
+A pergunta não estava presa na cobertura: estava descendo a fila de modelos.
+O catálogo lista `gemini-2.5-pro` ao lado dos `gemini-3.x`, mas ele responde
+404. E o castigo de 5 minutos que eu tinha acabado de introduzir tirou o
+`flash-lite` da fila por uma lotação passageira, empurrando tudo para esse
+modelo morto. A correção anterior piorou o caso que tentava resolver.
+
+- `lib/gemini-models.ts`: geração anterior sai da fila quando há uma atual.
+  `gemini-2.5-pro` não entra mais junto com os `3.x`. Se só houver geração
+  antiga, ela continua valendo.
+- `lib/server/gemini.ts`: o castigo por lotação caiu de 5 minutos para 1 —
+  lotação passa rápido, e tirar o modelo da fila causa dano maior que tentar
+  de novo. Modelo que responde 404 sai enquanto o catálogo durar, porque esse
+  não volta.
+- O orçamento de tempo passou a valer também entre modelos: sem tempo para
+  mais uma tentativa, para de tentar em vez de garantir o 524.
+
+
 ### O 524 não era a cobertura: era o tempo
 
 Depois de tirar o `fetch` da própria origem, a cobertura continuou dando 524.
