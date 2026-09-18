@@ -32,9 +32,15 @@ const MAX_ROUNDS = 5;
 // e pede a resposta com o que já tem: melhor uma resposta parcial do que um
 // erro de infraestrutura.
 const TIME_BUDGET_MS = 70_000;
-// Modelo lotado volta a funcionar depois de um tempo, mas tentar a cada
-// pergunta custa segundos que fazem falta no orçamento. Fica anotado.
-const UNAVAILABLE_MS = 5 * 60_000;
+// Modelo lotado volta a funcionar logo, e tirá-lo da fila por muito tempo é
+// pior do que tentar de novo: com 5 minutos de castigo, uma lotação passageira
+// no flash-lite empurrou a fila até um `pro` que o catálogo lista mas não
+// atende ("no longer available to new users") — e a pergunta gastou 102
+// segundos para terminar em 404.
+const BUSY_MS = 60_000;
+// Modelo que não existe para esta chave não volta: fica fora enquanto o
+// catálogo durar.
+const GONE_MS = CATALOG_TTL_MS;
 const unavailable = new Map<string, number>();
 
 export class GeminiError extends Error {
@@ -138,13 +144,15 @@ export async function askGemini(options: {
       return await converse(model, options, declarations, started);
     } catch (error) {
       if (!worthRetrying(error)) throw error;
-      // 429 e 503 são do momento: anota para as próximas perguntas não
-      // gastarem tempo com este modelo.
-      if (error instanceof GeminiError && error.status !== 404) unavailable.set(model, Date.now() + UNAVAILABLE_MS);
-      // Nome que não existe mais invalida o catálogo guardado; lotação e cota
-      // são do momento e não dizem nada sobre o catálogo.
-      if (error instanceof GeminiError && error.status === 404) catalog = null;
+      if (error instanceof GeminiError) {
+        // 404 é definitivo para esta chave; 429 e 503 são do momento.
+        unavailable.set(model, Date.now() + (error.status === 404 ? GONE_MS : BUSY_MS));
+        if (error.status === 404) catalog = null;
+      }
       last = error;
+      // Sem tempo para mais um modelo: cada tentativa custa uma ida ao Gemini,
+      // e passar de 100 segundos vira 524 antes de qualquer resposta.
+      if (Date.now() - started > TIME_BUDGET_MS) break;
     }
   }
   if (last instanceof GeminiError) {

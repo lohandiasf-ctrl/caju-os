@@ -69,7 +69,7 @@ export function pickModel(models: ModelInfo[]): string | null {
 // (lite, pro) tem chance de verdade, porque a cota do plano gratuito é por
 // modelo.
 export function fallbackQueue(models: ModelInfo[], limit = 3): string[] {
-  const ranked = rankModels(models);
+  const ranked = sameGeneration(rankModels(models));
   const queue: string[] = [];
   const taken = new Set<number>();
   for (const name of ranked) {
@@ -87,4 +87,19 @@ export function fallbackQueue(models: ModelInfo[], limit = 3): string[] {
     if (queue.length === limit) break;
   }
   return queue;
+}
+
+// Geração anterior sai da fila quando há uma atual.
+//
+// O catálogo listava `gemini-2.5-pro` ao lado dos `gemini-3.x`, e ele responde
+// 404 com "no longer available to new users". Como era o único `pro`, entrava
+// na fila como terceira tentativa e a pergunta gastava 102 segundos para
+// terminar em erro. Modelo de geração passada está a caminho da porta.
+function sameGeneration(names: string[]): string[] {
+  const major = (name: string) => Math.floor(version(name) / 100);
+  const newest = Math.max(0, ...names.map(major));
+  const atuais = names.filter((name) => major(name) === newest);
+  // Se a conta não achar geração nenhuma, a fila original vale mais do que
+  // uma fila vazia.
+  return atuais.length ? atuais : names;
 }
