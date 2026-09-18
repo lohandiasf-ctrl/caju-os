@@ -11,6 +11,28 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### O 524 não era a cobertura: era o tempo
+
+Depois de tirar o `fetch` da própria origem, a cobertura continuou dando 524.
+A medição mostrou outra coisa: **o assistente responde em 38 segundos** mesmo
+numa pergunta simples, com uma consulta só. A cobertura soma as
+geocodificações e passa dos 100 segundos em que o Cloudflare corta.
+
+Ou seja: o problema é a lentidão geral, e a cobertura só foi a primeira a
+esbarrar no teto.
+
+- `lib/server/gemini.ts`: **orçamento de tempo**. Passados 70 segundos, o loop
+  para de consultar e pede a resposta com o que já levantou. Uma resposta
+  parcial é melhor que um erro de infraestrutura.
+- Modelo que responde 429 ou 503 fica **anotado como indisponível por 5
+  minutos**. A fila tenta `flash` primeiro, e quando ele está lotado cada
+  pergunta pagava esse tempo de novo. Se todos estiverem anotados, a reserva
+  ainda é tentada.
+
+A lentidão de fundo continua: `gemini-3.5-flash-lite` sob demanda alta leva
+~19 segundos por ida ao modelo, e uma pergunta com consulta são duas idas.
+
+
 ### Cobertura: HTTP 524 em produção, e a razão
 
 A pergunta de cobertura entrou no ar e **travou**: 524, o timeout do
