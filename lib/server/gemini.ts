@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { rankModels, type ModelInfo } from '@/lib/gemini-models';
+import { fallbackQueue, type ModelInfo } from '@/lib/gemini-models';
 import { buildRequest, readCandidate, toolResultContent, type GeminiContent, type GeminiPayload } from '@/lib/gemini-protocol';
 import type { ToolSchema } from '@/lib/assistant-tools';
 
@@ -60,7 +60,7 @@ async function resolveModels(): Promise<string[]> {
   if (!response.ok || !payload?.models) {
     throw new GeminiError(payload?.error?.message ?? `Não foi possível listar os modelos do Gemini (HTTP ${response.status}).`, response.status === 429 ? 429 : 502, response.status === 429 ? 'cota' : 'falha');
   }
-  const models = rankModels(payload.models).slice(0, MAX_MODELS);
+  const models = fallbackQueue(payload.models, MAX_MODELS);
   if (!models.length) {
     throw new GeminiError('Nenhum modelo do Gemini disponível nesta chave serve para responder perguntas.', 503);
   }

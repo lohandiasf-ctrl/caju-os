@@ -11,6 +11,27 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Gemini: a fila de tentativas pega um modelo de cada porte
+
+A mensagem de erro em produção mostrou a fila que o código montou:
+
+> os modelos disponíveis do Gemini (gemini-3.8-flash, gemini-3.7-flash,
+> gemini-3.6-flash) estão ocupados ou sem cota agora
+
+São três versões do mesmo modelo. Flash lotado significa as três lotadas, e as
+duas tentativas extras só custaram espera. Cair para outro porte tem chance de
+verdade, porque a cota do plano gratuito é por modelo.
+
+- `lib/gemini-models.ts`: `fallbackQueue()` monta a fila com um modelo de cada
+  porte — flash, depois flash-lite, depois pro. Se a chave só tiver um porte,
+  completa com as outras versões em vez de desistir.
+- `tests/gemini-models.test.ts`: 3 testes novos, com os nomes reais que
+  apareceram em produção.
+
+O erro também revelou a família disponível nesta chave: **Gemini 3.x**. Os
+nomes que a primeira versão trazia (2.5, 2.0, 1.5) estavam todos obsoletos —
+o que confirma ter sido certo trocar a lista fixa por descoberta pela API.
+
 ### Gemini: tentar o próximo modelo quando o preferido está lotado
 
 Terceira falha em produção, e a primeira que não era erro de código:
