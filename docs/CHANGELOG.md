@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Zoom nas evidências
+
+A foto do anexo abria no tamanho da tela e parava aí: dava para ver que o PDV
+está com erro, não para ler o que está escrito nele.
+
+- `components/image-zoom.tsx`: pinça no celular, roda do mouse no computador,
+  duplo toque e arrasto quando ampliada. De 100% a 800%, com os botões de mais,
+  menos e "ajustar à tela" mostrando a porcentagem.
+- O zoom mira onde você aponta: o ponto sob o dedo (ou o cursor) continua no
+  lugar enquanto a imagem cresce, que é como se lê um número de série numa
+  foto.
+- O duplo toque é detectado na mão, porque com `touch-action: none` o navegador
+  do celular não garante o evento de duplo clique — e o celular é onde a
+  evidência costuma ser conferida.
+- `components/jira-ticket-details.tsx`: a visualização de anexo usa o
+  componente. Vídeo e PDF seguem como estavam.
+
 ### O 524 era a fila de modelos, e o castigo de 5 minutos piorou
 
 A medição final mostrou o que realmente acontecia:
