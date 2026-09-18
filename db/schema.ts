@@ -174,6 +174,8 @@ export const jiraIssueLinks = sqliteTable('jira_issue_links', {
 // webhooks da Meta duplique conversas no atendimento.
 export const whatsappMessages = sqliteTable('whatsapp_messages', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  // Qual número da operação trocou esta mensagem (lib/whatsapp-accounts.ts).
+  account: text('account').notNull().default('principal'),
   wamid: text('wamid').notNull(),
   phoneNumberId: text('phone_number_id').notNull(),
   contactPhone: text('contact_phone'),
@@ -208,6 +210,8 @@ export const whatsappMessages = sqliteTable('whatsapp_messages', {
 // a whole, not to any single message.
 export const whatsappConversations = sqliteTable('whatsapp_conversations', {
   contactPhone: text('contact_phone').primaryKey(),
+  // A conversa pertence a um dos números da operação; a resposta sai por ele.
+  account: text('account').notNull().default('principal'),
   contactName: text('contact_name'),
   // Phone JID of a contact WhatsApp only addresses by "@lid": learned from
   // messages or filled in by hand, and needed to create a group.
