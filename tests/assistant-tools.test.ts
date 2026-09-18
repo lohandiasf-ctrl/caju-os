@@ -112,3 +112,17 @@ test('o teto de linhas por consulta existe e é modesto', () => {
   assert.ok(MAX_ROWS > 0 && MAX_ROWS <= 100, 'lista grande faz o modelo errar contagem');
   assert.match(TOOL_SCHEMAS.find((tool) => tool.name === 'consultar_chamados')!.description, /contagem/);
 });
+
+// A API recusou o segundo turno em produção: "Function call is missing a
+// thought_signature in functionCall parts". Modelos que raciocinam mandam essa
+// assinatura junto da chamada, e ela precisa voltar como veio — remontar a
+// chamada a partir do nome e dos argumentos a perde.
+test('o turno do modelo volta inteiro, com a assinatura de raciocínio', () => {
+  const parts = [
+    { functionCall: { name: 'consultar_tecnicos', args: { cidade: 'Itabuna' } }, thoughtSignature: 'Ct8BAbc123' },
+  ];
+  const read = readCandidate({ candidates: [{ content: { parts } }] });
+  assert.deepEqual(read.parts, parts, 'as partes cruas saem intactas');
+  const echoed = read.parts[0] as { thoughtSignature?: string };
+  assert.equal(echoed.thoughtSignature, 'Ct8BAbc123');
+});

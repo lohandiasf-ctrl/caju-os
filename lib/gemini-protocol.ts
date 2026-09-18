@@ -6,9 +6,12 @@
 // chamada de função juntos, resposta cortada por limite de tokens, parte sem
 // argumentos.
 
+// `thoughtSignature` acompanha a chamada de função nos modelos que raciocinam,
+// e precisa voltar intacta no histórico, senão a API recusa o turno seguinte:
+// "Function call is missing a thought_signature in functionCall parts".
 export type GeminiPart =
-  | { text: string }
-  | { functionCall: { name: string; args?: Record<string, unknown> } }
+  | { text: string; thoughtSignature?: string }
+  | { functionCall: { name: string; args?: Record<string, unknown> }; thoughtSignature?: string }
   | { functionResponse: { name: string; response: Record<string, unknown> } };
 
 export type GeminiContent = { role: 'user' | 'model'; parts: GeminiPart[] };
@@ -33,11 +36,14 @@ export function buildRequest(options: {
   };
 }
 
-export function readCandidate(payload: GeminiPayload): { text: string; calls: ToolCall[]; finishReason: string } {
+export function readCandidate(payload: GeminiPayload): { text: string; calls: ToolCall[]; parts: GeminiPart[]; finishReason: string } {
   const candidate = payload.candidates?.[0];
   const parts = candidate?.content?.parts ?? [];
   return {
     text: parts.map((part) => ('text' in part ? part.text : '')).join('').trim(),
+    // As partes cruas, para devolver o turno do modelo exatamente como veio.
+    // Remontar a chamada a partir de `calls` perde `thoughtSignature`.
+    parts,
     // `args` vem ausente quando a função não tem parâmetro, e um objeto vazio
     // é mais fácil de tratar do que `undefined` em toda chamada.
     calls: parts.flatMap((part) => ('functionCall' in part ? [{ name: part.functionCall.name, args: part.functionCall.args ?? {} }] : [])),
