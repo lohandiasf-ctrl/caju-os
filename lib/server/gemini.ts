@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { pickModel, type ModelInfo } from '@/lib/gemini-models';
 import { buildRequest, readCandidate, toolResultContent, type GeminiContent, type GeminiPayload } from '@/lib/gemini-protocol';
 import type { ToolSchema } from '@/lib/assistant-tools';
 
@@ -13,9 +14,12 @@ import type { ToolSchema } from '@/lib/assistant-tools';
 
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-// Ordem de preferência. Nome de modelo muda com o tempo e o plano gratuito não
-// cobre todos; 404 aqui não é erro, é "tente o próximo".
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+// Nome de modelo não é chutado: a API é quem diz o que existe nesta chave.
+// A primeira versão trazia uma lista escrita de cabeça e os três nomes deram
+// 404 em produção. O catálogo é lido uma vez e guardado enquanto o isolate
+// viver, como o cache do Jira.
+const CATALOG_TTL_MS = 6 * 60 * 60_000;
+let catalog: { expiresAt: number; model: string } | null = null;
 
 // Teto de idas e voltas com o modelo. Cada rodada é uma consulta ao sistema;
 // sem teto, uma pergunta ruim consome a cota do dia.
@@ -40,9 +44,25 @@ function apiKey(): string {
   return key;
 }
 
-function models(): string[] {
-  const chosen = (env as unknown as { GEMINI_MODEL?: string }).GEMINI_MODEL?.trim();
-  return chosen ? [chosen, ...MODELS.filter((model) => model !== chosen)] : MODELS;
+// O modelo a usar: o que o secret mandar, ou o melhor que a API oferecer.
+async function resolveModel(): Promise<string> {
+  const forced = (env as unknown as { GEMINI_MODEL?: string }).GEMINI_MODEL?.trim();
+  if (forced) return forced;
+  if (catalog && catalog.expiresAt > Date.now()) return catalog.model;
+
+  const response = await fetch(`${ENDPOINT}?key=${encodeURIComponent(apiKey())}&pageSize=200`, {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const payload = await response.json().catch(() => null) as { models?: ModelInfo[]; error?: { message?: string } } | null;
+  if (!response.ok || !payload?.models) {
+    throw new GeminiError(payload?.error?.message ?? `Não foi possível listar os modelos do Gemini (HTTP ${response.status}).`, response.status === 429 ? 429 : 502, response.status === 429 ? 'cota' : 'falha');
+  }
+  const model = pickModel(payload.models);
+  if (!model) {
+    throw new GeminiError('Nenhum modelo do Gemini disponível nesta chave serve para responder perguntas.', 503);
+  }
+  catalog = { expiresAt: Date.now() + CATALOG_TTL_MS, model };
+  return model;
 }
 
 async function callModel(model: string, body: unknown): Promise<GeminiPayload> {
@@ -79,34 +99,42 @@ export async function askGemini(options: {
     name: tool.name, description: tool.description, parameters: tool.parameters,
   }));
 
-  let lastNotFound: GeminiError | null = null;
-  for (const model of models()) {
-    const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: options.question }] }];
-    const used: string[] = [];
-    try {
-      for (let round = 0; round < (options.maxRounds ?? MAX_ROUNDS); round += 1) {
-        const payload = await callModel(model, buildRequest({ systemInstruction: options.systemInstruction, contents, declarations }));
-        const { text, calls } = readCandidate(payload);
-        if (!calls.length) {
-          if (text) return { answer: text, model, used };
-          throw new GeminiError('O assistente não conseguiu responder agora.', 503);
-        }
-        contents.push({ role: 'model', parts: calls.map((call) => ({ functionCall: call })) });
-        const results = [];
-        for (const call of calls) {
-          used.push(call.name);
-          const data = await options.runTool(call.name, call.args)
-            .catch((error) => ({ erro: String(error).slice(0, 200) }));
-          results.push({ name: call.name, data });
-        }
-        contents.push(toolResultContent(results));
-      }
-      throw new GeminiError('O assistente consultou o sistema várias vezes e não chegou a uma resposta. Tente perguntar de forma mais específica.', 504);
-    } catch (error) {
-      // Modelo que não existe nesta chave: tenta o próximo da lista.
-      if (error instanceof GeminiError && error.status === 404) { lastNotFound = error; continue; }
-      throw error;
+  try {
+    return await converse(await resolveModel(), options, declarations);
+  } catch (error) {
+    // Modelo guardado que saiu do ar no meio do caminho: joga fora o que estava
+    // em cache e pergunta o catálogo de novo, uma vez só.
+    if (error instanceof GeminiError && error.status === 404) {
+      catalog = null;
+      return converse(await resolveModel(), options, declarations);
     }
+    throw error;
   }
-  throw lastNotFound ?? new GeminiError('Nenhum modelo do Gemini está disponível.', 503);
+}
+
+async function converse(
+  model: string,
+  options: { systemInstruction: string; question: string; runTool: (name: string, args: Record<string, unknown>) => Promise<unknown>; maxRounds?: number },
+  declarations: Array<{ name: string; description: string; parameters: unknown }>,
+): Promise<AskResult> {
+  const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: options.question }] }];
+  const used: string[] = [];
+  for (let round = 0; round < (options.maxRounds ?? MAX_ROUNDS); round += 1) {
+    const payload = await callModel(model, buildRequest({ systemInstruction: options.systemInstruction, contents, declarations }));
+    const { text, calls } = readCandidate(payload);
+    if (!calls.length) {
+      if (text) return { answer: text, model, used };
+      throw new GeminiError('O assistente não conseguiu responder agora.', 503);
+    }
+    contents.push({ role: 'model', parts: calls.map((call) => ({ functionCall: call })) });
+    const results = [];
+    for (const call of calls) {
+      used.push(call.name);
+      const data = await options.runTool(call.name, call.args)
+        .catch((error) => ({ erro: String(error).slice(0, 200) }));
+      results.push({ name: call.name, data });
+    }
+    contents.push(toolResultContent(results));
+  }
+  throw new GeminiError('O assistente consultou o sistema várias vezes e não chegou a uma resposta. Tente perguntar de forma mais específica.', 504);
 }
