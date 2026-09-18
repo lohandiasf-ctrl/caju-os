@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, like, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians, whatsappConversations, whatsappMessages } from '@/db/schema';
-import { onlyDate, queueContext, redact, ticketContext } from '@/lib/assistant';
+import { activeAttendances, activeAttendanceTickets, operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians, whatsappConversations, whatsappMessages } from '@/db/schema';
+import { onlyDate, operationDateTime, queueContext, redact, ticketContext } from '@/lib/assistant';
 import { MAX_ROWS } from '@/lib/assistant-tools';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
 import { getJiraIssue, searchJiraIssues } from '@/lib/server/jira';
@@ -60,7 +60,7 @@ async function detalharChamado(args: Args) {
   return {
     chamado: ticketContext(toAssistantIssue(issue)),
     historico: history.length
-      ? history.map((row) => `${row.createdAt} · ${redact(row.actorEmail)}: ${row.action}`)
+      ? history.map((row) => `${operationDateTime(row.createdAt)} · ${redact(row.actorEmail)}: ${row.action}`)
       : 'Sem registro de auditoria para este chamado.',
   };
 }
@@ -239,7 +239,7 @@ async function consultarHistorico(args: Args) {
   return {
     total: rows.length,
     periodo: `últimas ${hours} horas`,
-    historico: rows.map((row) => redact(`${row.createdAt} · ${row.ticketKey} · ${row.actorEmail}: ${row.action}`)),
+    historico: rows.map((row) => redact(`${operationDateTime(row.createdAt)} · ${row.ticketKey} · ${row.actorEmail}: ${row.action}`)),
   };
 }
 
@@ -297,8 +297,55 @@ async function consultarWhatsapp(args: Args) {
       const conteudo = row.deletedAt ? '[apagada]'
         : row.messageType !== 'text' ? `[${row.messageType}]`
         : (row.body ?? '').slice(0, WHATSAPP_CHARS);
-      return redact(`${row.occurredAt} · ${quem}: ${conteudo}`);
+      return redact(`${operationDateTime(row.occurredAt)} · ${quem}: ${conteudo}`);
     }),
+  };
+}
+
+const ATTENDANCE_ROWS = 30;
+
+// "Quais FSAs já têm grupo criado no WhatsApp?" não tinha resposta: o grupo
+// nasce com o atendimento (`active_attendances.whatsapp_group_name`), e as FSAs
+// ficam na tabela de tickets do atendimento — nenhuma consulta olhava ali.
+async function consultarAtendimentos(args: Args) {
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  const situation = text(args, 'situacao') ?? 'em_andamento';
+  const onlyWithGroup = args.com_grupo === true;
+  const db = getDb();
+
+  const attendances = await db.select({
+    id: activeAttendances.id, ownerEmail: activeAttendances.ownerEmail,
+    whatsappGroupName: activeAttendances.whatsappGroupName, phase: activeAttendances.phase,
+    startedAt: activeAttendances.startedAt, endedAt: activeAttendances.endedAt,
+  }).from(activeAttendances).orderBy(desc(activeAttendances.startedAt)).limit(120).all();
+
+  const tickets = await db.select({
+    attendanceId: activeAttendanceTickets.attendanceId, ticketKey: activeAttendanceTickets.ticketKey,
+    city: activeAttendanceTickets.city,
+  }).from(activeAttendanceTickets).all();
+  const byAttendance = new Map<number, string[]>();
+  for (const row of tickets) {
+    byAttendance.set(row.attendanceId, [...(byAttendance.get(row.attendanceId) ?? []), row.ticketKey]);
+  }
+
+  const filtradas = attendances
+    .filter((row) => situation === 'todos' || (situation === 'encerrados' ? row.endedAt : !row.endedAt))
+    .filter((row) => !onlyWithGroup || Boolean(row.whatsappGroupName?.trim()))
+    .filter((row) => !ticket || (byAttendance.get(row.id) ?? []).includes(ticket));
+  if (!filtradas.length) return { total: 0, atendimentos: 'Nenhum atendimento encontrado com esse filtro.' };
+
+  const comGrupo = filtradas.filter((row) => row.whatsappGroupName?.trim());
+  return {
+    total: filtradas.length,
+    com_grupo_de_whatsapp: comGrupo.length,
+    fsas_com_grupo: [...new Set(comGrupo.flatMap((row) => byAttendance.get(row.id) ?? []))],
+    atendimentos: filtradas.slice(0, ATTENDANCE_ROWS).map((row) => redact([
+      (byAttendance.get(row.id) ?? []).join(', ') || 'sem FSA',
+      row.whatsappGroupName?.trim() ? `grupo "${row.whatsappGroupName.trim()}"` : 'sem grupo de WhatsApp',
+      `com ${row.ownerEmail}`,
+      `início ${operationDateTime(row.startedAt) ?? '-'}`,
+      row.endedAt ? `encerrado ${operationDateTime(row.endedAt)}` : 'em andamento',
+    ].join(' · '))),
   };
 }
 
@@ -309,6 +356,7 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   resumo_operacao: resumoOperacao,
   consultar_spares: consultarSpares,
   consultar_whatsapp: consultarWhatsapp,
+  consultar_atendimentos: consultarAtendimentos,
   consultar_historico: consultarHistorico,
 };
 

@@ -86,6 +86,18 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
   {
+    name: 'consultar_atendimentos',
+    description: 'Atendimentos da operação: quem conduz, quais FSAs estão juntas no mesmo atendimento, o nome do grupo de WhatsApp criado para ele, quando começou e se já encerrou. Use para perguntas sobre grupo criado no WhatsApp, chamados atendidos juntos, ou quem está conduzindo o quê.',
+    parameters: {
+      type: 'object',
+      properties: {
+        situacao: { type: 'string', enum: ['em_andamento', 'encerrados', 'todos'], description: 'Recorte. Padrão: em_andamento.' },
+        chamado: { type: 'string', description: 'Uma FSA, para achar o atendimento (e o grupo) dela.' },
+        com_grupo: { type: 'boolean', description: 'true traz só os atendimentos que têm grupo de WhatsApp criado.' },
+      },
+    },
+  },
+  {
     name: 'consultar_historico',
     description: 'Histórico de auditoria: o que foi feito, por quem e quando. Use para perguntas sobre quem mexeu num chamado, o que aconteceu num período, ou o que uma pessoa fez.',
     parameters: {
@@ -126,7 +138,7 @@ VOCABULÁRIO DA OPERAÇÃO
 - Loja é identificada por código (1031, L441).
 
 LIMITES
-- Você é somente leitura: descreve e sugere, nunca escreve no Jira nem muda nada. Se pedirem para mudar algo, diga onde a pessoa faz isso na tela.
+- Você é somente leitura: descreve e sugere, nunca escreve nem muda nada. Se pedirem para agendar, transicionar, atribuir técnico ou anexar evidência, diga que isso se faz na tela do chamado no próprio Caju OS — não mande ninguém para o Jira.
 - Você não vê documento, telefone, endereço nem dado bancário de ninguém, e não deve pedir esses dados.
 - Conversa de WhatsApp é de cliente e de técnico: use para responder o que foi perguntado e não repita mais do que o necessário.`;
 }

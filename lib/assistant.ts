@@ -106,6 +106,20 @@ export function dateAndTime(value: string | null | undefined): string | null {
   return onlyDate(value);
 }
 
+// Instante do banco no fuso da operação. As datas do Jira já chegam com
+// -0300, mas as do D1 são UTC: a última mensagem do WhatsApp apareceu como
+// "2026-09-18T03:02:00.000Z" numa resposta, três horas à frente do que o
+// celular de quem perguntou mostrava.
+export function operationDateTime(value: string | null | undefined, timeZone = OPERATION_TIMEZONE): string | null {
+  const time = Date.parse(value ?? '');
+  if (!Number.isFinite(time)) return value?.trim() || null;
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(time));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
+}
+
 // "Hoje" é o hoje de quem está perguntando, não o do servidor. O Worker roda em
 // UTC: depois das 21h de Brasília o `toISOString()` já devolve o dia seguinte, e
 // o assistente responderia sobre amanhã. Os chamados também são operados neste

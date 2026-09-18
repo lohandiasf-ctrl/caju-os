@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, dateAndTime, describeAttachments, onlyDate, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -294,4 +294,15 @@ test('a hora não atrapalha a contagem do dia', () => {
     ticket({ key: 'FSA-2', partnerTriggeredAt: '2026-09-17T23:50:00.000-0300' }),
   ], 60, TODAY);
   assert.match(text, /- Acionados hoje \(2026-09-17\): 2 — FSA-1, FSA-2/);
+});
+
+// A última mensagem do WhatsApp saiu como "2026-09-18T03:02:00.000Z", três
+// horas à frente do que o celular de quem perguntou mostrava. As datas do Jira
+// já vêm com -0300, mas as do banco são UTC.
+test('instante do banco sai no fuso da operação', () => {
+  assert.equal(operationDateTime('2026-09-18T03:02:00.000Z'), '2026-09-18 00:02');
+  assert.equal(operationDateTime('2026-09-17T12:00:00.000Z'), '2026-09-17 09:00');
+  assert.equal(operationDateTime('2026-09-18T02:30:00.000-03:00'), '2026-09-18 02:30', 'já no fuso, fica igual');
+  assert.equal(operationDateTime(null), null);
+  assert.equal(operationDateTime('sem data'), 'sem data', 'o que não é data volta como veio');
 });

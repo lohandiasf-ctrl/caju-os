@@ -188,3 +188,20 @@ test('a consulta de WhatsApp avisa que é texto, e limita a janela', () => {
 test('a instrução lembra que a conversa é de terceiros', () => {
   assert.match(INSTRUCTION, /Conversa de WhatsApp é de cliente e de técnico/);
 });
+
+// "Quais FSAs já têm grupo criado no WhatsApp?" não tinha resposta: o grupo
+// nasce com o atendimento, e nenhuma consulta olhava ali.
+test('a consulta de atendimentos alcança o grupo de WhatsApp', () => {
+  const tool = TOOL_SCHEMAS.find((item) => item.name === 'consultar_atendimentos');
+  assert.ok(tool);
+  assert.match(tool!.description, /grupo de WhatsApp/);
+  assert.ok('com_grupo' in tool!.parameters.properties, 'dá para pedir só os que têm grupo');
+  assert.ok('chamado' in tool!.parameters.properties, 'e achar o grupo de uma FSA');
+});
+
+// Ele mandou abrir o Jira para agendar um chamado que se agenda na própria
+// tela do Caju OS.
+test('a instrução manda para a tela do Caju OS, não para o Jira', () => {
+  assert.match(INSTRUCTION, /tela do chamado no próprio Caju OS/);
+  assert.match(INSTRUCTION, /não mande ninguém para o Jira/);
+});
