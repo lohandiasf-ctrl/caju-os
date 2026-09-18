@@ -32,6 +32,10 @@ const MAX_ROUNDS = 5;
 // e pede a resposta com o que já tem: melhor uma resposta parcial do que um
 // erro de infraestrutura.
 const TIME_BUDGET_MS = 70_000;
+// Teto de cada ida ao modelo. Sem ele, uma única chamada lenta consome os 100
+// segundos sozinha e nem o orçamento acima adianta: em produção, uma pergunta
+// gastou 125 s e voltou com "HTTP 524" vindo da própria chamada ao Gemini.
+const CALL_TIMEOUT_MS = 40_000;
 // Modelo lotado volta a funcionar logo, e tirá-lo da fila por muito tempo é
 // pior do que tentar de novo: com 5 minutos de castigo, uma lotação passageira
 // no flash-lite empurrou a fila até um `pro` que o catálogo lista mas não
@@ -95,6 +99,11 @@ async function callModel(model: string, body: unknown): Promise<GeminiPayload> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+  }).catch((error) => {
+    // Modelo que não responde no prazo conta como ocupado: vale tentar o
+    // próximo em vez de esperar o Cloudflare cortar tudo.
+    throw error instanceof GeminiError ? error : new GeminiError(`O modelo ${model} não respondeu em ${CALL_TIMEOUT_MS / 1000} segundos.`, 503, 'falha');
   });
   const payload = await response.json().catch(() => null) as GeminiPayload | null;
   if (response.ok && payload) return payload;
