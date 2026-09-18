@@ -14,7 +14,7 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 ### O chat ganha cara de chat
 
 A caixa de pergunta era um campo de uma linha com um botão do lado — a mesma
-da busca antiga. Virou uma caixa de composição de verdade, no espírito de um
+da busca antiga. Virou uma caixa de composição de verdade, no espírito de uma
 referência que o usuário trouxe, mas com as cores do sistema: nada de branco
 sobre preto nem violeta solto, só `primary`, `card`, `border` e
 `muted-foreground`.
