@@ -11,6 +11,24 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Teto por chamada ao modelo
+
+Com a fila arrumada, a cobertura ainda deu 524 — e o erro final mostrou de
+onde:
+
+```
+125 segundos · "HTTP 524"
+```
+
+O 524 veio **da própria chamada ao Gemini**. Uma única ida ao modelo passou dos
+100 segundos, então o orçamento entre rodadas não tinha o que salvar: ele só
+decide se vale começar outra rodada, não interrompe uma que já está em curso.
+
+- `lib/server/gemini.ts`: cada chamada tem 40 segundos (`AbortSignal.timeout`).
+  Estourou, o modelo conta como ocupado e a vez passa para o próximo — que é o
+  tratamento que já existia para lotação.
+
+
 ### Zoom nas evidências
 
 A foto do anexo abria no tamanho da tela e parava aí: dava para ver que o PDV
