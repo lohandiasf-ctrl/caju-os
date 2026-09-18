@@ -11,6 +11,32 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Gemini: o modelo vem do catálogo da API, não de um nome escrito de cabeça
+
+Primeiro teste com a chave real em produção: os três nomes de modelo que o
+cliente tentava deram 404 — "models/gemini-1.5-flash is not found for API
+version v1beta". A chave estava certa; a lista fixa é que estava errada.
+
+- `lib/gemini-models.ts` (puro): `pickModel()` escolhe a partir do que a API
+  diz existir. Ordem: `flash` (plano gratuito e raciocina melhor), depois
+  `flash-lite`, depois `pro`; estável antes de prévia e de experimental,
+  versão maior antes da menor. Descarta o que não gera texto — embedding,
+  imagem, áudio, `gemma`.
+- `lib/server/gemini.ts`: lê o catálogo uma vez e guarda por 6 h no isolate.
+  Se o modelo guardado sumir no meio do caminho (404), joga o cache fora e
+  pergunta de novo, uma vez. `GEMINI_MODEL` continua forçando um nome.
+- `tests/gemini-models.test.ts`: 9 testes, com um catálogo parecido com o real.
+
+Também corrige o comando do secret, que estava sem o nome do Worker: a config
+do wrangler não fica na raiz, é gerada no build pelo `patch-wrangler.mjs`.
+
+```
+wrangler secret put GEMINI_API_KEY --name caju-os
+```
+
+**Pendente:** conferir em produção que a pergunta aberta responde.
+
+
 ### Assistente geral: pergunta aberta, consultando o sistema
 
 O assistente da fila só respondia sobre a lista que o servidor mandava pronta;
@@ -46,10 +72,11 @@ chave PIX (regra 9 do `WORKFLOW_RULES`), e o que sobra passa por `redact()`.
 **Modelo:** Gemini no plano gratuito. Estouro de cota vira mensagem explicando
 que é cota, não erro genérico.
 
-**Pendente, e bloqueia o teste:** criar a chave no Google AI Studio e gravá-la
-como secret do Worker (`npx wrangler secret put GEMINI_API_KEY`). Sem ela a
-rota devolve `code: "sem_chave"` e o painel continua usando o assistente da
-fila — ou seja, o deploy é seguro antes da chave, mas nada muda até ela existir.
+A chave saiu do Google AI Studio e foi gravada como secret do Worker no mesmo
+dia — o comando está na entrada acima, com o `--name` que faltava aqui.
+
+Sem a chave, a rota devolve `code: "sem_chave"` e o painel volta para o
+assistente da fila, então o deploy era seguro antes de ela existir.
 
 ## 2026-09-17
 
