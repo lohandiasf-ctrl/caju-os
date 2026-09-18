@@ -27,6 +27,15 @@ const MAX_MODELS = 3;
 // Teto de idas e voltas com o modelo. Cada rodada é uma consulta ao sistema;
 // sem teto, uma pergunta ruim consome a cota do dia.
 const MAX_ROUNDS = 5;
+// O Cloudflare corta a requisição em 100 segundos e devolve 524 — foi o que
+// aconteceu com a pergunta de cobertura. Antes disso, o loop para de consultar
+// e pede a resposta com o que já tem: melhor uma resposta parcial do que um
+// erro de infraestrutura.
+const TIME_BUDGET_MS = 70_000;
+// Modelo lotado volta a funcionar depois de um tempo, mas tentar a cada
+// pergunta custa segundos que fazem falta no orçamento. Fica anotado.
+const UNAVAILABLE_MS = 5 * 60_000;
+const unavailable = new Map<string, number>();
 
 export class GeminiError extends Error {
   status: number;
@@ -117,13 +126,21 @@ export async function askGemini(options: {
     name: tool.name, description: tool.description, parameters: tool.parameters,
   }));
 
-  const models = await resolveModels();
+  const started = Date.now();
+  const all = await resolveModels();
+  // Um modelo anotado como lotado sai da frente da fila, mas continua na
+  // reserva: se todos estiverem anotados, ainda vale tentar.
+  const fresh = all.filter((model) => (unavailable.get(model) ?? 0) < Date.now());
+  const models = fresh.length ? fresh : all;
   let last: unknown = null;
   for (const model of models) {
     try {
-      return await converse(model, options, declarations);
+      return await converse(model, options, declarations, started);
     } catch (error) {
       if (!worthRetrying(error)) throw error;
+      // 429 e 503 são do momento: anota para as próximas perguntas não
+      // gastarem tempo com este modelo.
+      if (error instanceof GeminiError && error.status !== 404) unavailable.set(model, Date.now() + UNAVAILABLE_MS);
       // Nome que não existe mais invalida o catálogo guardado; lotação e cota
       // são do momento e não dizem nada sobre o catálogo.
       if (error instanceof GeminiError && error.status === 404) catalog = null;
@@ -145,6 +162,7 @@ async function converse(
   model: string,
   options: { systemInstruction: string; question: string; history?: Array<{ role: 'user' | 'assistant'; text: string }>; runTool: (name: string, args: Record<string, unknown>) => Promise<unknown>; maxRounds?: number },
   declarations: Array<{ name: string; description: string; parameters: unknown }>,
+  started = Date.now(),
 ): Promise<AskResult> {
   const contents: GeminiContent[] = [
     ...(options.history ?? []).map((turn): GeminiContent => ({
@@ -160,7 +178,9 @@ async function converse(
     // novo, ele responde com o que já tem. Antes disso, "quais caíram hoje
     // após as 15h?" gastava as cinco rodadas e terminava em erro, sem
     // devolver nada do que já havia consultado.
-    const last = round === rounds - 1;
+    //
+    // O tempo gasto também encerra as consultas: o Cloudflare corta em 100s.
+    const last = round === rounds - 1 || Date.now() - started > TIME_BUDGET_MS;
     const payload = await callModel(model, buildRequest({ systemInstruction: options.systemInstruction, contents, declarations: last ? [] : declarations }));
     const { text, calls, parts } = readCandidate(payload);
     if (!calls.length || last) {
