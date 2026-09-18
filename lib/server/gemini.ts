@@ -104,6 +104,11 @@ export type AskResult = { answer: string; model: string; used: string[] };
 export async function askGemini(options: {
   systemInstruction: string;
   question: string;
+  // Conversa anterior, para a pergunta de seguimento ("e desses, quais são de
+  // Itabuna?") fazer sentido. Vem do cliente; as consultas ao sistema continuam
+  // acontecendo no servidor, então o pior que um histórico adulterado causa é
+  // uma resposta ruim, não acesso a dado que a pessoa não teria.
+  history?: Array<{ role: 'user' | 'assistant'; text: string }>;
   tools: ToolSchema[];
   runTool: (name: string, args: Record<string, unknown>) => Promise<unknown>;
   maxRounds?: number;
@@ -138,10 +143,16 @@ export async function askGemini(options: {
 
 async function converse(
   model: string,
-  options: { systemInstruction: string; question: string; runTool: (name: string, args: Record<string, unknown>) => Promise<unknown>; maxRounds?: number },
+  options: { systemInstruction: string; question: string; history?: Array<{ role: 'user' | 'assistant'; text: string }>; runTool: (name: string, args: Record<string, unknown>) => Promise<unknown>; maxRounds?: number },
   declarations: Array<{ name: string; description: string; parameters: unknown }>,
 ): Promise<AskResult> {
-  const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: options.question }] }];
+  const contents: GeminiContent[] = [
+    ...(options.history ?? []).map((turn): GeminiContent => ({
+      role: turn.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: turn.text }],
+    })),
+    { role: 'user', parts: [{ text: options.question }] },
+  ];
   const used: string[] = [];
   for (let round = 0; round < (options.maxRounds ?? MAX_ROUNDS); round += 1) {
     const payload = await callModel(model, buildRequest({ systemInstruction: options.systemInstruction, contents, declarations }));

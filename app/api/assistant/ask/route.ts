@@ -1,5 +1,5 @@
 import { operationDate, previousOperationDate, validQuestion } from '@/lib/assistant';
-import { systemInstruction, TOOL_SCHEMAS } from '@/lib/assistant-tools';
+import { cleanHistory, systemInstruction, TOOL_SCHEMAS } from '@/lib/assistant-tools';
 import { runAssistantTool } from '@/lib/server/assistant-data';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { askGemini, GeminiError } from '@/lib/server/gemini';
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     if (!isJiraConfigured()) {
       return Response.json({ error: 'A integração do Jira não está configurada.' }, { status: 503 });
     }
-    const body = await request.json().catch(() => null) as { question?: string } | null;
+    const body = await request.json().catch(() => null) as { question?: string; history?: unknown } | null;
     if (!validQuestion(body?.question)) {
       return Response.json({ error: 'Escreva a pergunta (de 3 a 400 caracteres).' }, { status: 400 });
     }
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     const { answer, model, used } = await askGemini({
       systemInstruction: systemInstruction(operationDate(now), previousOperationDate(now)),
       question: body!.question!.trim(),
+      history: cleanHistory(body?.history),
       tools: TOOL_SCHEMAS,
       runTool: runAssistantTool,
     });

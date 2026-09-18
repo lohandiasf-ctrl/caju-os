@@ -56,6 +56,7 @@ import { CajuLoading } from "@/components/caju-loading";
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
 import { FeedbackBoard } from "@/components/feedback-board";
+import { OperationChat } from "@/components/operation-chat";
 import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { TicketHistory } from "@/components/ticket-history";
 import { WhatsAppInbox } from "@/components/whatsapp-inbox";
@@ -327,7 +328,6 @@ export default function Home() {
   const [jiraLoading, setJiraLoading] = useState(true);
   const [jiraError, setJiraError] = useState("");
   const [query, setQuery] = useState("");
-  const [operationalQuestion, setOperationalQuestion] = useState("");
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
@@ -442,10 +442,6 @@ export default function Home() {
   const selectedTickets = useMemo(
     () => tickets.filter((ticket) => selectedKeys.has(ticket.id)),
     [selectedKeys, tickets],
-  );
-  const operationalAnswer = useMemo(
-    () => answerOperationalQuestion(operationalQuestion, tickets, operational),
-    [operationalQuestion, operational, tickets],
   );
 
   function toggleSelected(ticketKey: string) {
@@ -1264,10 +1260,9 @@ export default function Home() {
             </div>
           )}
           {activeView === "overview" && (
-            <OperationalQuestionBox
-              value={operationalQuestion}
-              onChange={setOperationalQuestion}
-              answer={operationalAnswer}
+            <OperationChat
+              tickets={tickets}
+              user={user}
               selectedKeys={selectedKeys}
               onToggleSelected={toggleSelected}
               onToggleAll={toggleSelectedGroup}
@@ -3489,127 +3484,6 @@ function OperationalSummary({
   );
 }
 
-type OperationalAnswer = {
-  title: string;
-  count: number;
-  description: string;
-  tickets: Ticket[];
-};
-
-function OperationalQuestionBox({
-  value,
-  onChange,
-  answer,
-  selectedKeys,
-  onToggleSelected,
-  onToggleAll,
-  onOpenTicket,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  answer: OperationalAnswer;
-  selectedKeys: Set<string>;
-  onToggleSelected: (ticketKey: string) => void;
-  onToggleAll: (ticketKeys: string[]) => void;
-  onOpenTicket: (ticket: Ticket) => void;
-}) {
-  const examples = [
-    "quantos chamados tem para amanhã",
-    "quantos chamados tem para 10h",
-    "quantos chamados estão agendados",
-    "quantos chamados estão sem mandar para validação",
-  ];
-  return (
-    <section className="surface-panel mt-6 rounded-2xl p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-              <Search className="size-5" aria-hidden="true" />
-            </span>
-            <div>
-              <h2 className="font-semibold">Pesquisar operação</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Pergunte por contagens de chamados, horários, datas, status e validação.
-              </p>
-            </div>
-          </div>
-          <Input
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder='Ex: "quantos chamados tem para amanhã às 10h?"'
-            className="mt-4 h-11 bg-background/80"
-            aria-label="Perguntar sobre chamados"
-          />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {examples.map((example) => (
-              <Button
-                key={example}
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => onChange(example)}
-                /* Em 375px a pergunta mais longa passava da tela: no celular
-                   ela quebra em duas linhas. */
-                className="h-auto max-w-full whitespace-normal text-left sm:whitespace-nowrap"
-              >
-                {example}
-              </Button>
-            ))}
-          </div>
-        </div>
-        <div className="rounded-2xl border border-primary/15 bg-primary/8 p-4 lg:w-[360px]">
-          <p className="text-xs font-bold uppercase tracking-wide text-primary">{answer.title}</p>
-          <p className="mt-2 text-4xl font-semibold tabular-nums">{answer.count}</p>
-          <p className="mt-2 text-xs text-muted-foreground">{answer.description}</p>
-          {!!answer.tickets.length && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => onToggleAll(answer.tickets.map((ticket) => ticket.id))}
-              >
-                {answer.tickets.every((ticket) => selectedKeys.has(ticket.id)) ? "Desmarcar tudo" : "Selecionar tudo"}
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {answer.tickets.filter((ticket) => selectedKeys.has(ticket.id)).length} de {answer.tickets.length} selecionados
-              </span>
-            </div>
-          )}
-          <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
-            {answer.tickets.map((ticket) => (
-              <div
-                key={ticket.id}
-                className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-xs transition ${selectedKeys.has(ticket.id) ? "border-primary/60 bg-primary/15" : "border-border bg-background/60 hover:border-primary/40 hover:bg-primary/8"}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedKeys.has(ticket.id)}
-                  onChange={() => onToggleSelected(ticket.id)}
-                  aria-label={`Selecionar ${ticket.id}`}
-                  className="mt-1 size-4 rounded border-border accent-primary"
-                />
-                <button
-                  type="button"
-                  onClick={() => onOpenTicket(ticket)}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <b className="font-mono text-primary">{ticket.id}</b>
-                  <span className="mt-1 block truncate">{ticket.title}</span>
-                  <span className="mt-1 block truncate text-muted-foreground">
-                    {[ticket.status, ticket.schedule, ticket.city].filter(Boolean).join(" · ")}
-                  </span>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="surface-panel mt-6 grid min-h-48 place-items-center rounded-2xl border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -3667,95 +3541,6 @@ function relativeAge(value: string) {
   return `há ${Math.floor(hours / 24)} d`;
 }
 
-function answerOperationalQuestion(
-  question: string,
-  tickets: Ticket[],
-  operational: OperationalDashboard | null,
-): OperationalAnswer {
-  const normalized = normalizeText(question);
-  const validationKeys = new Set((operational?.validationQueue ?? []).map((item) => item.ticketKey));
-  let result = [...tickets];
-  const parts: string[] = [];
-  const asksValidation = /validacao/.test(normalized);
-  const asksUnsentValidation = /sem\s+(mandar|enviar|ir).*(validacao)|nao.*validacao/.test(normalized);
-  const asksScheduled = /agendad/.test(normalized);
-  const asksField = /tecnico|campo|atendimento/.test(normalized);
-  const asksSpare = /spare|peca/.test(normalized);
-  const asksPending = /pendente|agenda/.test(normalized);
-  const asksDirected = /direcionad/.test(normalized);
-  const asksStatus = asksValidation || asksUnsentValidation || asksScheduled || asksField || asksSpare || asksPending || asksDirected;
-  let hasDateOrHourFilter = false;
-  if (!normalized) {
-    return {
-      title: "Resumo rápido",
-      count: tickets.length,
-      description: "Digite uma pergunta ou use um atalho para contar chamados por data, hora, status ou validação.",
-      tickets: tickets.slice(0, 4),
-    };
-  }
-  if (/\bamanha\b/.test(normalized)) {
-    const target = addDays(new Date(), 1);
-    result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
-    hasDateOrHourFilter = true;
-    parts.push("agendados para amanhã");
-  } else if (/\bhoje\b/.test(normalized)) {
-    const target = new Date();
-    result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
-    hasDateOrHourFilter = true;
-    parts.push("agendados para hoje");
-  }
-  const explicitDate = normalized.match(/\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/);
-  if (explicitDate) {
-    const day = Number(explicitDate[1]);
-    const month = Number(explicitDate[2]) - 1;
-    const year = explicitDate[3] ? Number(explicitDate[3].length === 2 ? `20${explicitDate[3]}` : explicitDate[3]) : new Date().getFullYear();
-    const target = new Date(year, month, day);
-    result = result.filter((ticket) => ticket.scheduledAt && sameDay(new Date(ticket.scheduledAt), target));
-    hasDateOrHourFilter = true;
-    parts.push(`em ${target.toLocaleDateString("pt-BR")}`);
-  }
-  const hourMatch = normalized.match(/\b(?:as\s*)?(\d{1,2})(?:h|:00|\s*horas?)\b/);
-  if (hourMatch) {
-    const hour = Number(hourMatch[1]);
-    result = result.filter((ticket) => {
-      if (!ticket.scheduledAt) return false;
-      const date = new Date(ticket.scheduledAt);
-      return Number.isFinite(date.getTime()) && date.getHours() === hour;
-    });
-    hasDateOrHourFilter = true;
-    parts.push(`${hour}h`);
-  }
-  if (hasDateOrHourFilter && !asksStatus) result = result.filter((ticket) => ticket.status === "Agendado");
-  if (asksUnsentValidation) {
-    result = result.filter((ticket) => ticket.status === "Técnico em campo" && !validationKeys.has(ticket.id));
-    parts.push("em campo sem validação enviada");
-  } else if (asksValidation) {
-    result = result.filter((ticket) => validationKeys.has(ticket.id));
-    parts.push("em validação");
-  } else if (asksScheduled && !parts.some((part) => part.includes("agendad"))) {
-    result = result.filter((ticket) => ticket.status === "Agendado");
-    parts.push("agendados");
-  } else if (asksField) {
-    result = result.filter((ticket) => ticket.status === "Técnico em campo");
-    parts.push("com técnico em campo");
-  } else if (asksSpare) {
-    result = result.filter((ticket) => ticket.status === "Aguardando spare");
-    parts.push("aguardando spare");
-  } else if (asksPending) {
-    result = result.filter((ticket) => ticket.status === "Pendente de agendamento");
-    parts.push("pendentes de agendamento");
-  } else if (asksDirected) {
-    result = result.filter((ticket) => ticket.status === "Direcionado");
-    parts.push("direcionados");
-  }
-  const label = parts.length ? parts.join(" · ") : "chamados encontrados";
-  return {
-    title: "Resultado",
-    count: result.length,
-    description: `Contando ${label}.`,
-    tickets: result,
-  };
-}
 
 function addDays(date: Date, days: number) {
   const copy = new Date(date);
