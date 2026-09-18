@@ -98,6 +98,18 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
   {
+    name: 'preparar_agendamento',
+    description: 'Prepara o agendamento de um ou mais chamados: confere quais podem ser agendados e devolve a lista para a pessoa confirmar na tela, escolhendo o técnico. NÃO agenda — nada entra no Jira por aqui. Use quando pedirem para agendar, marcar ou remarcar chamados.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamados: { type: 'array', items: { type: 'string' }, description: 'As FSAs a agendar.' },
+        data_hora: { type: 'string', description: 'Quando, no formato AAAA-MM-DD HH:MM. Converta "amanhã às 15:50" usando a data de hoje que está nas instruções.' },
+      },
+      required: ['chamados', 'data_hora'],
+    },
+  },
+  {
     name: 'consultar_historico',
     description: 'Histórico de auditoria: o que foi feito, por quem e quando. Use para perguntas sobre quem mexeu num chamado, o que aconteceu num período, ou o que uma pessoa fez.',
     parameters: {
@@ -173,4 +185,17 @@ const WHATSAPP_TOOL = 'consultar_whatsapp';
 
 export function toolsFor(canReadWhatsapp: boolean): ToolSchema[] {
   return canReadWhatsapp ? TOOL_SCHEMAS : TOOL_SCHEMAS.filter((tool) => tool.name !== WHATSAPP_TOOL);
+}
+
+// Quando agendar, vindo do texto que o modelo converteu. A tela usa
+// `datetime-local`, que fala AAAA-MM-DDTHH:MM.
+export function parseSchedule(value: unknown, now: Date): { at: string } | { erro: string } {
+  const found = typeof value === 'string' ? value.trim().match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/) : null;
+  if (!found) return { erro: 'Informe quando agendar, no formato AAAA-MM-DD HH:MM.' };
+  const [, day, hour, minute] = found;
+  if (Number(hour) > 23 || Number(minute) > 59) return { erro: 'Hora inválida.' };
+  // Agendar para trás não faz sentido e costuma ser erro de leitura da data.
+  const at = `${day}T${hour}:${minute}`;
+  if (Date.parse(`${at}:00-03:00`) < now.getTime()) return { erro: 'Essa data e hora já passaram.' };
+  return { at };
 }

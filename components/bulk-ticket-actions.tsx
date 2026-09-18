@@ -27,12 +27,16 @@ function count(value: number, singular: string, plural: string) {
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
-export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
+export function BulkTicketActions({ tickets, role, user, onClear, onApplied, scheduleRequest }: {
   tickets: BulkTicket[];
   role: string | null | undefined;
   user: User;
   onClear: () => void;
   onApplied: (status: BulkStatus, keys: string[], scheduledAt?: string) => void;
+  // Abre o diálogo de agendamento já com a data, quando o pedido vem de
+  // fora (o assistente preparou o lote). `id` muda a cada pedido, para o
+  // mesmo horário poder ser pedido duas vezes.
+  scheduleRequest?: { at: string; id: number } | null;
 }) {
   const [mode, setMode] = useState<BulkStatus | null>(null);
   const [targets, setTargets] = useState<BulkTicket[]>([]);
@@ -78,6 +82,13 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied }: {
     if (!query) return [];
     return technicians.filter((technician) => `${technician.name} ${technician.technicianCode ?? ''} ${technician.cpf ?? ''} ${technician.city} ${technician.state}`.toLocaleLowerCase('pt-BR').includes(query)).slice(0, 7);
   }, [technicianQuery, technicians]);
+
+  useEffect(() => {
+    if (!scheduleRequest || !canTransition) return;
+    open('scheduled');
+    setScheduledAt(scheduleRequest.at);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleRequest?.id]);
 
   function open(status: BulkStatus) {
     const eligible = status === 'scheduled' ? toSchedule : toField;

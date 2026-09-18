@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { CornerDownLeft, Loader2, Search, SendHorizontal, Sparkles } from 'lucide-react';
+import { CalendarClock, CornerDownLeft, Loader2, Search, SendHorizontal, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MAX_QUESTION_LENGTH, splitTicketKeys } from '@/lib/assistant';
 import { HISTORY_TURNS, type ChatTurn } from '@/lib/assistant-tools';
@@ -17,7 +17,9 @@ import { cn } from '@/lib/utils';
 
 type ChatTicket = { id: string; title: string; status: string; schedule?: string; city: string };
 
-type Message = ChatTurn & { used?: string[]; failed?: boolean };
+type PreparedAction = { tipo: 'agendar'; chamados: string[]; quando: string };
+
+type Message = ChatTurn & { used?: string[]; failed?: boolean; prepared?: PreparedAction | null };
 
 const EXAMPLES = [
   'quantos chamados caíram hoje?',
@@ -67,6 +69,7 @@ export function OperationChat<T extends ChatTicket>({
   onToggleSelected,
   onToggleAll,
   onOpenTicket,
+  onPrepareSchedule,
 }: {
   tickets: T[];
   user: { getIdToken: () => Promise<string> } | null;
@@ -74,6 +77,9 @@ export function OperationChat<T extends ChatTicket>({
   onToggleSelected: (ticketKey: string) => void;
   onToggleAll: (ticketKeys: string[]) => void;
   onOpenTicket: (ticket: T) => void;
+  // Pedido de agendamento que o chat preparou: a página marca os chamados e
+  // abre o diálogo de sempre, onde a pessoa escolhe o técnico e confirma.
+  onPrepareSchedule?: (ticketKeys: string[], at: string) => void;
 }) {
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -112,9 +118,9 @@ export function OperationChat<T extends ChatTicket>({
         headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: asked, history }),
       });
-      const payload = await response.json() as { answer?: string; error?: string; used?: string[] };
+      const payload = await response.json() as { answer?: string; error?: string; used?: string[]; prepared?: PreparedAction | null };
       if (!response.ok || !payload.answer) throw new Error(payload.error || 'O assistente não respondeu.');
-      setMessages((current) => [...current, { role: 'assistant', text: payload.answer!, used: payload.used }]);
+      setMessages((current) => [...current, { role: 'assistant', text: payload.answer!, used: payload.used, prepared: payload.prepared ?? null }]);
     } catch (reason) {
       setMessages((current) => [...current, { role: 'assistant', text: reason instanceof Error ? reason.message : 'O assistente falhou.', failed: true }]);
     } finally {
@@ -187,6 +193,16 @@ export function OperationChat<T extends ChatTicket>({
                           >{part.text}</button>
                         : <span key={position}>{part.text}</span>)
                       : message.text}
+                    {message.prepared && onPrepareSchedule && (
+                      <button
+                        type="button"
+                        onClick={() => onPrepareSchedule(message.prepared!.chamados, message.prepared!.quando)}
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <CalendarClock className="size-4" aria-hidden="true" />
+                        Agendar {message.prepared.chamados.length} {message.prepared.chamados.length === 1 ? 'chamado' : 'chamados'} · escolher técnico
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               ))}

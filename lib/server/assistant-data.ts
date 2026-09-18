@@ -1,8 +1,9 @@
 import { and, desc, eq, gte, inArray, like, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { activeAttendances, activeAttendanceTickets, operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians, whatsappConversations, whatsappMessages } from '@/db/schema';
-import { onlyDate, operationDateTime, queueContext, redact, ticketContext } from '@/lib/assistant';
-import { MAX_ROWS } from '@/lib/assistant-tools';
+import { onlyDate, operationDateTime, queueContext, redact, statusLabel, ticketContext } from '@/lib/assistant';
+import { MAX_ROWS, parseSchedule } from '@/lib/assistant-tools';
+import { bulkIneligibleReason, isBulkEligible, MAX_BULK_TICKETS } from '@/lib/bulk-actions';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
 import { getJiraIssue, searchJiraIssues } from '@/lib/server/jira';
 
@@ -349,6 +350,42 @@ async function consultarAtendimentos(args: Args) {
   };
 }
 
+// Prepara o agendamento — e só. Nada aqui escreve no Jira: a confirmação, com
+// a escolha do técnico, acontece na tela, no mesmo diálogo de sempre. Quem
+// agenda continua sendo uma pessoa (WORKFLOW_RULES, regras 1 e 2).
+async function prepararAgendamento(args: Args) {
+  const when = parseSchedule(args.data_hora, new Date());
+  if ('erro' in when) return when;
+  const asked = keys(args);
+  if (!asked.length) return { erro: 'Diga quais chamados agendar.' };
+
+  const found = await searchJiraIssues({ keys: asked, maxResults: asked.length });
+  const byKey = new Map(found.issues.map((issue) => [issue.key, issue]));
+  const prontos: string[] = [];
+  const recusados: string[] = [];
+  for (const key of asked) {
+    const issue = byKey.get(key);
+    if (!issue) { recusados.push(`${key}: não encontrado no Jira`); continue; }
+    if (isBulkEligible(issue.status, 'scheduled')) prontos.push(key);
+    else recusados.push(`${key}: ${bulkIneligibleReason(issue.status, 'scheduled')} (está em ${statusLabel(issue.status)})`);
+  }
+  // O lote da tela tem teto próprio; avisar antes evita a pessoa confirmar e
+  // receber o corte só depois.
+  const acima = prontos.length > MAX_BULK_TICKETS;
+  return {
+    quando: when.at.replace('T', ' '),
+    prontos,
+    total_pronto: prontos.length,
+    recusados: recusados.length ? recusados : 'nenhum',
+    // A tela lê isto para abrir o diálogo já preenchido.
+    acao: prontos.length ? { tipo: 'agendar', chamados: prontos.slice(0, MAX_BULK_TICKETS), quando: when.at } : null,
+    aviso: acima ? `A tela agenda no máximo ${MAX_BULK_TICKETS} por vez; os primeiros ${MAX_BULK_TICKETS} vão no lote.` : undefined,
+    instrucao_para_voce: prontos.length
+      ? 'Diga quantos estão prontos e quais foram recusados e por quê. Avise que a pessoa confirma na tela, escolhendo o técnico — você não agenda.'
+      : 'Nenhum pode ser agendado. Explique o motivo de cada um.',
+  };
+}
+
 const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   consultar_chamados: consultarChamados,
   detalhar_chamado: detalharChamado,
@@ -357,6 +394,7 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   consultar_spares: consultarSpares,
   consultar_whatsapp: consultarWhatsapp,
   consultar_atendimentos: consultarAtendimentos,
+  preparar_agendamento: prepararAgendamento,
   consultar_historico: consultarHistorico,
 };
 
