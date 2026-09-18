@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Abrir o .zip do laudo sem sair do sistema
+
+O laudo do técnico chega como `.zip` com as fotos dentro, e a visualização
+dizia só "este arquivo não possui visualização no navegador". Para conferir a
+evidência era preciso baixar, extrair e abrir fora do Caju OS.
+
+- `lib/zip.ts` (puro): lê o índice do ZIP e extrai cada arquivo. **Sem
+  biblioteca nova** — o formato é simples de percorrer e o navegador
+  descomprime com `DecompressionStream('deflate-raw')`.
+- `components/zip-preview.tsx`: lista o que há dentro, com tamanho, e abre
+  imagem, PDF e vídeo ali mesmo. Imagem abre com o zoom que a visualização de
+  anexo já usa, então dá para ler o que está escrito na foto do laudo.
+- `components/jira-ticket-details.tsx`: o `.zip` é reconhecido pelo tipo **ou**
+  pelo nome, porque o Jira às vezes o marca como `application/octet-stream`.
+- `tests/zip.test.ts`: 6 testes que montam um ZIP de verdade e o leem de volta
+  — comprimido e sem compressão, com pasta dentro, e arquivo que não é ZIP.
+
 ### Teto por chamada ao modelo
 
 Com a fila arrumada, a cobertura ainda deu 524 — e o erro final mostrou de
