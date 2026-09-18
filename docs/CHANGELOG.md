@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Primeira visita: R$ 120, e não se altera
+
+Regra informada pela operação. A tela de finanças deixava editar as duas
+faixas do repasse, e a primeira vinha com R$ 70 — a primeira visita não é
+configuração, é o valor base acordado.
+
+- `lib/finance-rules.ts` (puro): `FIRST_VISIT_CENTS` e `payoutCents()`, que é
+  o cálculo do repasse no período — primeira visita pelo valor base, as
+  seguintes pela faixa configurável.
+- `app/api/finance/rules/route.ts`: o `GET` devolve sempre o valor base, sem
+  depender do que estiver gravado; o `PUT` ignora o que o cliente mandar para
+  a primeira faixa. A trava fica no servidor, não só na tela.
+- `app/financeiro/page.tsx`: o campo da 1ª visita virou um valor à mostra,
+  marcado como fixo. O 2º chamado em diante continua editável.
+- `tests/finance-rules.test.ts`: 4 testes.
+
+**Muda o número na tela:** o repasse calculado passa a contar R$ 120 na
+primeira visita de cada técnico no período, onde antes contava R$ 70.
+
 ### Abrir o .zip do laudo sem sair do sistema
 
 O laudo do técnico chega como `.zip` com as fotos dentro, e a visualização
