@@ -11,6 +11,28 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Enviar no WhatsApp pelo chat, com o texto à vista
+
+A outra metade do que o vídeo mostrou: depois de levantar a cobertura, a
+resposta ia para o cliente na mão, copiando e colando. Agora o assistente
+escreve a mensagem e a tela abre a confirmação.
+
+- `lib/assistant-tools.ts`: `preparar_mensagem_whatsapp`, que **não envia**.
+  Endereça por FSA (a conversa do chamado) ou por nome de contato.
+- `lib/server/assistant-data.ts`: resolve o destinatário. Quando mais de uma
+  conversa combina, devolve a lista e manda perguntar — mandar para o contato
+  errado é pior do que perguntar.
+- `components/whatsapp-send-dialog.tsx`: o texto aparece inteiro e **editável**,
+  com o destinatário no título. O envio usa a rota de sempre, que assina com o
+  nome de quem enviou.
+- `components/operation-chat.tsx`, `app/page.tsx`: o botão "Revisar e enviar
+  para X" e o diálogo.
+
+**Nada sai sem clique.** A ferramenta prepara; quem envia é a pessoa, depois de
+ler. E as duas ferramentas de WhatsApp — ler a conversa e escrever nela — só
+existem para gerência, coordenação e analistas, como na tela.
+
+
 ### Cobertura de várias cidades numa pergunta
 
 Um vídeo da operação mostrou o trabalho: um cliente pediu técnico para oito

@@ -30,7 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { AppNavigation } from "@/components/app-navigation";
-import { canUseDashboardView, isDashboardView, type DashboardView } from "@/lib/navigation";
+import { canUseDashboardView, canUseWhatsapp, isDashboardView, type DashboardView } from "@/lib/navigation";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,7 @@ import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
 import { FeedbackBoard } from "@/components/feedback-board";
 import { OperationChat } from "@/components/operation-chat";
+import { WhatsappSendDialog, type WhatsappDraft } from "@/components/whatsapp-send-dialog";
 import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { TicketHistory } from "@/components/ticket-history";
 import { WhatsAppInbox } from "@/components/whatsapp-inbox";
@@ -442,6 +443,8 @@ export default function Home() {
   // Agendamento que o assistente preparou: marca os chamados e abre o
   // diálogo de sempre, onde a pessoa escolhe o técnico e confirma.
   const [scheduleRequest, setScheduleRequest] = useState<{ at: string; id: number } | null>(null);
+  // Mensagem escrita pelo assistente, esperando revisão antes de sair.
+  const [whatsappDraft, setWhatsappDraft] = useState<WhatsappDraft | null>(null);
   const selectedTickets = useMemo(
     () => tickets.filter((ticket) => selectedKeys.has(ticket.id)),
     [selectedKeys, tickets],
@@ -1274,6 +1277,7 @@ export default function Home() {
                 setSelectedKeys(new Set(keys));
                 setScheduleRequest({ at, id: Date.now() });
               }}
+              onPrepareMessage={(draft) => setWhatsappDraft(draft)}
             />
           )}
           {activeView === "overview" && (
@@ -1913,6 +1917,13 @@ export default function Home() {
           onClear={() => setSelectedKeys(new Set())}
           onApplied={applyBulkResult}
           scheduleRequest={scheduleRequest}
+        />
+      )}
+      {canUseWhatsapp(role) && (
+        <WhatsappSendDialog
+          draft={whatsappDraft}
+          user={user}
+          onClose={() => setWhatsappDraft(null)}
         />
       )}
     </main>

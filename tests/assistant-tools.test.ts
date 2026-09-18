@@ -167,15 +167,28 @@ test('a consulta de spares existe e sabe recortar a lista', () => {
 
 // O WhatsApp do Caju OS é restrito a gerência, coordenação e analistas. O
 // assistente não pode virar a porta dos fundos para N1.
-test('a conversa de WhatsApp só é oferecida a quem já a vê na tela', () => {
+test('o WhatsApp só é oferecido a quem já o vê na tela', () => {
   const comAcesso = toolsFor(true).map((tool) => tool.name);
   const semAcesso = toolsFor(false).map((tool) => tool.name);
-  assert.ok(comAcesso.includes('consultar_whatsapp'));
-  assert.ok(!semAcesso.includes('consultar_whatsapp'), 'quem não vê na tela não vê pelo assistente');
-  assert.equal(semAcesso.length, comAcesso.length - 1, 'só essa consulta sai; o resto continua');
-  for (const name of ['consultar_chamados', 'consultar_spares', 'resumo_operacao']) {
+  // Ler a conversa e escrever nela: as duas saem juntas.
+  for (const name of ['consultar_whatsapp', 'preparar_mensagem_whatsapp']) {
+    assert.ok(comAcesso.includes(name), name);
+    assert.ok(!semAcesso.includes(name), `${name}: quem não vê na tela não vê pelo assistente`);
+  }
+  assert.equal(semAcesso.length, comAcesso.length - 2, 'só as de WhatsApp saem; o resto continua');
+  for (const name of ['consultar_chamados', 'consultar_spares', 'resumo_operacao', 'consultar_cobertura']) {
     assert.ok(semAcesso.includes(name), name);
   }
+});
+
+// Mensagem para cliente ou técnico não sai de um texto interpretado sem
+// alguém ler antes.
+test('preparar mensagem deixa claro que não envia', () => {
+  const tool = TOOL_SCHEMAS.find((item) => item.name === 'preparar_mensagem_whatsapp')!;
+  assert.match(tool.description, /NÃO envia/);
+  assert.match(tool.description, /revisar e enviar na tela/);
+  assert.deepEqual(tool.parameters.required, ['texto']);
+  assert.ok('chamado' in tool.parameters.properties && 'contato' in tool.parameters.properties, 'dá para endereçar por FSA ou por contato');
 });
 
 test('a consulta de WhatsApp avisa que é texto, e limita a janela', () => {

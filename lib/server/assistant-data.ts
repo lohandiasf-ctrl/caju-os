@@ -429,6 +429,49 @@ async function consultarCobertura(args: Args, origin: string) {
   };
 }
 
+// Prepara a mensagem — e só. O envio acontece na tela, com o texto à vista e
+// editável, pela mesma rota de sempre, que assina com o nome de quem enviou.
+// Mensagem para fora não sai de um texto interpretado sem alguém ler antes.
+const MESSAGE_CHARS = 4096;
+
+async function prepararMensagemWhatsapp(args: Args) {
+  const texto = text(args, 'texto')?.slice(0, MESSAGE_CHARS);
+  if (!texto) return { erro: 'Escreva o texto da mensagem.' };
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  const contato = text(args, 'contato')?.toLowerCase();
+  if (!ticket && !contato) return { erro: 'Diga para quem enviar: o nome do contato ou a FSA da conversa.' };
+
+  const db = getDb();
+  const conversas = await db.select({
+    contactPhone: whatsappConversations.contactPhone, contactName: whatsappConversations.contactName,
+    ticketKey: whatsappConversations.ticketKey, lastMessageAt: whatsappConversations.lastMessageAt,
+  }).from(whatsappConversations)
+    .where(ticket ? eq(whatsappConversations.ticketKey, ticket) : like(whatsappConversations.contactName, `%${contato}%`))
+    .orderBy(desc(whatsappConversations.lastMessageAt)).limit(5).all();
+
+  if (!conversas.length) {
+    return { erro: ticket ? `Nenhuma conversa de WhatsApp ligada a ${ticket}.` : `Nenhuma conversa encontrada para "${contato}".` };
+  }
+  // Duas conversas parecidas viram pergunta, não escolha minha: mandar para o
+  // contato errado é pior do que perguntar.
+  if (conversas.length > 1) {
+    return {
+      erro: 'Mais de uma conversa combina com isso.',
+      conversas: conversas.map((row) => redact(`${row.contactName || 'sem nome'}${row.ticketKey ? ` · ${row.ticketKey}` : ''} · última mensagem ${operationDateTime(row.lastMessageAt)}`)),
+      instrucao_para_voce: 'Liste as conversas e pergunte para qual delas enviar.',
+    };
+  }
+
+  const alvo = conversas[0];
+  return {
+    para: redact(alvo.contactName || 'contato'),
+    texto,
+    // A tela lê isto para abrir a confirmação de envio.
+    acao: { tipo: 'whatsapp', contato: alvo.contactPhone, nome: alvo.contactName || 'contato', texto },
+    instrucao_para_voce: 'Diga para quem a mensagem vai e mostre o texto. Avise que ela só sai depois de a pessoa revisar e enviar na tela — você não envia.',
+  };
+}
+
 const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   consultar_chamados: consultarChamados,
   detalhar_chamado: detalharChamado,
@@ -436,6 +479,7 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   resumo_operacao: resumoOperacao,
   consultar_spares: consultarSpares,
   consultar_whatsapp: consultarWhatsapp,
+  preparar_mensagem_whatsapp: prepararMensagemWhatsapp,
   consultar_atendimentos: consultarAtendimentos,
   preparar_agendamento: prepararAgendamento,
   consultar_historico: consultarHistorico,
@@ -446,7 +490,7 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
 // fechada.
 export function assistantToolRunner(options: { canReadWhatsapp: boolean; origin: string }) {
   return async function runAssistantTool(name: string, args: Args): Promise<unknown> {
-    if (name === 'consultar_whatsapp' && !options.canReadWhatsapp) {
+    if ((name === 'consultar_whatsapp' || name === 'preparar_mensagem_whatsapp') && !options.canReadWhatsapp) {
       return { erro: 'Quem perguntou não tem acesso ao WhatsApp no Caju OS.' };
     }
     // A cobertura precisa saber de onde buscar o diretório de técnicos, que é
