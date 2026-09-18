@@ -122,6 +122,19 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
   {
+    name: 'preparar_mensagem_whatsapp',
+    description: 'Prepara uma mensagem de WhatsApp para a pessoa revisar e enviar na tela. NÃO envia — nada sai daqui sem alguém clicar em enviar. Use quando pedirem para mandar, responder ou avisar alguém pelo WhatsApp. Escreva o texto completo, pronto para sair.',
+    parameters: {
+      type: 'object',
+      properties: {
+        texto: { type: 'string', description: 'A mensagem inteira, como deve chegar ao destinatário. Sem assinatura: o sistema já assina com o nome de quem envia.' },
+        contato: { type: 'string', description: 'Parte do nome do contato, como aparece na conversa.' },
+        chamado: { type: 'string', description: 'Uma FSA, quando a conversa é a do chamado.' },
+      },
+      required: ['texto'],
+    },
+  },
+  {
     name: 'consultar_historico',
     description: 'Histórico de auditoria: o que foi feito, por quem e quando. Use para perguntas sobre quem mexeu num chamado, o que aconteceu num período, ou o que uma pessoa fez.',
     parameters: {
@@ -193,10 +206,10 @@ export function cleanHistory(value: unknown): ChatTurn[] {
 // (`canUseWhatsapp`, aplicado na tela e no servidor). O assistente não pode
 // virar a porta dos fundos: para quem não tem esse acesso, a consulta não
 // existe — o modelo nem sabe que ela é possível.
-const WHATSAPP_TOOL = 'consultar_whatsapp';
+const WHATSAPP_TOOLS = ['consultar_whatsapp', 'preparar_mensagem_whatsapp'];
 
 export function toolsFor(canReadWhatsapp: boolean): ToolSchema[] {
-  return canReadWhatsapp ? TOOL_SCHEMAS : TOOL_SCHEMAS.filter((tool) => tool.name !== WHATSAPP_TOOL);
+  return canReadWhatsapp ? TOOL_SCHEMAS : TOOL_SCHEMAS.filter((tool) => !WHATSAPP_TOOLS.includes(tool.name));
 }
 
 // Quando agendar, vindo do texto que o modelo converteu. A tela usa

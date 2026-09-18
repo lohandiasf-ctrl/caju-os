@@ -9,7 +9,9 @@ import { enforceRateLimit } from '@/lib/server/rate-limit';
 
 // Ação que a tela deve abrir depois da resposta. O servidor não executa nada:
 // quem agenda é a pessoa, no diálogo de sempre, escolhendo o técnico.
-type PreparedAction = { tipo: 'agendar'; chamados: string[]; quando: string };
+type PreparedAction =
+  | { tipo: 'agendar'; chamados: string[]; quando: string }
+  | { tipo: 'whatsapp'; contato: string; nome: string; texto: string };
 
 // Assistente geral. Diferente de `/api/assistant` (que responde sobre uma fila
 // já carregada), aqui a pergunta pode ser qualquer uma: o modelo consulta o
@@ -48,7 +50,7 @@ export async function POST(request: Request) {
         // diálogo de agendamento já preenchido. O texto do modelo continua
         // sendo só texto.
         const acao = (result as { acao?: unknown } | null)?.acao;
-        if (name === 'preparar_agendamento' && acao) prepared = acao as PreparedAction;
+        if ((name === 'preparar_agendamento' || name === 'preparar_mensagem_whatsapp') && acao) prepared = acao as PreparedAction;
         return result;
       },
     });
