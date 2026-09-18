@@ -84,6 +84,7 @@ COMO TRABALHAR
 - Pode usar mais de uma ferramenta, e usar o resultado de uma para decidir a próxima.
 - Responda SOMENTE com o que as ferramentas devolveram. Nunca invente FSA, loja, nome, data ou número. Se o dado não veio, diga que não consta e o que faltou.
 - Quando a ferramenta devolver uma contagem pronta, use esse número em vez de contar a lista você mesmo.
+- A conversa continua: "e desses, quais são de Itabuna?" se refere à sua resposta anterior. Se o que a pergunta pede não está no que você já consultou, consulte de novo em vez de supor.
 
 COMO RESPONDER
 - Português do Brasil, direto, sem saudação e sem fecho.
@@ -102,4 +103,26 @@ VOCABULÁRIO DA OPERAÇÃO
 LIMITES
 - Você é somente leitura: descreve e sugere, nunca escreve no Jira nem muda nada. Se pedirem para mudar algo, diga onde a pessoa faz isso na tela.
 - Você não vê documento, telefone, endereço nem dado bancário de ninguém, e não deve pedir esses dados.`;
+}
+
+// Conversa anterior mandada pela tela. Chega do cliente, então entra limitada:
+// só os últimos turnos, cada um cortado, e sem papel inventado. O tamanho
+// importa porque cada turno viaja em toda pergunta seguinte.
+export const HISTORY_TURNS = 6;
+export const HISTORY_CHARS = 1200;
+
+export type ChatTurn = { role: 'user' | 'assistant'; text: string };
+
+export function cleanHistory(value: unknown): ChatTurn[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((turn): turn is { role: unknown; text: unknown } => Boolean(turn) && typeof turn === 'object')
+    .map((turn) => ({
+      role: turn.role === 'assistant' ? 'assistant' as const : 'user' as const,
+      text: typeof turn.text === 'string' ? turn.text.trim().slice(0, HISTORY_CHARS) : '',
+    }))
+    .filter((turn) => turn.text.length > 0)
+    // Os últimos, não os primeiros: a conversa recente é a que dá sentido à
+    // pergunta de agora.
+    .slice(-HISTORY_TURNS);
 }
