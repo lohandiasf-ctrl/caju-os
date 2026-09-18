@@ -11,6 +11,20 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### As consultas ao bridge respeitavam a conta só pela metade
+
+Conferindo as abas em produção: a lista da conta nova dizia que o bridge dela
+estava "conectando", quando esse bridge nem existe ainda.
+
+Quatro funções de `lib/server/whatsapp-bridge.ts` recebiam a conta e a
+ignoravam — perguntavam sempre ao número principal: saúde, QR, presença e foto
+de perfil. O QR não chegou a enganar porque a rota confere a configuração antes
+de chamar, mas a proteção estava no lugar errado.
+
+Agora as quatro usam a conta que receberam. A lista da conta sem bridge passa a
+dizer que não há informação, em vez de mostrar a saúde do outro número.
+
+
 ### Segundo WhatsApp: as abas e o QR
 
 Segunda parte. Agora a caixa de entrada tem uma aba por número, e o QR do

@@ -68,9 +68,9 @@ export async function bridgeFetch(path: string, init: RequestInit = {}, account:
 // Contact's typing/recording/online state and profile photo. Best-effort:
 // any bridge failure reads as "no information".
 export async function fetchBridgePresence(jid: string, account: WhatsappAccountId = DEFAULT_ACCOUNT): Promise<{ state: string | null; photoUrl: string | null }> {
-  if (!bridgeConfigured()) return { state: null, photoUrl: null };
+  if (!bridgeConfigured(account)) return { state: null, photoUrl: null };
   try {
-    const upstream = await bridgeFetch(`/presence?${new URLSearchParams({ jid })}`);
+    const upstream = await bridgeFetch(`/presence?${new URLSearchParams({ jid })}`, {}, account);
     const payload = await upstream.json().catch(() => null) as { state?: string | null; photoUrl?: string | null } | null;
     return { state: payload?.state ?? null, photoUrl: payload?.photoUrl ?? null };
   } catch {
@@ -83,9 +83,9 @@ export type BridgeHealth = { status: 'open' | 'connecting' | 'qr' | 'logged_out'
 // WhatsApp session state, so the inbox can warn when messages stop arriving.
 // null means "unknown" (bridge not configured, or a bridge without /status).
 export async function fetchBridgeHealth(account: WhatsappAccountId = DEFAULT_ACCOUNT): Promise<BridgeHealth | null> {
-  if (!bridgeConfigured()) return null;
+  if (!bridgeConfigured(account)) return null;
   try {
-    const upstream = await bridgeFetch('/status', { signal: AbortSignal.timeout(4_000) });
+    const upstream = await bridgeFetch('/status', { signal: AbortSignal.timeout(4_000) }, account);
     if (upstream.status === 404) return null;
     if (!upstream.ok) return { status: 'unreachable', since: null };
     const payload = await upstream.json().catch(() => null) as { status?: string; since?: string } | null;
@@ -99,10 +99,10 @@ export async function fetchBridgeHealth(account: WhatsappAccountId = DEFAULT_ACC
 
 // Profile photo only, without subscribing to presence. Falls back to the
 // /presence route on a bridge that predates /photo.
-export async function fetchBridgePhoto(jid: string): Promise<{ photoUrl: string | null; limited: boolean }> {
-  if (!bridgeConfigured()) return { photoUrl: null, limited: false };
+export async function fetchBridgePhoto(jid: string, account: WhatsappAccountId = DEFAULT_ACCOUNT): Promise<{ photoUrl: string | null; limited: boolean }> {
+  if (!bridgeConfigured(account)) return { photoUrl: null, limited: false };
   try {
-    const upstream = await bridgeFetch(`/photo?${new URLSearchParams({ jid })}`);
+    const upstream = await bridgeFetch(`/photo?${new URLSearchParams({ jid })}`, {}, account);
     const payload = await upstream.json().catch(() => null) as { photoUrl?: string | null; limited?: boolean } | null;
     // limited: the bridge's per-minute lookup cap was hit; ask again later.
     return { photoUrl: payload?.photoUrl ?? null, limited: Boolean(payload?.limited) };
@@ -113,8 +113,8 @@ export async function fetchBridgePhoto(jid: string): Promise<{ photoUrl: string 
 
 // Pairing QR (data URL) while the bridge waits to be linked, plus its state.
 export async function fetchBridgeQr(account: WhatsappAccountId = DEFAULT_ACCOUNT): Promise<{ status: string; since: string | null; qr: string | null } | null> {
-  if (!bridgeConfigured()) return null;
-  const upstream = await bridgeFetch('/qr', { signal: AbortSignal.timeout(8_000) });
+  if (!bridgeConfigured(account)) return null;
+  const upstream = await bridgeFetch('/qr', { signal: AbortSignal.timeout(8_000) }, account);
   if (!upstream.ok) return null;
   return upstream.json() as Promise<{ status: string; since: string | null; qr: string | null }>;
 }
