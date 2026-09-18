@@ -29,6 +29,10 @@ declare namespace Cloudflare {
     // When set, the send route uses the bridge instead of the Graph API.
     WHATSAPP_BRIDGE_URL?: string;
     WHATSAPP_BRIDGE_SECRET?: string;
+    // Segunda conta ("Whatsapp Caju"): outra instância do bridge, com a sessão
+    // de outro número. Sem estas, a conta aparece na tela como não configurada.
+    WHATSAPP_BRIDGE_URL_CAJU?: string;
+    WHATSAPP_BRIDGE_SECRET_CAJU?: string;
     // JSON [{ name, phone }] of people added to every new WhatsApp group
     // (lib/whatsapp-group-name.ts). Secret: the repository is public.
     WHATSAPP_GROUP_DEFAULT_PARTICIPANTS?: string;

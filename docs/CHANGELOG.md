@@ -11,6 +11,38 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Segundo WhatsApp: a fundação
+
+Pedido: um segundo número, "Whatsapp Caju", com caixa de entrada própria — as
+conversas dos dois separadas por aba, para a resposta nunca sair pelo número
+errado.
+
+O sistema nasceu com um número só, e as conversas nem guardavam de qual conta
+vinham. Esta é a primeira parte: o banco e o servidor passam a saber que existe
+mais de uma conta. **Nada muda na tela ainda** — o número atual continua
+funcionando igual.
+
+- `lib/whatsapp-accounts.ts` (puro): as duas contas, com `principal` sendo a
+  que já existe. Conta desconhecida vinda do cliente vira a principal, nunca um
+  erro de tela.
+- `drizzle/0035_whatsapp_accounts.sql`: coluna `account` em
+  `whatsapp_conversations` e `whatsapp_messages`, com índices por conta e data.
+  **Tudo que já existe fica como `principal`**, então nenhuma conversa muda de
+  dono.
+- `lib/server/whatsapp-bridge.ts`: `bridgeFetch` e `bridgeConfigured` recebem a
+  conta e escolhem a instância. A principal segue nas variáveis de sempre; a
+  nova usa `WHATSAPP_BRIDGE_URL_CAJU` e `WHATSAPP_BRIDGE_SECRET_CAJU`.
+- `whatsapp-bridge/fly.caju.toml`: a configuração da segunda instância, com os
+  comandos de criação no cabeçalho. **Duas sessões do Baileys não cabem no
+  mesmo volume** — cada uma derruba a outra —, então são máquina e volume
+  próprios.
+- `tests/whatsapp-accounts.test.ts`: 3 testes.
+
+**Pendente:** rodar `npm run db:migrate:remote`, subir a segunda instância do
+bridge e gravar os dois secrets. Depois disso vem a segunda parte: as abas na
+caixa de entrada e o painel de QR da conta nova.
+
+
 ### Primeira visita: R$ 120, e não se altera
 
 Regra informada pela operação. A tela de finanças deixava editar as duas

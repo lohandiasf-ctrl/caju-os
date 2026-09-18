@@ -6,6 +6,7 @@ import { canUseWhatsapp, WHATSAPP_ROLES } from '@/lib/navigation';
 import { roleLabels, type UserRole } from '@/lib/permissions';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
+import { DEFAULT_ACCOUNT, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
 
 export async function senderLabelFor(user: { email: string; role: UserRole }) {
   const presence = await getDb().select({ displayName: employeePresence.displayName })
@@ -25,17 +26,31 @@ export async function requireWhatsappUser(request: Request) {
   return current;
 }
 
-export function bridgeConfigured() {
-  return Boolean(env.WHATSAPP_BRIDGE_URL && env.WHATSAPP_BRIDGE_SECRET);
+// Cada conta tem seu bridge: são duas instâncias, cada uma com a sessão de um
+// número. A conta nova usa as variáveis com sufixo, e a principal segue com os
+// nomes de sempre — assim o que já está no ar não muda de configuração.
+function bridgeCredentials(account: WhatsappAccountId = DEFAULT_ACCOUNT) {
+  const suffix = account === DEFAULT_ACCOUNT ? '' : `_${account.toUpperCase()}`;
+  const config = env as unknown as Record<string, string | undefined>;
+  return {
+    url: config[`WHATSAPP_BRIDGE_URL${suffix}`]?.trim(),
+    secret: config[`WHATSAPP_BRIDGE_SECRET${suffix}`]?.trim(),
+  };
 }
 
-export async function bridgeFetch(path: string, init: RequestInit = {}) {
-  if (!bridgeConfigured()) {
-    throw Response.json({ error: 'O bridge do WhatsApp não está configurado.' }, { status: 503 });
+export function bridgeConfigured(account: WhatsappAccountId = DEFAULT_ACCOUNT) {
+  const { url, secret } = bridgeCredentials(account);
+  return Boolean(url && secret);
+}
+
+export async function bridgeFetch(path: string, init: RequestInit = {}, account: WhatsappAccountId = DEFAULT_ACCOUNT) {
+  const { url, secret } = bridgeCredentials(account);
+  if (!url || !secret) {
+    throw Response.json({ error: 'O bridge deste WhatsApp não está configurado.' }, { status: 503 });
   }
   const headers = new Headers(init.headers);
-  headers.set('x-bridge-secret', env.WHATSAPP_BRIDGE_SECRET!);
-  return fetch(`${env.WHATSAPP_BRIDGE_URL}${path}`, { ...init, headers });
+  headers.set('x-bridge-secret', secret);
+  return fetch(`${url}${path}`, { ...init, headers });
 }
 
 // Contact's typing/recording/online state and profile photo. Best-effort:

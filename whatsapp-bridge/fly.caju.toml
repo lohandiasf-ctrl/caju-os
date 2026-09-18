@@ -1,0 +1,64 @@
+# Segunda conta de WhatsApp ("Whatsapp Caju").
+#
+# Mesmo código do bridge, outra máquina e outro volume: cada sessão do Baileys
+# precisa da sua própria pasta `auth`, e duas sessões no mesmo volume derrubam
+# uma à outra.
+#
+# Subir:
+#   cd whatsapp-bridge
+#   fly apps create caju-whatsapp-bridge-caju
+#   fly volumes create whatsapp_bridge_auth_caju --size 1 --region gru -a caju-whatsapp-bridge-caju
+#   fly secrets set BRIDGE_SECRET=<novo segredo> -a caju-whatsapp-bridge-caju
+#   fly deploy -c fly.caju.toml
+#
+# Depois, no Worker do Caju OS:
+#   wrangler secret put WHATSAPP_BRIDGE_URL_CAJU --name caju-os
+#   wrangler secret put WHATSAPP_BRIDGE_SECRET_CAJU --name caju-os
+#
+# fly.toml app configuration file generated for caju-whatsapp-bridge on 2026-09-14T23:24:05-03:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'caju-whatsapp-bridge-caju'
+primary_region = 'gru'
+
+[build]
+[env]
+  PORT = '3300'
+
+[[mounts]]
+  source = 'whatsapp_bridge_auth_caju'
+  destination = '/app/auth'
+
+[http_service]
+  internal_port = 3300
+  force_https = true
+  # Must stay always on: Baileys holds a persistent WebSocket to WhatsApp,
+  # stopping the machine on idle would drop the session and lose incoming
+  # messages until the next HTTP request woke it back up.
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[services]]
+  protocol = 'tcp'
+  internal_port = 3300
+
+  [[services.ports]]
+    port = 443
+    handlers = ['tls', 'http']
+
+  [[services.ports]]
+    port = 80
+    handlers = ['http']
+
+  [services.concurrency]
+    type = 'connections'
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
