@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickModel, rankModels, type ModelInfo } from '../lib/gemini-models.ts';
+import { fallbackQueue, pickModel, rankModels, type ModelInfo } from '../lib/gemini-models.ts';
 
 const chat = (name: string): ModelInfo => ({ name, supportedGenerationMethods: ['generateContent', 'countTokens'] });
 
@@ -92,4 +92,33 @@ test('a fila de modelos sai inteira e em ordem', () => {
 
 test('sem nada utilizável a fila vem vazia', () => {
   assert.deepEqual(rankModels([chat('models/gemini-2.5-flash-image')]), []);
+});
+
+// Em produção a fila saiu `gemini-3.8-flash, gemini-3.7-flash,
+// gemini-3.6-flash`: três versões do mesmo modelo. Flash lotado significa as
+// três lotadas, então as tentativas extras só custaram espera.
+test('a fila de tentativas pega um modelo de cada porte', () => {
+  const fila = fallbackQueue([
+    chat('models/gemini-3.8-flash'),
+    chat('models/gemini-3.7-flash'),
+    chat('models/gemini-3.6-flash'),
+    chat('models/gemini-3.8-flash-lite'),
+    chat('models/gemini-3.8-pro'),
+  ]);
+  assert.deepEqual(fila, ['gemini-3.8-flash', 'gemini-3.8-flash-lite', 'gemini-3.8-pro']);
+});
+
+test('com um porte só, a fila completa com as outras versões', () => {
+  assert.deepEqual(fallbackQueue([
+    chat('models/gemini-3.8-flash'),
+    chat('models/gemini-3.7-flash'),
+    chat('models/gemini-3.6-flash'),
+  ]), ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash']);
+});
+
+test('a fila respeita o teto e nunca repete', () => {
+  const fila = fallbackQueue([chat('models/gemini-3.8-flash'), chat('models/gemini-3.8-flash-lite'), chat('models/gemini-3.8-pro')], 2);
+  assert.equal(fila.length, 2);
+  assert.equal(new Set(fila).size, 2);
+  assert.deepEqual(fallbackQueue([]), []);
 });

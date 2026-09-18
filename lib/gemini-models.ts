@@ -59,3 +59,32 @@ export function rankModels(models: ModelInfo[]): string[] {
 export function pickModel(models: ModelInfo[]): string | null {
   return rankModels(models)[0] ?? null;
 }
+
+// A fila de tentativas, com um modelo de cada porte.
+//
+// A primeira versão pegava os três primeiros da ordem, e em produção isso deu
+// `gemini-3.8-flash, gemini-3.7-flash, gemini-3.6-flash`: três versões do
+// mesmo modelo. Quando o flash está lotado, todas as versões dele estão — as
+// duas tentativas extras só custaram espera. Cair para um porte diferente
+// (lite, pro) tem chance de verdade, porque a cota do plano gratuito é por
+// modelo.
+export function fallbackQueue(models: ModelInfo[], limit = 3): string[] {
+  const ranked = rankModels(models);
+  const queue: string[] = [];
+  const taken = new Set<number>();
+  for (const name of ranked) {
+    const tier = rank(name);
+    if (taken.has(tier)) continue;
+    taken.add(tier);
+    queue.push(name);
+    if (queue.length === limit) return queue;
+  }
+  // Sobrou espaço: completa com os melhores que ficaram de fora, para não
+  // desistir com uma fila de um só quando a chave tem um porte apenas.
+  for (const name of ranked) {
+    if (queue.includes(name)) continue;
+    queue.push(name);
+    if (queue.length === limit) break;
+  }
+  return queue;
+}
