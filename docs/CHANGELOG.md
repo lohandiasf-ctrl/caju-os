@@ -11,6 +11,31 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### "Pesquisar operação" vira conversa com o assistente
+
+A caixa da Visão geral respondia por padrões escritos à mão
+(`answerOperationalQuestion`): entendia "quantos chamados tem para amanhã" e
+pouco mais. Agora é uma conversa com o assistente geral, que consulta o
+sistema.
+
+- `components/operation-chat.tsx`: histórico de perguntas e respostas, envio
+  por Enter, rolagem automática, sugestões, e as FSAs da resposta como link que
+  abre o chamado. Mostra quais consultas o assistente fez.
+- O painel da direita continua: os chamados **citados na resposta** viram lista
+  com seleção, que é de onde saem as ações em lote. Quando a resposta cita um
+  chamado fora da lista carregada, a tela diz isso em vez de sumir com ele.
+- Pergunta de seguimento funciona ("e desses, quais são de Itabuna?"): a rota
+  passa a aceitar a conversa anterior. `cleanHistory()` corta o que vem do
+  cliente — seis turnos, 1200 caracteres cada, e papel desconhecido vira
+  `user`, nunca instrução de sistema.
+- `app/page.tsx`: 219 linhas a menos. A busca por padrões e o tipo dela saíram
+  junto, em vez de virar código morto.
+- `tests/assistant-tools.test.ts`: 3 testes novos.
+
+**Não verificado na tela:** o `npm run dev` não sobe nesta máquina (fica em
+"Establishing remote connection"), então a conversa só foi exercitada pela API.
+O comportamento visual precisa de uma passada em produção.
+
 ### Assistente geral validado em produção
 
 Depois de quatro correções, o assistente respondeu — e as respostas foram
