@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
+import { FIRST_VISIT_CENTS, payoutCents } from '@/lib/finance-rules';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { CajuLoading } from '@/components/caju-loading';
@@ -36,8 +37,8 @@ const compactMoney = (value: number) => new Intl.NumberFormat('pt-BR', { notatio
 export default function FinanceiroPage() {
   const { user } = useAuth();
   const [issues, setIssues] = useState<FinancialIssue[]>([]);
-  const [rule, setRule] = useState<PayoutRule>({ firstTicketCents: 7000, additionalTicketCents: 7000 });
-  const [firstRate, setFirstRate] = useState('70,00');
+  const [rule, setRule] = useState<PayoutRule>({ firstTicketCents: FIRST_VISIT_CENTS, additionalTicketCents: 7000 });
+  
   const [additionalRate, setAdditionalRate] = useState('70,00');
   const [period, setPeriod] = useState<7 | 30 | 90>(30);
   const [query, setQuery] = useState('');
@@ -57,7 +58,7 @@ export default function FinanceiroPage() {
       try {
         const parsed = JSON.parse(cached) as { at: number; issues: FinancialIssue[]; rule: PayoutRule };
         if (Date.now() - parsed.at < 10 * 60_000) {
-          setIssues(parsed.issues); setRule(parsed.rule); setFirstRate(formatRate(parsed.rule.firstTicketCents)); setAdditionalRate(formatRate(parsed.rule.additionalTicketCents)); setLoading(false);
+          setIssues(parsed.issues); setRule(parsed.rule); setAdditionalRate(formatRate(parsed.rule.additionalTicketCents)); setLoading(false);
           return () => { active = false; };
         }
       } catch { sessionStorage.removeItem('caju-finance-cache'); }
@@ -78,7 +79,6 @@ export default function FinanceiroPage() {
       const nextRule = { firstTicketCents: rulePayload.firstTicketCents, additionalTicketCents: rulePayload.additionalTicketCents };
       setIssues(financePayload.issues ?? []);
       setRule(nextRule);
-      setFirstRate(formatRate(nextRule.firstTicketCents));
       setAdditionalRate(formatRate(nextRule.additionalTicketCents));
       sessionStorage.setItem('caju-finance-cache', JSON.stringify({ at: Date.now(), issues: financePayload.issues ?? [], rule: nextRule }));
     }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Falha ao carregar financeiro.'); })
@@ -113,10 +113,9 @@ export default function FinanceiroPage() {
 
   async function saveRule() {
     if (!user) return;
-    const firstTicketCents = parseRate(firstRate);
     const additionalTicketCents = parseRate(additionalRate);
-    if (firstTicketCents === null || additionalTicketCents === null) {
-      setMessage('Informe valores válidos.');
+    if (additionalTicketCents === null) {
+      setMessage('Informe um valor válido.');
       return;
     }
     setSaving(true);
@@ -126,7 +125,7 @@ export default function FinanceiroPage() {
       const response = await fetch('/api/finance/rules', {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ firstTicketCents, additionalTicketCents }),
+        body: JSON.stringify({ additionalTicketCents }),
       });
       const payload = await response.json() as PayoutRule & { error?: string };
       if (!response.ok) throw new Error(payload.error || 'Falha ao salvar regra.');
@@ -170,7 +169,7 @@ export default function FinanceiroPage() {
           </div>
           <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,.7fr)]">
             <article className="surface-panel min-w-0 rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-bold">Faturamento e repasses</h2><p className="mt-1 text-xs text-muted-foreground">Últimos 6 meses, em reais</p></div><Badge variant="outline"><CalendarDays />6 meses</Badge></div><ChartContainer className="mt-5 h-[260px] min-w-0 w-full" config={{ revenue: { label: 'Faturamento', color: 'var(--chart-3)' }, payout: { label: 'Repasses', color: 'var(--chart-1)' } }}><BarChart data={monthly} barGap={5}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="month" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} tickFormatter={(value) => compactMoney(Number(value))} width={70} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => money(Number(value))} />} /><Bar dataKey="revenue" fill="var(--color-revenue)" radius={[5, 5, 0, 0]} /><Bar dataKey="payout" fill="var(--color-payout)" radius={[5, 5, 0, 0]} /></BarChart></ChartContainer></article>
-            <article id="repasses" className="surface-panel scroll-mt-24 rounded-2xl p-5"><h2 className="text-sm font-bold">Regra de repasse</h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Valor pago ao mesmo técnico no período. Primeiro chamado usa primeira faixa; demais usam segunda.</p><div className="mt-5 grid gap-4"><RateInput label="1º chamado" value={firstRate} onChange={setFirstRate} /><RateInput label="2º chamado em diante" value={additionalRate} onChange={setAdditionalRate} /></div><Button className="mt-5 w-full" onClick={() => void saveRule()} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Save />}Salvar regra</Button>{message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}<div className="mt-5 rounded-xl border border-violet-400/20 bg-violet-400/8 p-4"><p className="text-xs text-muted-foreground">Repasse calculado no período</p><p className="mt-1 text-xl font-bold">{money(payout)}</p></div></article>
+            <article id="repasses" className="surface-panel scroll-mt-24 rounded-2xl p-5"><h2 className="text-sm font-bold">Regra de repasse</h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Valor pago ao mesmo técnico no período. A primeira visita é o valor base da operação; o 2º chamado em diante é configurável.</p><div className="mt-5 grid gap-4"><div className="rounded-xl border border-border bg-background/60 p-3"><p className="text-xs font-semibold text-muted-foreground">1ª visita · valor base</p><p className="mt-1 text-lg font-bold tabular-nums">{money(FIRST_VISIT_CENTS / 100)}</p><p className="mt-1 text-[11px] text-muted-foreground">Fixo, não editável.</p></div><RateInput label="2º chamado em diante" value={additionalRate} onChange={setAdditionalRate} /></div><Button className="mt-5 w-full" onClick={() => void saveRule()} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Save />}Salvar regra</Button>{message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}<div className="mt-5 rounded-xl border border-violet-400/20 bg-violet-400/8 p-4"><p className="text-xs text-muted-foreground">Repasse calculado no período</p><p className="mt-1 text-xl font-bold">{money(payout)}</p></div></article>
           </div>
           <article id="receita-tecnicos" className="surface-panel mt-6 scroll-mt-24 overflow-hidden rounded-2xl"><div className="border-b border-border p-5"><h2 className="text-sm font-bold">Receita gerada por técnico</h2><p className="mt-1 text-xs text-muted-foreground">Total dos tickets, repasse calculado e margem para Caju.</p></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Técnico</TableHead><TableHead className="text-right">Chamados</TableHead><TableHead className="text-right">Receita</TableHead><TableHead className="text-right">Repasse</TableHead><TableHead className="text-right">Margem Caju</TableHead></TableRow></TableHeader><TableBody>{visibleTechnicians.map((technician) => <TableRow key={technician.name}><TableCell className="font-semibold">{technician.name}</TableCell><TableCell className="text-right tabular-nums">{technician.tickets}</TableCell><TableCell className="text-right font-mono">{money(technician.revenue)}</TableCell><TableCell className="text-right font-mono">{money(technician.payout)}</TableCell><TableCell className={`text-right font-mono font-bold ${technician.margin >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{money(technician.margin)}</TableCell></TableRow>)}</TableBody></Table></div>{!technicians.length && <Empty label="Nenhuma receita encontrada no período." />}{technicians.length > 25 && <div className="flex justify-center border-t border-border p-3"><Button size="sm" variant="ghost" onClick={() => setShowAllTechnicians((value) => !value)}>{showAllTechnicians ? 'Mostrar menos' : `Ver todos os ${technicians.length} técnicos`}</Button></div>}</article>
           <article className="surface-panel mt-6 min-w-0 overflow-hidden rounded-2xl"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center"><div className="mr-auto"><h2 className="text-sm font-bold">Composição dos tickets</h2><p className="mt-1 text-xs text-muted-foreground">Serviço e spare sem dupla contagem.</p></div><div className="relative w-full sm:w-80"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} aria-label="Buscar chamado, técnico ou loja" placeholder="Buscar chamado, técnico ou loja..." className="pl-9" /></div></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Chamado</TableHead><TableHead>Técnico / local</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Serviço</TableHead><TableHead className="text-right">Spare</TableHead><TableHead className="text-right">Total ticket</TableHead></TableRow></TableHeader><TableBody>{visibleRows.map((issue) => <TableRow key={issue.key}><TableCell><p className="font-mono text-xs font-bold text-primary">{issue.key}</p><p className="mt-1 max-w-72 truncate text-xs text-muted-foreground">{issue.title}</p></TableCell><TableCell><p className="font-semibold">{issue.technician}</p><p className="text-[11px] text-muted-foreground">{issue.store} · {issue.city}</p></TableCell><TableCell><Badge variant="outline">{issue.status}</Badge></TableCell><TableCell className="text-right font-mono">{money(issue.serviceValue)}</TableCell><TableCell className="text-right font-mono">{money(issue.spareValue)}</TableCell><TableCell className="text-right font-mono font-bold">{money(issue.totalValue)}</TableCell></TableRow>)}</TableBody></Table></div>{!rows.length && <Empty label="Nenhum ticket financeiro encontrado." />}<div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4 text-xs text-muted-foreground"><span>{rows.length} tickets · página {safePage} de {pageCount}</span>{pageCount > 1 && <div className="flex gap-2"><Button size="sm" variant="outline" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Anterior</Button><Button size="sm" variant="outline" disabled={safePage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Próxima</Button></div>}</div></article>
@@ -189,7 +188,7 @@ function groupTechnicians(issues: FinancialIssue[], rule: PayoutRule): Technicia
     grouped.set(issue.technician, current);
   }
   return Array.from(grouped, ([name, data]) => {
-    const payout = (data.tickets ? rule.firstTicketCents : 0) / 100 + Math.max(0, data.tickets - 1) * rule.additionalTicketCents / 100;
+    const payout = payoutCents(data.tickets, rule.additionalTicketCents) / 100;
     return { name, ...data, payout, margin: data.revenue - payout };
   }).sort((a, b) => b.revenue - a.revenue);
 }

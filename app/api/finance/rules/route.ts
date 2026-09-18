@@ -2,12 +2,15 @@ import { eq } from 'drizzle-orm';
 import { financeSettings } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
+import { FIRST_VISIT_CENTS } from '@/lib/finance-rules';
 
 export async function GET(request: Request) {
   try {
     await requireApiUser(request, ['gerencia']);
     const rule = await getDb().select().from(financeSettings).where(eq(financeSettings.key, 'default')).get();
-    return Response.json(rule ?? { key: 'default', firstTicketCents: 7000, additionalTicketCents: 7000 });
+    // A primeira visita é valor base da operação, não configuração: o que
+    // estiver gravado não muda isso.
+    return Response.json({ ...(rule ?? { key: 'default', additionalTicketCents: 7000 }), firstTicketCents: FIRST_VISIT_CENTS });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: 'Falha ao carregar regra de repasse.' }, { status: 500 });
@@ -17,12 +20,13 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const user = await requireApiUser(request, ['gerencia']);
-    const body = await request.json() as { firstTicketCents?: unknown; additionalTicketCents?: unknown };
-    const firstTicketCents = validCents(body.firstTicketCents);
+    const body = await request.json() as { additionalTicketCents?: unknown };
     const additionalTicketCents = validCents(body.additionalTicketCents);
-    if (firstTicketCents === null || additionalTicketCents === null) {
-      return Response.json({ error: 'Informe valores válidos entre R$ 0 e R$ 10.000.' }, { status: 400 });
+    if (additionalTicketCents === null) {
+      return Response.json({ error: 'Informe um valor válido entre R$ 0 e R$ 10.000.' }, { status: 400 });
     }
+    // Venha o que vier do cliente, a primeira visita continua a mesma.
+    const firstTicketCents = FIRST_VISIT_CENTS;
     const updatedAt = new Date().toISOString();
     await getDb().insert(financeSettings).values({ key: 'default', firstTicketCents, additionalTicketCents, updatedBy: user.uid, updatedAt }).onConflictDoUpdate({
       target: financeSettings.key,
