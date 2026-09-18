@@ -6,7 +6,7 @@ import { canUseWhatsapp, WHATSAPP_ROLES } from '@/lib/navigation';
 import { roleLabels, type UserRole } from '@/lib/permissions';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
-import { DEFAULT_ACCOUNT, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
+import { DEFAULT_ACCOUNT, WHATSAPP_ACCOUNTS, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
 
 export async function senderLabelFor(user: { email: string; role: UserRole }) {
   const presence = await getDb().select({ displayName: employeePresence.displayName })
@@ -38,6 +38,18 @@ function bridgeCredentials(account: WhatsappAccountId = DEFAULT_ACCOUNT) {
   };
 }
 
+// De qual número veio a chamada. Cada bridge tem o seu segredo, então ele já
+// diz quem está falando — não é preciso o bridge saber a própria identidade
+// nem mudar o código dele.
+export function accountFromSecret(secret: string | null): WhatsappAccountId | null {
+  if (!secret) return null;
+  for (const account of WHATSAPP_ACCOUNTS) {
+    const known = bridgeCredentials(account.id).secret;
+    if (known && known === secret) return account.id;
+  }
+  return null;
+}
+
 export function bridgeConfigured(account: WhatsappAccountId = DEFAULT_ACCOUNT) {
   const { url, secret } = bridgeCredentials(account);
   return Boolean(url && secret);
@@ -55,7 +67,7 @@ export async function bridgeFetch(path: string, init: RequestInit = {}, account:
 
 // Contact's typing/recording/online state and profile photo. Best-effort:
 // any bridge failure reads as "no information".
-export async function fetchBridgePresence(jid: string): Promise<{ state: string | null; photoUrl: string | null }> {
+export async function fetchBridgePresence(jid: string, account: WhatsappAccountId = DEFAULT_ACCOUNT): Promise<{ state: string | null; photoUrl: string | null }> {
   if (!bridgeConfigured()) return { state: null, photoUrl: null };
   try {
     const upstream = await bridgeFetch(`/presence?${new URLSearchParams({ jid })}`);
@@ -70,7 +82,7 @@ export type BridgeHealth = { status: 'open' | 'connecting' | 'qr' | 'logged_out'
 
 // WhatsApp session state, so the inbox can warn when messages stop arriving.
 // null means "unknown" (bridge not configured, or a bridge without /status).
-export async function fetchBridgeHealth(): Promise<BridgeHealth | null> {
+export async function fetchBridgeHealth(account: WhatsappAccountId = DEFAULT_ACCOUNT): Promise<BridgeHealth | null> {
   if (!bridgeConfigured()) return null;
   try {
     const upstream = await bridgeFetch('/status', { signal: AbortSignal.timeout(4_000) });
@@ -100,7 +112,7 @@ export async function fetchBridgePhoto(jid: string): Promise<{ photoUrl: string 
 }
 
 // Pairing QR (data URL) while the bridge waits to be linked, plus its state.
-export async function fetchBridgeQr(): Promise<{ status: string; since: string | null; qr: string | null } | null> {
+export async function fetchBridgeQr(account: WhatsappAccountId = DEFAULT_ACCOUNT): Promise<{ status: string; since: string | null; qr: string | null } | null> {
   if (!bridgeConfigured()) return null;
   const upstream = await bridgeFetch('/qr', { signal: AbortSignal.timeout(8_000) });
   if (!upstream.ok) return null;
@@ -108,17 +120,21 @@ export async function fetchBridgeQr(): Promise<{ status: string; since: string |
 }
 
 export async function recordOutgoing(row: {
+  account?: WhatsappAccountId;
   wamid: string; phoneNumberId: string; contactPhone: string; messageType: string;
   body: string | null; mediaId: string | null; senderEmail: string;
 }) {
+  const account = row.account ?? DEFAULT_ACCOUNT;
   const now = new Date().toISOString();
   const db = getDb();
   // The bridge may already have stored this wamid from its own echo of the
   // sent message (with the signature line in the body); keep that row, but
   // store the unsigned body since the inbox shows the sender separately.
   await db.insert(whatsappMessages).values({
-    ...row, contactName: null, direction: 'outgoing', deliveryStatus: null, occurredAt: now, createdAt: now,
+    ...row, account, contactName: null, direction: 'outgoing', deliveryStatus: null, occurredAt: now, createdAt: now,
   }).onConflictDoUpdate({ target: whatsappMessages.wamid, set: { senderEmail: row.senderEmail, mediaId: row.mediaId, body: row.body } });
-  await db.insert(whatsappConversations).values({ contactPhone: row.contactPhone, lastMessageAt: now, createdAt: now, updatedAt: now })
-    .onConflictDoUpdate({ target: whatsappConversations.contactPhone, set: { lastMessageAt: now, updatedAt: now } });
+  // A conversa é identificada por conta + contato desde que existe um segundo
+  // número; o mesmo contato pode ter conversa nos dois.
+  await db.insert(whatsappConversations).values({ account, contactPhone: row.contactPhone, lastMessageAt: now, createdAt: now, updatedAt: now })
+    .onConflictDoUpdate({ target: [whatsappConversations.account, whatsappConversations.contactPhone], set: { lastMessageAt: now, updatedAt: now } });
 }

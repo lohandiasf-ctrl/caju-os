@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { fetchBridgeHealth, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
+import { toWhatsappAccount } from '@/lib/whatsapp-accounts';
 
 type Row = {
   contact_phone: string; contact_name: string | null; ticket_key: string | null; assigned_to: string | null;
@@ -14,22 +15,25 @@ const LIST_SQL = `
   SELECT c.*,
     lm.body AS last_body, lm.direction AS last_direction, lm.occurred_at AS last_occurred_at, lm.message_type AS last_message_type,
     (SELECT COUNT(*) FROM whatsapp_messages u
-      WHERE u.contact_phone = c.contact_phone AND u.direction = 'incoming'
+      WHERE u.account = c.account AND u.contact_phone = c.contact_phone AND u.direction = 'incoming'
         AND (c.last_read_at IS NULL OR u.occurred_at > c.last_read_at)) AS unread
-  FROM (SELECT * FROM whatsapp_conversations ORDER BY last_message_at DESC LIMIT 200) c
+  FROM (SELECT * FROM whatsapp_conversations WHERE account = ? ORDER BY last_message_at DESC LIMIT 200) c
   LEFT JOIN whatsapp_messages lm ON lm.id = (
     SELECT m.id FROM whatsapp_messages m
-    WHERE m.contact_phone = c.contact_phone AND m.direction IN ('incoming', 'outgoing')
+    WHERE m.account = c.account AND m.contact_phone = c.contact_phone AND m.direction IN ('incoming', 'outgoing')
     ORDER BY m.id DESC LIMIT 1)
   ORDER BY c.last_message_at DESC`;
 
 export async function GET(request: Request) {
   try {
     await requireWhatsappUser(request);
+    // Cada número tem sua caixa: a lista e a saúde do bridge são da conta que
+    // a tela está mostrando.
+    const account = toWhatsappAccount(new URL(request.url).searchParams.get('account'));
     // Bridge health rides on the list poll instead of costing its own request.
     const [{ results }, bridge] = await Promise.all([
-      env.DB.prepare(LIST_SQL).all<Row>(),
-      fetchBridgeHealth(),
+      env.DB.prepare(LIST_SQL).bind(account).all<Row>(),
+      fetchBridgeHealth(account),
     ]);
     const conversations = results.map((row) => ({
       contactPhone: row.contact_phone, contactName: row.contact_name, ticketKey: row.ticket_key, assignedTo: row.assigned_to,
@@ -37,7 +41,7 @@ export async function GET(request: Request) {
       lastMessage: row.last_occurred_at ? { body: row.last_body, direction: row.last_direction, occurredAt: row.last_occurred_at, messageType: row.last_message_type } : null,
       unread: Number(row.unread) || 0,
     }));
-    return Response.json({ conversations, bridge }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ conversations, bridge, account }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     console.error('Falha ao listar conversas do WhatsApp', error);

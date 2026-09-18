@@ -11,6 +11,33 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Segundo WhatsApp: as abas e o QR
+
+Segunda parte. Agora a caixa de entrada tem uma aba por número, e o QR do
+número novo aparece na aba dele — é só escanear.
+
+- `components/whatsapp-inbox.tsx`: abas no topo da lista. Trocar de aba fecha a
+  conversa aberta, porque ela pertence ao número anterior; todas as chamadas da
+  conversa (mensagens, envio, mídia, presença, evidência) levam a conta.
+- `app/api/whatsapp/bridge-webhook/route.ts`: a mensagem que chega é gravada
+  com a conta certa. **O segredo do bridge é que diz de quem é** — cada
+  instância tem o seu, então o bridge não precisou mudar nem saber a própria
+  identidade.
+- `app/api/whatsapp/connection/route.ts`: QR e reinício de sessão por conta.
+- Lista, mensagens, detalhe e envio passaram a filtrar por conta. Sem conta na
+  chamada, tudo cai na principal — o número atual não muda de comportamento.
+- `drizzle/0036_whatsapp_conversation_account_key.sql`: a conversa passa a ser
+  identificada por **conta + contato**. Com a chave só no telefone, o mesmo
+  contato falando com os dois números viraria uma conversa só, e a segunda
+  sobrescreveria a conta da primeira. SQLite não altera chave primária, então a
+  tabela é recriada com o conteúdo copiado.
+
+**Pendente:** rodar `npm run db:migrate:remote`, subir a segunda instância do
+bridge (`whatsapp-bridge/fly.caju.toml`) e gravar `WHATSAPP_BRIDGE_URL_CAJU` e
+`WHATSAPP_BRIDGE_SECRET_CAJU` no Worker. Feito isso, a aba "WhatsApp Caju"
+mostra o QR.
+
+
 ### Segundo WhatsApp: a fundação
 
 Pedido: um segundo número, "Whatsapp Caju", com caixa de entrada própria — as
