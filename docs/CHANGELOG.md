@@ -13,6 +13,18 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ### Pedir o agendamento pelo chat — o assistente prepara, a pessoa confirma
 
+**Verificado em produção (18/09):**
+
+| Teste | Resultado |
+|---|---|
+| agendar as FSAs que estão em campo | recusou com o motivo certo e apontou a tela do Caju OS |
+| agendar 3 pendentes para "amanhã às 15:50" | o botão apareceu e o diálogo abriu com 19/09 15:50 e as FSAs certas |
+| quais FSAs têm grupo no WhatsApp | FSA-132505 e FSA-132416, pela consulta de atendimentos |
+| última mensagem do WhatsApp | `2026-09-18 00:07`, no fuso da operação |
+
+O diálogo foi fechado sem confirmar: nada entrou no Jira.
+
+
 Pedido: "agende esses chamados para amanhã às 15:50", com onze FSAs coladas.
 Selecionar onze chamados na mão é o trabalho que o chat pode poupar; agendar
 por conta própria é outra coisa, e continua fora — agendar exige um técnico, e
