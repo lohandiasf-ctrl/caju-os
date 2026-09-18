@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COVERAGE_RADIUS_KM, coverageFor, coverageText, distanceKm, type CoverageTechnician } from '../lib/coverage.ts';
+import { COVERAGE_RADIUS_KM, coverageFor, coverageText, distanceKm, parseDirectory, type CoverageTechnician } from '../lib/coverage.ts';
+import { readFileSync } from 'node:fs';
 
 // Coordenadas reais, para a distância ser conferível fora do teste.
 const JACANA = { city: 'Jaçanã', uf: 'RN', lat: -6.4147, lng: -35.9967 };
@@ -83,4 +84,27 @@ test('lista longa é cortada, com a conta do que sobrou', () => {
 
 test('o raio da operação é o mesmo da tela', () => {
   assert.equal(COVERAGE_RADIUS_KM, 55);
+});
+
+// O arquivo é `window.TECHNICIAN_DIRECTORY=[...]`, e o servidor o lê embutido
+// no bundle. Buscá-lo pela rede na própria origem deu HTTP 524 em produção: no
+// Cloudflare, o Worker que chama a própria rota espera por si mesmo.
+test('o diretório de técnicos é lido do formato de script', () => {
+  const rows = parseDirectory('window.TECHNICIAN_DIRECTORY=[{"name":"Ana","city":"Recife","uf":"PE","lat":-8.05,"lng":-34.9,"vehicle":true}];');
+  assert.deepEqual(rows, [{ name: 'Ana', city: 'Recife', uf: 'PE', lat: -8.05, lng: -34.9, vehicle: true }]);
+});
+
+test('linha sem nome ou sem coordenada é descartada, e lixo não quebra', () => {
+  const rows = parseDirectory('window.X=[{"name":"Ok","city":"A","uf":"PE","lat":-8,"lng":-34},{"city":"sem nome","lat":-8,"lng":-34},{"name":"Sem coord","city":"B","uf":"PE"}];');
+  assert.deepEqual(rows.map((row) => row.name), ['Ok']);
+  assert.deepEqual(parseDirectory('não é um diretório'), []);
+  assert.deepEqual(parseDirectory('window.X=[isso não é json];'), []);
+});
+
+// O arquivo de verdade, para o formato não mudar sem o teste perceber.
+test('o arquivo do projeto tem os técnicos com coordenada', () => {
+  const rows = parseDirectory(readFileSync('public/data/technician-directory.js', 'utf8'));
+  assert.ok(rows.length > 500, `só ${rows.length} técnicos`);
+  assert.ok(rows.every((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng)));
+  assert.ok(rows.some((row) => row.uf === 'BA'), 'tem gente na Bahia, onde a operação atende');
 });
