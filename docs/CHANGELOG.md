@@ -11,6 +11,27 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Assistente geral validado em produção
+
+Depois de quatro correções, o assistente respondeu — e as respostas foram
+conferidas contra o Jira e o banco, não aceitas pela aparência.
+
+| Pergunta | Resposta | Conferência |
+|---|---|---|
+| "quem atende em Itabuna?" | 9 técnicos | 15 registros citam Itabuna, mas são 9 pessoas: ele consolidou as repetições |
+| "quais chamados estão com técnico em campo?" | 28 chamados | o quadro também mostra 28, e as FSAs são exatamente as mesmas — nenhuma faltando, nenhuma inventada |
+| "o que aconteceu no FSA-132819?" | defeito, causa, técnico, 11 evidências | confere com o Jira: Genilson Sérgio, agendado 17/09 11:00, 11 anexos, PDV 302 lento por ter 2 GB de RAM |
+
+Na segunda pergunta, o assistente da fila respondia 22 de 30 e listava status
+que ninguém pediu. Esta é a mesma pergunta, agora exata.
+
+Respondeu no `gemini-3.5-flash-lite`: o flash estava lotado e a fila caiu de
+porte, como o ajuste anterior previa.
+
+**Achado à parte, que não é do assistente:** o cadastro de técnicos tem
+registros duplicados — "Gustavo Pereira da Costa" e "Italo Mateus Querino
+cunha" aparecem quatro vezes cada, com os mesmos dados.
+
 ### Gemini: a fila de tentativas pega um modelo de cada porte
 
 A mensagem de erro em produção mostrou a fila que o código montou:
@@ -89,7 +110,7 @@ do wrangler não fica na raiz, é gerada no build pelo `patch-wrangler.mjs`.
 wrangler secret put GEMINI_API_KEY --name caju-os
 ```
 
-**Pendente:** conferir em produção que a pergunta aberta responde.
+Conferido em produção no mesmo dia — ver a entrada "Assistente geral validado em produção".
 
 
 ### Assistente geral: pergunta aberta, consultando o sistema
