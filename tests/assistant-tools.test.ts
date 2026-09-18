@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanHistory, HISTORY_CHARS, HISTORY_TURNS, MAX_ROWS, systemInstruction, TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
+import { cleanHistory, HISTORY_CHARS, HISTORY_TURNS, MAX_ROWS, systemInstruction, toolsFor, TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
 import { buildRequest, readCandidate, toolResultContent, type GeminiPayload } from '../lib/gemini-protocol.ts';
 
 const INSTRUCTION = systemInstruction('2026-09-18', '2026-09-17');
@@ -163,4 +163,28 @@ test('a consulta de spares existe e sabe recortar a lista', () => {
   const situacao = tool!.parameters.properties.situacao as { enum?: string[] };
   assert.deepEqual(situacao.enum, ['todos', 'a_caminho', 'entregues', 'atrasados']);
   assert.ok('chamado' in tool!.parameters.properties, 'dá para perguntar pela peça de uma FSA');
+});
+
+// O WhatsApp do Caju OS é restrito a gerência, coordenação e analistas. O
+// assistente não pode virar a porta dos fundos para N1.
+test('a conversa de WhatsApp só é oferecida a quem já a vê na tela', () => {
+  const comAcesso = toolsFor(true).map((tool) => tool.name);
+  const semAcesso = toolsFor(false).map((tool) => tool.name);
+  assert.ok(comAcesso.includes('consultar_whatsapp'));
+  assert.ok(!semAcesso.includes('consultar_whatsapp'), 'quem não vê na tela não vê pelo assistente');
+  assert.equal(semAcesso.length, comAcesso.length - 1, 'só essa consulta sai; o resto continua');
+  for (const name of ['consultar_chamados', 'consultar_spares', 'resumo_operacao']) {
+    assert.ok(semAcesso.includes(name), name);
+  }
+});
+
+test('a consulta de WhatsApp avisa que é texto, e limita a janela', () => {
+  const tool = TOOL_SCHEMAS.find((item) => item.name === 'consultar_whatsapp')!;
+  assert.match(tool.description, /telefone vem mascarado/);
+  assert.ok('horas' in tool.parameters.properties, 'sem janela de tempo, a conversa inteira iria junto');
+  assert.ok('chamado' in tool.parameters.properties);
+});
+
+test('a instrução lembra que a conversa é de terceiros', () => {
+  assert.match(INSTRUCTION, /Conversa de WhatsApp é de cliente e de técnico/);
 });
