@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Três acertos vindos do uso no celular
+
+O WhatsApp entrou em produção e a operação testou. Três coisas apareceram:
+
+1. **"Quais FSAs já têm grupo criado no WhatsApp?" não tinha resposta.** O
+   grupo nasce com o atendimento (`active_attendances.whatsapp_group_name`) e
+   as FSAs ficam na tabela de tickets do atendimento; nenhuma consulta olhava
+   ali. Agora há `consultar_atendimentos`, com recorte por situação, por FSA e
+   por "só os que têm grupo".
+2. **A data saía crua e em UTC.** A última mensagem apareceu como
+   "2026-09-18T03:02:00.000Z" — três horas à frente do relógio de quem
+   perguntou. `operationDateTime()` passa qualquer instante do banco para o
+   fuso da operação; vale também para o histórico de auditoria, que tinha o
+   mesmo problema.
+3. **Ele mandou abrir o Jira para agendar** um chamado que se agenda na tela do
+   Caju OS. A instrução agora diz isso: agendar, transicionar, atribuir técnico
+   e anexar evidência se fazem aqui.
+
+
 ### O assistente passa a ler as conversas de WhatsApp
 
 Pedido depois de ele responder "não tenho acesso a mensagens de WhatsApp". A
