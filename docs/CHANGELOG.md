@@ -11,6 +11,19 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### Corrigidas as instruções do segundo bridge
+
+As instruções que deixei no `fly.caju.toml` levavam a um bridge que não sobe:
+
+- o segredo se chama `WHATSAPP_BRIDGE_SECRET`, não `BRIDGE_SECRET`;
+- faltava `CAJU_WEBHOOK_URL`, que aponta para
+  `/api/whatsapp/bridge-webhook`. O bridge **encerra na largada** sem as duas:
+  "Faltam variáveis de ambiente".
+
+Também trocado `npx wrangler` pelo caminho direto do binário, porque nesta
+máquina o `npx` esbarra na política de execução de scripts do PowerShell.
+
+
 ### As consultas ao bridge respeitavam a conta só pela metade
 
 Conferindo as abas em produção: a lista da conta nova dizia que o bridge dela
