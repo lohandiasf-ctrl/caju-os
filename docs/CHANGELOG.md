@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### O assistente passa a enxergar os spares
+
+Perguntado "quais spares já chegaram?", ele respondeu que não tinha acesso aos
+detalhes de entrega. Era verdade: o pedido da peça (`spares`) e o rastreio da
+transportadora (`shipment_tracking`) existem no banco, mas nenhuma consulta os
+alcançava — o resumo da operação só contava quantos estavam a caminho.
+
+- `lib/assistant-tools.ts`: `consultar_spares`, com recorte por chamado,
+  situação (a caminho, entregues, atrasados) e busca livre por cidade,
+  equipamento, fornecedor ou código de rastreio.
+- `lib/server/assistant-data.ts`: junta as duas tabelas, porque quem pergunta
+  "esse spare chegou?" quer o pedido e a entrega na mesma linha. A situação é
+  calculada: entregue quando a transportadora diz isso, atrasado quando a
+  previsão já passou.
+
+**Continua fora do alcance:** mensagens de WhatsApp. Expor conversa com cliente
+e técnico a um serviço externo é decisão de quem opera, não minha.
+
+
 ### O chat ganha cara de chat
 
 A caixa de pergunta era um campo de uma linha com um botão do lado — a mesma

@@ -152,3 +152,15 @@ test('a conversa anterior não cresce sem limite', () => {
 test('a instrução avisa que a conversa continua', () => {
   assert.match(INSTRUCTION, /A conversa continua/);
 });
+
+// O assistente respondeu "não tenho acesso aos detalhes de entrega de spares"
+// a uma pergunta legítima: o pedido da peça e o rastreio estavam no banco, mas
+// sem consulta que os alcançasse.
+test('a consulta de spares existe e sabe recortar a lista', () => {
+  const tool = TOOL_SCHEMAS.find((item) => item.name === 'consultar_spares');
+  assert.ok(tool, 'sem ela, "esse spare chegou?" não tem resposta');
+  assert.match(tool!.description, /rastreio/);
+  const situacao = tool!.parameters.properties.situacao as { enum?: string[] };
+  assert.deepEqual(situacao.enum, ['todos', 'a_caminho', 'entregues', 'atrasados']);
+  assert.ok('chamado' in tool!.parameters.properties, 'dá para perguntar pela peça de uma FSA');
+});

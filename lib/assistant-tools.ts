@@ -61,6 +61,18 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     parameters: { type: 'object', properties: {} },
   },
   {
+    name: 'consultar_spares',
+    description: 'Peças (spares) de um chamado ou da operação: equipamento, fornecedor, status, código de rastreio, data prevista e o que a transportadora informou por último. Use para perguntas sobre peça pedida, entrega, rastreio, o que já chegou e o que está atrasado.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'Uma FSA, para ver só as peças dela.' },
+        situacao: { type: 'string', enum: ['todos', 'a_caminho', 'entregues', 'atrasados'], description: 'Recorte da lista. Padrão: todos.' },
+        busca: { type: 'string', description: 'Parte da cidade, do equipamento, do fornecedor ou do código de rastreio.' },
+      },
+    },
+  },
+  {
     name: 'consultar_historico',
     description: 'Histórico de auditoria: o que foi feito, por quem e quando. Use para perguntas sobre quem mexeu num chamado, o que aconteceu num período, ou o que uma pessoa fez.',
     parameters: {
