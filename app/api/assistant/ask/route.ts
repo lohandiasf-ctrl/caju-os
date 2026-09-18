@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
-    const run = assistantToolRunner(canUseWhatsapp(person.role));
+    const run = assistantToolRunner({ canReadWhatsapp: canUseWhatsapp(person.role), origin: new URL(request.url).origin });
     let prepared: PreparedAction | null = null;
     const { answer, model, used } = await askGemini({
       systemInstruction: systemInstruction(operationDate(now), previousOperationDate(now)),

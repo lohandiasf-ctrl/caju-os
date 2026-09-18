@@ -110,6 +110,18 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
   {
+    name: 'consultar_cobertura',
+    description: 'Diz se a operação atende uma ou mais cidades: quem está na própria cidade e quem está dentro do raio, com a distância de cada um. Use quando perguntarem se temos técnico em tal lugar, se cobrimos uma cidade, ou quem é o mais próximo. Aceita várias cidades de uma vez.',
+    parameters: {
+      type: 'object',
+      properties: {
+        cidades: { type: 'array', items: { type: 'string' }, description: 'As cidades, uma por item. Inclua o estado quando souber ("Taperoá/PB"), porque há cidades com o mesmo nome em estados diferentes.' },
+        raio_km: { type: 'integer', description: 'Raio a considerar. Padrão 55, que é o que a operação usa.' },
+      },
+      required: ['cidades'],
+    },
+  },
+  {
     name: 'consultar_historico',
     description: 'Histórico de auditoria: o que foi feito, por quem e quando. Use para perguntas sobre quem mexeu num chamado, o que aconteceu num período, ou o que uma pessoa fez.',
     parameters: {
