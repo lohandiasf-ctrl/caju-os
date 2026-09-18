@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-18
 
+### A fila leva a hora, e a última rodada sempre responde
+
+"Quais chamados caíram hoje após as 15h?" terminou em "o assistente consultou
+o sistema várias vezes e não chegou a uma resposta". Duas causas, as duas
+minhas:
+
+1. **A hora não ia no contexto.** `queueContext` cortava tudo para AAAA-MM-DD,
+   então não havia como filtrar por horário — o modelo consultava de novo a
+   cada tentativa até estourar as cinco rodadas. Isso é uma regressão: a busca
+   por padrões que o chat substituiu entendia horário ("quantos chamados tem
+   para 10h"). Agora as colunas de abertura, acionamento e agendamento saem
+   como AAAA-MM-DD HH:MM, e o cabeçalho diz o formato. As contagens por dia
+   continuam comparando só o dia.
+2. **Estourar as rodadas virava erro.** Na última rodada o modelo agora vai
+   sem ferramentas: sem poder consultar de novo, ele responde com o que já
+   tem. Quem perguntou recebe o que deu para apurar, em vez de um aviso de
+   falha.
+
+
 ### "Pesquisar operação" vira conversa com o assistente
 
 A caixa da Visão geral respondia por padrões escritos à mão

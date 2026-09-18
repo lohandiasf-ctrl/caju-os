@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, describeAttachments, onlyDate, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, dateAndTime, describeAttachments, onlyDate, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -71,7 +71,7 @@ test('a fila vira tabela e avisa o que ficou de fora', () => {
 test('a fila leva a data de abertura de cada chamado', () => {
   const text = queueContext([ticket({ createdAt: '2026-09-16T10:23:00.000-0300' })], 60, TODAY);
   assert.match(text, /aberto em/, 'a coluna existe no cabeçalho');
-  assert.match(text, /\| 2026-09-16 \|/, 'a data entra só com o dia');
+  assert.match(text, /\| 2026-09-16 10:23 \|/, 'com a hora, porque a operação pergunta por horário');
 });
 
 // "Quantos chamados foram acionados hoje?" recebia "a lista não fornece a data
@@ -79,7 +79,7 @@ test('a fila leva a data de abertura de cada chamado', () => {
 test('a fila leva a data de acionamento do parceiro', () => {
   const text = queueContext([ticket({ partnerTriggeredAt: '2026-09-17T08:10:00.000-0300' }), ticket({ key: 'FSA-2' })], 60, TODAY);
   assert.match(text, /aberto em \| acionado em \| agendamento/);
-  assert.match(text, /FSA-1 .*\| 2026-09-10 \| 2026-09-17 \| sem agendamento \|/);
+  assert.match(text, /FSA-1 .*\| 2026-09-10 \| 2026-09-17 08:10 \| sem agendamento \|/);
   assert.match(text, /FSA-2 .*\| não acionado \|/);
   assert.match(ticketContext(issue({ partnerTriggeredAt: '17/09/2026 08:10' }), 6, TODAY), /Parceiro acionado em: 17\/09\/2026 08:10/);
 });
@@ -271,4 +271,27 @@ test('pergunta vazia, curta demais ou longa demais é recusada', () => {
   assert.equal(validQuestion('ab'), false);
   assert.equal(validQuestion('a'.repeat(401)), false);
   assert.equal(validQuestion(undefined), false);
+});
+
+// "Quais chamados caíram hoje após as 15h?" gastava as cinco rodadas de
+// consulta e terminava em erro: a hora não estava em lugar nenhum do contexto.
+// A busca por padrões que existia antes do chat entendia horário.
+test('a fila leva a hora, não só o dia', () => {
+  assert.equal(dateAndTime('2026-09-16T10:23:00.000-0300'), '2026-09-16 10:23');
+  assert.equal(dateAndTime('17/09/2026, 14:30'), '2026-09-17 14:30', 'campo de texto do Jira');
+  assert.equal(dateAndTime('17/09/2026 14:30'), '2026-09-17 14:30');
+  assert.equal(dateAndTime('2026-09-16'), '2026-09-16', 'sem hora, a data sozinha ainda vale');
+  assert.equal(dateAndTime(null), null);
+  const text = queueContext([ticket({ partnerTriggeredAt: '2026-09-17T15:40:00.000-0300', scheduledAt: '18/09/2026, 09:00' })], 60, TODAY);
+  assert.match(text, /\| 2026-09-17 15:40 \| 2026-09-18 09:00 \|/);
+  assert.match(text, /formato AAAA-MM-DD HH:MM/, 'o modelo precisa saber o formato que está lendo');
+});
+
+// A contagem de "hoje" compara o dia; ganhar hora não pode quebrá-la.
+test('a hora não atrapalha a contagem do dia', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-1', partnerTriggeredAt: '2026-09-17T08:10:00.000-0300' }),
+    ticket({ key: 'FSA-2', partnerTriggeredAt: '2026-09-17T23:50:00.000-0300' }),
+  ], 60, TODAY);
+  assert.match(text, /- Acionados hoje \(2026-09-17\): 2 — FSA-1, FSA-2/);
 });
