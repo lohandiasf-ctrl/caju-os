@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, like, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, technicianReviews, technicians } from '@/db/schema';
+import { operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians } from '@/db/schema';
 import { onlyDate, queueContext, redact, ticketContext } from '@/lib/assistant';
 import { MAX_ROWS } from '@/lib/assistant-tools';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
@@ -150,6 +150,76 @@ async function resumoOperacao() {
   };
 }
 
+const SPARE_ROWS = 40;
+
+// Peça pedida e entrega são duas tabelas: `spares` guarda o pedido (equipamento,
+// fornecedor, previsão) e `shipment_tracking` guarda o que a transportadora
+// respondeu. Quem pergunta "esse spare chegou?" quer as duas coisas juntas.
+async function consultarSpares(args: Args) {
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  const search = text(args, 'busca')?.toLowerCase();
+  const situation = text(args, 'situacao') ?? 'todos';
+  const db = getDb();
+  const now = Date.now();
+  const [pedidos, entregas] = await Promise.all([
+    db.select({
+      ticketKey: spares.ticketKey, equipment: spares.equipment, supplier: spares.supplier,
+      status: spares.status, trackingCode: spares.trackingCode, expectedDelivery: spares.expectedDelivery,
+      city: spares.city, expectedService: spares.expectedService,
+    }).from(spares).where(ticket ? eq(spares.ticketKey, ticket) : undefined).limit(200).all(),
+    db.select({
+      ticketKey: shipmentTracking.ticketKey, trackingCode: shipmentTracking.trackingCode,
+      carrier: shipmentTracking.carrier, status: shipmentTracking.status,
+      lastEvent: shipmentTracking.lastEvent, expectedAt: shipmentTracking.expectedAt,
+    }).from(shipmentTracking).where(ticket ? eq(shipmentTracking.ticketKey, ticket) : undefined).limit(200).all(),
+  ]);
+
+  const byTracking = new Map(entregas.filter((row) => row.trackingCode).map((row) => [row.trackingCode, row]));
+  const byTicket = new Map(entregas.map((row) => [row.ticketKey, row]));
+  const delivered = (status: string) => /entregue|recebido/i.test(status);
+
+  const linhas = pedidos.map((pedido) => {
+    const entrega = (pedido.trackingCode && byTracking.get(pedido.trackingCode)) || byTicket.get(pedido.ticketKey);
+    const previsto = entrega?.expectedAt ?? pedido.expectedDelivery;
+    const prazo = Date.parse(previsto ?? '');
+    const situacaoReal = entrega && delivered(entrega.status) ? 'entregue'
+      : Number.isFinite(prazo) && prazo < now ? 'atrasado'
+      : 'a caminho';
+    return {
+      situacaoReal,
+      texto: redact([
+        pedido.ticketKey,
+        pedido.equipment,
+        pedido.city,
+        `fornecedor ${pedido.supplier}`,
+        `pedido ${pedido.status}`,
+        pedido.trackingCode ? `rastreio ${pedido.trackingCode}` : 'sem rastreio',
+        entrega?.carrier ? `por ${entrega.carrier}` : '',
+        previsto ? `previsto ${onlyDate(previsto)}` : 'sem previsão',
+        entrega ? `transportadora diz "${entrega.status}"` : '',
+        entrega?.lastEvent ? `último evento: ${entrega.lastEvent}` : '',
+        situacaoReal === 'atrasado' ? 'ATRASADO' : '',
+      ].filter(Boolean).join(' · ')),
+    };
+  });
+
+  const alvo = situation === 'entregues' ? ['entregue']
+    : situation === 'a_caminho' ? ['a caminho']
+    : situation === 'atrasados' ? ['atrasado']
+    : ['entregue', 'a caminho', 'atrasado'];
+  const filtradas = linhas
+    .filter((linha) => alvo.includes(linha.situacaoReal))
+    .filter((linha) => !search || linha.texto.toLowerCase().includes(search));
+  if (!filtradas.length) return { total: 0, spares: 'Nenhuma peça encontrada com esse filtro.' };
+  return {
+    total: filtradas.length,
+    entregues: linhas.filter((linha) => linha.situacaoReal === 'entregue').length,
+    a_caminho: linhas.filter((linha) => linha.situacaoReal === 'a caminho').length,
+    atrasados: linhas.filter((linha) => linha.situacaoReal === 'atrasado').length,
+    spares: filtradas.slice(0, SPARE_ROWS).map((linha) => linha.texto),
+  };
+}
+
 async function consultarHistorico(args: Args) {
   const ticket = text(args, 'chamado');
   const person = text(args, 'pessoa');
@@ -178,6 +248,7 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
   detalhar_chamado: detalharChamado,
   consultar_tecnicos: consultarTecnicos,
   resumo_operacao: resumoOperacao,
+  consultar_spares: consultarSpares,
   consultar_historico: consultarHistorico,
 };
 
