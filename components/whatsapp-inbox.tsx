@@ -8,6 +8,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, Con
 import { isUserRole, roleLabels } from '@/lib/permissions';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 import { splitTicketKeys } from '@/lib/whatsapp-bridge-payload';
+import { DEFAULT_ACCOUNT, WHATSAPP_ACCOUNTS, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type AuthHeaders = () => Promise<Record<string, string>>;
@@ -39,6 +40,9 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   const [filter, setFilter] = useState<Filter>('all');
   const [bridge, setBridge] = useState<BridgeHealth | null>(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
+  // Qual número está aberto. Cada um tem sua caixa de entrada; trocar de aba
+  // fecha a conversa, porque ela pertence ao número anterior.
+  const [account, setAccount] = useState<WhatsappAccountId>(DEFAULT_ACCOUNT);
   const bridgeWarning = bridgeWarningText(bridge);
 
   const authHeaders = useCallback<AuthHeaders>(async (): Promise<Record<string, string>> => (user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}), [user]);
@@ -46,7 +50,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch('/api/whatsapp/conversations', { headers: await authHeaders(), cache: 'no-store' });
+      const response = await fetch(`/api/whatsapp/conversations?account=${account}`, { headers: await authHeaders(), cache: 'no-store' });
       if (response.status === 429) return;
       const payload = await response.json() as { conversations?: Conversation[]; bridge?: BridgeHealth | null; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar as conversas.');
@@ -55,9 +59,19 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
       setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as conversas.'); }
     finally { setLoading(false); }
-  }, [user, authHeaders]);
+  }, [user, authHeaders, account]);
 
   useVisiblePolling(load, 15_000);
+
+  // Trocar de número esvazia a lista até a nova chegar, e fecha a conversa
+  // aberta: ela é do número anterior.
+  function switchAccount(next: WhatsappAccountId) {
+    if (next === account) return;
+    setAccount(next);
+    setSelectedPhone(null);
+    setConversations([]);
+    setLoading(true);
+  }
 
   const visible = useMemo(() => {
     const term = normalize(query);
@@ -76,6 +90,20 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100 shadow-2xl">
       {/* Chat list */}
       <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-white/10 bg-[#111b21] md:w-[340px] lg:w-[380px]`}>
+        {/* Uma aba por número: a conversa pertence a um deles, e a resposta
+            sai por ele. */}
+        <div className="flex shrink-0 gap-1 bg-[#202c33] px-2 pt-2" role="tablist" aria-label="Números de WhatsApp">
+          {WHATSAPP_ACCOUNTS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={account === item.id}
+              onClick={() => switchAccount(item.id)}
+              className={`min-h-9 flex-1 rounded-t-lg px-3 text-xs font-semibold transition ${account === item.id ? "bg-[#111b21] text-neutral-100" : "text-neutral-400 hover:text-neutral-200"}`}
+            >{item.label}</button>
+          ))}
+        </div>
         <div className="flex h-16 shrink-0 items-center justify-between bg-[#202c33] px-4">
           <h2 className="text-lg font-bold tracking-tight">Conversas</h2>
           <div className="flex items-center gap-2">
@@ -124,7 +152,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
         </div>
 
         {bridgeWarning && <p role="alert" className="mx-3 mb-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">{bridgeWarning}</p>}
-        {(bridge?.status === 'qr' || bridge?.status === 'logged_out') && <ConnectionPanel status={bridge.status} authHeaders={authHeaders} onChanged={load} />}
+        {(bridge?.status === 'qr' || bridge?.status === 'logged_out') && <ConnectionPanel status={bridge.status} account={account} authHeaders={authHeaders} onChanged={load} />}
         {error && <p role="alert" className="mx-3 mb-2 rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs text-rose-100">{error}</p>}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -177,8 +205,9 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
       <div className={`${selected ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
         {selected ? (
           <ConversationPane
-            key={selected.contactPhone}
+            key={`${account}:${selected.contactPhone}`}
             conversation={selected}
+            account={account}
             user={user}
             authHeaders={authHeaders}
             tickets={tickets}
@@ -200,12 +229,14 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   </section>;
 }
 
-function ConversationPane({ conversation, user, authHeaders, tickets, onBack, onUpdated, onOpenTicket }: {
-  conversation: Conversation; user: User; authHeaders: AuthHeaders; tickets: Ticket[];
+function ConversationPane({ conversation, account, user, authHeaders, tickets, onBack, onUpdated, onOpenTicket }: {
+  conversation: Conversation; account: WhatsappAccountId; user: User; authHeaders: AuthHeaders; tickets: Ticket[];
   onBack: () => void; onUpdated: () => void; onOpenTicket: (ticketId: string) => void;
 }) {
   const contactPhone = conversation.contactPhone;
   const basePath = `/api/whatsapp/conversations/${encodeURIComponent(contactPhone)}`;
+  // Toda chamada da conversa carrega o número a que ela pertence.
+  const accountQuery = `account=${account}`;
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
@@ -248,7 +279,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch(`${basePath}/messages?presence=1`, { headers: await authHeaders(), cache: 'no-store' });
+      const response = await fetch(`${basePath}/messages?presence=1&${accountQuery}`, { headers: await authHeaders(), cache: 'no-store' });
       // A background refresh that hits the rate limit just waits for the next one.
       if (response.status === 429) return;
       const payload = await response.json() as { messages?: Message[]; presence?: Presence; error?: string };
@@ -290,7 +321,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
       lastTypingSentAt.current = 0;
     }
     try {
-      await fetch(`${basePath}/presence`, { method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) });
+      await fetch(`${basePath}/presence?${accountQuery}`, { method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ state }) });
     } catch { /* best-effort */ }
   }, [user, basePath, authHeaders]);
 
@@ -298,7 +329,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     if (!user || !draft.trim() || sending) return;
     setSending(true); setError('');
     try {
-      const response = await fetch(`${basePath}/send`, {
+      const response = await fetch(`${basePath}/send?${accountQuery}`, {
         method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ text: draft }),
       });
       const payload = await response.json() as { error?: string };
@@ -317,7 +348,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
       form.set('file', file);
       if (options.caption) form.set('caption', options.caption);
       if (options.voice) form.set('voice', '1');
-      const response = await fetch(`${basePath}/send-media`, { method: 'POST', headers: await authHeaders(), body: form });
+      const response = await fetch(`${basePath}/send-media?${accountQuery}`, { method: 'POST', headers: await authHeaders(), body: form });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível enviar o arquivo.');
       setPendingFile(null); setDraft(''); await load(); onUpdated();
@@ -376,7 +407,7 @@ function ConversationPane({ conversation, user, authHeaders, tickets, onBack, on
     if (!user || attaching) return;
     setAttaching(message.wamid); setError(''); setNotice('');
     try {
-      const response = await fetch(`${basePath}/evidence`, {
+      const response = await fetch(`${basePath}/evidence?${accountQuery}`, {
         method: 'POST', headers: { ...await authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ wamid: message.wamid, ticketKey: key, kind }),
       });
       const payload = await response.json().catch(() => ({})) as { error?: string; storedForN1?: boolean };
@@ -672,7 +703,7 @@ function NewChatPanel({ authHeaders, onPicked }: { authHeaders: AuthHeaders; onP
 // Pairing the operation's number from the inbox: shows the bridge's QR code
 // while it waits to be linked, and lets management start a new session when
 // the old one was logged out. Hidden for roles the server doesn't allow.
-function ConnectionPanel({ status, authHeaders, onChanged }: { status: 'qr' | 'logged_out'; authHeaders: AuthHeaders; onChanged: () => void }) {
+function ConnectionPanel({ status, account, authHeaders, onChanged }: { status: 'qr' | 'logged_out'; account: WhatsappAccountId; authHeaders: AuthHeaders; onChanged: () => void }) {
   const [qr, setQr] = useState<string | null>(null);
   const [allowed, setAllowed] = useState(true);
   const [resetting, setResetting] = useState(false);
@@ -680,7 +711,7 @@ function ConnectionPanel({ status, authHeaders, onChanged }: { status: 'qr' | 'l
 
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch('/api/whatsapp/connection', { headers: await authHeaders(), cache: 'no-store' });
+      const response = await fetch(`/api/whatsapp/connection?account=${account}`, { headers: await authHeaders(), cache: 'no-store' });
       if (response.status === 403) { setAllowed(false); return; }
       const payload = await response.json().catch(() => ({})) as { qr?: string | null; status?: string; error?: string };
       if (!response.ok) { setMessage(payload.error ?? 'Não foi possível consultar a conexão.'); return; }
@@ -688,7 +719,7 @@ function ConnectionPanel({ status, authHeaders, onChanged }: { status: 'qr' | 'l
       setQr(payload.qr ?? null);
       if (payload.status === 'open') onChanged();
     } catch { setMessage('Não foi possível consultar a conexão.'); }
-  }, [authHeaders, onChanged]);
+  }, [authHeaders, onChanged, account]);
 
   // WhatsApp rotates the QR about every 20 s.
   useVisiblePolling(refresh, 5_000);
@@ -697,7 +728,7 @@ function ConnectionPanel({ status, authHeaders, onChanged }: { status: 'qr' | 'l
     if (!window.confirm('Gerar um novo QR code? A sessão antiga do WhatsApp no bridge será apagada e será preciso escanear de novo no celular da operação.')) return;
     setResetting(true); setMessage('');
     try {
-      const response = await fetch('/api/whatsapp/connection', { method: 'POST', headers: await authHeaders() });
+      const response = await fetch(`/api/whatsapp/connection?account=${account}`, { method: 'POST', headers: await authHeaders() });
       const payload = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível gerar um novo QR code.');
       setMessage('Gerando QR code...');

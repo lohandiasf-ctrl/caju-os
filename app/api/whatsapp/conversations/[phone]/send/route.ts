@@ -1,11 +1,15 @@
 import { env } from 'cloudflare:workers';
 import { bridgeConfigured, bridgeFetch, recordOutgoing, requireWhatsappUser, senderLabelFor } from '@/lib/server/whatsapp-bridge';
 import { signWhatsappText } from '@/lib/whatsapp-sender';
+import { toWhatsappAccount } from '@/lib/whatsapp-accounts';
 
 export async function POST(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
     const current = await requireWhatsappUser(request);
-    const useBridge = bridgeConfigured();
+    // A resposta sai pelo número que recebeu a conversa; mandar pelo outro
+    // chegaria como mensagem de um desconhecido.
+    const account = toWhatsappAccount(new URL(request.url).searchParams.get('account'));
+    const useBridge = bridgeConfigured(account);
     if (!useBridge && (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID)) {
       return Response.json({ error: 'Envio pelo WhatsApp ainda não está configurado: falta o token de acesso da Meta e o Phone Number ID (ou o bridge não-oficial).' }, { status: 503 });
     }
@@ -24,7 +28,7 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: contactPhone, text: signedText }),
-      });
+      }, account);
       const payload = await response.json().catch(() => null) as { wamid?: string; error?: string } | null;
       if (!response.ok || !payload?.wamid) {
         return Response.json({ error: payload?.error || 'O bridge do WhatsApp recusou o envio. Confira se ele está rodando e conectado.' }, { status: 502 });
@@ -47,7 +51,7 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
       phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID!;
     }
 
-    await recordOutgoing({ wamid, phoneNumberId, contactPhone, messageType: 'text', body: text, mediaId: null, senderEmail: current.email });
+    await recordOutgoing({ account, wamid, phoneNumberId, contactPhone, messageType: 'text', body: text, mediaId: null, senderEmail: current.email });
     return Response.json({ ok: true }, { status: 201 });
   } catch (error) { if (error instanceof Response) return error; return Response.json({ error: 'Não foi possível enviar a mensagem.' }, { status: 500 }); }
 }

@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { whatsappConversations } from '@/db/schema';
 import { requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
 import { participantJid } from '@/lib/whatsapp-group-name';
+import { toWhatsappAccount } from '@/lib/whatsapp-accounts';
 
 export async function PATCH(request: Request, context: { params: Promise<{ phone: string }> }) {
   try {
@@ -25,9 +26,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ phone
       }
     }
     const db = getDb();
-    const existing = await db.select().from(whatsappConversations).where(eq(whatsappConversations.contactPhone, contactPhone)).get();
+    const account = toWhatsappAccount(new URL(request.url).searchParams.get('account'));
+    const alvo = and(eq(whatsappConversations.account, account), eq(whatsappConversations.contactPhone, contactPhone));
+    const existing = await db.select().from(whatsappConversations).where(alvo).get();
     if (!existing) return Response.json({ error: 'Conversa não encontrada.' }, { status: 404 });
-    const conversation = await db.update(whatsappConversations).set(set).where(eq(whatsappConversations.contactPhone, contactPhone)).returning().get();
+    const conversation = await db.update(whatsappConversations).set(set).where(alvo).returning().get();
     return Response.json({ conversation });
   } catch (error) { if (error instanceof Response) return error; return Response.json({ error: 'Não foi possível atualizar a conversa.' }, { status: 500 }); }
 }

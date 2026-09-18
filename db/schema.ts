@@ -1,5 +1,6 @@
 import {
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -209,8 +210,10 @@ export const whatsappMessages = sqliteTable('whatsapp_messages', {
 // instead of on every message row, since both apply to the conversation as
 // a whole, not to any single message.
 export const whatsappConversations = sqliteTable('whatsapp_conversations', {
-  contactPhone: text('contact_phone').primaryKey(),
+  contactPhone: text('contact_phone').notNull(),
   // A conversa pertence a um dos números da operação; a resposta sai por ele.
+  // Junto com o contato, forma a chave: o mesmo contato pode falar com os dois
+  // números, e são conversas diferentes.
   account: text('account').notNull().default('principal'),
   contactName: text('contact_name'),
   // Phone JID of a contact WhatsApp only addresses by "@lid": learned from
@@ -223,7 +226,9 @@ export const whatsappConversations = sqliteTable('whatsapp_conversations', {
   lastReadBy: text('last_read_by'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.account, table.contactPhone] }),
+]);
 
 export const financeSettings = sqliteTable('finance_settings', {
   key: text('key').primaryKey(),
