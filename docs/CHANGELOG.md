@@ -9,6 +9,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-19
+
+### WhatsApp Caju: apenas 1:1 e carregamento de nomes de contato
+
+O "WhatsApp Caju" é destinado apenas a conversas 1:1 com clientes. Grupos não
+fazem sentido nessa conta.
+
+Mudanças:
+- Grupos são automaticamente filtrados na lista (não aparecem mesmo com filtro
+  "Todas")
+- O botão de filtro "Grupos" é ocultado para a conta Caju
+- Se o usuário estivesse no filtro "Grupos" e muda para Caju, o filtro volta
+  a "Todas" automaticamente
+- Nova enriquecimento de contatos: quando uma mensagem 1:1 chega sem nome,
+  o webhook consulta a agenda do bridge (`/contacts`) e armazena o nome no banco.
+  Assim, conversas 1:1 sempre têm um identificador legível em vez de mostrar
+  apenas as iniciais do número
+
+---
+
 ## 2026-09-18
 
 ### Corrigidas as instruções do segundo bridge

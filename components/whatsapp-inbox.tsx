@@ -71,6 +71,8 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     setSelectedPhone(null);
     setConversations([]);
     setLoading(true);
+    // WhatsApp Caju não tem grupos, então reseta o filtro se estava em 'groups'
+    if (next === 'caju' && filter === 'groups') setFilter('all');
   }
 
   const visible = useMemo(() => {
@@ -79,10 +81,12 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
       if (filter === 'unread' && conversation.unread === 0) return false;
       if (filter === 'ticket' && !conversation.ticketKey) return false;
       if (filter === 'groups' && !isGroup(conversation.contactPhone)) return false;
+      // WhatsApp Caju é apenas para 1:1, nunca mostra grupos
+      if (account === 'caju' && isGroup(conversation.contactPhone)) return false;
       if (!term) return true;
       return normalize(`${conversation.contactName ?? ''} ${displayPhone(conversation.contactPhone)} ${conversation.ticketKey ?? ''} ${conversation.lastMessage?.body ?? ''}`).includes(term);
     });
-  }, [conversations, query, filter]);
+  }, [conversations, query, filter, account]);
 
   const selected = conversations.find((conversation) => conversation.contactPhone === selectedPhone) ?? null;
 
@@ -137,17 +141,21 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
             />
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar conversas">
-            {FILTERS.map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setFilter(value)}
-                aria-pressed={filter === value}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] ${filter === value ? 'bg-[#0a332c] text-[#25d366]' : 'bg-[#202c33] text-neutral-300 hover:bg-[#2a3942]'}`}
-              >
-                {label}
-              </button>
-            ))}
+            {FILTERS.map(([value, label]) => {
+              // WhatsApp Caju só tem 1:1, então não mostra filtro de grupos
+              if (account === 'caju' && value === 'groups') return null;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  aria-pressed={filter === value}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] ${filter === value ? 'bg-[#0a332c] text-[#25d366]' : 'bg-[#202c33] text-neutral-300 hover:bg-[#2a3942]'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
