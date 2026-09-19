@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Regras de Pagamento dos Técnicos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+        }
+        h1 {
+            color: #1f2937;
+            margin-bottom: 10px;
+            font-size: 2.2em;
+        }
+        .metadata {
+            color: #6b7280;
+            font-size: 0.95em;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        h2 {
+            color: #1f2937;
+            margin-top: 35px;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            border-left: 4px solid #3b82f6;
+            padding-left: 15px;
+        }
+        h3 {
+            color: #374151;
+            margin-top: 20px;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }
+        p {
+            margin-bottom: 12px;
+            text-align: justify;
+        }
+        ul, ol {
+            margin-left: 25px;
+            margin-bottom: 15px;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+        }
+        th {
+            background: #3b82f6;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        tr:hover {
+            background: #f3f4f6;
+        }
+        .example {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .example strong {
+            color: #1e40af;
+        }
+        .checklist {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 25px 0;
+        }
+        .checklist h3 {
+            color: #166534;
+            margin-top: 0;
+        }
+        .checklist ul {
+            list-style: none;
+            margin-left: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .checklist li:before {
+            content: "☐";
+            position: absolute;
+            left: 0;
+            font-size: 1.2em;
+            color: #16a34a;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 0.9em;
+        }
+        .signature {
+            margin-top: 30px;
+            display: flex;
+            gap: 60px;
+        }
+        .signature-line {
+            flex: 1;
+        }
+        .signature-line input {
+            width: 100%;
+            border: none;
+            border-bottom: 1px solid #333;
+            padding: 5px 0;
+            font-size: 0.9em;
+        }
+        .signature-label {
+            font-size: 0.8em;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+        @media print {
+            body {
+                padding: 0;
+            }
+            .container {
+                padding: 20px;
+                max-width: 100%;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+        }
+        strong {
+            color: #1f2937;
+            font-weight: 600;
+        }
+        .highlight {
+            background: #fef08a;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Regras de Pagamento dos Técnicos</h1>
+        <div class="metadata">
+            <strong>Data:</strong> 18 de setembro de 2026<br>
+            <strong>Status:</strong> Aguardando sua confirmação
+        </div>
+
+        <h2>O que é isso?</h2>
+        <p>Este documento mostra como calcular quanto pagar cada técnico pelas suas visitas às lojas. O sistema Caju vai fazer isso automaticamente.</p>
+
+        <h2>Como funciona?</h2>
+        <p>Cada visita do técnico vai ter <strong>chamados</strong> (tarefas):</p>
+        <ul>
+            <li><strong>Chamados normais:</strong> quando o técnico conserta/resolve algo (conserto de máquina, configuração, etc.)</li>
+            <li><strong>Chamados de foto:</strong> quando só precisa tirar foto/comprovante</li>
+            <li><strong>Chamados que não conseguiu resolver:</strong> quando não conseguiu fazer por algum motivo (loja fechada, máquina muito quebrada, etc.)</li>
+        </ul>
+        <p>O técnico pode mudar a classificação de um chamado a qualquer momento, e o preço é recalculado automaticamente.</p>
+
+        <h2>O que o sistema vai guardar?</h2>
+        <p>Para cada chamado, o sistema vai registrar:</p>
+        <ul>
+            <li><strong>Tipo do chamado:</strong> Se é serviço (conserto) ou foto</li>
+            <li><strong>Improdutivo?:</strong> Se conseguiu resolver ou não</li>
+            <li><strong>Por quê não conseguiu?:</strong> Qual foi o motivo (loja fechada, máquina com defeito maior, etc.)</li>
+            <li><strong>Observações extras:</strong> Detalhes adicionais que o técnico quer registrar</li>
+            <li><strong>Quanto pagar:</strong> O valor calculado automaticamente</li>
+            <li><strong>Status do pagamento:</strong> Se está pronto para pagar, aprovado, pago ou bloqueado</li>
+            <li><strong>Histórico:</strong> Rastreamento de tudo que mudou (para auditoria)</li>
+        </ul>
+
+        <h2>Quanto pagar por serviço (conserto)?</h2>
+        <p>Quanto mais serviços o técnico faz em uma visita, mais ele ganha:</p>
+        <table>
+            <tr>
+                <th>Quantidade de Serviços</th>
+                <th>Valor</th>
+            </tr>
+            <tr><td>1</td><td>R$ 70</td></tr>
+            <tr><td>2</td><td>R$ 100</td></tr>
+            <tr><td>3</td><td>R$ 120</td></tr>
+            <tr><td>4</td><td>R$ 150</td></tr>
+            <tr><td>5</td><td>R$ 150</td></tr>
+            <tr><td>6</td><td>R$ 180</td></tr>
+            <tr><td>7</td><td>R$ 210</td></tr>
+            <tr><td>8</td><td>R$ 240</td></tr>
+            <tr><td>9</td><td>R$ 270</td></tr>
+            <tr><td>10</td><td>R$ 300</td></tr>
+            <tr><td>11</td><td>R$ 330</td></tr>
+        </table>
+        <p><strong>E se tiver mais de 11?</strong> Cada serviço adicional vale R$ 30 a mais (exemplo: 12 = R$ 360, 13 = R$ 390, e assim vai).</p>
+
+        <h2>Quando aparecem serviços novos na loja?</h2>
+        <p>Se o técnico chega à loja agendado para fazer 4 serviços, mas ao chegar descobre que precisa fazer mais 1, ele ganha um <strong>bônus de R$ 30</strong> por cada novo serviço descoberto.</p>
+        <div class="example">
+            <strong>Exemplo prático:</strong><br>
+            • Técnico é agendado para 4 serviços = R$ 150<br>
+            • Chega lá e aparece mais 1 serviço = R$ 150 + R$ 30 = <strong>R$ 180</strong>
+        </div>
+        <p>Isso vale para cada novo serviço que aparecer, sem limite máximo.</p>
+
+        <h2>Quanto pagar por fotos?</h2>
+        <p>Se o técnico <strong>só tira fotos</strong> (sem fazer serviço):</p>
+        <table>
+            <tr>
+                <th>Quantidade de Fotos</th>
+                <th>Valor</th>
+            </tr>
+            <tr><td>1 a 14 fotos</td><td>R$ 70</td></tr>
+            <tr><td>15 fotos</td><td>R$ 75</td></tr>
+            <tr><td>16 fotos</td><td>R$ 80</td></tr>
+            <tr><td>17 fotos</td><td>R$ 85</td></tr>
+            <tr><td>18 fotos</td><td>R$ 90</td></tr>
+        </table>
+        <p><strong>A partir da 15ª foto,</strong> cada foto a mais vale R$ 5 (ex: 19 fotos = R$ 95, 20 fotos = R$ 100, etc.)</p>
+
+        <h3>Quando tem serviço E foto?</h3>
+        <p>Se o técnico faz serviço E tira fotos na mesma visita, a gente soma os dois:</p>
+        <ul>
+            <li><strong>Valor dos serviços:</strong> Segue a tabela normal (R$ 70, R$ 100, etc.)</li>
+            <li><strong>Valor das fotos:</strong> R$ 5 por cada foto</li>
+            <li><strong>Total:</strong> Valor do serviço + (quantidade de fotos × R$ 5)</li>
+        </ul>
+        <div class="example">
+            <strong>Caso 1:</strong> 1 serviço + 9 fotos<br>
+            • Serviço: R$ 70<br>
+            • Fotos: 9 × R$ 5 = R$ 45<br>
+            • <strong>Total: R$ 115</strong><br><br>
+            <strong>Caso 2:</strong> 3 serviços + 8 fotos<br>
+            • Serviço: R$ 120<br>
+            • Fotos: 8 × R$ 5 = R$ 40<br>
+            • <strong>Total: R$ 160</strong>
+        </div>
+
+        <h2>Quando não consegue resolver (improdutivo)?</h2>
+        <p>Um chamado é marcado como <strong>não conseguiu resolver</strong> quando:</p>
+        <ol>
+            <li>O gerente da loja não deixou o técnico fazer o trabalho</li>
+            <li>Máquina com defeito que não dá pra consertar na hora (vai pra manutenção maior)</li>
+            <li>Tem outro problema que impede resolver o principal</li>
+            <li>A loja estava fechada</li>
+            <li>Passaram mais de 2 horas tentando resolver um único problema e ainda não saiu</li>
+            <li>A loja estava perto de fechar (últimos 30 minutos)</li>
+        </ol>
+
+        <h3>Quanto pagar quando não consegue resolver?</h3>
+        <p>Quando não consegue resolver, o técnico ganha <strong>metade</strong> do valor que ganharia se tivesse resolvido.</p>
+        <div class="example">
+            <strong>Caso 1:</strong> 1 serviço e não conseguiu resolver<br>
+            • Normal custaria: R$ 70<br>
+            • Sem resolver: R$ 70 ÷ 2 = <strong>R$ 35</strong><br><br>
+            <strong>Caso 2:</strong> 2 serviços, 1 resolvido e 1 não<br>
+            • Normal custaria: R$ 100<br>
+            • Resolvido: R$ 50<br>
+            • Não resolvido: R$ 50 ÷ 2 = R$ 25<br>
+            • <strong>Total: R$ 75</strong><br><br>
+            <strong>Caso 3:</strong> 3 serviços, 2 resolvidos e 1 não<br>
+            • Normal custaria: R$ 120 (R$ 40 por serviço)<br>
+            • Resolvidos: R$ 40 + R$ 40 = R$ 80<br>
+            • Não resolvido: R$ 40 ÷ 2 = R$ 20<br>
+            • <strong>Total: R$ 100</strong>
+        </div>
+
+        <h3>Quando tem fotos e depois vira serviço?</h3>
+        <p>Se começou marcando como "só foto" (R$ 70) e depois virou "serviço + foto", recalcula automaticamente.</p>
+        <div class="example">
+            <strong>Exemplo:</strong> Era 10 fotos (R$ 70), mas 1 delas virou serviço<br>
+            • Antes: R$ 70<br>
+            • Depois: R$ 70 (serviço) + R$ 45 (9 fotos × R$ 5) = <strong>R$ 115</strong>
+        </div>
+
+        <h2>Como funciona o fluxo de pagamento?</h2>
+
+        <h3>Passo a passo:</h3>
+        <ol>
+            <li><strong>Técnico é agendado</strong> com alguns serviços/fotos planejados</li>
+            <li><strong>Durante a visita,</strong> o técnico pode:
+                <ul>
+                    <li>Adicionar serviços/fotos novos</li>
+                    <li>Mudar de "foto" para "serviço" (ou vice-versa)</li>
+                    <li>Marcar como "não conseguiu resolver" e explicar o motivo</li>
+                </ul>
+            </li>
+            <li><strong>Sistema calcula automaticamente</strong> o valor a cada mudança</li>
+            <li><strong>Atendimento fica pronto para pagar</strong> — o sistema guardou o valor final</li>
+            <li><strong>Gerente aprova</strong> — revisa o valor e confirma se está ok</li>
+            <li><strong>Técnico recebe o pagamento</strong> após aprovação</li>
+        </ol>
+
+        <h3>Se mudar de ideia depois?</h3>
+        <p>Se o técnico marcou como "foto" mas depois muda para "serviço", o sistema:</p>
+        <ul>
+            <li>Bloqueia a mudança temporariamente</li>
+            <li>Gerente precisa revisar e confirmar a mudança</li>
+            <li>Valor é recalculado automaticamente</li>
+        </ul>
+
+        <h3>O sistema guarda tudo?</h3>
+        <p>Sim! Cada mudança é registrada (quando foi, o que mudou, quem mudou) para não ter dúvidas depois.</p>
+
+        <h2>Como fica na tela?</h2>
+
+        <h3>Marcando como "não conseguiu resolver"</h3>
+        <p>Ao clicar num chamado, tem um botão para marcar como "não conseguiu resolver". Quando marca, precisa escolher:</p>
+        <ul>
+            <li>O motivo (gerente recusou, máquina com defeito, loja fechada, etc.)</li>
+            <li>Opcionalmente, deixar uma observação (ex: "máquina soltando fumaça, marcado para manutenção")</li>
+        </ul>
+
+        <h3>Vendo quanto vai ganhar</h3>
+        <p>Quando o técnico clica em um chamado (ou grupo de chamados), vê:</p>
+        <ul>
+            <li>Quanto ganhou com serviços</li>
+            <li>Quanto ganhou com fotos</li>
+            <li>Quanto vai descontar por não conseguir resolver</li>
+            <li><strong>O total final que vai receber</strong></li>
+        </ul>
+
+        <h3>Várias visitas no mesmo dia</h3>
+        <p>Se o técnico faz 3 visitas a lojas diferentes no mesmo dia:</p>
+        <ul>
+            <li>O sistema mostra cada visita separadamente</li>
+            <li>Mas também soma tudo em um "resumo do dia"</li>
+            <li>Exemplo: se fez 4 + 3 + 2 = 9 serviços em total, o sistema calcula como se fossem 9 serviços em uma única visita</li>
+        </ul>
+
+        <h3>Relatório para exportar</h3>
+        <p>O gerente pode gerar um relatório (arquivo PDF ou Excel) mostrando:</p>
+        <ul>
+            <li>Data</li>
+            <li>Técnico</li>
+            <li>Cada chamado (se era serviço ou foto, se conseguiu resolver)</li>
+            <li>Como foi calculado</li>
+            <li>Quanto vai receber</li>
+            <li>Se já foi aprovado ou ainda está pendente</li>
+        </ul>
+
+        <h2>Onde os dados ficam guardados?</h2>
+
+        <h3>De onde vêm os chamados?</h3>
+        <p>Os chamados começam no Jira (sistema de tickets antigo), mas o Caju Monitor faz uma cópia para usar.</p>
+
+        <h3>Mudanças que o técnico faz</h3>
+        <p>Quando o técnico marca como "serviço", "foto" ou "não conseguiu resolver", isso fica <strong>só no Caju Monitor</strong> — não volta pro Jira.</p>
+
+        <h3>Onde o Caju guarda tudo?</h3>
+        <p>Tudo fica guardado no banco de dados do Caju Monitor, de forma segura e com histórico completo.</p>
+
+        <h3>Como o dinheiro sai?</h3>
+        <p>O gerente exporta um relatório do Caju e envia pra folha de pagamento normalmente. O Caju não faz pagamento automaticamente (fica só como cálculo e aprovação).</p>
+
+        <h2>Regras que o sistema vai seguir</h2>
+        <ol>
+            <li><strong>Cada chamado precisa ser classificado</strong> — não pode deixar indefinido ("é serviço ou é foto?")</li>
+            <li><strong>Se não conseguiu resolver, precisa explicar o motivo</strong> — não pode deixar em branco</li>
+            <li><strong>Pode ter uma visita inteira sem conseguir resolver nada</strong> — não tem problema, o sistema permite</li>
+            <li><strong>Pode mudar de ideia a qualquer hora</strong> — o sistema recalcula automaticamente</li>
+            <li><strong>Sem limite de chamados</strong> — pode ter 100, 1000, o cálculo funciona para qualquer quantidade</li>
+        </ol>
+
+        <h2>Exemplo prático para testar</h2>
+        <p><strong>Situação real:</strong></p>
+        <p>O técnico é agendado para fazer:</p>
+        <ul>
+            <li>2 serviços</li>
+            <li>2 fotos</li>
+            <li>Valor esperado: R$ 100 (serviços) + R$ 10 (fotos) = <strong>R$ 110</strong></li>
+        </ul>
+
+        <p><strong>Na loja:</strong></p>
+        <ul>
+            <li>Descobre +1 serviço novo = +R$ 30 (bônus por aparecer na hora)</li>
+            <li>Descobre +2 fotos = +R$ 10</li>
+            <li>Novo subtotal: R$ 110 + R$ 30 + R$ 10 = <strong>R$ 150</strong></li>
+        </ul>
+
+        <p><strong>Depois:</strong></p>
+        <ul>
+            <li>Um dos 2 serviços originais não conseguiu resolver (máquina com defeito maior)</li>
+            <li>Agora tem:
+                <ul>
+                    <li>3 serviços no total (2 resolvidos + 1 não)</li>
+                    <li>Valor normal para 3 serviços: R$ 120</li>
+                    <li>Como 1 não foi resolvido: R$ 120 ÷ 3 = R$ 40 cada, então R$ 40 ÷ 2 = R$ 20 (o que não resolveu)</li>
+                    <li>Ganho com serviços: R$ 40 + R$ 40 + R$ 20 = <strong>R$ 100</strong></li>
+                </ul>
+            </li>
+            <li>Fotos: 4 fotos × R$ 5 = <strong>R$ 20</strong></li>
+        </ul>
+
+        <p><strong>Valor final que o técnico recebe: R$ 100 + R$ 20 = R$ 120</strong></p>
+
+        <div class="page-break"></div>
+
+        <h2>Próximos passos (para o time técnico)</h2>
+        <ul>
+            <li>Criar a função que calcula o valor automaticamente</li>
+            <li>Guardar os dados com histórico completo</li>
+            <li>Criar as telas para o técnico marcar e para o gerente aprovar</li>
+            <li>Escrever testes com os exemplos acima</li>
+        </ul>
+
+        <div class="checklist">
+            <h3>✅ Confirmação do chefe</h3>
+            <p>Você concorda com <strong>TODAS</strong> estas regras?</p>
+            <ul>
+                <li>Serviços: R$ 70, R$ 100, R$ 120... até R$ 330, depois +R$ 30 por serviço adicional</li>
+                <li>Fotos sozinhas: R$ 70 até 14 fotos, depois +R$ 5 por foto adicional</li>
+                <li>Serviço + Foto: preço do serviço + (quantidade de fotos × R$ 5)</li>
+                <li>Novo serviço que aparece na loja: +R$ 30 por serviço</li>
+                <li>Não conseguiu resolver: metade do valor normal</li>
+                <li>Motivo obrigatório quando não consegue resolver</li>
+                <li>Pode não conseguir resolver nada (visita inteira "branca")</li>
+                <li>Sem limite máximo de serviços/fotos</li>
+                <li>Tudo é rastreado (histórico completo)</li>
+                <li>Cada técnico pode ter múltiplas visitas no mesmo dia</li>
+                <li>Gerente aprova antes de pagar</li>
+                <li>Exemplo final deve dar R$ 120 (confira o cálculo acima)</li>
+            </ul>
+        </div>
+
+        <div class="signature">
+            <div class="signature-line">
+                <div class="signature-label">Data</div>
+                <input type="text" placeholder="____/____/______">
+            </div>
+            <div class="signature-line">
+                <div class="signature-label">Confirmado por</div>
+                <input type="text" placeholder="________________________________">
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>Documento:</strong> Especificação de Pagamento por FSA</p>
+            <p><strong>Data de criação:</strong> 18 de setembro de 2026</p>
+            <p><strong>Status:</strong> Aguardando confirmação</p>
+            <p style="margin-top: 20px; font-style: italic;">Este documento apresenta as regras de cálculo de pagamento para técnicos de campo do Caju Monitor. Deve ser aprovado pelo chefe antes da implementação no sistema.</p>
+        </div>
+    </div>
+</body>
+</html>
