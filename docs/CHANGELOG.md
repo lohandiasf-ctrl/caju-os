@@ -1128,6 +1128,20 @@ Prompt também mudou: diz onde cada campo está no formulário e que
 
 ## 2026-09-15
 
+### WhatsApp: busca de agenda usa os contatos que já estavam no volume
+
+Testado em produção: a busca de "Nova conversa" só listava grupos e respondia
+"Nada encontrado na agenda do número" para qualquer nome. O `contacts.json`
+nasceu vazio no deploy e só se enche quando o WhatsApp manda um
+`contacts.upsert` novo — os 87 contatos já sincronizados estavam no volume em
+`phones.json` (lid -> telefone) e `names.json`, e ficavam de fora.
+
+`GET /contacts` agora monta a agenda juntando `contacts.json` com os pares
+telefone+nome que já existiam, e devolve grupos e pessoas em ordem alfabética.
+Sem nova sincronização com o celular.
+
+**Pendente:** `flyctl deploy` no `whatsapp-bridge` (a correção é só do bridge).
+
 ### WhatsApp: formato do nome do grupo
 
 Padrão definido pela operação:
