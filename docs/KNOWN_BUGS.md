@@ -103,6 +103,22 @@ Na branch `codex/technician-dispatch-and-contacts`, há uma busca nova por centr
 | Link de WhatsApp por chamado (`jira_issue_links`) não migrou | **Pendente (perda aceita)** | funcionalidade volta a gravar; histórico se foi |
 | Planilha de Spares era um CSV estático | **Parcial** | cadastro persistente e conector bidirecional implementados; falta configurar os fluxos Power Automate/secrets e migrar o D1 |
 
+## WhatsApp (bridge Baileys)
+
+Em 2026-09-19 a infraestrutura foi **removida por inteiro** a pedido do
+usuário, para ser reconfigurada do zero. As apps do Fly e seus volumes não
+existem mais, e `whatsapp_messages`/`whatsapp_conversations` foram esvaziadas.
+Os itens abaixo são o que se sabia quando ela caiu — valem como aviso para a
+montagem nova, não como bug ativo numa instalação que ainda não existe.
+
+| Item | Estado | Nota |
+|---|---|---|
+| Conversa 1:1 endereçada por `@lid` não envia nem recebe | **Pendente, causa não fechada** | `sock.sendMessage` aceita o lid, devolve `wamid` e não entrega; como a rota do app só grava depois do `wamid`, a mensagem aparece como enviada na tela. Grupo funcionava normalmente na mesma conta |
+| `a9f0597` traduz `@lid` para número antes de enviar | **Não resolveu, e é suspeito** | resolveu `557388181339` para um contato cujo número é `5573988181339` — **sem o nono dígito**. Confirmar se `resolveLidPhone()` devolve JID canônico antes de reusar; do jeito que está pode endereçar para outro número |
+| Mídia morava no volume da sessão (`./auth/media`) | **Risco de projeto** | o D1 guarda só `media_id`; destruir o volume levou 474 arquivos. Na montagem nova, considerar R2 ou outro armazenamento fora do volume do bridge |
+| Webhook não pode chamar o bridge de volta | **Resolvido (`93db292`)** | o bridge encaminha dentro do handler `messages.upsert` e espera a resposta; chamada de volta trava o processamento de eventos dele |
+| Bridge do Suporte em laço de reconexão | **Encerrado sem diagnóstico** | 24 ciclos seguidos de `connected → logging in → Connection Terminated`; sem processar mensagem desde 18/09. A app foi destruída antes de se achar a causa |
+
 ## Desempenho / UI
 
 | Item | Estado | Nota |

@@ -14,6 +14,33 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
+- **WhatsApp removido por inteiro em 2026-09-19 (Claude → Codex).** O usuário
+  decidiu reconfigurar do zero depois de um dia inteiro sem fechar a causa de
+  conversa 1:1 não funcionar. O que você precisa saber para remontar:
+
+  - **Não existe mais bridge.** As apps `caju-whatsapp-bridge` e
+    `caju-whatsapp-bridge-caju` foram destruídas com seus volumes. Os nomes
+    estão livres. O código continua em `whatsapp-bridge/`, com `fly.toml` e
+    `fly.caju.toml` apontando para esses nomes.
+  - **Os segredos do Worker continuam configurados e apontam para o vazio:**
+    `WHATSAPP_BRIDGE_URL`, `WHATSAPP_BRIDGE_SECRET` e as variantes `_CAJU`.
+    Atualize-os ao subir a infraestrutura nova, senão a tela acusa bridge fora
+    do ar. **O segredo é o que identifica a conta** (`accountFromSecret`), então
+    cada bridge precisa do seu, diferente do outro.
+  - **As tabelas estão vazias.** `whatsapp_messages` e
+    `whatsapp_conversations` foram esvaziadas (2574 e 641 linhas). Dump do
+    texto em `Downloads/caju-whatsapp-*-2026-09-19.sql`, na máquina do usuário,
+    fora do repositório porque contém conversa de cliente.
+  - **474 mídias foram perdidas em definitivo** porque moravam no volume da
+    sessão (`MEDIA_DIR = './auth/media'`). O D1 guarda só o `media_id`. Se for
+    remontar, vale tirar a mídia do volume do bridge — R2, por exemplo. O
+    usuário foi avisado do número antes e escolheu apagar.
+  - **Não suba `a9f0597` sem validar.** Ele traduz `@lid` para número no
+    `/send`, não resolveu o problema, e devolveu um número sem o nono dígito.
+    Detalhe em `docs/KNOWN_BUGS.md`, seção WhatsApp.
+  - O que foi confirmado funcionando na tela antes da remoção: a conta `caju`
+    esconde grupo (só 1:1) e o botão de filtro "Grupos" some nela.
+
 - **Feedback 2026-09-14 (branch `codex/feedback-attendance-workflow`):** nova
   migration `0028_attendance_preparation.sql` adiciona `phase` em
   `active_attendances` com default `ongoing`. POST cria `preparing`; PATCH
