@@ -4,16 +4,21 @@
 # precisa da sua própria pasta `auth`, e duas sessões no mesmo volume derrubam
 # uma à outra.
 #
-# Subir:
+# Subir (os dois segredos do bridge são obrigatórios: sem eles ele nem inicia):
 #   cd whatsapp-bridge
-#   fly apps create caju-whatsapp-bridge-caju
-#   fly volumes create whatsapp_bridge_auth_caju --size 1 --region gru -a caju-whatsapp-bridge-caju
-#   fly secrets set BRIDGE_SECRET=<novo segredo> -a caju-whatsapp-bridge-caju
-#   fly deploy -c fly.caju.toml
+#   flyctl apps create caju-whatsapp-bridge-caju
+#   flyctl volumes create whatsapp_bridge_auth_caju --size 1 --region gru -a caju-whatsapp-bridge-caju
+#   flyctl secrets set CAJU_WEBHOOK_URL=https://operacoes.cajutech.net/api/whatsapp/bridge-webhook WHATSAPP_BRIDGE_SECRET=<segredo novo> -a caju-whatsapp-bridge-caju
+#   flyctl deploy -c fly.caju.toml
 #
-# Depois, no Worker do Caju OS:
-#   wrangler secret put WHATSAPP_BRIDGE_URL_CAJU --name caju-os
-#   wrangler secret put WHATSAPP_BRIDGE_SECRET_CAJU --name caju-os
+# Depois, no Worker do Caju OS, com o MESMO segredo (wrangler pelo caminho
+# direto, porque o npx esbarra na política de scripts do PowerShell):
+#   node_modules/.bin/wrangler.cmd secret put WHATSAPP_BRIDGE_URL_CAJU --name caju-os
+#     valor: https://caju-whatsapp-bridge-caju.fly.dev
+#   node_modules/.bin/wrangler.cmd secret put WHATSAPP_BRIDGE_SECRET_CAJU --name caju-os
+#
+# É o segredo que diz ao Caju OS de qual número veio cada mensagem, então ele
+# precisa ser diferente do segredo do outro bridge.
 #
 # fly.toml app configuration file generated for caju-whatsapp-bridge on 2026-09-14T23:24:05-03:00
 #
