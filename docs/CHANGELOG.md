@@ -484,9 +484,16 @@ sistema.
   junto, em vez de virar código morto.
 - `tests/assistant-tools.test.ts`: 3 testes novos.
 
-**Não verificado na tela:** o `npm run dev` não sobe nesta máquina (fica em
-"Establishing remote connection"), então a conversa só foi exercitada pela API.
-O comportamento visual precisa de uma passada em produção.
+**Verificado em produção**, já que o `npm run dev` não sobe nesta máquina
+(fica em "Establishing remote connection"):
+
+- "quais chamados estão com técnico em campo?" → 28, e o painel da direita
+  encheu com os 28, cada um com seleção.
+- "e desses, quais são de Itabuna?" → 7. O painel acompanhou, de 28 para 7, e
+  as 7 FSAs são exatamente as que a tela mostra em campo naquela cidade.
+
+A segunda pergunta é o que separa conversa de busca: sem o histórico, "e
+desses" não teria sentido.
 
 ### Assistente geral validado em produção
 
