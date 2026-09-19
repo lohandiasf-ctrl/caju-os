@@ -3,15 +3,14 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { employeePresence, whatsappConversations, whatsappMessages } from '@/db/schema';
 import { canUseWhatsapp, WHATSAPP_ROLES } from '@/lib/navigation';
-import { roleLabels, type UserRole } from '@/lib/permissions';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 import { DEFAULT_ACCOUNT, WHATSAPP_ACCOUNTS, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
 
-export async function senderLabelFor(user: { email: string; role: UserRole }) {
+export async function senderLabelFor(user: { email: string }) {
   const presence = await getDb().select({ displayName: employeePresence.displayName })
     .from(employeePresence).where(eq(employeePresence.email, user.email)).get();
-  return whatsappSenderLabel(user.email, presence?.displayName, roleLabels[user.role]);
+  return whatsappSenderLabel(user.email, presence?.displayName);
 }
 
 export const WHATSAPP_SUPPORT_ROLES = WHATSAPP_ROLES;
