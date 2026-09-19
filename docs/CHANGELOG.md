@@ -11,6 +11,55 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-19
 
+### WhatsApp zerado para reconfiguração do zero
+
+A pedido do usuário, toda a infraestrutura de WhatsApp foi removida para ser
+montada de novo:
+
+- as duas apps do Fly (`caju-whatsapp-bridge` e `caju-whatsapp-bridge-caju`)
+  foram destruídas, com seus volumes;
+- **474 arquivos de mídia foram perdidos em definitivo** (301 fotos, 125
+  áudios, 32 documentos, 9 vídeos, 9 figurinhas). Só 2 já estavam anexados no
+  Jira. A mídia morava em `./auth/media`, dentro do volume da sessão — o D1
+  guarda só o `media_id`, nunca o arquivo;
+- `whatsapp_messages` (2574 linhas) e `whatsapp_conversations` (641) foram
+  esvaziadas.
+
+Backup do texto em `Downloads/caju-whatsapp-{messages,conversations}-2026-09-19.sql`,
+fora do repositório porque contém conversa de cliente.
+
+**Pendente:** os segredos `WHATSAPP_BRIDGE_URL/SECRET` e as variantes `_CAJU`
+continuam no Worker apontando para apps que não existem mais. A tela vai
+acusar bridge fora do ar até a configuração nova. Os nomes em `fly.toml` e
+`fly.caju.toml` ficaram livres e podem ser reusados.
+
+**Pendente:** o commit `a9f0597` (tradução de `@lid` para número no envio)
+está só na `main` local, não foi para o GitHub, e **não está validado** — ver
+a seção abaixo antes de subir bridge nova com ele.
+
+### Diagnóstico do WhatsApp: o que ficou sabido
+
+Conversa direta nunca funcionou na conta `caju` — 314 mensagens entraram, todas
+de grupo, nenhuma 1:1 em nenhum momento. Grupo funcionava; 1:1 não, nos dois
+sentidos, enquanto presença e foto de perfil respondiam normalmente.
+
+A conversa era endereçada por `@lid` (`209479127822392@lid`), sem `phone_jid`.
+O `/send` passava o lid direto para `sock.sendMessage`, que aceita, devolve
+`wamid` e não entrega — e como a rota do app só grava depois de receber
+`wamid`, a mensagem aparecia na tela como enviada. Perda silenciosa dos dois
+lados.
+
+O commit `a9f0597` passou a traduzir o lid com `resolveLidPhone()` antes de
+enviar, e a recusar com 422 quando não consegue. **Não resolveu**: a mensagem
+continuou não chegando, e a tradução devolveu `557388181339` para um contato
+cujo número é `5573988181339` — **faltando o nono dígito**. Antes de reusar
+esse commit, confirmar se `resolveLidPhone` devolve o JID canônico; do jeito
+que está, pode endereçar mensagem para outro número.
+
+Também ficou registrado que o bridge do Suporte estava em laço de reconexão
+(24 ciclos seguidos) e não processava mensagem desde 18/09 — independente do
+problema do Caju.
+
 ### WhatsApp Caju: apenas 1:1 e carregamento de nomes de contato
 
 O "WhatsApp Caju" é destinado apenas a conversas 1:1 com clientes. Grupos não
