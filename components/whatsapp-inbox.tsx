@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, MessageCirclePlus, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { isUserRole, roleLabels } from '@/lib/permissions';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 import { splitTicketKeys } from '@/lib/whatsapp-bridge-payload';
 import { DEFAULT_ACCOUNT, WHATSAPP_ACCOUNTS, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
@@ -921,9 +920,7 @@ function FilePreview({ file }: { file: File }) {
 }
 
 function senderLabel(email: string, colleaguesByEmail: Record<string, Colleague>) {
-  const colleague = colleaguesByEmail[email];
-  const role = colleague?.role && isUserRole(colleague.role) ? roleLabels[colleague.role] : null;
-  return whatsappSenderLabel(email, colleague?.displayName, role);
+  return whatsappSenderLabel(email, colleaguesByEmail[email]?.displayName);
 }
 
 function previewText(type: string, body: string | null) {

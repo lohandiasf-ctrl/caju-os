@@ -1,9 +1,8 @@
-// "Lohan · Gerência": shown above outgoing messages in the inbox and signed
-// into the WhatsApp message itself, so both read the same. `roleLabel` is the
-// display name from roleLabels (lib/permissions), or null.
-export function whatsappSenderLabel(email: string, displayName: string | null | undefined, roleLabel: string | null | undefined) {
-  const firstName = (displayName || email.split('@')[0]).trim().split(/\s+/)[0];
-  return roleLabel ? `${firstName} · ${roleLabel}` : firstName;
+// "Lohan": shown above outgoing messages in the inbox and signed into the
+// WhatsApp message itself, so both read the same. Só o primeiro nome — o cargo
+// fica de fora de propósito, inclusive do que o contato recebe.
+export function whatsappSenderLabel(email: string, displayName: string | null | undefined) {
+  return (displayName || email.split('@')[0]).trim().split(/\s+/)[0];
 }
 
 export function signWhatsappText(label: string, text: string) {
