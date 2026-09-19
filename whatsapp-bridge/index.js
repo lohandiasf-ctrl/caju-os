@@ -455,6 +455,16 @@ function jidFor(rawTo) {
   return to.includes('@') ? to : `${to.replace(/\D/g, '')}@s.whatsapp.net`;
 }
 
+// O WhatsApp só entrega mensagem endereçada ao número. Para um contato que a
+// caixa de entrada conhece apenas por "@lid", `sendMessage` aceita o lid e
+// devolve um wamid — e a mensagem não chega a ninguém, sem erro nenhum. Traduz
+// antes, e devolve null quando não dá: melhor recusar o envio do que sumir
+// com a mensagem.
+async function sendableJid(jid) {
+  if (!jid || isGroup(jid) || !jid.endsWith('@lid')) return jid;
+  return resolveLidPhone(jid);
+}
+
 // Browsers record voice as webm/opus; WhatsApp phones only play voice notes
 // as ogg/opus, so transcode before sending.
 function toOggOpus(buffer) {
@@ -540,16 +550,20 @@ http.createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/send') {
       const body = JSON.parse((await readBody(request, 64 * 1024)).toString('utf8') || '{}');
-      const jid = jidFor(body?.to);
+      const asked = jidFor(body?.to);
       const text = typeof body?.text === 'string' ? body.text.trim() : '';
-      if (!jid || !text) return json(response, 400, { error: 'to e text são obrigatórios.' });
+      if (!asked || !text) return json(response, 400, { error: 'to e text são obrigatórios.' });
+      const jid = await sendableJid(asked);
+      if (!jid) return json(response, 422, { error: 'Não foi possível descobrir o número deste contato, e o WhatsApp só entrega para o número. A mensagem não foi enviada.' });
       const sent = await sock.sendMessage(jid, { text });
       return json(response, 200, { wamid: sent.key.id });
     }
 
     if (request.method === 'POST' && url.pathname === '/send-media') {
-      const jid = jidFor(url.searchParams.get('to'));
-      if (!jid) return json(response, 400, { error: 'to é obrigatório.' });
+      const asked = jidFor(url.searchParams.get('to'));
+      if (!asked) return json(response, 400, { error: 'to é obrigatório.' });
+      const jid = await sendableJid(asked);
+      if (!jid) return json(response, 422, { error: 'Não foi possível descobrir o número deste contato, e o WhatsApp só entrega para o número. O arquivo não foi enviado.' });
       const mimetype = String(request.headers['content-type'] || 'application/octet-stream').split(';')[0].trim();
       const fileName = url.searchParams.get('fileName') || 'arquivo';
       const caption = url.searchParams.get('caption') || undefined;
