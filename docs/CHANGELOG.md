@@ -9,6 +9,97 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-21
+
+### Improdutiva vira categoria, não desconto
+
+No teste em produção apareceu uma leitura ruim. A tela mostrava o valor de cada
+grupo **já com o desconto aplicado** e, embaixo, uma linha de desconto
+informativa:
+
+```
+Serviços (1)                     R$ 70,00
+Evidências (1)                   R$  2,50
+Desconto por não resolver (1)   − R$  2,50
+Total da visita                  R$ 72,50
+```
+
+O total estava certo, mas quem lê de cima para baixo faz 70 + 2,50 − 2,50 = 70
+e estranha. Numa conferência de pagamento isso vira discussão.
+
+A pedido do usuário, improdutiva passa a ser uma **terceira categoria** ao lado
+de atuação e evidência, com valor próprio: uma atuação de R$ 70 que não saiu
+aparece como improdutiva de R$ 35, e não como desconto. As três linhas somam o
+total, sem nada a subtrair.
+
+A conta não mudou — só a leitura. Os testes antigos continuam passando.
+
+**Evidência deixou de poder ser improdutiva.** Entregar a evidência é o trabalho
+inteiro: ou saiu, ou vira atuação improdutiva. Não existe meia evidência. Isso
+corrige uma suposição feita quando o documento não cobria o caso — na primeira
+versão, evidência improdutiva caía pela metade. O botão some da tela quando a
+FSA é evidência, trocar o tipo limpa a marcação, e o servidor recusa mesmo que a
+tela deixe passar.
+
+Junto veio o vocabulário da operação: "serviço" vira **atuação** na tela, e o
+botão "Não consegui resolver" vira **Improdutiva**.
+
+`fsa_payouts` ganhou `improdutivas_cents` (`drizzle/0038_fsa_improdutivas.sql`),
+e `servicos_cents`/`evidencias_cents` passam a guardar só a parte produtiva. A
+tabela estava vazia, então não houve o que converter. O relatório ganhou três
+colunas novas, uma por categoria, para a planilha ser somável por qualquer
+recorte.
+
+### O grupo passa a ser a unidade de pagamento
+
+Duas limitações do modelo anterior apareceram no uso real:
+
+- **Só dava para classificar dentro de um atendimento preparado.** O usuário
+  quer classificar a qualquer momento — pendente de agendamento, agendado ou
+  técnico em campo — sem passar pela operação ao vivo.
+- **Um chamado que volta para a fila sobrescrevia a passada anterior.** Ex.: a
+  FSA foi marcada como evidência, ficou aguardando spare, o spare chegou e ela
+  foi atendida como atuação — às vezes por outro técnico, noutro grupo. A
+  classificação era única por chamado, então a segunda apagava a primeira, e
+  com ela um trabalho que já tinha sido pago.
+
+Agora existe o **grupo de repasse**: o usuário seleciona várias FSAs na fila,
+escolhe o técnico e cria o grupo pela barra de ações em lote ("Agrupar para
+repasse"). O grupo define a faixa de preço — dois chamados na mesma loja, no
+mesmo horário, com o mesmo técnico, valem R$ 100 no total. A tabela calcula e a
+gerência só confere.
+
+A chave da classificação passou a ser (grupo, chamado), então o mesmo chamado
+pode estar em vários grupos ao longo do tempo, um por passada.
+
+Antes de decidir, foi considerado agrupar automaticamente por técnico + dia. O
+usuário escolheu o grupo manual, e a diferença é de dinheiro: um técnico que faz
+4 + 3 + 2 atuações em três lojas recebe R$ 370 por grupo, contra R$ 270 se o dia
+inteiro virasse uma faixa só.
+
+**O técnico vem do cadastro, não do texto do Jira.** O Jira manda o nome como
+texto livre, e o mesmo técnico aparece lá como "Carlos Antonio" e "Carlos
+Antônio" — o que partiria o repasse de uma pessoa em dois.
+
+O grupo guarda a descrição e a loja de cada FSA no momento em que ela entrou:
+o Jira muda de status e de texto, e o que foi atendido e pago não pode mudar
+junto.
+
+Mudanças de estrutura:
+
+- `fsa_groups` substitui `fsa_payouts`, e `fsa_classifications` passa a apontar
+  para o grupo (`drizzle/0039_fsa_groups.sql`). As duas tabelas antigas estavam
+  vazias, então não houve o que converter.
+- A `0038` do dia anterior foi removida antes de ir para produção: ela
+  adicionava uma coluna a `fsa_payouts`, que a `0039` apaga.
+- As rotas `/api/active-attendances/[id]/fsa-payment` e `/api/fsa-payouts`
+  deram lugar a `/api/fsa-groups`. O botão "Repasse" saiu do card de
+  atendimento, e a fila de grupos fica na `/financeiro`.
+
+**Pendente:** rodar `npm run db:migrate:remote` antes de publicar.
+
+---
+
 ## 2026-09-20
 
 ### Repasse por FSA: cálculo, persistência e a tela do técnico

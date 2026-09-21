@@ -33,9 +33,9 @@ const visita = (fsas: Fsa[], extra: Partial<VisitaDoRelatorio> = {}): VisitaDoRe
   ...extra,
 });
 
-test('a memória explica a faixa de serviços e as evidências', () => {
+test('a memória explica a faixa de atuações e as evidências', () => {
   const texto = memoriaDeCalculo(calcularRepasse([...varios(3, servico), ...varios(8, evidencia)]));
-  assert.match(texto, /3 serviços = R\$\s?120,00/);
+  assert.match(texto, /faixa de 3 atuações = R\$\s?120,00/);
   assert.match(texto, /8 FSAs de evidência = R\$\s?40,00/);
   assert.match(texto, /total R\$\s?160,00/);
 });
@@ -50,11 +50,14 @@ test('a memória avisa quando a exceção do quinto chamado entrou', () => {
   assert.match(texto, /total R\$\s?180,00/);
 });
 
-test('a memória mostra o desconto de quem não resolveu', () => {
+// Improdutiva soma com o valor dela, em vez de abater o que veio antes.
+test('a memória traz a improdutiva como categoria, não como desconto', () => {
   const texto = memoriaDeCalculo(
     calcularRepasse([...varios(2, servico), servico({ improdutiva: true, motivo: 'loja-fechada' })]),
   );
-  assert.match(texto, /1 não resolvida, metade do valor: − R\$\s?20,00/);
+  assert.match(texto, /2 resolvidas = R\$\s?80,00/);
+  assert.match(texto, /1 improdutiva pela metade = R\$\s?20,00/);
+  assert.doesNotMatch(texto, /−/, 'nada a subtrair na leitura');
   assert.match(texto, /total R\$\s?100,00/);
 });
 
@@ -105,7 +108,7 @@ test('o CSV sai no formato que o Excel brasileiro abre', () => {
   const [cabecalho, primeira] = csv.slice(1).split('\r\n');
   assert.equal(
     cabecalho,
-    '"Data";"Técnico";"Grupo";"FSA";"Tipo";"Resolveu";"Motivo";"Observação";"Como foi calculado";"Total da visita";"Situação"',
+    '"Data";"Técnico";"Grupo";"FSA";"Tipo";"Resolveu";"Motivo";"Observação";"Como foi calculado";"Atuação da visita";"Evidências da visita";"Improdutivas da visita";"Total da visita";"Situação"',
   );
   assert.ok(primeira.startsWith('"20/09/2026";"tecnico@cajutech.net";"Recife Centro";"FSA-100"'));
 });
@@ -114,8 +117,8 @@ test('o CSV sai no formato que o Excel brasileiro abre', () => {
 test('o separador dentro do texto não quebra as colunas', () => {
   const csv = paraCsv(linhasDoRelatorio([visita([servico(), evidencia()])]));
   const primeira = csv.slice(1).split('\r\n')[1];
-  assert.equal(primeira.split('";"').length, 11, 'continuam 11 colunas');
-  assert.match(primeira, /1 serviço = R\$\s?70,00; 1 FSA de evidência/);
+  assert.equal(primeira.split('";"').length, 14, 'continuam 14 colunas');
+  assert.match(primeira, /faixa de 1 atuação = R\$\s?70,00; 1 resolvida/);
 });
 
 test('aspas na observação não quebram o arquivo', () => {
@@ -123,4 +126,20 @@ test('aspas na observação não quebram o arquivo', () => {
   comAspas.fsas[0].observacao = 'máquina "fritando" o papel';
   const csv = paraCsv(linhasDoRelatorio([comAspas]));
   assert.match(csv, /"máquina ""fritando"" o papel"/);
+});
+
+// A planilha precisa ser somável por recorte, então as três categorias vão em
+// colunas próprias, repetidas por linha.
+test('as três categorias viram colunas da planilha', () => {
+  const linhas = linhasDoRelatorio([
+    visita([servico(), evidencia(), servico({ improdutiva: true, motivo: 'loja-fechada' })]),
+  ]);
+
+  assert.match(linhas[0].atuacaoVisita, /^R\$\s50,00$/, 'metade da faixa de 2 atuações');
+  assert.match(linhas[0].evidenciasVisita, /^R\$\s5,00$/);
+  assert.match(linhas[0].improdutivasVisita, /^R\$\s25,00$/);
+  assert.ok(
+    linhas.every((l) => l.totalVisita === linhas[0].totalVisita),
+    'toda linha carrega o total da visita',
+  );
 });

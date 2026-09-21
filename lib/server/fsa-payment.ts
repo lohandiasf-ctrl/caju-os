@@ -1,119 +1,144 @@
-import { eq } from 'drizzle-orm';
-import { activeAttendanceTickets, fsaClassifications, fsaPayouts } from '@/db/schema';
+import { asc, eq } from 'drizzle-orm';
+import { fsaClassifications, fsaGroups, technicians } from '@/db/schema';
 import { getDb } from '@/db';
 import { calcularRepasse, type Fsa, type Repasse } from '@/lib/fsa-payment';
 
-export type FsaDaVisita = {
+export type FsaDoGrupo = {
+  id: number;
   ticketKey: string;
-  summary: string;
+  summary: string | null;
   store: string | null;
-  classificacao: {
-    tipo: 'servico' | 'evidencia';
-    improdutiva: boolean;
-    motivo: string | null;
-    observacao: string | null;
-    descobertaNaLoja: boolean;
-    revisao: 'ok' | 'pendente';
-    updatedBy: string;
-    updatedAt: string;
-  } | null;
+  tipo: 'servico' | 'evidencia' | null;
+  improdutiva: boolean;
+  motivo: string | null;
+  observacao: string | null;
+  descobertaNaLoja: boolean;
+  revisao: 'ok' | 'pendente';
+  updatedBy: string;
+  updatedAt: string;
 };
 
-export type RepasseDaVisita = {
-  fsas: FsaDaVisita[];
-  // FSAs ainda sem classificação. Enquanto houver alguma, o repasse mostrado é
-  // parcial e a visita não pode ser fechada: toda FSA precisa ser classificada.
+export type GrupoDeRepasse = {
+  id: number;
+  nome: string | null;
+  technicianId: number;
+  tecnico: string;
+  dia: string;
+  status: 'aberto' | 'pronto' | 'aprovado' | 'pago' | 'bloqueado';
+  approvedBy: string | null;
+  approvedAt: string | null;
+  paidAt: string | null;
+  createdBy: string;
+  fsas: FsaDoGrupo[];
+  // FSAs ainda sem classificação. Enquanto houver alguma, o valor mostrado é
+  // parcial e o grupo não pode ser fechado.
   naoClassificadas: string[];
-  // Alguma FSA saiu de evidência para serviço e espera a gerência. O cálculo
+  // Alguma FSA saiu de evidência para atuação e espera a gerência. O cálculo
   // continua valendo — o que trava é o pagamento.
   aguardandoRevisao: string[];
   repasse: Repasse;
-  // Estado do fechamento. Nulo enquanto a visita não foi fechada — o cálculo
-  // acima continua valendo, só ainda não virou algo para a gerência aprovar.
-  payout: {
-    status: 'aberto' | 'pronto' | 'aprovado' | 'pago' | 'bloqueado';
-    totalCents: number;
-    approvedBy: string | null;
-    approvedAt: string | null;
-    paidAt: string | null;
-    updatedAt: string;
-  } | null;
 };
 
 /**
- * Monta o repasse de uma visita a partir das FSAs que estão nela agora.
+ * Monta o grupo a partir das FSAs que estão nele agora.
  *
- * O valor nunca é lido de volta de um total guardado: ele sai sempre das
+ * O valor nunca é lido de volta do total guardado: sai sempre das
  * classificações atuais, para que reclassificar não deixe para trás um número
- * que não fecha mais com as regras.
+ * que não fecha mais com as regras. O que está guardado no grupo é a fotografia
+ * apresentada à gerência, e serve para outra coisa: provar o que foi aprovado.
  */
-export async function carregarRepasseDaVisita(attendanceId: number): Promise<RepasseDaVisita> {
+export async function carregarGrupo(groupId: number): Promise<GrupoDeRepasse | null> {
   const db = getDb();
 
-  const tickets = await db
-    .select()
-    .from(activeAttendanceTickets)
-    .where(eq(activeAttendanceTickets.attendanceId, attendanceId))
-    .all();
+  const grupo = await db
+    .select({
+      id: fsaGroups.id,
+      nome: fsaGroups.nome,
+      technicianId: fsaGroups.technicianId,
+      tecnico: technicians.name,
+      dia: fsaGroups.dia,
+      status: fsaGroups.status,
+      approvedBy: fsaGroups.approvedBy,
+      approvedAt: fsaGroups.approvedAt,
+      paidAt: fsaGroups.paidAt,
+      createdBy: fsaGroups.createdBy,
+    })
+    .from(fsaGroups)
+    .innerJoin(technicians, eq(technicians.id, fsaGroups.technicianId))
+    .where(eq(fsaGroups.id, groupId))
+    .get();
+  if (!grupo) return null;
 
-  const classificacoes = await db
+  const linhas = await db
     .select()
     .from(fsaClassifications)
-    .where(eq(fsaClassifications.attendanceId, attendanceId))
+    .where(eq(fsaClassifications.groupId, groupId))
+    .orderBy(asc(fsaClassifications.id))
     .all();
 
-  const porTicket = new Map(classificacoes.map((c) => [c.ticketKey, c]));
-
-  const fsas: FsaDaVisita[] = tickets.map((ticket) => {
-    const c = porTicket.get(ticket.ticketKey);
-    return {
-      ticketKey: ticket.ticketKey,
-      summary: ticket.summary,
-      store: ticket.store,
-      classificacao: c
-        ? {
-            tipo: c.tipo,
-            improdutiva: c.improdutiva,
-            motivo: c.motivo,
-            observacao: c.observacao,
-            descobertaNaLoja: c.descobertaNaLoja,
-            revisao: c.revisao,
-            updatedBy: c.updatedBy,
-            updatedAt: c.updatedAt,
-          }
-        : null,
-    };
-  });
+  const fsas: FsaDoGrupo[] = linhas.map((l) => ({
+    id: l.id,
+    ticketKey: l.ticketKey,
+    summary: l.summary,
+    store: l.store,
+    tipo: l.tipo,
+    improdutiva: l.improdutiva,
+    motivo: l.motivo,
+    observacao: l.observacao,
+    descobertaNaLoja: l.descobertaNaLoja,
+    revisao: l.revisao,
+    updatedBy: l.updatedBy,
+    updatedAt: l.updatedAt,
+  }));
 
   const paraCalcular: Fsa[] = fsas
-    .filter((f) => f.classificacao)
+    .filter((f) => f.tipo)
     .map((f) => ({
-      tipo: f.classificacao!.tipo,
-      improdutiva: f.classificacao!.improdutiva,
-      motivo: (f.classificacao!.motivo ?? undefined) as Fsa['motivo'],
-      descobertaNaLoja: f.classificacao!.descobertaNaLoja,
+      tipo: f.tipo!,
+      improdutiva: f.improdutiva,
+      motivo: (f.motivo ?? undefined) as Fsa['motivo'],
+      descobertaNaLoja: f.descobertaNaLoja,
     }));
 
-  const payout = await db.select().from(fsaPayouts).where(eq(fsaPayouts.attendanceId, attendanceId)).get();
-
   return {
+    ...grupo,
     fsas,
-    naoClassificadas: fsas.filter((f) => !f.classificacao).map((f) => f.ticketKey),
-    aguardandoRevisao: fsas
-      .filter((f) => f.classificacao?.revisao === 'pendente')
-      .map((f) => f.ticketKey),
+    naoClassificadas: fsas.filter((f) => !f.tipo).map((f) => f.ticketKey),
+    aguardandoRevisao: fsas.filter((f) => f.revisao === 'pendente').map((f) => f.ticketKey),
     repasse: calcularRepasse(paraCalcular),
-    payout: payout
-      ? {
-          status: payout.status,
-          totalCents: payout.totalCents,
-          approvedBy: payout.approvedBy,
-          approvedAt: payout.approvedAt,
-          paidAt: payout.paidAt,
-          updatedAt: payout.updatedAt,
-        }
-      : null,
   };
+}
+
+/**
+ * Todas as passadas já registradas de um chamado, em todos os grupos.
+ *
+ * Um chamado volta para a fila — vira "aguardando spare", o spare chega, outro
+ * técnico atende — e cada passada foi um trabalho pago à parte. A tela mostra o
+ * histórico para ninguém classificar de novo achando que está corrigindo o que
+ * ficou para trás.
+ */
+export async function carregarPassesDaFsa(ticketKey: string) {
+  const db = getDb();
+  return db
+    .select({
+      id: fsaClassifications.id,
+      groupId: fsaClassifications.groupId,
+      grupo: fsaGroups.nome,
+      dia: fsaGroups.dia,
+      status: fsaGroups.status,
+      tecnico: technicians.name,
+      tipo: fsaClassifications.tipo,
+      improdutiva: fsaClassifications.improdutiva,
+      motivo: fsaClassifications.motivo,
+      updatedBy: fsaClassifications.updatedBy,
+      updatedAt: fsaClassifications.updatedAt,
+    })
+    .from(fsaClassifications)
+    .innerJoin(fsaGroups, eq(fsaGroups.id, fsaClassifications.groupId))
+    .innerJoin(technicians, eq(technicians.id, fsaGroups.technicianId))
+    .where(eq(fsaClassifications.ticketKey, ticketKey))
+    .orderBy(asc(fsaGroups.dia))
+    .all();
 }
 
 /** R$ 1.234,56 a partir de centavos, para a tela e para o relatório. */

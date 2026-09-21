@@ -955,20 +955,81 @@ export const assistantActions = sqliteTable(
   ],
 );
 
-// Classificação de uma FSA para efeito de repasse ao técnico.
+// Grupo de repasse: o conjunto de FSAs que o técnico atendeu junto.
 //
-// Vive só no Caju: nada disso volta para o Jira, que continua sendo a origem
-// do chamado e não sabe o que é serviço, evidência ou improdutivo. Por isso a
-// chave é a do ticket, e não um id próprio — cada FSA tem uma classificação só.
+// É o grupo que define a faixa de preço, e não o chamado isolado: dois chamados
+// na mesma loja, no mesmo horário, com o mesmo técnico, são um grupo e valem
+// R$ 100 no total.
+//
+// O grupo não depende do atendimento preparado da operação ao vivo. Ele nasce da
+// seleção de chamados, em qualquer momento — pendente de agendamento, agendado
+// ou com o técnico em campo.
+export const fsaGroups = sqliteTable(
+  'fsa_groups',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    nome: text('nome'),
+    // Quem recebe. Vem do cadastro, e não do texto livre que o Jira manda: o
+    // mesmo técnico aparece lá como "Carlos Antonio" e "Carlos Antônio", e o
+    // relatório acabaria pagando duas pessoas que são uma só.
+    technicianId: integer('technician_id')
+      .notNull()
+      .references(() => technicians.id),
+    // AAAA-MM-DD no fuso da operação, para o relatório agrupar por data sem
+    // depender do fuso do servidor.
+    dia: text('dia').notNull(),
+    status: text('status', {
+      enum: ['aberto', 'pronto', 'aprovado', 'pago', 'bloqueado'],
+    })
+      .notNull()
+      .default('aberto'),
+    // As três categorias da leitura, cada uma com o que rendeu. Improdutiva não
+    // é desconto: soma como as outras duas, e juntas fecham o total. Só são
+    // preenchidas no fechamento — antes disso o valor sai sempre do cálculo.
+    servicosCents: integer('servicos_cents').notNull().default(0),
+    evidenciasCents: integer('evidencias_cents').notNull().default(0),
+    improdutivasCents: integer('improdutivas_cents').notNull().default(0),
+    descontoImprodutivoCents: integer('desconto_improdutivo_cents').notNull().default(0),
+    totalCents: integer('total_cents').notNull().default(0),
+    // Memória de cálculo em JSON, para o relatório explicar como chegou no valor.
+    memoria: text('memoria'),
+    approvedBy: text('approved_by'),
+    approvedAt: text('approved_at'),
+    paidAt: text('paid_at'),
+    createdBy: text('created_by').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    index('idx_fsa_groups_status').on(table.status, table.dia),
+    index('idx_fsa_groups_tecnico').on(table.technicianId, table.dia),
+  ],
+);
+
+// A FSA dentro de um grupo.
+//
+// Vive só no Caju: nada disso volta para o Jira, que é a origem do chamado e não
+// sabe o que é atuação, evidência ou improdutiva.
+//
+// A chave é (grupo, chamado), não o chamado sozinho. Um chamado sai e volta para
+// a fila — vira "aguardando spare", o spare chega, outro técnico atende — e cada
+// passada entra num grupo novo. Sobrescrever a classificação anterior apagaria um
+// atendimento que já aconteceu e já foi pago.
 export const fsaClassifications = sqliteTable(
   'fsa_classifications',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
+    groupId: integer('group_id')
+      .notNull()
+      .references(() => fsaGroups.id),
     ticketKey: text('ticket_key').notNull(),
-    // A visita a que a FSA pertence. O repasse é calculado por atendimento,
-    // porque a faixa de preço é do conjunto e não de cada chamado isolado.
-    attendanceId: integer('attendance_id').references(() => activeAttendances.id),
-    tipo: text('tipo', { enum: ['servico', 'evidencia'] }).notNull(),
+    // Fotografia do chamado no momento em que entrou no grupo. O Jira muda de
+    // status e de texto; o que foi atendido e pago não pode mudar junto.
+    summary: text('summary'),
+    store: text('store'),
+    // Nulo enquanto ninguém classificou. O grupo não fecha com FSA em branco,
+    // mas ela precisa existir antes disso para aparecer na tela a classificar.
+    tipo: text('tipo', { enum: ['servico', 'evidencia'] }),
     improdutiva: integer('improdutiva', { mode: 'boolean' }).notNull().default(false),
     motivo: text('motivo', {
       enum: [
@@ -982,11 +1043,11 @@ export const fsaClassifications = sqliteTable(
     }),
     observacao: text('observacao'),
     // Apareceu durante a visita, fora do agendamento. Muda o valor quando o
-    // recálculo pela tabela não renderia nada (4 serviços e aparece o quinto).
+    // recálculo pela tabela não renderia nada (4 atuações e aparece a quinta).
     descobertaNaLoja: integer('descoberta_na_loja', { mode: 'boolean' }).notNull().default(false),
-    // Trocar evidência por serviço mexe no valor, então a mudança fica retida
-    // até a gerência revisar. O cálculo continua rodando; o que trava é o
-    // pagamento, não a edição.
+    // Trocar evidência por atuação mexe no valor, então a mudança fica retida até
+    // a gerência revisar. O cálculo continua rodando; o que trava é o pagamento,
+    // não a edição.
     revisao: text('revisao', { enum: ['ok', 'pendente'] }).notNull().default('ok'),
     createdBy: text('created_by').notNull(),
     createdAt: text('created_at').notNull(),
@@ -994,40 +1055,8 @@ export const fsaClassifications = sqliteTable(
     updatedAt: text('updated_at').notNull(),
   },
   (table) => [
-    uniqueIndex('idx_fsa_classifications_ticket').on(table.ticketKey),
-    index('idx_fsa_classifications_attendance').on(table.attendanceId),
+    uniqueIndex('idx_fsa_classifications_grupo').on(table.groupId, table.ticketKey),
+    // O histórico do chamado: todas as passadas dele, em todos os grupos.
+    index('idx_fsa_classifications_ticket').on(table.ticketKey),
   ],
-);
-
-// Repasse fechado de uma visita.
-//
-// O valor não é a fonte da verdade — ele sempre pode ser recalculado a partir
-// das FSAs. É uma fotografia do que foi apresentado à gerência no momento da
-// aprovação, para que uma reclassificação posterior não reescreva à revelia o
-// que já foi aprovado ou pago.
-export const fsaPayouts = sqliteTable(
-  'fsa_payouts',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    attendanceId: integer('attendance_id')
-      .notNull()
-      .references(() => activeAttendances.id),
-    status: text('status', {
-      enum: ['aberto', 'pronto', 'aprovado', 'pago', 'bloqueado'],
-    })
-      .notNull()
-      .default('aberto'),
-    servicosCents: integer('servicos_cents').notNull().default(0),
-    evidenciasCents: integer('evidencias_cents').notNull().default(0),
-    descontoImprodutivoCents: integer('desconto_improdutivo_cents').notNull().default(0),
-    totalCents: integer('total_cents').notNull().default(0),
-    // Memória de cálculo em JSON, para o relatório explicar como chegou no valor.
-    memoria: text('memoria'),
-    approvedBy: text('approved_by'),
-    approvedAt: text('approved_at'),
-    paidAt: text('paid_at'),
-    createdAt: text('created_at').notNull(),
-    updatedAt: text('updated_at').notNull(),
-  },
-  (table) => [uniqueIndex('idx_fsa_payouts_attendance').on(table.attendanceId)],
 );

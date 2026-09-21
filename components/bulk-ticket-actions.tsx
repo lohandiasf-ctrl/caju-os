@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Loader2, MessageCirclePlus, Search, UserRound, Wrench, X, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Loader2, MessageCirclePlus, Search, UserRound, WalletCards, Wrench, X, XCircle } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -52,6 +52,13 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
   const [results, setResults] = useState<Result[] | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'ok' | 'fail'>('idle');
   const [groupOpen, setGroupOpen] = useState(false);
+  // Agrupar para repasse é outra coisa do que agrupar no WhatsApp: aqui o grupo
+  // define a faixa de preço que o técnico recebe.
+  const [repasseOpen, setRepasseOpen] = useState(false);
+  const [repasseTecnico, setRepasseTecnico] = useState<number | null>(null);
+  const [repasseNome, setRepasseNome] = useState('');
+  const [repasseSaving, setRepasseSaving] = useState(false);
+  const [repasseOk, setRepasseOk] = useState('');
   const canCreateGroup = canUseWhatsapp(role);
 
   const canTransition = canBulkTransition(role);
@@ -59,7 +66,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
   const toField = useMemo(() => tickets.filter((ticket) => isBulkEligible(ticket.rawStatus, 'in_service')), [tickets]);
 
   useEffect(() => {
-    if (mode !== 'scheduled' || !user) return;
+    if ((mode !== 'scheduled' && !repasseOpen) || !user) return;
     let active = true;
     setLoadingTechnicians(true);
     void user.getIdToken()
@@ -69,7 +76,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
       .catch(() => { if (active) setTechnicians([]); })
       .finally(() => { if (active) setLoadingTechnicians(false); });
     return () => { active = false; };
-  }, [mode, user]);
+  }, [mode, repasseOpen, user]);
 
   useEffect(() => {
     if (copyState === 'idle' || copyState === 'copying') return;
@@ -167,6 +174,35 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
   const accent = mode === 'in_service'
     ? { icon: 'text-emerald-300', box: 'border-emerald-400/25 bg-emerald-400/8', label: 'text-emerald-200', chip: 'border-emerald-300/20 text-emerald-100' }
     : { icon: 'text-violet-300', box: 'border-violet-400/25 bg-violet-400/8', label: 'text-violet-200', chip: 'border-violet-300/20 text-violet-100' };
+  const criarGrupoDeRepasse = async () => {
+    if (!user || !repasseTecnico) return;
+    setRepasseSaving(true);
+    setError('');
+    try {
+      const response = await fetch('/api/fsa-groups', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          technicianId: repasseTecnico,
+          nome: repasseNome.trim() || null,
+          // A descrição e a loja viajam junto: o grupo guarda a fotografia do
+          // chamado, para a conferência não depender do Jira de amanhã.
+          tickets: tickets.map((ticket) => ({ key: ticket.id, summary: ticket.title, store: ticket.store })),
+        }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível criar o grupo.');
+      setRepasseOk(`Grupo criado com ${count(tickets.length, 'FSA', 'FSAs')}. Classifique cada uma em Financeiro › Grupos de repasse.`);
+      setRepasseNome('');
+      setRepasseTecnico(null);
+      setTechnicianQuery('');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Não foi possível criar o grupo.');
+    } finally {
+      setRepasseSaving(false);
+    }
+  };
+
   const title = mode === 'in_service'
     ? `Mover ${count(targets.length, 'chamado', 'chamados')} para Técnico em campo`
     : `Agendar ${count(targets.length, 'chamado', 'chamados')}`;
@@ -199,12 +235,65 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
         {canCreateGroup && <Button variant="outline" className="h-9" onClick={() => setGroupOpen(true)} disabled={tickets.length > MAX_BULK_TICKETS} title={tickets.length > MAX_BULK_TICKETS ? `Máximo de ${MAX_BULK_TICKETS} chamados por vez` : undefined}>
           <MessageCirclePlus /> Criar grupo
         </Button>}
+        <Button variant="outline" className="h-9" onClick={() => { setRepasseOk(''); setError(''); setRepasseOpen(true); }}>
+          <WalletCards /> Agrupar para repasse
+        </Button>
         <Button variant="ghost" className="size-9 p-0" onClick={onClear} aria-label="Limpar seleção" title="Limpar seleção"><X /></Button>
         <span className="sr-only" aria-live="polite">{copyState === 'ok' ? `${count(tickets.length, 'chamado copiado', 'chamados copiados')}.` : copyState === 'fail' ? 'Não foi possível copiar.' : ''}</span>
       </div>
     </>}
 
     {canCreateGroup && <WhatsAppGroupDialog open={groupOpen} onOpenChange={setGroupOpen} tickets={tickets} user={user} />}
+
+    <Dialog open={repasseOpen} onOpenChange={(next) => { if (!next && !repasseSaving) { setRepasseOpen(false); setRepasseOk(''); } }}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><WalletCards className="size-5 text-emerald-300" />Agrupar {count(tickets.length, 'FSA', 'FSAs')} para repasse</DialogTitle>
+          <DialogDescription>
+            O grupo define a faixa de preço: estas FSAs viram um atendimento só na conta do técnico.
+            Não precisa preparar atendimento, e o valor sai da tabela — você só confere depois.
+          </DialogDescription>
+        </DialogHeader>
+        {error && <p role="alert" className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{error}</p>}
+        {repasseOk
+          ? <p className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">{repasseOk}</p>
+          : <div className="mt-2 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {tickets.map((ticket) => <span key={ticket.id} className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-100">{ticket.id}</span>)}
+            </div>
+            <div>
+              <label htmlFor="repasse-nome" className="mb-1 block text-sm font-semibold">Nome do grupo</label>
+              <Input id="repasse-nome" maxLength={120} value={repasseNome} onChange={(event) => setRepasseNome(event.target.value)} placeholder="Ex.: Loja L252 — manhã" />
+              <p className="mt-1 text-xs text-muted-foreground">Opcional. Serve para você reconhecer o grupo na fila de repasse.</p>
+            </div>
+            <div>
+              <label htmlFor="repasse-tecnico" className="mb-1 block text-sm font-semibold">Técnico que vai receber</label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                <Input id="repasse-tecnico" value={technicianQuery} onChange={(event) => { setTechnicianQuery(event.target.value); setRepasseTecnico(null); }} placeholder="Busque pelo nome" className="min-h-11 pl-9" />
+              </div>
+              {loadingTechnicians && <p className="mt-2 text-xs text-muted-foreground"><Loader2 className="mr-1 inline size-3 animate-spin" />Carregando técnicos...</p>}
+              {!loadingTechnicians && technicianQuery.trim().length > 1 && <div className="mt-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-background/60 p-1">
+                {matches.length ? matches.slice(0, 8).map((technician) => <button key={technician.id} type="button" onClick={() => { setRepasseTecnico(technician.id); setTechnicianQuery(technician.name); }} className={`flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-muted ${repasseTecnico === technician.id ? 'bg-emerald-400/10' : ''}`}>
+                  <UserRound className="mt-0.5 size-4 shrink-0 text-emerald-300" aria-hidden="true" />
+                  <span className="min-w-0"><b className="text-sm">{technician.name}</b><span className="ml-1 text-xs text-muted-foreground">{technician.city}/{technician.state}</span></span>
+                </button>) : <p className="px-2 py-2 text-xs text-muted-foreground">Nenhum técnico encontrado.</p>}
+              </div>}
+              <p className="mt-1 text-xs text-muted-foreground">Vem do cadastro, não do texto do Jira — lá o mesmo técnico aparece escrito de duas formas.</p>
+            </div>
+          </div>}
+        <DialogFooter>
+          {repasseOk
+            ? <Button onClick={() => { setRepasseOpen(false); setRepasseOk(''); onClear(); }}>Fechar</Button>
+            : <>
+              <Button variant="ghost" onClick={() => setRepasseOpen(false)} disabled={repasseSaving}>Cancelar</Button>
+              <Button disabled={!repasseTecnico || repasseSaving} onClick={() => void criarGrupoDeRepasse()}>
+                {repasseSaving ? <Loader2 className="animate-spin" /> : <WalletCards />}Criar grupo
+              </Button>
+            </>}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={mode !== null} onOpenChange={(next) => { if (!next && !saving) setMode(null); }}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
