@@ -11,6 +11,11 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### Anexar evidência não comenta mais no Jira
+
+O Caju OS deixou de escrever "Evidências anexadas pelo Caju OS por …" no
+chamado ao anexar fotos. Os arquivos continuam indo para o Jira.
+
 ### Validar não exige mais valores atualizados
 
 O botão Validar deixou de travar em "Falta: valores atualizados". O valor do
