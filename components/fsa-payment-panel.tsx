@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Camera, Loader2, ShieldAlert, Wrench } from "lucide-react";
+import { AlertTriangle, Camera, CheckCircle2, Loader2, ShieldAlert, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -51,11 +51,29 @@ type Repasse = {
   totalCents: number;
 };
 
+type Payout = {
+  status: "aberto" | "pronto" | "aprovado" | "pago" | "bloqueado";
+  totalCents: number;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  paidAt: string | null;
+  updatedAt: string;
+};
+
 type Dados = {
   fsas: Fsa[];
   naoClassificadas: string[];
   aguardandoRevisao: string[];
   repasse: Repasse;
+  payout: Payout | null;
+};
+
+const ROTULO_STATUS: Record<Payout["status"], string> = {
+  aberto: "Em aberto",
+  pronto: "Fechado, esperando a gerência",
+  aprovado: "Aprovado pela gerência",
+  pago: "Pago",
+  bloqueado: "Retido para conferência da gerência",
 };
 
 const reais = (cents: number) =>
@@ -68,6 +86,7 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
   const [error, setError] = useState("");
   const [salvando, setSalvando] = useState<string | null>(null);
   const [abrindoMotivo, setAbrindoMotivo] = useState<string | null>(null);
+  const [fechando, setFechando] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -126,6 +145,31 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
       setError(reason instanceof Error ? reason.message : "Não foi possível salvar.");
     } finally {
       setSalvando(null);
+    }
+  };
+
+  // Fechar é o que transforma o cálculo em algo que a gerência aprova. Antes
+  // disso a visita é só do técnico, e nada foi apresentado a ninguém.
+  const fechar = async () => {
+    if (!user) return;
+    setFechando(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/active-attendances/${attendanceId}/fsa-payment`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "fechar" }),
+      });
+      const payload = (await response.json()) as Dados & { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Não foi possível fechar o repasse.");
+      setDados(payload);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Não foi possível fechar o repasse.");
+    } finally {
+      setFechando(false);
     }
   };
 
@@ -306,6 +350,24 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
           <dd className="font-bold text-emerald-300">{reais(repasse.totalCents)}</dd>
         </div>
       </dl>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {dados.payout ? ROTULO_STATUS[dados.payout.status] : "Ainda não fechado"}
+        </p>
+        {(!dados.payout || dados.payout.status === "pronto" || dados.payout.status === "bloqueado") && (
+          <Button
+            type="button"
+            size="sm"
+            className="min-h-11"
+            disabled={fechando || dados.naoClassificadas.length > 0}
+            onClick={() => void fechar()}
+          >
+            {fechando ? <Loader2 className="animate-spin" aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}
+            {dados.payout ? "Atualizar o que a gerência vê" : "Fechar repasse"}
+          </Button>
+        )}
+      </div>
     </section>
   );
 }

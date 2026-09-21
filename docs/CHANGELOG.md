@@ -49,8 +49,27 @@ pelo botão "Repasse": classifica cada FSA como serviço ou evidência, marca
 total da visita. Avisa quando falta classificar alguma FSA (valor parcial) e
 quando uma evidência virou serviço e espera a gerência.
 
+### Aprovação do gerente
+
+Fecha o ciclo que a persistência tinha deixado pela metade: até aqui
+`fsa_payouts` não tinha ninguém escrevendo nela.
+
+O técnico fecha a visita no próprio painel, e só então o cálculo vira uma
+fotografia que a gerência vê. Fechar exige toda FSA classificada — fechar com
+pendência guardaria um valor que já se sabe incompleto. Se alguma FSA passou de
+evidência para serviço, a visita chega à fila já marcada como retida, em vez de
+entrar como se estivesse conferida.
+
+Na `/financeiro`, a fila de repasses com aprovar, bloquear, liberar a
+reclassificação e marcar como pago. Só gerência vê — quem não é nem recebe a
+lista. Aprovar refaz a fotografia a partir das FSAs atuais, porque a
+classificação pode ter mudado entre o fechamento e a conferência.
+
+'Pago' não paga ninguém: é o gerente registrando que a folha saiu, para a
+visita não voltar à fila. O Caju segue sem tocar em dinheiro.
+
 **Pendente:** rodar `npm run db:migrate:remote` para aplicar a migration.
-Faltam ainda o fluxo de aprovação do gerente e a exportação do relatório.
+Falta ainda a exportação do relatório em PDF/Excel.
 
 Atenção ao gerar migration neste projeto: o journal do `drizzle-kit` está
 parado no `0024`, então `drizzle-kit generate` diffa contra um snapshot velho e

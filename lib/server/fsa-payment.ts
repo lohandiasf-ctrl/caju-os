@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { activeAttendanceTickets, fsaClassifications } from '@/db/schema';
+import { activeAttendanceTickets, fsaClassifications, fsaPayouts } from '@/db/schema';
 import { getDb } from '@/db';
 import { calcularRepasse, type Fsa, type Repasse } from '@/lib/fsa-payment';
 
@@ -28,6 +28,16 @@ export type RepasseDaVisita = {
   // continua valendo — o que trava é o pagamento.
   aguardandoRevisao: string[];
   repasse: Repasse;
+  // Estado do fechamento. Nulo enquanto a visita não foi fechada — o cálculo
+  // acima continua valendo, só ainda não virou algo para a gerência aprovar.
+  payout: {
+    status: 'aberto' | 'pronto' | 'aprovado' | 'pago' | 'bloqueado';
+    totalCents: number;
+    approvedBy: string | null;
+    approvedAt: string | null;
+    paidAt: string | null;
+    updatedAt: string;
+  } | null;
 };
 
 /**
@@ -84,6 +94,8 @@ export async function carregarRepasseDaVisita(attendanceId: number): Promise<Rep
       descobertaNaLoja: f.classificacao!.descobertaNaLoja,
     }));
 
+  const payout = await db.select().from(fsaPayouts).where(eq(fsaPayouts.attendanceId, attendanceId)).get();
+
   return {
     fsas,
     naoClassificadas: fsas.filter((f) => !f.classificacao).map((f) => f.ticketKey),
@@ -91,6 +103,16 @@ export async function carregarRepasseDaVisita(attendanceId: number): Promise<Rep
       .filter((f) => f.classificacao?.revisao === 'pendente')
       .map((f) => f.ticketKey),
     repasse: calcularRepasse(paraCalcular),
+    payout: payout
+      ? {
+          status: payout.status,
+          totalCents: payout.totalCents,
+          approvedBy: payout.approvedBy,
+          approvedAt: payout.approvedAt,
+          paidAt: payout.paidAt,
+          updatedAt: payout.updatedAt,
+        }
+      : null,
   };
 }
 
