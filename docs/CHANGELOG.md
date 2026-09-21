@@ -11,6 +11,27 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### Kanban empilha os chamados agrupados
+
+Quem agrupa quatro FSAs da mesma loja não quer ver quatro cards soltos na
+coluna: é um atendimento só. Agora os chamados do mesmo grupo de repasse, na
+mesma coluna, viram uma **pilha** — um card com o nome do grupo, o técnico, as
+FSAs e a loja, com duas cartas deslocadas por trás. Clicar abre os cards de
+sempre dentro da coluna, e cada um continua abrindo o chamado.
+
+- A pilha só existe com **dois ou mais** chamados do grupo **na mesma coluna**.
+  Se um deles mudou de etapa (foi para "aguardando spare"), aparece sozinho
+  onde está: a pilha mostra onde cada chamado está de fato.
+- **Grupo pago deixa de empilhar.** Se o chamado voltar para a fila depois
+  disso, é trabalho novo e aparece solto até ser agrupado de novo.
+- A seleção em lote continua funcionando: a pilha tem sua própria caixa, que
+  marca todas as FSAs do grupo.
+
+A regra de empilhar é função pura (`lib/ticket-stacks.ts`), com testes. Os
+vínculos vêm de `/api/fsa-groups/vinculos`, que devolve só nome do grupo e
+técnico — sem valor, porque o kanban é visto pela equipe inteira. O kanban
+atualiza a cada minuto, e na hora quando quem está vendo acabou de agrupar.
+
 ### Improdutiva vira categoria, não desconto
 
 No teste em produção apareceu uma leitura ruim. A tela mostrava o valor de cada
