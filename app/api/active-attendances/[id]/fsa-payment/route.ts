@@ -241,8 +241,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const status = visita.aguardandoRevisao.length ? ('bloqueado' as const) : ('pronto' as const);
       const valores = {
         status,
-        servicosCents: visita.repasse.servicos.totalCents,
-        evidenciasCents: visita.repasse.evidencias.totalCents,
+        // Só a parte produtiva em cada categoria: o que as improdutivas
+        // renderam vai na linha delas, não descontado das outras duas.
+        servicosCents: visita.repasse.servicos.produtivosCents,
+        evidenciasCents: visita.repasse.evidencias.produtivasCents,
+        improdutivasCents: visita.repasse.improdutivas.totalCents,
         descontoImprodutivoCents: visita.repasse.descontoImprodutivoCents,
         totalCents: visita.repasse.totalCents,
         memoria: JSON.stringify(visita.repasse),
@@ -290,8 +293,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         .update(fsaPayouts)
         .set({
           status: 'aprovado',
-          servicosCents: visita.repasse.servicos.totalCents,
-          evidenciasCents: visita.repasse.evidencias.totalCents,
+          servicosCents: visita.repasse.servicos.produtivosCents,
+          evidenciasCents: visita.repasse.evidencias.produtivasCents,
+          improdutivasCents: visita.repasse.improdutivas.totalCents,
           descontoImprodutivoCents: visita.repasse.descontoImprodutivoCents,
           totalCents: visita.repasse.totalCents,
           memoria: JSON.stringify(visita.repasse),

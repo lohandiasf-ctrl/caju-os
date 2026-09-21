@@ -40,13 +40,25 @@ type Fsa = {
 type Repasse = {
   servicos: {
     quantidade: number;
+    produtivos: number;
     descobertos: number;
     improdutivos: number;
     faixaCents: number;
     excecaoQuintoChamado: boolean;
+    produtivosCents: number;
+    improdutivosCents: number;
     totalCents: number;
   };
-  evidencias: { quantidade: number; improdutivas: number; baseCents: number; totalCents: number };
+  evidencias: {
+    quantidade: number;
+    produtivas: number;
+    improdutivas: number;
+    baseCents: number;
+    produtivasCents: number;
+    improdutivasCents: number;
+    totalCents: number;
+  };
+  improdutivas: { quantidade: number; totalCents: number };
   descontoImprodutivoCents: number;
   totalCents: number;
 };
@@ -245,7 +257,7 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
                   aria-pressed={c?.tipo === "servico"}
                   onClick={() => void classificar(fsa, { tipo: "servico" })}
                 >
-                  <Wrench aria-hidden="true" /> Serviço
+                  <Wrench aria-hidden="true" /> Atuação
                 </Button>
                 <Button
                   type="button"
@@ -267,7 +279,7 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
                   aria-pressed={c?.improdutiva ?? false}
                   onClick={() => void classificar(fsa, { improdutiva: !c?.improdutiva, motivo: c?.improdutiva ? null : undefined })}
                 >
-                  Não consegui resolver
+                  Improdutiva
                 </Button>
               </div>
 
@@ -327,22 +339,19 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
       <dl className="mt-4 grid gap-1 rounded-xl border border-border bg-background/60 p-3 text-sm">
         <div className="flex justify-between gap-3">
           <dt className="text-muted-foreground">
-            Serviços ({repasse.servicos.quantidade})
-            {repasse.servicos.excecaoQuintoChamado && " · com o serviço a mais da loja"}
+            Atuação ({repasse.servicos.produtivos})
+            {repasse.servicos.excecaoQuintoChamado && " · com a atuação a mais da loja"}
           </dt>
-          <dd className="font-bold">{reais(repasse.servicos.totalCents)}</dd>
+          <dd className="font-bold">{reais(repasse.servicos.produtivosCents)}</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Evidências ({repasse.evidencias.quantidade})</dt>
-          <dd className="font-bold">{reais(repasse.evidencias.totalCents)}</dd>
+          <dt className="text-muted-foreground">Evidências ({repasse.evidencias.produtivas})</dt>
+          <dd className="font-bold">{reais(repasse.evidencias.produtivasCents)}</dd>
         </div>
-        {repasse.descontoImprodutivoCents > 0 && (
+        {repasse.improdutivas.quantidade > 0 && (
           <div className="flex justify-between gap-3 text-amber-200">
-            <dt>
-              Desconto por não resolver (
-              {repasse.servicos.improdutivos + repasse.evidencias.improdutivas})
-            </dt>
-            <dd className="font-bold">− {reais(repasse.descontoImprodutivoCents)}</dd>
+            <dt>Improdutivas ({repasse.improdutivas.quantidade})</dt>
+            <dd className="font-bold">{reais(repasse.improdutivas.totalCents)}</dd>
           </div>
         )}
         <div className="mt-1 flex justify-between gap-3 border-t border-border pt-2 text-base">

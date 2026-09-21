@@ -166,3 +166,60 @@ test('o dia junta as visitas numa faixa só', () => {
   assert.equal(dia.consolidado.servicos.quantidade, 9);
   assert.equal(dia.consolidado.totalCents, 27_000, '9 serviços valem R$ 270, não a soma das visitas');
 });
+
+// A improdutiva é uma categoria de leitura, não um desconto: ela tem valor
+// próprio, e as três linhas somam o total sem nada a subtrair.
+test('improdutiva aparece como categoria, com valor próprio', () => {
+  const r = calcularRepasse([servico({ improdutiva: true, motivo: 'loja-fechada' })]);
+
+  assert.equal(r.servicos.faixaCents, 7_000, 'a faixa continua sendo de 1 atuação');
+  assert.equal(r.servicos.produtivosCents, 0);
+  assert.equal(r.improdutivas.quantidade, 1);
+  assert.equal(r.improdutivas.totalCents, 3_500, 'R$ 35: metade dos R$ 70');
+  assert.equal(r.totalCents, 3_500);
+});
+
+test('as três categorias somam o total', () => {
+  const casos: Fsa[][] = [
+    [...varios(2, servico), servico({ improdutiva: true, motivo: 'defeito-maior' })],
+    [servico(), ...varios(9, evidencia), evidencia({ improdutiva: true, motivo: 'loja-fechada' })],
+    [...varios(4, servico), servico({ descobertaNaLoja: true }), ...varios(3, evidencia)],
+    varios(5, () => evidencia({ improdutiva: true, motivo: 'loja-fechada' })),
+  ];
+  for (const fsas of casos) {
+    const r = calcularRepasse(fsas);
+    assert.equal(
+      r.servicos.produtivosCents + r.evidencias.produtivasCents + r.improdutivas.totalCents,
+      r.totalCents,
+      'atuação + evidência + improdutiva fecha o total, sem linha de desconto',
+    );
+  }
+});
+
+// A parte improdutiva sai da subtração justamente para não sobrar centavo.
+test('a repartição não perde centavo em divisão quebrada', () => {
+  const r = calcularRepasse([
+    ...varios(3, servico),
+    servico({ improdutiva: true, motivo: 'tempo-excedido' }),
+  ]);
+  assert.equal(r.servicos.faixaCents, 15_000, '4 atuações');
+  assert.equal(r.servicos.produtivosCents + r.servicos.improdutivosCents, r.servicos.totalCents);
+  assert.equal(r.totalCents, 13_125, 'R$ 37,50 x 3 + R$ 18,75');
+});
+
+test('visita mista separa improdutiva de atuação e de evidência', () => {
+  const r = calcularRepasse([
+    servico(),
+    servico({ improdutiva: true, motivo: 'gerente-recusou' }),
+    evidencia(),
+    evidencia({ improdutiva: true, motivo: 'loja-fechada' }),
+  ]);
+
+  assert.equal(r.servicos.produtivos, 1);
+  assert.equal(r.servicos.produtivosCents, 5_000, 'metade da faixa de 2 atuações');
+  assert.equal(r.evidencias.produtivas, 1);
+  assert.equal(r.evidencias.produtivasCents, 500);
+  assert.equal(r.improdutivas.quantidade, 2, 'uma de cada tipo, numa linha só');
+  assert.equal(r.improdutivas.totalCents, 2_750, 'R$ 25 da atuação + R$ 2,50 da evidência');
+  assert.equal(r.totalCents, 8_250);
+});

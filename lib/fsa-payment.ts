@@ -97,19 +97,50 @@ function aplicarImprodutivas(baseCents: number, total: number, improdutivas: num
   return Math.round((baseCents * (produtivas + improdutivas / 2)) / total);
 }
 
+/**
+ * Separa o que o grupo rendeu entre quem resolveu e quem não.
+ *
+ * Improdutiva não é desconto: é uma categoria à parte, com valor próprio (uma
+ * atuação de R$ 70 que não saiu vale R$ 35, e é assim que ela aparece). A parte
+ * improdutiva sai da subtração em vez de ter arredondamento próprio, senão as
+ * duas metades podem somar um centavo a mais ou a menos que o total do grupo.
+ */
+function repartir(baseCents: number, total: number, improdutivas: number) {
+  if (!total) return { totalCents: 0, produtivasCents: 0, improdutivasCents: 0 };
+  const totalCents = aplicarImprodutivas(baseCents, total, improdutivas);
+  const produtivasCents = Math.round((baseCents * (total - improdutivas)) / total);
+  return { totalCents, produtivasCents, improdutivasCents: totalCents - produtivasCents };
+}
+
 export type Repasse = {
+  // Atuação: a FSA em que o técnico resolveu alguma coisa. `quantidade` conta
+  // todas, inclusive as improdutivas, porque é ela que define a faixa de preço;
+  // `produtivosCents` é só o que as resolvidas renderam.
   servicos: {
     quantidade: number;
+    produtivos: number;
     descobertos: number;
     improdutivos: number;
     faixaCents: number;
     excecaoQuintoChamado: boolean;
+    produtivosCents: number;
+    improdutivosCents: number;
     totalCents: number;
   };
   evidencias: {
     quantidade: number;
+    produtivas: number;
     improdutivas: number;
     baseCents: number;
+    produtivasCents: number;
+    improdutivasCents: number;
+    totalCents: number;
+  };
+  // A terceira categoria da leitura: reúne o que as improdutivas renderam, de
+  // atuação e de evidência. Não é um desconto a subtrair — é uma linha que soma
+  // como as outras duas, e as três fecham o total.
+  improdutivas: {
+    quantidade: number;
     totalCents: number;
   };
   descontoImprodutivoCents: number;
@@ -154,30 +185,36 @@ export function calcularRepasse(fsas: readonly Fsa[]): Repasse {
   );
   const evidenciasBaseCents = evidenciasCents(evidencias.length, servicos.length > 0);
 
-  const servicosTotal = aplicarImprodutivas(faixaCents, servicos.length, servicosImprodutivos);
-  const evidenciasTotal = aplicarImprodutivas(
-    evidenciasBaseCents,
-    evidencias.length,
-    evidenciasImprodutivas,
-  );
+  const porServico = repartir(faixaCents, servicos.length, servicosImprodutivos);
+  const porEvidencia = repartir(evidenciasBaseCents, evidencias.length, evidenciasImprodutivas);
 
   const cheio = faixaCents + evidenciasBaseCents;
-  const totalCents = servicosTotal + evidenciasTotal;
+  const totalCents = porServico.totalCents + porEvidencia.totalCents;
 
   return {
     servicos: {
       quantidade: servicos.length,
+      produtivos: servicos.length - servicosImprodutivos,
       descobertos,
       improdutivos: servicosImprodutivos,
       faixaCents,
       excecaoQuintoChamado,
-      totalCents: servicosTotal,
+      produtivosCents: porServico.produtivasCents,
+      improdutivosCents: porServico.improdutivasCents,
+      totalCents: porServico.totalCents,
     },
     evidencias: {
       quantidade: evidencias.length,
+      produtivas: evidencias.length - evidenciasImprodutivas,
       improdutivas: evidenciasImprodutivas,
       baseCents: evidenciasBaseCents,
-      totalCents: evidenciasTotal,
+      produtivasCents: porEvidencia.produtivasCents,
+      improdutivasCents: porEvidencia.improdutivasCents,
+      totalCents: porEvidencia.totalCents,
+    },
+    improdutivas: {
+      quantidade: servicosImprodutivos + evidenciasImprodutivas,
+      totalCents: porServico.improdutivasCents + porEvidencia.improdutivasCents,
     },
     descontoImprodutivoCents: cheio - totalCents,
     totalCents,

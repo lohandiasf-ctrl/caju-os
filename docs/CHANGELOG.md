@@ -9,6 +9,44 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-21
+
+### Improdutiva vira categoria, não desconto
+
+No teste em produção apareceu uma leitura ruim. A tela mostrava o valor de cada
+grupo **já com o desconto aplicado** e, embaixo, uma linha de desconto
+informativa:
+
+```
+Serviços (1)                     R$ 70,00
+Evidências (1)                   R$  2,50
+Desconto por não resolver (1)   − R$  2,50
+Total da visita                  R$ 72,50
+```
+
+O total estava certo, mas quem lê de cima para baixo faz 70 + 2,50 − 2,50 = 70
+e estranha. Numa conferência de pagamento isso vira discussão.
+
+A pedido do usuário, improdutiva passa a ser uma **terceira categoria** ao lado
+de atuação e evidência, com valor próprio: uma atuação de R$ 70 que não saiu
+aparece como improdutiva de R$ 35, e não como desconto. As três linhas somam o
+total, sem nada a subtrair.
+
+A conta não mudou — só a leitura. Os testes antigos continuam passando.
+
+Junto veio o vocabulário da operação: "serviço" vira **atuação** na tela, e o
+botão "Não consegui resolver" vira **Improdutiva**.
+
+`fsa_payouts` ganhou `improdutivas_cents` (`drizzle/0038_fsa_improdutivas.sql`),
+e `servicos_cents`/`evidencias_cents` passam a guardar só a parte produtiva. A
+tabela estava vazia, então não houve o que converter. O relatório ganhou três
+colunas novas, uma por categoria, para a planilha ser somável por qualquer
+recorte.
+
+**Pendente:** rodar `npm run db:migrate:remote`.
+
+---
+
 ## 2026-09-20
 
 ### Repasse por FSA: cálculo, persistência e a tela do técnico

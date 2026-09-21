@@ -11,6 +11,7 @@ type Payout = {
   status: "aberto" | "pronto" | "aprovado" | "pago" | "bloqueado";
   servicosCents: number;
   evidenciasCents: number;
+  improdutivasCents: number;
   descontoImprodutivoCents: number;
   totalCents: number;
   approvedBy: string | null;
@@ -202,18 +203,18 @@ export function FsaPayoutReview() {
 
                 <dl className="flex shrink-0 gap-5 text-xs">
                   <div>
-                    <dt className="text-muted-foreground">Serviços</dt>
+                    <dt className="text-muted-foreground">Atuação</dt>
                     <dd className="mt-0.5 font-mono font-bold">{money(payout.servicosCents)}</dd>
                   </div>
                   <div>
                     <dt className="text-muted-foreground">Evidências</dt>
                     <dd className="mt-0.5 font-mono font-bold">{money(payout.evidenciasCents)}</dd>
                   </div>
-                  {payout.descontoImprodutivoCents > 0 && (
+                  {payout.improdutivasCents > 0 && (
                     <div>
-                      <dt className="text-muted-foreground">Desconto</dt>
+                      <dt className="text-muted-foreground">Improdutivas</dt>
                       <dd className="mt-0.5 font-mono font-bold text-amber-200">
-                        − {money(payout.descontoImprodutivoCents)}
+                        {money(payout.improdutivasCents)}
                       </dd>
                     </div>
                   )}

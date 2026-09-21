@@ -28,6 +28,7 @@ export async function GET(request: Request) {
         status: fsaPayouts.status,
         servicosCents: fsaPayouts.servicosCents,
         evidenciasCents: fsaPayouts.evidenciasCents,
+        improdutivasCents: fsaPayouts.improdutivasCents,
         descontoImprodutivoCents: fsaPayouts.descontoImprodutivoCents,
         totalCents: fsaPayouts.totalCents,
         approvedBy: fsaPayouts.approvedBy,

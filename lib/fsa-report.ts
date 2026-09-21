@@ -36,6 +36,9 @@ export type LinhaDoRelatorio = {
   motivo: string;
   observacao: string;
   calculo: string;
+  atuacaoVisita: string;
+  evidenciasVisita: string;
+  improdutivasVisita: string;
   totalVisita: string;
   situacao: string;
 };
@@ -76,12 +79,15 @@ export function memoriaDeCalculo(repasse: Repasse): string {
   const { servicos, evidencias } = repasse;
 
   if (servicos.quantidade) {
-    let texto = `${servicos.quantidade} serviço${servicos.quantidade === 1 ? '' : 's'} = ${reais(servicos.faixaCents)}`;
+    let texto = `faixa de ${servicos.quantidade} atuaç${servicos.quantidade === 1 ? 'ão' : 'ões'} = ${reais(servicos.faixaCents)}`;
     if (servicos.descobertos) {
       texto += ` (${servicos.descobertos} apareceu na loja`;
       texto += servicos.excecaoQuintoChamado ? ', faixa seguinte por não render nada)' : ')';
     }
     partes.push(texto);
+    if (servicos.produtivos) {
+      partes.push(`${servicos.produtivos} resolvida${servicos.produtivos === 1 ? '' : 's'} = ${reais(servicos.produtivosCents)}`);
+    }
   }
 
   if (evidencias.quantidade) {
@@ -90,10 +96,11 @@ export function memoriaDeCalculo(repasse: Repasse): string {
     );
   }
 
-  const improdutivas = servicos.improdutivos + evidencias.improdutivas;
-  if (improdutivas) {
+  // Improdutiva entra somando, com o valor que ela vale, e não como um abatimento
+  // do que veio antes: é assim que a operação lê a categoria.
+  if (repasse.improdutivas.quantidade) {
     partes.push(
-      `${improdutivas} não resolvida${improdutivas === 1 ? '' : 's'}, metade do valor: − ${reais(repasse.descontoImprodutivoCents)}`,
+      `${repasse.improdutivas.quantidade} improdutiva${repasse.improdutivas.quantidade === 1 ? '' : 's'} pela metade = ${reais(repasse.improdutivas.totalCents)}`,
     );
   }
 
@@ -112,6 +119,13 @@ export function linhasDoRelatorio(visitas: readonly VisitaDoRelatorio[]): LinhaD
     const calculo = memoriaDeCalculo(visita.repasse);
     const total = reais(visita.repasse.totalCents);
     const situacao = ROTULO_STATUS[visita.status];
+    // As três categorias repetidas por linha, para a planilha ser somável por
+    // qualquer recorte que quem recebe resolver filtrar.
+    const categorias = {
+      atuacaoVisita: reais(visita.repasse.servicos.produtivosCents),
+      evidenciasVisita: reais(visita.repasse.evidencias.produtivasCents),
+      improdutivasVisita: reais(visita.repasse.improdutivas.totalCents),
+    };
 
     // Visita sem nenhuma FSA ainda assim aparece: sumir do relatório seria pior
     // do que mostrar uma linha vazia que a gerência vai estranhar.
@@ -127,6 +141,7 @@ export function linhasDoRelatorio(visitas: readonly VisitaDoRelatorio[]): LinhaD
           motivo: '',
           observacao: '',
           calculo,
+          ...categorias,
           totalVisita: total,
           situacao,
         },
@@ -143,6 +158,7 @@ export function linhasDoRelatorio(visitas: readonly VisitaDoRelatorio[]): LinhaD
       motivo: fsa.motivo ? (ROTULO_MOTIVO[fsa.motivo as MotivoImprodutivo] ?? fsa.motivo) : '',
       observacao: fsa.observacao ?? '',
       calculo,
+      ...categorias,
       totalVisita: total,
       situacao,
     }));
@@ -159,6 +175,9 @@ const CABECALHO = [
   'Motivo',
   'Observação',
   'Como foi calculado',
+  'Atuação da visita',
+  'Evidências da visita',
+  'Improdutivas da visita',
   'Total da visita',
   'Situação',
 ] as const;
@@ -181,6 +200,9 @@ export function paraCsv(linhas: readonly LinhaDoRelatorio[]): string {
       linha.motivo,
       linha.observacao,
       linha.calculo,
+      linha.atuacaoVisita,
+      linha.evidenciasVisita,
+      linha.improdutivasVisita,
       linha.totalVisita,
       linha.situacao,
     ]

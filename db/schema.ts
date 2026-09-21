@@ -1017,8 +1017,11 @@ export const fsaPayouts = sqliteTable(
     })
       .notNull()
       .default('aberto'),
+    // As três categorias da leitura, cada uma com o que rendeu. Improdutiva não
+    // é desconto: soma como as outras duas, e juntas fecham o total.
     servicosCents: integer('servicos_cents').notNull().default(0),
     evidenciasCents: integer('evidencias_cents').notNull().default(0),
+    improdutivasCents: integer('improdutivas_cents').notNull().default(0),
     descontoImprodutivoCents: integer('desconto_improdutivo_cents').notNull().default(0),
     totalCents: integer('total_cents').notNull().default(0),
     // Memória de cálculo em JSON, para o relatório explicar como chegou no valor.
