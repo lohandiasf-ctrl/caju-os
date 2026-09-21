@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { CajuLoading } from '@/components/caju-loading';
 import { FsaGroups } from '@/components/fsa-groups';
 import { useAuth } from '@/components/auth-provider';
+import { saveFile } from '@/lib/download-file';
 
 type FinancialIssue = {
   key: string;
@@ -54,6 +55,7 @@ export default function FinanceiroPage() {
   const [zerando, setZerando] = useState(false);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
+  const [avisoExport, setAvisoExport] = useState('');
   const [page, setPage] = useState(1);
   const [showAllTechnicians, setShowAllTechnicians] = useState(false);
 
@@ -174,11 +176,7 @@ export default function FinanceiroPage() {
     const header = ['Chamado', 'Técnico', 'Loja', 'Cidade', 'Status', 'Serviço', 'Spare', 'Total'];
     const body = rows.map((issue) => [issue.key, issue.technician, issue.store, issue.city, issue.status, issue.serviceValue, issue.spareValue, issue.totalValue]);
     const csv = [header, ...body].map((line) => line.map(csvCell).join(';')).join('\n');
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
-    link.download = `financeiro-caju-${period}-dias.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    setAvisoExport(saveFile(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }), `financeiro-caju-${period}-dias.csv`));
   }
 
   return <main className="min-h-screen text-foreground">
@@ -191,6 +189,7 @@ export default function FinanceiroPage() {
       </header>
       <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-6 pb-36 sm:px-6 lg:px-8 lg:pt-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Gestão financeira</p><h1 className="text-2xl font-semibold tracking-[-.03em] sm:text-3xl">Financeiro</h1><p className="mt-1 text-sm text-muted-foreground">Valores do ticket, spare, repasses e margem em uma visão.</p></div><div className="flex flex-wrap items-center gap-2"><div role="group" aria-label="Período" className="flex rounded-lg border border-border bg-card p-1">{([7, 30, 90] as const).map((days) => <Button key={days} aria-pressed={period === days} size="sm" variant={period === days ? 'secondary' : 'ghost'} onClick={() => { setPeriod(days); setPage(1); }}>{days} dias</Button>)}</div><Button size="sm" onClick={exportCsv} disabled={!rows.length}><Download />Exportar</Button></div></div>
+        {avisoExport && <p aria-live="polite" className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{avisoExport}</p>}
         {error && <div role="alert" className="mt-6 rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">{error}</div>}
         {loading ? <div className="surface-panel mt-7 grid min-h-48 place-items-center rounded-2xl"><CajuLoading label="Carregando dados reais do Jira..." fullscreen={false} compact /></div> : <>
           <div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
