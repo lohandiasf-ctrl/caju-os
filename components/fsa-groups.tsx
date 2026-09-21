@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   BadgeCheck,
   Ban,
-  Camera,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -14,16 +13,12 @@ import {
   ShieldAlert,
   Unlock,
   WalletCards,
-  Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/auth-provider";
-import { MOTIVOS_IMPRODUTIVO, type MotivoImprodutivo } from "@/lib/fsa-payment";
+import type { MotivoImprodutivo } from "@/lib/fsa-payment";
 
 // O técnico escolhe pelo que aconteceu na loja, não pelo código do motivo.
 const ROTULO_MOTIVO: Record<MotivoImprodutivo, string> = {
@@ -33,6 +28,25 @@ const ROTULO_MOTIVO: Record<MotivoImprodutivo, string> = {
   "loja-fechada": "A loja estava fechada",
   "tempo-excedido": "Mais de 2 horas no mesmo problema, sem resolver",
   "loja-fechando": "A loja estava nos últimos 30 minutos",
+};
+
+type TipoLido = "atuacao" | "evidencia" | "improdutiva" | "sem-tipo";
+
+const tipoDaFsa = (fsa: { tipo: string | null; improdutiva: boolean }): TipoLido =>
+  fsa.tipo === "evidencia" ? "evidencia" : fsa.tipo === "servico" ? (fsa.improdutiva ? "improdutiva" : "atuacao") : "sem-tipo";
+
+const ROTULO_TIPO: Record<TipoLido, string> = {
+  atuacao: "Atuação",
+  evidencia: "Evidência",
+  improdutiva: "Improdutiva",
+  "sem-tipo": "Sem tipo",
+};
+
+const ROTULO_TIPO_COR: Record<TipoLido, string> = {
+  atuacao: "border-blue-400/30 bg-blue-400/10 text-blue-200",
+  evidencia: "border-cyan-400/30 bg-cyan-400/10 text-cyan-200",
+  improdutiva: "border-amber-400/30 bg-amber-400/10 text-amber-200",
+  "sem-tipo": "border-rose-400/30 bg-rose-400/10 text-rose-200",
 };
 
 const ROTULO_STATUS: Record<string, string> = {
@@ -113,21 +127,8 @@ export function FsaGroups() {
   const [exportando, setExportando] = useState(false);
   // Data de pagamento escolhida antes de aprovar, por grupo.
   const [datasPagamento, setDatasPagamento] = useState<Map<number, string>>(new Map());
-  // FSAs em que o técnico clicou "Improdutiva" e ainda não escolheu o motivo.
-  // O servidor não aceita improdutiva sem motivo, então a marcação fica só na
-  // tela até o motivo vir — sem isso o seletor nunca aparece, porque ele depende
-  // da improdutiva já estar salva.
-  const [pedindoMotivo, setPedindoMotivo] = useState<Set<number>>(new Set());
 
   const daGerencia = role === "gerencia";
-
-  const marcarPedindo = (id: number, pedindo: boolean) =>
-    setPedindoMotivo((atual) => {
-      const proximo = new Set(atual);
-      if (pedindo) proximo.add(id);
-      else proximo.delete(id);
-      return proximo;
-    });
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -189,43 +190,6 @@ export function FsaGroups() {
     }
   };
 
-  const classificar = async (grupo: Grupo, fsa: Fsa, mudanca: Partial<Fsa>) => {
-    if (!user) return;
-    const proxima = {
-      tipo: mudanca.tipo ?? fsa.tipo ?? "servico",
-      improdutiva: mudanca.improdutiva ?? fsa.improdutiva,
-      motivo: mudanca.motivo !== undefined ? mudanca.motivo : fsa.motivo,
-      observacao: mudanca.observacao !== undefined ? mudanca.observacao : fsa.observacao,
-      descobertaNaLoja: mudanca.descobertaNaLoja ?? fsa.descobertaNaLoja,
-    };
-    // Sem motivo o servidor recusa. Em vez de mandar um pedido que já se sabe
-    // que volta com erro, abre o seletor e espera o motivo.
-    if (proxima.improdutiva && !proxima.motivo) {
-      marcarPedindo(fsa.id, true);
-      return;
-    }
-    setOcupado(grupo.id);
-    setError("");
-    try {
-      const response = await fetch(`/api/fsa-groups/${grupo.id}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${await user.getIdToken()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ticketKey: fsa.ticketKey, ...proxima }),
-      });
-      const payload = (await response.json()) as { grupo?: Grupo; error?: string };
-      if (!response.ok || !payload.grupo) throw new Error(payload.error ?? "Não foi possível salvar.");
-      guardar(payload.grupo);
-      marcarPedindo(fsa.id, false);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Não foi possível salvar.");
-    } finally {
-      setOcupado(null);
-    }
-  };
-
   const agir = async (id: number, action: string, extra: Record<string, unknown> = {}) => {
     if (!user) return;
     setOcupado(id);
@@ -278,8 +242,8 @@ export function FsaGroups() {
         <div className="mr-auto">
           <h2 className="text-sm font-bold">Grupos de repasse</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            O grupo define a faixa de preço. Selecione as FSAs na fila e agrupe — não precisa
-            preparar atendimento.
+            O grupo define a faixa de preço. O tipo de cada FSA é marcado no chamado, na tela
+            inicial; aqui se confere, fecha e aprova.
           </p>
         </div>
         {daGerencia && (
@@ -362,7 +326,8 @@ export function FsaGroups() {
                           {grupo.naoClassificadas.length === 1
                             ? "Falta classificar 1 FSA"
                             : `Faltam classificar ${grupo.naoClassificadas.length} FSAs`}
-                          . O valor abaixo ainda está parcial.
+                          . Marque o tipo abrindo o chamado na tela inicial; o valor abaixo ainda
+                          está parcial.
                         </span>
                       </p>
                     )}
@@ -376,129 +341,31 @@ export function FsaGroups() {
                       </p>
                     )}
 
-                    <ul className="grid gap-3">
+                    {/* O tipo é marcado na tela do chamado, por quem opera. Aqui só se confere. */}
+                    <ul className="grid gap-2">
                       {grupo.fsas.map((fsa) => (
-                        <li key={fsa.id} className="rounded-xl border border-border bg-background/60 p-3">
-                          <p className="text-sm font-bold">{fsa.ticketKey}</p>
-                          {fsa.summary && (
-                            <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{fsa.summary}</p>
-                          )}
-                          {fsa.store && <p className="mt-0.5 text-xs text-muted-foreground">{fsa.store}</p>}
-
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={fsa.tipo === "servico" ? "default" : "outline"}
-                              className="min-h-11"
-                              disabled={trabalhando}
-                              aria-pressed={fsa.tipo === "servico"}
-                              onClick={() => void classificar(grupo, fsa, { tipo: "servico" })}
-                            >
-                              <Wrench aria-hidden="true" /> Atuação
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant={fsa.tipo === "evidencia" ? "default" : "outline"}
-                              className="min-h-11"
-                              disabled={trabalhando}
-                              aria-pressed={fsa.tipo === "evidencia"}
-                              onClick={() =>
-                                void classificar(grupo, fsa, {
-                                  tipo: "evidencia",
-                                  improdutiva: false,
-                                  motivo: null,
-                                })
-                              }
-                            >
-                              <Camera aria-hidden="true" /> Evidência
-                            </Button>
-                            {fsa.tipo === "servico" && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant={fsa.improdutiva || pedindoMotivo.has(fsa.id) ? "destructive" : "outline"}
-                                className="min-h-11"
-                                disabled={trabalhando}
-                                aria-pressed={fsa.improdutiva || pedindoMotivo.has(fsa.id)}
-                                onClick={() => {
-                                  // Desmarcar uma que só estava esperando motivo não
-                                  // precisa ir ao servidor: nada foi salvo ainda.
-                                  if (!fsa.improdutiva && pedindoMotivo.has(fsa.id)) {
-                                    marcarPedindo(fsa.id, false);
-                                    return;
-                                  }
-                                  void classificar(grupo, fsa, {
-                                    improdutiva: !fsa.improdutiva,
-                                    motivo: fsa.improdutiva ? null : fsa.motivo,
-                                  });
-                                }}
-                              >
-                                Improdutiva
-                              </Button>
+                        <li key={fsa.id} className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-border bg-background/60 p-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold">{fsa.ticketKey}</p>
+                            {fsa.summary && (
+                              <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{fsa.summary}</p>
+                            )}
+                            {fsa.store && <p className="mt-0.5 text-xs text-muted-foreground">{fsa.store}</p>}
+                            {fsa.tipo === "servico" && fsa.improdutiva && fsa.motivo && (
+                              <p className="mt-1 text-xs text-amber-200">
+                                {ROTULO_MOTIVO[fsa.motivo as MotivoImprodutivo] ?? fsa.motivo}
+                                {fsa.observacao && ` — ${fsa.observacao}`}
+                              </p>
                             )}
                           </div>
-
-                          {fsa.tipo && (
-                            <label
-                              className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"
-                              htmlFor={`descoberta-${fsa.id}`}
-                            >
-                              <Checkbox
-                                id={`descoberta-${fsa.id}`}
-                                checked={fsa.descobertaNaLoja}
-                                disabled={trabalhando}
-                                onCheckedChange={(marcado) =>
-                                  void classificar(grupo, fsa, { descobertaNaLoja: marcado === true })
-                                }
-                              />
-                              Apareceu aqui na loja, não estava agendada
-                            </label>
-                          )}
-
-                          {fsa.tipo === "servico" && (fsa.improdutiva || pedindoMotivo.has(fsa.id)) && (
-                            <div className="mt-3 grid gap-2 rounded-xl border border-amber-400/25 bg-amber-400/[.06] p-3">
-                              <label
-                                className="text-xs font-bold uppercase tracking-wide text-amber-200"
-                                htmlFor={`motivo-${fsa.id}`}
-                              >
-                                Por que não foi possível resolver?
-                              </label>
-                              <NativeSelect
-                                id={`motivo-${fsa.id}`}
-                                value={fsa.motivo ?? ""}
-                                disabled={trabalhando}
-                                onChange={(event) =>
-                                  void classificar(grupo, fsa, {
-                                    improdutiva: true,
-                                    motivo: event.target.value,
-                                  })
-                                }
-                              >
-                                <NativeSelectOption value="" disabled>
-                                  Escolha o motivo
-                                </NativeSelectOption>
-                                {MOTIVOS_IMPRODUTIVO.map((motivo) => (
-                                  <NativeSelectOption key={motivo} value={motivo}>
-                                    {ROTULO_MOTIVO[motivo]}
-                                  </NativeSelectOption>
-                                ))}
-                              </NativeSelect>
-                              <Textarea
-                                aria-label="Observação"
-                                placeholder="Quer registrar algum detalhe? (opcional)"
-                                defaultValue={fsa.observacao ?? ""}
-                                disabled={trabalhando}
-                                onBlur={(event) => {
-                                  const texto = event.target.value.trim();
-                                  if (texto !== (fsa.observacao ?? "")) {
-                                    void classificar(grupo, fsa, { observacao: texto });
-                                  }
-                                }}
-                              />
-                            </div>
-                          )}
+                          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                            {fsa.descobertaNaLoja && (
+                              <Badge variant="outline" className="text-muted-foreground">apareceu na loja</Badge>
+                            )}
+                            <Badge variant="outline" className={ROTULO_TIPO_COR[tipoDaFsa(fsa)]}>
+                              {ROTULO_TIPO[tipoDaFsa(fsa)]}
+                            </Badge>
+                          </div>
                         </li>
                       ))}
                     </ul>

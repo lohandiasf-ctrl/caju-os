@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validateEvidenceFiles } from '@/lib/image-validation';
 import { haptic } from '@/lib/haptics';
 import { TicketAssistant } from '@/components/assistant-panel';
+import { FsaClassificacao } from '@/components/fsa-classificacao';
 
 export type JiraOperationalFields = {
   storeCode: string | null; storeName: string | null; contactName: string | null; contactPhone: string | null; preferredServiceTime: string | null;
@@ -338,6 +339,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
 
   return <section className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
     <TicketAssistant ticketKey={details.key} user={user} />
+    {/* O tipo da FSA é marcado aqui, por quem opera o chamado; a tela financeira só confere e aprova. */}
+    <FsaClassificacao ticketKey={details.key} user={user} />
     <div className="rounded-xl border border-primary/25 bg-background/80 p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-sm font-bold">Fluxo do chamado</p><p className="text-xs text-muted-foreground">Etapa atual: {details.status}</p></div><span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{currentStatus === 'scheduling' ? '1. Agendar' : currentStatus === 'scheduled' ? '2. Preparar' : currentStatus === 'in_service' ? '3. Atender' : 'Acompanhamento'}</span></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
