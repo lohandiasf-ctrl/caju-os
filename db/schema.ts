@@ -236,6 +236,9 @@ export const financeSettings = sqliteTable('finance_settings', {
   additionalTicketCents: integer('additional_ticket_cents')
     .notNull()
     .default(7000),
+  // AAAA-MM-DD. O painel financeiro só conta daqui em diante, para a gerência
+  // poder conferir 1:1 a partir do zero sem apagar nada.
+  acompanhamentoDesde: text('acompanhamento_desde'),
   updatedBy: text('updated_by').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
@@ -995,6 +998,10 @@ export const fsaGroups = sqliteTable(
     memoria: text('memoria'),
     approvedBy: text('approved_by'),
     approvedAt: text('approved_at'),
+    // AAAA-MM-DD em que o repasse vai ser pago. A folha não sai no dia da
+    // aprovação, e é esta data — não a do atendimento — que diz quando o
+    // dinheiro sai. Obrigatória ao aprovar.
+    dataPagamento: text('data_pagamento'),
     paidAt: text('paid_at'),
     createdBy: text('created_by').notNull(),
     createdAt: text('created_at').notNull(),

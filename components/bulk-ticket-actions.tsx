@@ -193,7 +193,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível criar o grupo.');
       window.dispatchEvent(new Event('caju:grupos-de-repasse'));
-      setRepasseOk(`Grupo criado com ${count(tickets.length, 'FSA', 'FSAs')}. Classifique cada uma em Financeiro › Grupos de repasse.`);
+      setRepasseOk(`Grupo criado com ${count(tickets.length, 'FSA', 'FSAs')}. Marque o tipo de cada uma abrindo o chamado na tela inicial.`);
       setRepasseNome('');
       setRepasseTecnico(null);
       setTechnicianQuery('');
@@ -252,7 +252,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
           <DialogTitle className="flex items-center gap-2"><WalletCards className="size-5 text-emerald-300" />Agrupar {count(tickets.length, 'FSA', 'FSAs')} para repasse</DialogTitle>
           <DialogDescription>
             O grupo define a faixa de preço: estas FSAs viram um atendimento só na conta do técnico.
-            Não precisa preparar atendimento, e o valor sai da tabela — você só confere depois.
+            Depois, o tipo de cada uma (atuação, evidência, improdutiva) é marcado abrindo o chamado.
           </DialogDescription>
         </DialogHeader>
         {error && <p role="alert" className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{error}</p>}
