@@ -13,7 +13,7 @@ Este documento mostra como calcular quanto pagar cada técnico pelas suas visita
 
 Cada visita do técnico vai ter **chamados** (tarefas):
 - **Chamados normais**: quando o técnico conserta/resolve algo (conserto de máquina, configuração, etc.)
-- **Chamados de foto**: quando só precisa tirar foto/comprovante
+- **FSAs de evidência**: quando a FSA exige evidências, como uma ou várias fotos/comprovantes
 - **Chamados que não conseguiu resolver**: quando não conseguiu fazer por algum motivo (loja fechada, máquina muito quebrada, etc.)
 
 O técnico pode mudar a classificação de um chamado a qualquer momento, e o preço é recalculado automaticamente.
@@ -24,7 +24,7 @@ O técnico pode mudar a classificação de um chamado a qualquer momento, e o pr
 
 Para cada chamado, o sistema vai registrar:
 
-- **Tipo do chamado**: Se é serviço (conserto) ou foto
+- **Tipo da FSA**: Se é serviço (conserto) ou evidência
 - **Improdutivo?**: Se conseguiu resolver ou não
 - **Por quê não conseguiu?**: Qual foi o motivo (loja fechada, máquina com defeito maior, etc.)
 - **Observações extras**: Detalhes adicionais que o técnico quer registrar
@@ -68,37 +68,39 @@ Isso vale para cada novo serviço que aparecer, sem limite máximo.
 
 ---
 
-## Quanto pagar por fotos?
+## Quanto pagar por evidências?
 
-Se o técnico **só tira fotos** (sem fazer serviço):
+Se o técnico atende **somente FSAs de evidência** (sem fazer serviço):
 
-| Quantidade de Fotos | Valor |
+| Quantidade de FSAs de Evidência | Valor |
 |-----------|-------|
-| 1 a 14 fotos | R$ 70 |
-| 15 fotos | R$ 75 |
-| 16 fotos | R$ 80 |
-| 17 fotos | R$ 85 |
-| 18 fotos | R$ 90 |
+| 1 a 14 FSAs | R$ 70 |
+| 15 FSAs | R$ 75 |
+| 16 FSAs | R$ 80 |
+| 17 FSAs | R$ 85 |
+| 18 FSAs | R$ 90 |
 
-**A partir da 15ª foto**, cada foto a mais vale R$ 5 (ex: 19 fotos = R$ 95, 20 fotos = R$ 100, etc.)
+**A partir da 15ª FSA de evidência**, cada FSA adicional vale R$ 5 (ex.: 19 FSAs = R$ 95, 20 FSAs = R$ 100).
 
-### Quando tem serviço E foto?
+**Importante:** a contagem é por FSA, não por foto. Uma FSA continua valendo uma evidência mesmo quando possui várias fotos ou comprovantes.
 
-Se o técnico faz serviço E tira fotos na mesma visita, a gente soma os dois:
+### Quando tem serviço E evidência?
+
+Se o técnico atende FSAs de serviço e FSAs de evidência na mesma visita, a gente soma os dois:
 - **Valor dos serviços**: Segue a tabela normal (R$ 70, R$ 100, etc.)
-- **Valor das fotos**: R$ 5 por cada foto
-- **Total**: Valor do serviço + (quantidade de fotos × R$ 5)
+- **Valor das evidências**: R$ 5 por cada FSA de evidência
+- **Total**: Valor do serviço + (quantidade de FSAs de evidência × R$ 5)
 
 **Exemplos:**
 
-**Caso 1:** 1 serviço + 9 fotos
+**Caso 1:** 1 serviço + 9 FSAs de evidência
 - Serviço: R$ 70
-- Fotos: 9 × R$ 5 = R$ 45
+- Evidências: 9 FSAs × R$ 5 = R$ 45
 - **Total: R$ 115**
 
-**Caso 2:** 3 serviços + 8 fotos
+**Caso 2:** 3 serviços + 8 FSAs de evidência
 - Serviço: R$ 120
-- Fotos: 8 × R$ 5 = R$ 40
+- Evidências: 8 FSAs × R$ 5 = R$ 40
 - **Total: R$ 160**
 
 ---
@@ -136,13 +138,13 @@ Quando não consegue resolver, o técnico ganha **metade** do valor que ganharia
 - Não resolvido: R$ 40 ÷ 2 = R$ 20
 - **Total: R$ 100**
 
-### Quando tem fotos e depois vira serviço?
+### Quando uma FSA de evidência vira serviço?
 
-Se começou marcando como "só foto" (R$ 70) e depois virou "serviço + foto", recalcula automaticamente.
+Se começou marcada como "evidência" e depois virou "serviço", o sistema recalcula automaticamente.
 
-**Exemplo:** Era 10 fotos (R$ 70), mas 1 delas virou serviço
+**Exemplo:** Eram 10 FSAs de evidência (R$ 70), mas 1 delas virou serviço
 - Antes: R$ 70
-- Depois: R$ 70 (serviço) + R$ 45 (9 fotos × R$ 5) = **R$ 115**
+- Depois: R$ 70 (serviço) + R$ 45 (9 FSAs de evidência × R$ 5) = **R$ 115**
 
 ---
 
@@ -150,11 +152,11 @@ Se começou marcando como "só foto" (R$ 70) e depois virou "serviço + foto", r
 
 ### Passo a passo:
 
-1. **Técnico é agendado** com alguns serviços/fotos planejados
+1. **Técnico é agendado** com algumas FSAs de serviço/evidência planejadas
 
 2. **Durante a visita**, o técnico pode:
-   - Adicionar serviços/fotos novos
-   - Mudar de "foto" para "serviço" (ou vice-versa)
+   - Adicionar novas FSAs de serviço/evidência
+   - Mudar uma FSA de "evidência" para "serviço" (ou vice-versa)
    - Marcar como "não conseguiu resolver" e explicar o motivo
 
 3. **Sistema calcula automaticamente** o valor a cada mudança
@@ -167,7 +169,7 @@ Se começou marcando como "só foto" (R$ 70) e depois virou "serviço + foto", r
 
 ### Se mudar de ideia depois?
 
-Se o técnico marcou como "foto" mas depois muda para "serviço", o sistema:
+Se o técnico marcou a FSA como "evidência" mas depois muda para "serviço", o sistema:
 - Bloqueia a mudança temporariamente
 - Gerente precisa revisar e confirmar a mudança
 - Valor é recalculado automaticamente
@@ -190,7 +192,7 @@ Ao clicar num chamado, tem um botão para marcar como "não conseguiu resolver".
 
 Quando o técnico clica em um chamado (ou grupo de chamados), vê:
 - Quanto ganhou com serviços
-- Quanto ganhou com fotos
+- Quanto ganhou com FSAs de evidência
 - Quanto vai descontar por não conseguir resolver
 - **O total final que vai receber**
 
@@ -206,7 +208,7 @@ Se o técnico faz 3 visitas a lojas diferentes no mesmo dia:
 O gerente pode gerar um relatório (arquivo PDF ou Excel) mostrando:
 - Data
 - Técnico
-- Cada chamado (se era serviço ou foto, se conseguiu resolver)
+- Cada FSA (se era serviço ou evidência, se conseguiu resolver)
 - Como foi calculado
 - Quanto vai receber
 - Se já foi aprovado ou ainda está pendente
@@ -221,7 +223,7 @@ Os chamados começam no Jira (sistema de tickets antigo), mas o Caju Monitor faz
 
 ### Mudanças que o técnico faz
 
-Quando o técnico marca como "serviço", "foto" ou "não conseguiu resolver", isso fica **só no Caju Monitor** — não volta pro Jira.
+Quando o técnico marca como "serviço", "evidência" ou "não conseguiu resolver", isso fica **só no Caju Monitor** — não volta pro Jira.
 
 ### Onde o Caju guarda tudo?
 
@@ -235,7 +237,7 @@ O gerente exporta um relatório do Caju e envia pra folha de pagamento normalmen
 
 ## Regras que o sistema vai seguir
 
-1. **Cada chamado precisa ser classificado** — não pode deixar indefinido ("é serviço ou é foto?")
+1. **Cada FSA precisa ser classificada** — não pode deixar indefinido ("é serviço ou é evidência?")
 2. **Se não conseguiu resolver, precisa explicar o motivo** — não pode deixar em branco
 3. **Pode ter uma visita inteira sem conseguir resolver nada** — não tem problema, o sistema permite
 4. **Pode mudar de ideia a qualquer hora** — o sistema recalcula automaticamente
@@ -249,12 +251,12 @@ O gerente exporta um relatório do Caju e envia pra folha de pagamento normalmen
 
 O técnico é agendado para fazer:
 - 2 serviços
-- 2 fotos
-- Valor esperado: R$ 100 (serviços) + R$ 10 (fotos) = **R$ 110**
+- 2 FSAs de evidência
+- Valor esperado: R$ 100 (serviços) + R$ 10 (evidências) = **R$ 110**
 
 **Na loja:**
 - Descobre +1 serviço novo = +R$ 30 (bônus por aparecer na hora)
-- Descobre +2 fotos = +R$ 10
+- Descobre +2 FSAs de evidência = +R$ 10
 - Novo subtotal: R$ 110 + R$ 30 + R$ 10 = **R$ 150**
 
 **Depois:**
@@ -264,7 +266,7 @@ O técnico é agendado para fazer:
   - Valor normal para 3 serviços: R$ 120
   - Como 1 não foi resolvido: R$ 120 ÷ 3 = R$ 40 cada, então R$ 40 ÷ 2 = R$ 20 (o que não resolveu)
   - Ganho com serviços: R$ 40 + R$ 40 + R$ 20 = **R$ 100**
-- Fotos: 4 fotos × R$ 5 = **R$ 20**
+- Evidências: 4 FSAs × R$ 5 = **R$ 20**
 
 **Valor final que o técnico recebe: R$ 100 + R$ 20 = R$ 120**
 
@@ -284,13 +286,13 @@ O técnico é agendado para fazer:
 Você concorda com **TODAS** estas regras?
 
 - [ ] Serviços: R$ 70, R$ 100, R$ 120... até R$ 330, depois +R$ 30 por serviço adicional
-- [ ] Fotos sozinhas: R$ 70 até 14 fotos, depois +R$ 5 por foto adicional
-- [ ] Serviço + Foto: preço do serviço + (quantidade de fotos × R$ 5)
+- [ ] FSAs de evidência sozinhas: R$ 70 até 14 FSAs, depois +R$ 5 por FSA adicional
+- [ ] Serviço + evidência: preço do serviço + (quantidade de FSAs de evidência × R$ 5)
 - [ ] Novo serviço que aparece na loja: +R$ 30 por serviço
 - [ ] Não conseguiu resolver: metade do valor normal
 - [ ] Motivo obrigatório quando não consegue resolver
 - [ ] Pode não conseguir resolver nada (visita inteira "branca")
-- [ ] Sem limite máximo de serviços/fotos
+- [ ] Sem limite máximo de FSAs de serviço/evidência
 - [ ] Tudo é rastreado (histórico completo)
 - [ ] Cada técnico pode ter múltiplas visitas no mesmo dia
 - [ ] Gerente aprova antes de pagar
