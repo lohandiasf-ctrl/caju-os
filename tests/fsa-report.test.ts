@@ -20,6 +20,7 @@ const visita = (fsas: Fsa[], extra: Partial<VisitaDoRelatorio> = {}): VisitaDoRe
   status: 'aprovado',
   aprovadoPor: 'gerente@cajutech.net',
   aprovadoEm: '2026-09-20T18:00:00.000Z',
+  dataPagamento: '2026-09-25',
   pagoEm: null,
   repasse: calcularRepasse(fsas),
   fsas: fsas.map((f, i) => ({
@@ -108,7 +109,7 @@ test('o CSV sai no formato que o Excel brasileiro abre', () => {
   const [cabecalho, primeira] = csv.slice(1).split('\r\n');
   assert.equal(
     cabecalho,
-    '"Data";"Técnico";"Grupo";"FSA";"Tipo";"Resolveu";"Motivo";"Observação";"Como foi calculado";"Atuação da visita";"Evidências da visita";"Improdutivas da visita";"Total da visita";"Situação"',
+    '"Data";"Técnico";"Grupo";"FSA";"Tipo";"Resolveu";"Motivo";"Observação";"Como foi calculado";"Atuação da visita";"Evidências da visita";"Improdutivas da visita";"Total da visita";"Situação";"Data do pagamento"',
   );
   assert.ok(primeira.startsWith('"20/09/2026";"tecnico@cajutech.net";"Recife Centro";"FSA-100"'));
 });
@@ -117,7 +118,7 @@ test('o CSV sai no formato que o Excel brasileiro abre', () => {
 test('o separador dentro do texto não quebra as colunas', () => {
   const csv = paraCsv(linhasDoRelatorio([visita([servico(), evidencia()])]));
   const primeira = csv.slice(1).split('\r\n')[1];
-  assert.equal(primeira.split('";"').length, 14, 'continuam 14 colunas');
+  assert.equal(primeira.split('";"').length, 15, 'continuam 15 colunas');
   assert.match(primeira, /faixa de 1 atuação = R\$\s?70,00; 1 resolvida/);
 });
 
@@ -142,4 +143,21 @@ test('as três categorias viram colunas da planilha', () => {
     linhas.every((l) => l.totalVisita === linhas[0].totalVisita),
     'toda linha carrega o total da visita',
   );
+});
+
+// A folha não paga no dia da aprovação: a planilha precisa dizer quando paga.
+test('a data do pagamento vai para a planilha', () => {
+  const [linha] = linhasDoRelatorio([visita([servico()])]);
+  assert.equal(linha.dataPagamento, '25/09/2026');
+
+  const [semData] = linhasDoRelatorio([visita([servico()], { dataPagamento: null, status: 'pronto' })]);
+  assert.equal(semData.dataPagamento, '', 'grupo ainda não aprovado não tem data');
+});
+
+// Um dia sem hora não pode escorregar para o anterior por causa do fuso. Rodar
+// com TZ de Brasília é o que expõe isso: em UTC o erro não aparece.
+test('dia sem hora não vira o dia anterior', () => {
+  const [linha] = linhasDoRelatorio([visita([servico()], { data: '2026-09-21', dataPagamento: '2026-10-01' })]);
+  assert.equal(linha.data, '21/09/2026');
+  assert.equal(linha.dataPagamento, '01/10/2026');
 });

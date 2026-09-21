@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/auth-provider";
@@ -69,6 +70,7 @@ type Grupo = {
   dia: string;
   status: "aberto" | "pronto" | "aprovado" | "pago" | "bloqueado";
   approvedBy: string | null;
+  dataPagamento: string | null;
   createdBy: string;
   fsas: Fsa[];
   naoClassificadas: string[];
@@ -78,6 +80,7 @@ type Grupo = {
 
 type ResumoGrupo = {
   id: number;
+  dataPagamento: string | null;
   nome: string | null;
   tecnico: string;
   dia: string;
@@ -108,6 +111,8 @@ export function FsaGroups() {
   const [error, setError] = useState("");
   const [ocupado, setOcupado] = useState<number | null>(null);
   const [exportando, setExportando] = useState(false);
+  // Data de pagamento escolhida antes de aprovar, por grupo.
+  const [datasPagamento, setDatasPagamento] = useState<Map<number, string>>(new Map());
   // FSAs em que o técnico clicou "Improdutiva" e ainda não escolheu o motivo.
   // O servidor não aceita improdutiva sem motivo, então a marcação fica só na
   // tela até o motivo vir — sem isso o seletor nunca aparece, porque ele depende
@@ -152,7 +157,7 @@ export function FsaGroups() {
     setResumos((atual) =>
       atual.map((r) =>
         r.id === grupo.id
-          ? { ...r, status: grupo.status, totalCents: grupo.repasse.totalCents, semClassificar: grupo.naoClassificadas.length }
+          ? { ...r, status: grupo.status, dataPagamento: grupo.dataPagamento, totalCents: grupo.repasse.totalCents, semClassificar: grupo.naoClassificadas.length }
           : r,
       ),
     );
@@ -221,7 +226,7 @@ export function FsaGroups() {
     }
   };
 
-  const agir = async (id: number, action: string) => {
+  const agir = async (id: number, action: string, extra: Record<string, unknown> = {}) => {
     if (!user) return;
     setOcupado(id);
     setError("");
@@ -232,7 +237,7 @@ export function FsaGroups() {
           Authorization: `Bearer ${await user.getIdToken()}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, ...extra }),
       });
       const payload = (await response.json()) as { grupo?: Grupo; error?: string };
       if (!response.ok || !payload.grupo) throw new Error(payload.error ?? "Não foi possível atualizar.");
@@ -314,6 +319,11 @@ export function FsaGroups() {
                         {ROTULO_STATUS[resumo.status]}
                       </Badge>
                       <span className="text-xs text-muted-foreground">{dia(resumo.dia)}</span>
+                      {(grupo?.dataPagamento ?? resumo.dataPagamento) && (
+                        <span className="text-xs text-emerald-200">
+                          {(grupo?.status ?? resumo.status) === "pago" ? "pago" : "paga"} em {dia((grupo?.dataPagamento ?? resumo.dataPagamento)!)}
+                        </span>
+                      )}
                       {resumo.semClassificar > 0 && (
                         <span className="text-xs text-amber-200">
                           {resumo.semClassificar} a classificar
@@ -537,14 +547,54 @@ export function FsaGroups() {
                         </Button>
                       )}
                       {daGerencia && grupo.status === "pronto" && (
-                        <Button size="sm" disabled={trabalhando} onClick={() => void agir(grupo.id, "aprovar")}>
-                          <BadgeCheck aria-hidden="true" /> Aprovar
-                        </Button>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className="grid gap-1 text-xs font-semibold text-muted-foreground" htmlFor={`pagamento-${grupo.id}`}>
+                            Data do pagamento
+                            <Input
+                              id={`pagamento-${grupo.id}`}
+                              type="date"
+                              className="h-9 w-40"
+                              value={datasPagamento.get(grupo.id) ?? ""}
+                              disabled={trabalhando}
+                              onChange={(event) =>
+                                setDatasPagamento((atual) => new Map(atual).set(grupo.id, event.target.value))
+                              }
+                            />
+                          </label>
+                          {/* Sem data não aprova: a folha não sai no dia da aprovação, e é
+                              esta data que diz ao painel quando o dinheiro sai. */}
+                          <Button
+                            size="sm"
+                            disabled={trabalhando || !datasPagamento.get(grupo.id)}
+                            onClick={() =>
+                              void agir(grupo.id, "aprovar", { dataPagamento: datasPagamento.get(grupo.id) })
+                            }
+                          >
+                            <BadgeCheck aria-hidden="true" /> Aprovar
+                          </Button>
+                        </div>
                       )}
                       {daGerencia && grupo.status === "aprovado" && (
-                        <Button size="sm" disabled={trabalhando} onClick={() => void agir(grupo.id, "pagar")}>
-                          <WalletCards aria-hidden="true" /> Marcar como pago
-                        </Button>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <label className="grid gap-1 text-xs font-semibold text-muted-foreground" htmlFor={`pagamento-${grupo.id}`}>
+                            Pagamento previsto
+                            <Input
+                              id={`pagamento-${grupo.id}`}
+                              type="date"
+                              className="h-9 w-40"
+                              value={grupo.dataPagamento ?? ""}
+                              disabled={trabalhando}
+                              onChange={(event) => {
+                                if (event.target.value) {
+                                  void agir(grupo.id, "reagendar", { dataPagamento: event.target.value });
+                                }
+                              }}
+                            />
+                          </label>
+                          <Button size="sm" disabled={trabalhando} onClick={() => void agir(grupo.id, "pagar")}>
+                            <WalletCards aria-hidden="true" /> Marcar como pago
+                          </Button>
+                        </div>
                       )}
                       {daGerencia && grupo.status !== "pago" && grupo.status !== "aberto" && grupo.status !== "bloqueado" && (
                         <Button

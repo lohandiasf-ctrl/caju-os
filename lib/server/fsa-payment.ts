@@ -27,6 +27,7 @@ export type GrupoDeRepasse = {
   status: 'aberto' | 'pronto' | 'aprovado' | 'pago' | 'bloqueado';
   approvedBy: string | null;
   approvedAt: string | null;
+  dataPagamento: string | null;
   paidAt: string | null;
   createdBy: string;
   fsas: FsaDoGrupo[];
@@ -60,6 +61,7 @@ export async function carregarGrupo(groupId: number): Promise<GrupoDeRepasse | n
       status: fsaGroups.status,
       approvedBy: fsaGroups.approvedBy,
       approvedAt: fsaGroups.approvedAt,
+      dataPagamento: fsaGroups.dataPagamento,
       paidAt: fsaGroups.paidAt,
       createdBy: fsaGroups.createdBy,
     })

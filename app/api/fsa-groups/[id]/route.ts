@@ -6,6 +6,7 @@ import { carregarGrupo } from '@/lib/server/fsa-payment';
 import { MOTIVOS_IMPRODUTIVO } from '@/lib/fsa-payment';
 
 const TIPOS = ['servico', 'evidencia'] as const;
+const DIA = /^\d{4}-\d{2}-\d{2}$/;
 
 async function abrir(request: Request, context: { params: Promise<{ id: string }> }) {
   const user = await requireApiUser(request);
@@ -135,8 +136,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const { erro, user, grupo } = await abrir(request, context);
     if (erro) return erro;
 
-    const body = (await request.json().catch(() => ({}))) as { action?: unknown };
+    const body = (await request.json().catch(() => ({}))) as { action?: unknown; dataPagamento?: unknown };
     const action = typeof body.action === 'string' ? body.action : '';
+    const dataPagamento =
+      typeof body.dataPagamento === 'string' && DIA.test(body.dataPagamento) ? body.dataPagamento : null;
     const daGerencia = user!.role === 'gerencia';
     // Fechar é de quem montou o grupo. O resto é dinheiro: só gerência.
     if (action !== 'fechar' && !daGerencia) {
@@ -218,13 +221,45 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           { status: 409 },
         );
       }
+      // A folha não sai no dia da aprovação. Sem a data, o painel não saberia
+      // em que dia contar a saída.
+      if (!dataPagamento) {
+        return Response.json({ error: 'Informe a data em que o repasse vai ser pago.' }, { status: 400 });
+      }
       // Aprova-se o que está na tela agora, não o que foi fechado antes: se a
       // classificação mudou no meio, a fotografia é refeita.
       await db
         .update(fsaGroups)
-        .set({ status: 'aprovado', ...fotografia, approvedBy: user!.email, approvedAt: now, updatedAt: now })
+        .set({
+          status: 'aprovado',
+          ...fotografia,
+          dataPagamento,
+          approvedBy: user!.email,
+          approvedAt: now,
+          updatedAt: now,
+        })
         .where(eq(fsaGroups.id, grupo!.id));
-      await registrar('Repasse aprovado', { totalCents: grupo!.repasse.totalCents });
+      await registrar('Repasse aprovado', { totalCents: grupo!.repasse.totalCents, dataPagamento });
+      return Response.json({ grupo: await carregarGrupo(grupo!.id) });
+    }
+
+    // A folha pode atrasar ou adiantar. Enquanto não foi pago, a data muda sem
+    // precisar desaprovar e aprovar de novo.
+    if (action === 'reagendar') {
+      if (grupo!.status !== 'aprovado') {
+        return Response.json(
+          { error: 'Só dá para mudar a data de um repasse aprovado e ainda não pago.' },
+          { status: 409 },
+        );
+      }
+      if (!dataPagamento) {
+        return Response.json({ error: 'Informe a nova data de pagamento.' }, { status: 400 });
+      }
+      await db
+        .update(fsaGroups)
+        .set({ dataPagamento, updatedAt: now })
+        .where(eq(fsaGroups.id, grupo!.id));
+      await registrar('Data de pagamento alterada', { de: grupo!.dataPagamento, para: dataPagamento });
       return Response.json({ grupo: await carregarGrupo(grupo!.id) });
     }
 
@@ -234,7 +269,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
       await db
         .update(fsaGroups)
-        .set({ status: 'bloqueado', approvedBy: null, approvedAt: null, updatedAt: now })
+        .set({ status: 'bloqueado', approvedBy: null, approvedAt: null, dataPagamento: null, updatedAt: now })
         .where(eq(fsaGroups.id, grupo!.id));
       await registrar('Repasse bloqueado', { de: grupo!.status });
       return Response.json({ grupo: await carregarGrupo(grupo!.id) });

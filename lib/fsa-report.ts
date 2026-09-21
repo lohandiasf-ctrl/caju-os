@@ -14,6 +14,8 @@ export type VisitaDoRelatorio = {
   status: 'aberto' | 'pronto' | 'aprovado' | 'pago' | 'bloqueado';
   aprovadoPor: string | null;
   aprovadoEm: string | null;
+  // Quando a folha paga. Não é o dia do atendimento nem o da aprovação.
+  dataPagamento: string | null;
   pagoEm: string | null;
   repasse: Repasse;
   fsas: {
@@ -41,6 +43,7 @@ export type LinhaDoRelatorio = {
   improdutivasVisita: string;
   totalVisita: string;
   situacao: string;
+  dataPagamento: string;
 };
 
 const ROTULO_STATUS: Record<VisitaDoRelatorio['status'], string> = {
@@ -63,9 +66,16 @@ const ROTULO_MOTIVO: Record<MotivoImprodutivo, string> = {
 const reais = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-const dia = (iso: string) => {
-  const data = new Date(iso);
-  return Number.isNaN(data.getTime()) ? iso : data.toLocaleDateString('pt-BR');
+const dia = (valor: string) => {
+  // AAAA-MM-DD é um dia, não um instante. Passar por `new Date` o joga para a
+  // meia-noite UTC, que em Brasília ainda é o dia anterior — a planilha diria
+  // que a folha paga no dia 24 quando ela paga no dia 25. No servidor, que roda
+  // em UTC, isso sai certo por acaso; em qualquer outro fuso, erra.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor.split('-').reverse().join('/');
+  const data = new Date(valor);
+  return Number.isNaN(data.getTime())
+    ? valor
+    : data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 };
 
 /**
@@ -120,6 +130,7 @@ export function linhasDoRelatorio(visitas: readonly VisitaDoRelatorio[]): LinhaD
     const calculo = memoriaDeCalculo(visita.repasse);
     const total = reais(visita.repasse.totalCents);
     const situacao = ROTULO_STATUS[visita.status];
+    const dataPagamento = visita.dataPagamento ? dia(visita.dataPagamento) : '';
     // As três categorias repetidas por linha, para a planilha ser somável por
     // qualquer recorte que quem recebe resolver filtrar.
     const categorias = {
@@ -145,6 +156,7 @@ export function linhasDoRelatorio(visitas: readonly VisitaDoRelatorio[]): LinhaD
           ...categorias,
           totalVisita: total,
           situacao,
+          dataPagamento,
         },
       ];
     }
@@ -162,6 +174,7 @@ export function linhasDoRelatorio(visitas: readonly VisitaDoRelatorio[]): LinhaD
       ...categorias,
       totalVisita: total,
       situacao,
+      dataPagamento,
     }));
   });
 }
@@ -181,6 +194,7 @@ const CABECALHO = [
   'Improdutivas da visita',
   'Total da visita',
   'Situação',
+  'Data do pagamento',
 ] as const;
 
 const celula = (valor: string) => `"${valor.replace(/"/g, '""')}"`;
@@ -206,6 +220,7 @@ export function paraCsv(linhas: readonly LinhaDoRelatorio[]): string {
       linha.improdutivasVisita,
       linha.totalVisita,
       linha.situacao,
+      linha.dataPagamento,
     ]
       .map(celula)
       .join(';'),

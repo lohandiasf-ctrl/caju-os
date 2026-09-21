@@ -11,6 +11,54 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### Painel financeiro: zerar a partir de uma data, e repasse vindo dos grupos
+
+A gerência quer conferir os números 1:1 a partir do zero. Duas mudanças:
+
+**Zerar sem apagar.** Os valores vêm do Jira e dos grupos de repasse; apagar
+não é opção. O painel ganhou uma data de início (`finance_settings.acompanhamento_desde`,
+`drizzle/0040_acompanhamento_financeiro.sql`) e ignora tudo antes dela. Botão
+"Zerar a partir de hoje", campo para escolher outra data e opção de voltar a
+contar todo o histórico. Os filtros de 7/30/90 dias continuam; vale o mais
+recente entre eles e a data de início.
+
+**O repasse do painel vinha de outra regra.** A caixa "Regra de repasse"
+(R$ 120 na primeira visita + R$ 70 por chamado) era uma estimativa antiga,
+anterior aos grupos, e ninguém a tinha desligado — o painel mostrava
+"Repasse calculado no período: R$ 23.100" com base nela. Ela nunca bateria com
+os grupos aprovados. Agora o repasse é a soma dos grupos **aprovados e pagos**
+(o que vai para a folha), agregada no banco por `/api/fsa-groups/resumo` — sem
+o teto de 200 da lista, porque total que trunca em silêncio é justamente o que
+a conferência existe para pegar. O que está fechado e espera a gerência aparece
+à parte.
+
+A tabela por técnico foi dividida em duas: receita (nomes do Jira) e repasse
+(nomes do cadastro). Cruzar as duas por nome erraria em silêncio: no Jira o
+técnico é "Lohan Dias", no cadastro é "Lohan Dias Farias".
+
+Limitações conhecidas:
+
+- O faturamento é filtrado pela **última atualização** do chamado no Jira, a
+  única data que a consulta financeira traz. Um chamado antigo que for editado
+  depois da data de início entra na conta.
+- A regra antiga continua em uso em outras telas: dashboard operacional
+  (`/api/operational-dashboard`, `/api/operations`), histórico do chamado,
+  assistente e o diálogo de fluxo operacional. Só o painel financeiro mudou.
+
+**Data do pagamento.** A folha não sai no dia da aprovação. Aprovar um grupo
+agora exige a data em que ele vai ser pago (`fsa_groups.data_pagamento`, na
+mesma `0040`), que pode ser mudada enquanto o grupo não foi pago. O painel
+conta a saída por essa data — é quando o dinheiro sai de fato —, e grupo ainda
+sem data conta pelo dia do atendimento. O relatório ganhou a coluna "Data do
+pagamento". Bloquear um grupo aprovado limpa a data.
+
+De passagem, o teste da coluna nova expôs um bug de fuso no relatório: dia
+sem hora (`2026-09-25`) passava por `new Date`, virava meia-noite UTC, e em
+Brasília saía como 24/09. No servidor, que roda em UTC, saía certo por acaso.
+Agora dia sem hora é formatado como texto, e há teste que roda nos dois fusos.
+
+**Pendente:** rodar `npm run db:migrate:remote`.
+
 ### Improdutiva vira categoria, não desconto
 
 No teste em produção apareceu uma leitura ruim. A tela mostrava o valor de cada
