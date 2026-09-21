@@ -9,6 +9,57 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-20
+
+### Repasse por FSA: cálculo, persistência e a tela do técnico
+
+Primeira implementação da especificação de pagamento
+(`ESPECIFICACAO_PAGAMENTO_FSA.md`), que até aqui só existia como documento.
+
+O cálculo vive em `lib/fsa-payment.ts`, puro e sem banco: faixa de serviços,
+evidência contada **por FSA e não por foto**, improdutivo pela metade com
+motivo obrigatório, e o consolidado do dia numa faixa só (4 + 3 + 2 serviços
+pagam como 9, não como três visitas pequenas). Os exemplos do documento viraram
+os 19 testes de `tests/fsa-payment.test.ts`.
+
+Duas regras que o documento não tinha fechado, decididas com o usuário:
+
+- **Serviço novo na loja não paga bônus fixo.** O "bônus de R$ 30" era só o
+  primeiro degrau da tabela (70 → 100) lido como se fosse regra. Recalcula-se
+  pela faixa e o técnico fica com a diferença.
+- **Exceção do quinto chamado.** A tabela repete R$ 150 em 4 e em 5 serviços,
+  então 4 agendados + 1 descoberto renderia zero — o técnico trabalharia de
+  graça. Quando o recálculo não aumenta nada, paga a faixa seguinte (R$ 180).
+  Com 2 a mais a exceção não aparece: 6 já valem R$ 180 por tabela.
+
+Persistência em duas tabelas novas (`drizzle/0037_fsa_payment.sql`):
+
+- `fsa_classifications` — uma linha por FSA. Vive só no Caju; nada volta para o
+  Jira, que não conhece serviço, evidência nem improdutivo.
+- `fsa_payouts` — fotografia do repasse fechado de uma visita. O valor nunca é
+  a fonte da verdade (ele sempre sai do cálculo sobre as FSAs atuais); guarda-se
+  o que foi apresentado à gerência para que reclassificar depois não reescreva à
+  revelia o que já foi aprovado ou pago.
+
+A trilha de auditoria reusa `operational_audit`, que já é append-only.
+
+Na tela, `components/fsa-payment-panel.tsx` abre dentro do card de atendimento
+pelo botão "Repasse": classifica cada FSA como serviço ou evidência, marca
+"não consegui resolver" pedindo o motivo, e mostra a memória de cálculo com o
+total da visita. Avisa quando falta classificar alguma FSA (valor parcial) e
+quando uma evidência virou serviço e espera a gerência.
+
+**Pendente:** rodar `npm run db:migrate:remote` para aplicar a migration.
+Faltam ainda o fluxo de aprovação do gerente e a exportação do relatório.
+
+Atenção ao gerar migration neste projeto: o journal do `drizzle-kit` está
+parado no `0024`, então `drizzle-kit generate` diffa contra um snapshot velho e
+recria tudo que veio depois (`assistant_actions`, `ticket_archives`, tabelas do
+WhatsApp, vários `ALTER TABLE`). A `0037` foi escrita à mão, como as demais de
+`0026` em diante.
+
+---
+
 ## 2026-09-19
 
 ### WhatsApp zerado para reconfiguração do zero
