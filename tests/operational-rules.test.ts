@@ -8,7 +8,7 @@ test('validation only releases a complete field-service ticket', () => {
 });
 
 test('validation explains every pending requirement', () => {
-  assert.equal(validationRequirements({ status: 'AGENDAMENTO', ticketTotal: '0', attachmentCount: 0, pendingSync: 1 }).length, 8);
+  assert.equal(validationRequirements({ status: 'AGENDAMENTO', ticketTotal: '0', attachmentCount: 0, pendingSync: 1 }).length, 7);
 });
 
 test('validation does not require the part to replace', () => {
