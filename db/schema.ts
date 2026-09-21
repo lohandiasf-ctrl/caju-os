@@ -954,3 +954,80 @@ export const assistantActions = sqliteTable(
     index('idx_assistant_actions_ticket').on(table.ticketKey, table.createdAt),
   ],
 );
+
+// Classificação de uma FSA para efeito de repasse ao técnico.
+//
+// Vive só no Caju: nada disso volta para o Jira, que continua sendo a origem
+// do chamado e não sabe o que é serviço, evidência ou improdutivo. Por isso a
+// chave é a do ticket, e não um id próprio — cada FSA tem uma classificação só.
+export const fsaClassifications = sqliteTable(
+  'fsa_classifications',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ticketKey: text('ticket_key').notNull(),
+    // A visita a que a FSA pertence. O repasse é calculado por atendimento,
+    // porque a faixa de preço é do conjunto e não de cada chamado isolado.
+    attendanceId: integer('attendance_id').references(() => activeAttendances.id),
+    tipo: text('tipo', { enum: ['servico', 'evidencia'] }).notNull(),
+    improdutiva: integer('improdutiva', { mode: 'boolean' }).notNull().default(false),
+    motivo: text('motivo', {
+      enum: [
+        'gerente-recusou',
+        'defeito-maior',
+        'problema-impeditivo',
+        'loja-fechada',
+        'tempo-excedido',
+        'loja-fechando',
+      ],
+    }),
+    observacao: text('observacao'),
+    // Apareceu durante a visita, fora do agendamento. Muda o valor quando o
+    // recálculo pela tabela não renderia nada (4 serviços e aparece o quinto).
+    descobertaNaLoja: integer('descoberta_na_loja', { mode: 'boolean' }).notNull().default(false),
+    // Trocar evidência por serviço mexe no valor, então a mudança fica retida
+    // até a gerência revisar. O cálculo continua rodando; o que trava é o
+    // pagamento, não a edição.
+    revisao: text('revisao', { enum: ['ok', 'pendente'] }).notNull().default('ok'),
+    createdBy: text('created_by').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedBy: text('updated_by').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_fsa_classifications_ticket').on(table.ticketKey),
+    index('idx_fsa_classifications_attendance').on(table.attendanceId),
+  ],
+);
+
+// Repasse fechado de uma visita.
+//
+// O valor não é a fonte da verdade — ele sempre pode ser recalculado a partir
+// das FSAs. É uma fotografia do que foi apresentado à gerência no momento da
+// aprovação, para que uma reclassificação posterior não reescreva à revelia o
+// que já foi aprovado ou pago.
+export const fsaPayouts = sqliteTable(
+  'fsa_payouts',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    attendanceId: integer('attendance_id')
+      .notNull()
+      .references(() => activeAttendances.id),
+    status: text('status', {
+      enum: ['aberto', 'pronto', 'aprovado', 'pago', 'bloqueado'],
+    })
+      .notNull()
+      .default('aberto'),
+    servicosCents: integer('servicos_cents').notNull().default(0),
+    evidenciasCents: integer('evidencias_cents').notNull().default(0),
+    descontoImprodutivoCents: integer('desconto_improdutivo_cents').notNull().default(0),
+    totalCents: integer('total_cents').notNull().default(0),
+    // Memória de cálculo em JSON, para o relatório explicar como chegou no valor.
+    memoria: text('memoria'),
+    approvedBy: text('approved_by'),
+    approvedAt: text('approved_at'),
+    paidAt: text('paid_at'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [uniqueIndex('idx_fsa_payouts_attendance').on(table.attendanceId)],
+);
