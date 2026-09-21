@@ -58,13 +58,25 @@ Quanto mais serviços o técnico faz em uma visita, mais ele ganha:
 
 ## Quando aparecem serviços novos na loja?
 
-Se o técnico chega à loja agendado para fazer 4 serviços, mas ao chegar descobre que precisa fazer mais 1, ele ganha um **bônus de R$ 30** por cada novo serviço descoberto.
+Quando o técnico descobre um serviço novo já na loja, o sistema **recalcula pela tabela**. Não existe bônus de valor fixo: o técnico ganha a diferença entre a faixa antiga e a nova.
 
-**Exemplo prático:**
+**Exemplos:**
+- Tinha 1 serviço (R$ 70) e aparece mais 1 → 2 serviços = R$ 100. O serviço novo valeu **R$ 30**.
+- Tinha 1 serviço (R$ 70) e aparecem mais 2 → 3 serviços = R$ 120. Os dois juntos valeram **R$ 50** (R$ 30 o primeiro, R$ 20 o segundo).
+
+Isso vale para quantos serviços aparecerem, sem limite máximo.
+
+### A exceção: 4 serviços e aparece o quinto
+
+A tabela repete o mesmo valor em 4 e em 5 serviços (R$ 150). Então, se o técnico foi agendado para 4 e descobre 1 na loja, o recálculo daria diferença **zero** — ele faria o serviço a mais de graça.
+
+Nesse caso o valor sobe para **R$ 180**:
 - Técnico é agendado para 4 serviços = R$ 150
-- Chega lá e aparece mais 1 serviço = R$ 150 + R$ 30 = **R$ 180**
+- Aparece 1 serviço na loja = **R$ 180**
 
-Isso vale para cada novo serviço que aparecer, sem limite máximo.
+Se aparecerem 2 serviços, a exceção não é necessária: 6 serviços já valem R$ 180 pela tabela.
+
+**A regra geral:** se o recálculo não aumentar nada, paga a faixa seguinte. Como a tabela só repete valor entre 4 e 5 serviços, hoje esse é o único caso que cai na exceção.
 
 ---
 
@@ -255,9 +267,9 @@ O técnico é agendado para fazer:
 - Valor esperado: R$ 100 (serviços) + R$ 10 (evidências) = **R$ 110**
 
 **Na loja:**
-- Descobre +1 serviço novo = +R$ 30 (bônus por aparecer na hora)
+- Descobre +1 serviço novo → 3 serviços, que pela tabela valem R$ 120 (o serviço novo valeu R$ 20)
 - Descobre +2 FSAs de evidência = +R$ 10
-- Novo subtotal: R$ 110 + R$ 30 + R$ 10 = **R$ 150**
+- Novo subtotal: R$ 120 + R$ 20 = **R$ 140**
 
 **Depois:**
 - Um dos 2 serviços originais não conseguiu resolver (máquina com defeito maior)
@@ -288,7 +300,7 @@ Você concorda com **TODAS** estas regras?
 - [ ] Serviços: R$ 70, R$ 100, R$ 120... até R$ 330, depois +R$ 30 por serviço adicional
 - [ ] FSAs de evidência sozinhas: R$ 70 até 14 FSAs, depois +R$ 5 por FSA adicional
 - [ ] Serviço + evidência: preço do serviço + (quantidade de FSAs de evidência × R$ 5)
-- [ ] Novo serviço que aparece na loja: +R$ 30 por serviço
+- [ ] Novo serviço que aparece na loja: recalcula pela tabela (exceção: 4 serviços + 1 na loja = R$ 180)
 - [ ] Não conseguiu resolver: metade do valor normal
 - [ ] Motivo obrigatório quando não consegue resolver
 - [ ] Pode não conseguir resolver nada (visita inteira "branca")

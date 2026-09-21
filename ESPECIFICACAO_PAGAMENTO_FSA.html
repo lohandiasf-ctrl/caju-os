@@ -222,13 +222,23 @@
         <p><strong>E se tiver mais de 11?</strong> Cada serviço adicional vale R$ 30 a mais (exemplo: 12 = R$ 360, 13 = R$ 390, e assim vai).</p>
 
         <h2>Quando aparecem serviços novos na loja?</h2>
-        <p>Se o técnico chega à loja agendado para fazer 4 serviços, mas ao chegar descobre que precisa fazer mais 1, ele ganha um <strong>bônus de R$ 30</strong> por cada novo serviço descoberto.</p>
+        <p>Quando o técnico descobre um serviço novo já na loja, o sistema <strong>recalcula pela tabela</strong>. Não existe bônus de valor fixo: o técnico ganha a diferença entre a faixa antiga e a nova.</p>
         <div class="example">
-            <strong>Exemplo prático:</strong><br>
-            • Técnico é agendado para 4 serviços = R$ 150<br>
-            • Chega lá e aparece mais 1 serviço = R$ 150 + R$ 30 = <strong>R$ 180</strong>
+            <strong>Exemplos:</strong><br>
+            • Tinha 1 serviço (R$ 70) e aparece mais 1 → 2 serviços = R$ 100. O serviço novo valeu <strong>R$ 30</strong>.<br>
+            • Tinha 1 serviço (R$ 70) e aparecem mais 2 → 3 serviços = R$ 120. Os dois juntos valeram <strong>R$ 50</strong> (R$ 30 o primeiro, R$ 20 o segundo).
         </div>
-        <p>Isso vale para cada novo serviço que aparecer, sem limite máximo.</p>
+        <p>Isso vale para quantos serviços aparecerem, sem limite máximo.</p>
+
+        <h3>A exceção: 4 serviços e aparece o quinto</h3>
+        <p>A tabela repete o mesmo valor em 4 e em 5 serviços (R$ 150). Então, se o técnico foi agendado para 4 e descobre 1 na loja, o recálculo daria diferença <strong>zero</strong> — ele faria o serviço a mais de graça.</p>
+        <div class="example">
+            <strong>Nesse caso o valor sobe para R$ 180:</strong><br>
+            • Técnico é agendado para 4 serviços = R$ 150<br>
+            • Aparece 1 serviço na loja = <strong>R$ 180</strong>
+        </div>
+        <p>Se aparecerem 2 serviços, a exceção não é necessária: 6 serviços já valem R$ 180 pela tabela.</p>
+        <p><strong>A regra geral:</strong> se o recálculo não aumentar nada, paga a faixa seguinte. Como a tabela só repete valor entre 4 e 5 serviços, hoje esse é o único caso que cai na exceção.</p>
 
         <h2>Quanto pagar por evidências?</h2>
         <p>Se o técnico atende <strong>somente FSAs de evidência</strong> (sem fazer serviço):</p>
@@ -401,9 +411,9 @@
 
         <p><strong>Na loja:</strong></p>
         <ul>
-            <li>Descobre +1 serviço novo = +R$ 30 (bônus por aparecer na hora)</li>
+            <li>Descobre +1 serviço novo → 3 serviços, que pela tabela valem R$ 120 (o serviço novo valeu R$ 20)</li>
             <li>Descobre +2 FSAs de evidência = +R$ 10</li>
-            <li>Novo subtotal: R$ 110 + R$ 30 + R$ 10 = <strong>R$ 150</strong></li>
+            <li>Novo subtotal: R$ 120 + R$ 20 = <strong>R$ 140</strong></li>
         </ul>
 
         <p><strong>Depois:</strong></p>
@@ -439,7 +449,7 @@
                 <li>Serviços: R$ 70, R$ 100, R$ 120... até R$ 330, depois +R$ 30 por serviço adicional</li>
                 <li>FSAs de evidência sozinhas: R$ 70 até 14 FSAs, depois +R$ 5 por FSA adicional</li>
                 <li>Serviço + evidência: preço do serviço + (quantidade de FSAs de evidência × R$ 5)</li>
-                <li>Novo serviço que aparece na loja: +R$ 30 por serviço</li>
+                <li>Novo serviço que aparece na loja: recalcula pela tabela (exceção: 4 serviços + 1 na loja = R$ 180)</li>
                 <li>Não conseguiu resolver: metade do valor normal</li>
                 <li>Motivo obrigatório quando não consegue resolver</li>
                 <li>Pode não conseguir resolver nada (visita inteira "branca")</li>
