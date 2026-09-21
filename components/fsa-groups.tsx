@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/auth-provider";
 import type { MotivoImprodutivo } from "@/lib/fsa-payment";
+import { saveFile } from "@/lib/download-file";
 
 // O técnico escolhe pelo que aconteceu na loja, não pelo código do motivo.
 const ROTULO_MOTIVO: Record<MotivoImprodutivo, string> = {
@@ -125,6 +126,7 @@ export function FsaGroups() {
   const [error, setError] = useState("");
   const [ocupado, setOcupado] = useState<number | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [avisoExport, setAvisoExport] = useState("");
   // Data de pagamento escolhida antes de aprovar, por grupo.
   const [datasPagamento, setDatasPagamento] = useState<Map<number, string>>(new Map());
 
@@ -216,6 +218,7 @@ export function FsaGroups() {
   const exportar = async () => {
     if (!user) return;
     setExportando(true);
+    setAvisoExport("");
     try {
       const response = await fetch("/api/fsa-groups/report?status=aprovado,pago&dias=30", {
         headers: { Authorization: `Bearer ${await user.getIdToken()}` },
@@ -224,11 +227,11 @@ export function FsaGroups() {
         const payload = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(payload.error ?? "Não foi possível gerar o relatório.");
       }
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(await response.blob());
-      link.download = "repasse-fsa-30-dias.csv";
-      link.click();
-      URL.revokeObjectURL(link.href);
+      const blob = await response.blob();
+      const salvo = saveFile(blob, "repasse-fsa-30-dias.csv");
+      // Sem quebra de linha = só o cabeçalho, nenhum grupo no período.
+      const vazio = !(await blob.text()).trim().includes("\n");
+      setAvisoExport(vazio ? `${salvo}. Nenhum grupo aprovado ou pago nos últimos 30 dias — o arquivo só tem o cabeçalho.` : salvo);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível gerar o relatório.");
     } finally {
@@ -253,6 +256,12 @@ export function FsaGroups() {
           </Button>
         )}
       </div>
+
+      {avisoExport && (
+        <p aria-live="polite" className="border-b border-border bg-emerald-400/10 px-5 py-3 text-sm text-emerald-100">
+          {avisoExport}
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="border-b border-border bg-rose-400/10 px-5 py-3 text-sm text-rose-100">

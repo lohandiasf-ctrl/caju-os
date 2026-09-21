@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### Exportar agora avisa onde o arquivo foi salvo
+
+No app desktop, o WebView salva o CSV direto na pasta Downloads sem mostrar
+nada, e parecia que o botão Exportar não funcionava. Os botões Exportar do
+Financeiro e dos grupos de chamados agora mostram "Arquivo salvo na pasta
+Downloads: …". Se o repasse sair só com o cabeçalho, o aviso diz que não há
+grupo aprovado ou pago nos últimos 30 dias. O download passou para
+`lib/download-file.ts`: o link entra no DOM e o blob só é liberado depois de
+60 s. Não precisa de executável novo.
+
 ### Anexar evidência não comenta mais no Jira
 
 O Caju OS deixou de escrever "Evidências anexadas pelo Caju OS por …" no
