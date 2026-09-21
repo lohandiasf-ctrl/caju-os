@@ -11,6 +11,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### "Agrupar chamados", nome pela cidade e loja, e o tipo à vista no chamado
+
+Três ajustes pedidos pelo usuário depois de usar:
+
+- **"Agrupar para repasse" virou "Agrupar chamados".** Agrupar é juntar os
+  chamados da mesma visita; o repasse é consequência, não o nome da ação.
+- **O nome do grupo é a cidade e o número da loja**, gerado pelo servidor a
+  partir dos próprios chamados ("Candeias — Loja L497"; "Candeias — Lojas L497,
+  L500"; cidades diferentes separadas por " · "). Não há mais campo livre: um
+  apelido como "gvnd" não diz nada a quem olha a fila. O kanban preenche a
+  cidade que falta com "Atualizado em …", e isso é descartado. A regra está em
+  `lib/group-name.ts`, com testes.
+- **O tipo da FSA estava escondido.** O bloco ficava dentro dos detalhes do
+  Jira, abaixo do assistente, fora da parte visível do diálogo — o usuário não
+  achou. Agora fica logo abaixo dos botões de ação. E chamado sem grupo não
+  mostra mais só um aviso: escolhido o técnico, marcar o tipo cria o grupo dele
+  na hora.
+
+O grupo "gvnd", criado antes disso, mantém o nome antigo.
+
 ### Kanban empilha os chamados agrupados
 
 Quem agrupa quatro FSAs da mesma loja não quer ver quatro cards soltos na

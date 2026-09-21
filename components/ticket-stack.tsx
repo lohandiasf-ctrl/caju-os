@@ -11,7 +11,7 @@ type Chamado = { id: string; store: string };
 const MAX_ETIQUETAS = 4;
 
 /**
- * Pilha de chamados do mesmo grupo de repasse, no lugar dos cards soltos.
+ * Pilha de chamados do mesmo grupo, no lugar dos cards soltos.
  *
  * Fechada, ela ocupa o espaço de um card e mostra o que o grupo é: quem atende,
  * quais FSAs, em que loja. Aberta, mostra os cards de sempre — cada um continua
@@ -53,7 +53,7 @@ export function TicketStack<T extends Chamado>({
             className="flex min-h-9 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs font-semibold text-emerald-100 transition hover:bg-emerald-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
           >
             <Layers3 className="size-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate">{grupo.nome ?? "Grupo de repasse"}</span>
+            <span className="min-w-0 flex-1 truncate">{grupo.nome ?? "Grupo"}</span>
             <span className="shrink-0 text-emerald-200/80">Recolher</span>
             <ChevronUp className="size-3.5 shrink-0" aria-hidden="true" />
           </button>
@@ -89,7 +89,7 @@ export function TicketStack<T extends Chamado>({
           onClick={onAlternar}
           aria-expanded="false"
           aria-controls={conteudoId}
-          aria-label={`${grupo.nome ?? "Grupo de repasse"}: ${chamados.length} FSAs de ${grupo.tecnico}. Abrir.`}
+          aria-label={`${grupo.nome ?? "Grupo"}: ${chamados.length} FSAs de ${grupo.tecnico}. Abrir.`}
           className="w-full rounded-xl p-3 text-left transition hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
         >
           <div className={`flex items-center justify-between gap-2 ${selecao ? "pl-8" : ""}`}>
@@ -103,7 +103,7 @@ export function TicketStack<T extends Chamado>({
           </div>
 
           <h4 className="mt-2 truncate text-sm font-semibold leading-snug">
-            {grupo.nome ?? "Grupo de repasse"}
+            {grupo.nome ?? "Grupo"}
           </h4>
 
           <div className="mt-2 flex flex-wrap gap-1">

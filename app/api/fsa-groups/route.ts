@@ -4,6 +4,7 @@ import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { carregarGrupo, carregarPassesDaFsa } from '@/lib/server/fsa-payment';
 import { operationDate } from '@/lib/assistant';
+import { nomeDoGrupo } from '@/lib/group-name';
 
 const STATUS = ['aberto', 'pronto', 'aprovado', 'pago', 'bloqueado'] as const;
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
@@ -119,6 +120,7 @@ export async function POST(request: Request) {
         key: typeof t.key === 'string' ? t.key.trim().toUpperCase() : '',
         summary: typeof t.summary === 'string' ? t.summary.slice(0, 300) : null,
         store: typeof t.store === 'string' ? t.store.slice(0, 200) : null,
+        city: typeof t.city === 'string' ? t.city.slice(0, 120) : null,
       }))
       .filter((t) => t.key);
     const unicos = [...new Map(tickets.map((t) => [t.key, t])).values()];
@@ -134,7 +136,10 @@ export async function POST(request: Request) {
     // O dia define o relatório, então é o da operação e não o do Worker: depois
     // das 21h de Brasília o UTC já virou amanhã.
     const dia = typeof body.dia === 'string' && DIA.test(body.dia) ? body.dia : operationDate();
-    const nome = typeof body.nome === 'string' ? body.nome.trim().slice(0, 120) || null : null;
+    // O nome é a cidade e o número da loja, tirados dos próprios chamados. Não
+    // se aceita nome digitado: quem olha a fila reconhece o grupo pelo lugar, e
+    // um apelido qualquer não diz nada a mais ninguém.
+    const nome = nomeDoGrupo(unicos);
 
     const db = getDb();
     const tecnico = await db
@@ -175,7 +180,7 @@ export async function POST(request: Request) {
     await db.insert(operationalAudit).values(
       unicos.map((t) => ({
         ticketKey: t.key,
-        action: 'FSA agrupada para repasse',
+        action: 'Chamado agrupado',
         actorEmail: user.email,
         details: JSON.stringify({
           groupId: grupo.id,
