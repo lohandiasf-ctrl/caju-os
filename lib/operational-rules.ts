@@ -18,7 +18,6 @@ export function validationRequirements(input: ValidationInput) {
   const missing: string[] = [];
   const status = normalizedStatus(input.status);
   if (!status.includes('tec-campo') && !status.includes('tecnico em campo') && !status.includes('em atendimento')) missing.push('chamado em Técnico em campo');
-  if (!(Number(String(input.ticketTotal ?? '').replace(',', '.')) > 0)) missing.push('valores atualizados');
   if (input.attachmentCount < 1) missing.push('ao menos uma evidência');
   if (!input.identifiedProblem?.trim()) missing.push('problema identificado');
   if (!input.testsPerformed?.trim()) missing.push('testes feitos');

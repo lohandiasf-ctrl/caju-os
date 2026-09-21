@@ -11,6 +11,12 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### Validar não exige mais valores atualizados
+
+O botão Validar deixou de travar em "Falta: valores atualizados". O valor do
+chamado agora vem da classificação da FSA (atuação, evidência, improdutiva) e
+do grupo, então o total do Jira não é mais pré-requisito.
+
 ### Cadastro de técnicos: a importação parou de duplicar, e as cópias foram mapeadas
 
 O cadastro tinha **1.794 linhas para ~900 pessoas** — 292 nomes repetidos, gente
