@@ -108,8 +108,21 @@ export function FsaGroups() {
   const [error, setError] = useState("");
   const [ocupado, setOcupado] = useState<number | null>(null);
   const [exportando, setExportando] = useState(false);
+  // FSAs em que o técnico clicou "Improdutiva" e ainda não escolheu o motivo.
+  // O servidor não aceita improdutiva sem motivo, então a marcação fica só na
+  // tela até o motivo vir — sem isso o seletor nunca aparece, porque ele depende
+  // da improdutiva já estar salva.
+  const [pedindoMotivo, setPedindoMotivo] = useState<Set<number>>(new Set());
 
   const daGerencia = role === "gerencia";
+
+  const marcarPedindo = (id: number, pedindo: boolean) =>
+    setPedindoMotivo((atual) => {
+      const proximo = new Set(atual);
+      if (pedindo) proximo.add(id);
+      else proximo.delete(id);
+      return proximo;
+    });
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -180,8 +193,12 @@ export function FsaGroups() {
       observacao: mudanca.observacao !== undefined ? mudanca.observacao : fsa.observacao,
       descobertaNaLoja: mudanca.descobertaNaLoja ?? fsa.descobertaNaLoja,
     };
-    // Sem motivo o servidor recusa; o seletor abre sozinho ao marcar.
-    if (proxima.improdutiva && !proxima.motivo) return;
+    // Sem motivo o servidor recusa. Em vez de mandar um pedido que já se sabe
+    // que volta com erro, abre o seletor e espera o motivo.
+    if (proxima.improdutiva && !proxima.motivo) {
+      marcarPedindo(fsa.id, true);
+      return;
+    }
     setOcupado(grupo.id);
     setError("");
     try {
@@ -196,6 +213,7 @@ export function FsaGroups() {
       const payload = (await response.json()) as { grupo?: Grupo; error?: string };
       if (!response.ok || !payload.grupo) throw new Error(payload.error ?? "Não foi possível salvar.");
       guardar(payload.grupo);
+      marcarPedindo(fsa.id, false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Não foi possível salvar.");
     } finally {
@@ -390,16 +408,22 @@ export function FsaGroups() {
                               <Button
                                 type="button"
                                 size="sm"
-                                variant={fsa.improdutiva ? "destructive" : "outline"}
+                                variant={fsa.improdutiva || pedindoMotivo.has(fsa.id) ? "destructive" : "outline"}
                                 className="min-h-11"
                                 disabled={trabalhando}
-                                aria-pressed={fsa.improdutiva}
-                                onClick={() =>
+                                aria-pressed={fsa.improdutiva || pedindoMotivo.has(fsa.id)}
+                                onClick={() => {
+                                  // Desmarcar uma que só estava esperando motivo não
+                                  // precisa ir ao servidor: nada foi salvo ainda.
+                                  if (!fsa.improdutiva && pedindoMotivo.has(fsa.id)) {
+                                    marcarPedindo(fsa.id, false);
+                                    return;
+                                  }
                                   void classificar(grupo, fsa, {
                                     improdutiva: !fsa.improdutiva,
                                     motivo: fsa.improdutiva ? null : fsa.motivo,
-                                  })
-                                }
+                                  });
+                                }}
                               >
                                 Improdutiva
                               </Button>
@@ -423,7 +447,7 @@ export function FsaGroups() {
                             </label>
                           )}
 
-                          {fsa.tipo === "servico" && fsa.improdutiva && (
+                          {fsa.tipo === "servico" && (fsa.improdutiva || pedindoMotivo.has(fsa.id)) && (
                             <div className="mt-3 grid gap-2 rounded-xl border border-amber-400/25 bg-amber-400/[.06] p-3">
                               <label
                                 className="text-xs font-bold uppercase tracking-wide text-amber-200"
