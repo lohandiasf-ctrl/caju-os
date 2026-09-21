@@ -9,6 +9,46 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-21
+
+### O backup do D1 nunca tinha rodado
+
+O workflow `D1 backup` falhava **todo dia desde 13/09**, quando foi criado. Não
+era regressão: nunca funcionou uma vez sequer. O `caju-os-prod` estava sem
+backup nenhum.
+
+A causa era mais boba do que o erro sugeria. O workflow passa as credenciais
+assim:
+
+```yaml
+CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+```
+
+E o repositório **não tinha secret nenhum cadastrado** — `total_count: 0`. O
+GitHub não falha quando um secret não existe: ele substitui por string vazia.
+O wrangler recebia `CLOUDFLARE_API_TOKEN=""`, tratava como ausente, e morria
+com "it's necessary to set a CLOUDFLARE_API_TOKEN environment variable".
+
+A mensagem parecia credencial inválida; era credencial ausente. Quem for
+investigar algo parecido: **confira `gh api repos/OWNER/REPO/actions/secrets`
+antes de desconfiar do token**, porque a tela de Actions não distingue os dois
+casos.
+
+Resolvido cadastrando `CLOUDFLARE_API_TOKEN` (token novo, só `Account · D1 ·
+Edit`) e `CLOUDFLARE_ACCOUNT_ID`. O primeiro backup real saiu em 21/09: 5,7 MB,
+export em 3 segundos, artifact com 30 dias de retenção. Ele já inclui as
+tabelas de repasse por FSA.
+
+Dois pontos que ficam em aberto:
+
+- O `caju-os build token`, usado pelo deploy, tem 25 permissões e acesso a
+  todas as zonas. Não foi tocado, mas merece revisão.
+- A retenção de 30 dias do artifact significa que o backup mais antigo sempre
+  some. Para histórico mais longo, o caminho é mandar o `.sql` para um bucket
+  R2 em vez de artifact do Actions.
+
+---
+
 ## 2026-09-20
 
 ### Repasse por FSA: cálculo, persistência e a tela do técnico
