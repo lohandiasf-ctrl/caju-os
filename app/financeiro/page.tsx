@@ -3,12 +3,11 @@
 import { AppNavigation } from "@/components/app-navigation";
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { ArrowLeft, BadgeDollarSign, Building2, CalendarDays, CircleDollarSign, Download, LayoutDashboard, Loader2, Menu, Save, Search, Settings, TrendingUp, Users, WalletCards } from 'lucide-react';
+import { ArrowLeft, BadgeDollarSign, Building2, CalendarDays, Download, Loader2, Menu, RotateCcw, Search, TrendingUp, WalletCards } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Input } from '@/components/ui/input';
-import { FIRST_VISIT_CENTS, payoutCents } from '@/lib/finance-rules';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { CajuLoading } from '@/components/caju-loading';
@@ -29,8 +28,14 @@ type FinancialIssue = {
   billed: boolean;
 };
 
-type PayoutRule = { firstTicketCents: number; additionalTicketCents: number };
-type TechnicianRevenue = { name: string; tickets: number; revenue: number; payout: number; margin: number };
+type TechnicianRevenue = { name: string; tickets: number; revenue: number };
+
+// O repasse vem dos grupos de repasse, e não mais de uma regra de estimativa: é
+// o mesmo número que vai para a folha, então dá para conferir 1:1.
+type RepasseTecnico = { technicianId: number; tecnico: string; grupos: number; fsas: number; confirmadoCents: number; pendenteCents: number };
+type Resumo = { confirmadoCents: number; pendenteCents: number; porTecnico: RepasseTecnico[]; porMes: Array<{ mes: string; totalCents: number }> };
+
+const RESUMO_VAZIO: Resumo = { confirmadoCents: 0, pendenteCents: 0, porTecnico: [], porMes: [] };
 
 const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const compactMoney = (value: number) => new Intl.NumberFormat('pt-BR', { notation: 'compact', style: 'currency', currency: 'BRL', maximumFractionDigits: 1 }).format(value);
@@ -38,59 +43,88 @@ const compactMoney = (value: number) => new Intl.NumberFormat('pt-BR', { notatio
 export default function FinanceiroPage() {
   const { user } = useAuth();
   const [issues, setIssues] = useState<FinancialIssue[]>([]);
-  const [rule, setRule] = useState<PayoutRule>({ firstTicketCents: FIRST_VISIT_CENTS, additionalTicketCents: 7000 });
-  
-  const [additionalRate, setAdditionalRate] = useState('70,00');
+  // AAAA-MM-DD a partir do qual o painel conta. Nulo = todo o histórico.
+  const [desde, setDesde] = useState<string | null>(null);
+  const [resumo, setResumo] = useState<Resumo>(RESUMO_VAZIO);
+  const [resumoMensal, setResumoMensal] = useState<Resumo>(RESUMO_VAZIO);
   const [period, setPeriod] = useState<7 | 30 | 90>(30);
   const [query, setQuery] = useState('');
   const [menu, setMenu] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [zerando, setZerando] = useState(false);
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [aviso, setAviso] = useState('');
   const [page, setPage] = useState(1);
   const [showAllTechnicians, setShowAllTechnicians] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     let active = true;
-    const cached = sessionStorage.getItem('caju-finance-cache');
+    // A chave mudou junto com o formato: um cache antigo traria a regra de
+    // estimativa que o painel não usa mais.
+    sessionStorage.removeItem('caju-finance-cache');
+    const cached = sessionStorage.getItem('caju-finance-cache-v2');
     if (cached) {
       try {
-        const parsed = JSON.parse(cached) as { at: number; issues: FinancialIssue[]; rule: PayoutRule };
+        const parsed = JSON.parse(cached) as { at: number; issues: FinancialIssue[]; desde: string | null };
         if (Date.now() - parsed.at < 10 * 60_000) {
-          setIssues(parsed.issues); setRule(parsed.rule); setAdditionalRate(formatRate(parsed.rule.additionalTicketCents)); setLoading(false);
+          setIssues(parsed.issues); setDesde(parsed.desde); setLoading(false);
           return () => { active = false; };
         }
-      } catch { sessionStorage.removeItem('caju-finance-cache'); }
+      } catch { sessionStorage.removeItem('caju-finance-cache-v2'); }
     }
     setLoading(true);
     setError('');
     void user.getIdToken().then(async (token) => {
       const headers = { Authorization: `Bearer ${token}` };
-      const [financeResponse, ruleResponse] = await Promise.all([
+      const [financeResponse, desdeResponse] = await Promise.all([
         fetch('/api/jira/finance?days=365', { headers, cache: 'no-store' }),
-        fetch('/api/finance/rules', { headers, cache: 'no-store' }),
+        fetch('/api/finance/acompanhamento', { headers, cache: 'no-store' }),
       ]);
       const financePayload = await financeResponse.json() as { issues?: FinancialIssue[]; error?: string };
-      const rulePayload = await ruleResponse.json() as PayoutRule & { error?: string };
+      const desdePayload = await desdeResponse.json() as { desde?: string | null; error?: string };
       if (!financeResponse.ok) throw new Error(financePayload.error || 'Falha ao carregar financeiro.');
-      if (!ruleResponse.ok) throw new Error(rulePayload.error || 'Falha ao carregar regra de repasse.');
+      if (!desdeResponse.ok) throw new Error(desdePayload.error || 'Falha ao carregar o acompanhamento.');
       if (!active) return;
-      const nextRule = { firstTicketCents: rulePayload.firstTicketCents, additionalTicketCents: rulePayload.additionalTicketCents };
       setIssues(financePayload.issues ?? []);
-      setRule(nextRule);
-      setAdditionalRate(formatRate(nextRule.additionalTicketCents));
-      sessionStorage.setItem('caju-finance-cache', JSON.stringify({ at: Date.now(), issues: financePayload.issues ?? [], rule: nextRule }));
+      setDesde(desdePayload.desde ?? null);
+      sessionStorage.setItem('caju-finance-cache-v2', JSON.stringify({ at: Date.now(), issues: financePayload.issues ?? [], desde: desdePayload.desde ?? null }));
     }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Falha ao carregar financeiro.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [user]);
 
-  const periodIssues = useMemo(() => {
-    const cutoff = Date.now() - period * 86_400_000;
-    return issues.filter((issue) => new Date(issue.updatedAt).getTime() >= cutoff);
-  }, [issues, period]);
+  // Vale o mais recente entre o início do acompanhamento e o período escolhido:
+  // "30 dias" num acompanhamento que começou ontem mostra só desde ontem.
+  const desdeMs = desde ? Date.parse(`${desde}T00:00:00-03:00`) : 0;
+  const cutoffMs = Math.max(desdeMs, Date.now() - period * 86_400_000);
+  const cutoffDia = diaDaOperacao(cutoffMs);
+
+  const periodIssues = useMemo(
+    () => issues.filter((issue) => new Date(issue.updatedAt).getTime() >= cutoffMs),
+    [issues, cutoffMs],
+  );
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void user.getIdToken().then(async (token) => {
+      const headers = { Authorization: `Bearer ${token}` };
+      // Dois recortes: o do período, para os totais baterem com o faturamento
+      // da mesma janela, e o do acompanhamento inteiro, para o gráfico mensal.
+      const [periodo, mensal] = await Promise.all([
+        fetch(`/api/fsa-groups/resumo?desde=${cutoffDia}`, { headers, cache: 'no-store' }),
+        fetch(`/api/fsa-groups/resumo${desde ? `?desde=${desde}` : ''}`, { headers, cache: 'no-store' }),
+      ]);
+      const [dadosPeriodo, dadosMensal] = await Promise.all([periodo.json(), mensal.json()]) as [Resumo & { error?: string }, Resumo & { error?: string }];
+      if (!periodo.ok) throw new Error(dadosPeriodo.error || 'Falha ao carregar os repasses.');
+      if (!mensal.ok) throw new Error(dadosMensal.error || 'Falha ao carregar os repasses.');
+      if (!active) return;
+      setResumo(dadosPeriodo);
+      setResumoMensal(dadosMensal);
+    }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : 'Falha ao carregar os repasses.'); });
+    return () => { active = false; };
+  }, [user, cutoffDia, desde]);
 
   const rows = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -98,7 +132,7 @@ export default function FinanceiroPage() {
     return periodIssues.filter((issue) => [issue.key, issue.title, issue.technician, issue.store, issue.city, issue.status].some((value) => value.toLowerCase().includes(normalized)));
   }, [periodIssues, query]);
 
-  const technicians = useMemo(() => groupTechnicians(periodIssues, rule), [periodIssues, rule]);
+  const technicians = useMemo(() => groupTechnicians(periodIssues), [periodIssues]);
   const pageSize = 40;
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const safePage = Math.min(page, pageCount);
@@ -107,35 +141,32 @@ export default function FinanceiroPage() {
   const revenue = periodIssues.reduce((sum, issue) => sum + issue.totalValue, 0);
   const serviceRevenue = periodIssues.reduce((sum, issue) => sum + issue.serviceValue, 0);
   const spareRevenue = periodIssues.reduce((sum, issue) => sum + issue.spareValue, 0);
-  const payout = technicians.reduce((sum, technician) => sum + technician.payout, 0);
+  const payout = resumo.confirmadoCents / 100;
   const margin = revenue - payout;
   const marginPercent = revenue > 0 ? (margin / revenue) * 100 : 0;
-  const monthly = useMemo(() => buildMonthly(issues, rule), [issues, rule]);
+  const monthly = useMemo(() => buildMonthly(issues, desdeMs, resumoMensal.porMes), [issues, desdeMs, resumoMensal]);
 
-  async function saveRule() {
+  // Zerar não apaga nada: o painel só passa a ignorar o que veio antes da data.
+  async function mudarInicio(valor: 'hoje' | string | null) {
     if (!user) return;
-    const additionalTicketCents = parseRate(additionalRate);
-    if (additionalTicketCents === null) {
-      setMessage('Informe um valor válido.');
-      return;
-    }
-    setSaving(true);
-    setMessage('');
+    setZerando(true);
+    setAviso('');
     try {
-      const token = await user.getIdToken();
-      const response = await fetch('/api/finance/rules', {
+      const response = await fetch('/api/finance/acompanhamento', {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ additionalTicketCents }),
+        headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ desde: valor }),
       });
-      const payload = await response.json() as PayoutRule & { error?: string };
-      if (!response.ok) throw new Error(payload.error || 'Falha ao salvar regra.');
-      setRule({ firstTicketCents: payload.firstTicketCents, additionalTicketCents: payload.additionalTicketCents });
-      setMessage('Regra salva. Cálculos atualizados.');
+      const payload = await response.json() as { desde?: string | null; error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar.');
+      setDesde(payload.desde ?? null);
+      sessionStorage.removeItem('caju-finance-cache-v2');
+      setPage(1);
+      setAviso(payload.desde ? `Contando a partir de ${diaBr(payload.desde)}.` : 'Contando todo o histórico.');
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : 'Falha ao salvar regra.');
+      setAviso(cause instanceof Error ? cause.message : 'Não foi possível salvar.');
     } finally {
-      setSaving(false);
+      setZerando(false);
     }
   }
 
@@ -170,10 +201,23 @@ export default function FinanceiroPage() {
           </div>
           <FsaGroups />
           <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,.7fr)]">
-            <article className="surface-panel min-w-0 rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-bold">Faturamento e repasses</h2><p className="mt-1 text-xs text-muted-foreground">Últimos 6 meses, em reais</p></div><Badge variant="outline"><CalendarDays />6 meses</Badge></div><ChartContainer className="mt-5 h-[260px] min-w-0 w-full" config={{ revenue: { label: 'Faturamento', color: 'var(--chart-3)' }, payout: { label: 'Repasses', color: 'var(--chart-1)' } }}><BarChart data={monthly} barGap={5}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="month" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} tickFormatter={(value) => compactMoney(Number(value))} width={70} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => money(Number(value))} />} /><Bar dataKey="revenue" fill="var(--color-revenue)" radius={[5, 5, 0, 0]} /><Bar dataKey="payout" fill="var(--color-payout)" radius={[5, 5, 0, 0]} /></BarChart></ChartContainer></article>
-            <article id="repasses" className="surface-panel scroll-mt-24 rounded-2xl p-5"><h2 className="text-sm font-bold">Regra de repasse</h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Valor pago ao mesmo técnico no período. A primeira visita é o valor base da operação; o 2º chamado em diante é configurável.</p><div className="mt-5 grid gap-4"><div className="rounded-xl border border-border bg-background/60 p-3"><p className="text-xs font-semibold text-muted-foreground">1ª visita · valor base</p><p className="mt-1 text-lg font-bold tabular-nums">{money(FIRST_VISIT_CENTS / 100)}</p><p className="mt-1 text-[11px] text-muted-foreground">Fixo, não editável.</p></div><RateInput label="2º chamado em diante" value={additionalRate} onChange={setAdditionalRate} /></div><Button className="mt-5 w-full" onClick={() => void saveRule()} disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Save />}Salvar regra</Button>{message && <p className="mt-3 text-xs text-muted-foreground">{message}</p>}<div className="mt-5 rounded-xl border border-violet-400/20 bg-violet-400/8 p-4"><p className="text-xs text-muted-foreground">Repasse calculado no período</p><p className="mt-1 text-xl font-bold">{money(payout)}</p></div></article>
+            <article className="surface-panel min-w-0 rounded-2xl p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-bold">Faturamento e repasses</h2><p className="mt-1 text-xs text-muted-foreground">Últimos 6 meses, em reais{desde ? ` · desde ${diaBr(desde)}` : ''}. Repasse = grupos aprovados e pagos.</p></div><Badge variant="outline"><CalendarDays />6 meses</Badge></div><ChartContainer className="mt-5 h-[260px] min-w-0 w-full" config={{ revenue: { label: 'Faturamento', color: 'var(--chart-3)' }, payout: { label: 'Repasses', color: 'var(--chart-1)' } }}><BarChart data={monthly} barGap={5}><CartesianGrid vertical={false} strokeDasharray="3 3" /><XAxis dataKey="month" axisLine={false} tickLine={false} /><YAxis axisLine={false} tickLine={false} tickFormatter={(value) => compactMoney(Number(value))} width={70} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => money(Number(value))} />} /><Bar dataKey="revenue" fill="var(--color-revenue)" radius={[5, 5, 0, 0]} /><Bar dataKey="payout" fill="var(--color-payout)" radius={[5, 5, 0, 0]} /></BarChart></ChartContainer></article>
+            <article id="repasses" className="surface-panel scroll-mt-24 rounded-2xl p-5">
+              <h2 className="text-sm font-bold">Acompanhamento</h2>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{desde ? <>O painel conta a partir de <b className="text-foreground">{diaBr(desde)}</b>. Nada antes disso entra nos números — e nada foi apagado.</> : 'O painel está contando todo o histórico.'}</p>
+              <Button className="mt-4 w-full" onClick={() => void mudarInicio('hoje')} disabled={zerando}>{zerando ? <Loader2 className="animate-spin" /> : <RotateCcw />}Zerar a partir de hoje</Button>
+              <label className="mt-3 block" htmlFor="acompanhamento-desde"><span className="mb-1 block text-xs font-semibold text-muted-foreground">Ou escolha a data de início</span><Input id="acompanhamento-desde" type="date" value={desde ?? ''} disabled={zerando} onChange={(event) => { if (event.target.value) void mudarInicio(event.target.value); }} /></label>
+              {desde && <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={() => void mudarInicio(null)} disabled={zerando}>Voltar a contar todo o histórico</Button>}
+              {aviso && <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">{aviso}</p>}
+              <div className="mt-5 grid gap-2">
+                <div className="rounded-xl border border-violet-400/20 bg-violet-400/8 p-4"><p className="text-xs text-muted-foreground">Repasse confirmado no período</p><p className="mt-1 text-xl font-bold tabular-nums">{money(payout)}</p><p className="mt-1 text-[11px] text-muted-foreground">Grupos aprovados e pagos — o que vai para a folha.</p></div>
+                <div className="rounded-xl border border-border bg-background/60 p-3"><p className="text-xs text-muted-foreground">Aguardando a gerência</p><p className="mt-1 font-bold tabular-nums">{money(resumo.pendenteCents / 100)}</p></div>
+              </div>
+            </article>
           </div>
-          <article id="receita-tecnicos" className="surface-panel mt-6 scroll-mt-24 overflow-hidden rounded-2xl"><div className="border-b border-border p-5"><h2 className="text-sm font-bold">Receita gerada por técnico</h2><p className="mt-1 text-xs text-muted-foreground">Total dos tickets, repasse calculado e margem para Caju.</p></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Técnico</TableHead><TableHead className="text-right">Chamados</TableHead><TableHead className="text-right">Receita</TableHead><TableHead className="text-right">Repasse</TableHead><TableHead className="text-right">Margem Caju</TableHead></TableRow></TableHeader><TableBody>{visibleTechnicians.map((technician) => <TableRow key={technician.name}><TableCell className="font-semibold">{technician.name}</TableCell><TableCell className="text-right tabular-nums">{technician.tickets}</TableCell><TableCell className="text-right font-mono">{money(technician.revenue)}</TableCell><TableCell className="text-right font-mono">{money(technician.payout)}</TableCell><TableCell className={`text-right font-mono font-bold ${technician.margin >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{money(technician.margin)}</TableCell></TableRow>)}</TableBody></Table></div>{!technicians.length && <Empty label="Nenhuma receita encontrada no período." />}{technicians.length > 25 && <div className="flex justify-center border-t border-border p-3"><Button size="sm" variant="ghost" onClick={() => setShowAllTechnicians((value) => !value)}>{showAllTechnicians ? 'Mostrar menos' : `Ver todos os ${technicians.length} técnicos`}</Button></div>}</article>
+          <article id="receita-tecnicos" className="surface-panel mt-6 scroll-mt-24 overflow-hidden rounded-2xl"><div className="border-b border-border p-5"><h2 className="text-sm font-bold">Receita gerada por técnico</h2><p className="mt-1 text-xs text-muted-foreground">Total dos tickets no período, com o nome como está no Jira.</p></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Técnico</TableHead><TableHead className="text-right">Chamados</TableHead><TableHead className="text-right">Receita</TableHead></TableRow></TableHeader><TableBody>{visibleTechnicians.map((technician) => <TableRow key={technician.name}><TableCell className="font-semibold">{technician.name}</TableCell><TableCell className="text-right tabular-nums">{technician.tickets}</TableCell><TableCell className="text-right font-mono">{money(technician.revenue)}</TableCell></TableRow>)}</TableBody></Table></div>{!technicians.length && <Empty label="Nenhuma receita no período." />}{technicians.length > 25 && <div className="flex justify-center border-t border-border p-3"><Button size="sm" variant="ghost" onClick={() => setShowAllTechnicians((value) => !value)}>{showAllTechnicians ? 'Mostrar menos' : `Ver todos os ${technicians.length} técnicos`}</Button></div>}</article>
+          {/* Tabelas separadas de propósito: receita vem do Jira, com o nome em texto livre ("Lohan Dias"), e repasse vem do cadastro ("Lohan Dias Farias"). Cruzar os dois por nome erraria em silêncio. */}
+          <article id="repasse-tecnicos" className="surface-panel mt-6 scroll-mt-24 overflow-hidden rounded-2xl"><div className="border-b border-border p-5"><h2 className="text-sm font-bold">Repasse por técnico</h2><p className="mt-1 text-xs text-muted-foreground">Somado dos grupos de repasse, com o nome do cadastro.</p></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Técnico</TableHead><TableHead className="text-right">Grupos</TableHead><TableHead className="text-right">FSAs</TableHead><TableHead className="text-right">Confirmado</TableHead><TableHead className="text-right">Aguardando</TableHead></TableRow></TableHeader><TableBody>{resumo.porTecnico.map((t) => <TableRow key={t.technicianId}><TableCell className="font-semibold">{t.tecnico}</TableCell><TableCell className="text-right tabular-nums">{t.grupos}</TableCell><TableCell className="text-right tabular-nums">{t.fsas}</TableCell><TableCell className="text-right font-mono font-bold text-emerald-300">{money(t.confirmadoCents / 100)}</TableCell><TableCell className="text-right font-mono text-muted-foreground">{money(t.pendenteCents / 100)}</TableCell></TableRow>)}</TableBody></Table></div>{!resumo.porTecnico.length && <Empty label="Nenhum repasse no período." />}</article>
           <article className="surface-panel mt-6 min-w-0 overflow-hidden rounded-2xl"><div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center"><div className="mr-auto"><h2 className="text-sm font-bold">Composição dos tickets</h2><p className="mt-1 text-xs text-muted-foreground">Serviço e spare sem dupla contagem.</p></div><div className="relative w-full sm:w-80"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} aria-label="Buscar chamado, técnico ou loja" placeholder="Buscar chamado, técnico ou loja..." className="pl-9" /></div></div><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Chamado</TableHead><TableHead>Técnico / local</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Serviço</TableHead><TableHead className="text-right">Spare</TableHead><TableHead className="text-right">Total ticket</TableHead></TableRow></TableHeader><TableBody>{visibleRows.map((issue) => <TableRow key={issue.key}><TableCell><p className="font-mono text-xs font-bold text-primary">{issue.key}</p><p className="mt-1 max-w-72 truncate text-xs text-muted-foreground">{issue.title}</p></TableCell><TableCell><p className="font-semibold">{issue.technician}</p><p className="text-[11px] text-muted-foreground">{issue.store} · {issue.city}</p></TableCell><TableCell><Badge variant="outline">{issue.status}</Badge></TableCell><TableCell className="text-right font-mono">{money(issue.serviceValue)}</TableCell><TableCell className="text-right font-mono">{money(issue.spareValue)}</TableCell><TableCell className="text-right font-mono font-bold">{money(issue.totalValue)}</TableCell></TableRow>)}</TableBody></Table></div>{!rows.length && <Empty label="Nenhum ticket financeiro encontrado." />}<div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-4 text-xs text-muted-foreground"><span>{rows.length} tickets · página {safePage} de {pageCount}</span>{pageCount > 1 && <div className="flex gap-2"><Button size="sm" variant="outline" disabled={safePage === 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Anterior</Button><Button size="sm" variant="outline" disabled={safePage === pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Próxima</Button></div>}</div></article>
         </>}
       </div>
@@ -181,7 +225,7 @@ export default function FinanceiroPage() {
   </main>;
 }
 
-function groupTechnicians(issues: FinancialIssue[], rule: PayoutRule): TechnicianRevenue[] {
+function groupTechnicians(issues: FinancialIssue[]): TechnicianRevenue[] {
   const grouped = new Map<string, { tickets: number; revenue: number }>();
   for (const issue of issues) {
     const current = grouped.get(issue.technician) ?? { tickets: 0, revenue: 0 };
@@ -189,20 +233,26 @@ function groupTechnicians(issues: FinancialIssue[], rule: PayoutRule): Technicia
     current.revenue += issue.totalValue;
     grouped.set(issue.technician, current);
   }
-  return Array.from(grouped, ([name, data]) => {
-    const payout = payoutCents(data.tickets, rule.additionalTicketCents) / 100;
-    return { name, ...data, payout, margin: data.revenue - payout };
-  }).sort((a, b) => b.revenue - a.revenue);
+  return Array.from(grouped, ([name, data]) => ({ name, ...data })).sort((a, b) => b.revenue - a.revenue);
 }
 
-function buildMonthly(issues: FinancialIssue[], rule: PayoutRule) {
+function buildMonthly(issues: FinancialIssue[], desdeMs: number, porMes: Resumo['porMes']) {
   const now = new Date();
+  const repassePorMes = new Map(porMes.map((m) => [m.mes, m.totalCents / 100]));
   return Array.from({ length: 6 }, (_, index) => {
     const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
-    const monthIssues = issues.filter((issue) => { const item = new Date(issue.updatedAt); return item.getFullYear() === date.getFullYear() && item.getMonth() === date.getMonth(); });
-    return { month: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', ''), revenue: monthIssues.reduce((sum, issue) => sum + issue.totalValue, 0), payout: groupTechnicians(monthIssues, rule).reduce((sum, technician) => sum + technician.payout, 0) };
+    const monthIssues = issues.filter((issue) => { const item = new Date(issue.updatedAt); return item.getTime() >= desdeMs && item.getFullYear() === date.getFullYear() && item.getMonth() === date.getMonth(); });
+    const chave = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    return { month: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', ''), revenue: monthIssues.reduce((sum, issue) => sum + issue.totalValue, 0), payout: repassePorMes.get(chave) ?? 0 };
   });
 }
+
+// O dia é o da operação, não o do navegador: os grupos gravam o dia em Brasília.
+function diaDaOperacao(ms: number) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(ms));
+}
+
+function diaBr(dia: string) { return dia.split('-').reverse().join('/'); }
 
 
 function Metric({ label, value, note, icon: Icon, tone }: { label: string; value: string; note: string; icon: typeof TrendingUp; tone: 'green' | 'blue' | 'amber' | 'violet' }) {
@@ -210,11 +260,5 @@ function Metric({ label, value, note, icon: Icon, tone }: { label: string; value
   return <article className="cockpit-stat metric-glow rounded-2xl p-5"><div className="flex justify-between"><p className="text-sm text-muted-foreground">{label}</p><div className={`grid size-9 place-items-center rounded-lg bg-black/15 ${colors[tone]}`}><Icon className="size-[18px]" /></div></div><p className="mt-2 text-2xl font-extrabold tracking-tight">{value}</p><p className="mt-3 text-xs text-muted-foreground">{note}</p></article>;
 }
 
-function RateInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{label}</span><div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span><Input inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} className="pl-10" /></div></label>;
-}
-
 function Empty({ label }: { label: string }) { return <div className="grid min-h-32 place-items-center p-6 text-sm text-muted-foreground">{label}</div>; }
-function formatRate(cents: number) { return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function parseRate(value: string) { const normalized = value.replace(/\s/g, '').replace(/\./g, '').replace(',', '.'); const amount = Number(normalized); return Number.isFinite(amount) && amount >= 0 && amount <= 10_000 ? Math.round(amount * 100) : null; }
 function csvCell(value: string | number) { return `"${String(value).replace(/"/g, '""')}"`; }

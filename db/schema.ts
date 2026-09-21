@@ -236,6 +236,9 @@ export const financeSettings = sqliteTable('finance_settings', {
   additionalTicketCents: integer('additional_ticket_cents')
     .notNull()
     .default(7000),
+  // AAAA-MM-DD. O painel financeiro só conta daqui em diante, para a gerência
+  // poder conferir 1:1 a partir do zero sem apagar nada.
+  acompanhamentoDesde: text('acompanhamento_desde'),
   updatedBy: text('updated_by').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
