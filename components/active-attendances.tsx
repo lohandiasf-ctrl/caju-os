@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronUp,
   CircleStop,
-  Wallet,
   Clock3,
   Layers3,
   Loader2,
@@ -19,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/auth-provider";
-import { FsaPaymentPanel } from "@/components/fsa-payment-panel";
 import { elapsedLabel, normalizeFsaKeys } from "@/lib/active-attendances";
 
 export type ActiveAttendanceTicket = {
@@ -70,9 +68,6 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [endingId, setEndingId] = useState<number | null>(null);
-  // Repasse aberto por atendimento: é uma leitura à parte, não vale carregar
-  // para todo mundo enquanto o técnico só quer ver a fila.
-  const [payoutOpen, setPayoutOpen] = useState<Set<number>>(new Set());
   const [startingId, setStartingId] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [now, setNow] = useState<number | null>(null);
@@ -278,11 +273,9 @@ export function ActiveAttendances({ availableTickets, onOpenTicket }: Props) {
                 <div className="mt-4 flex flex-wrap gap-2">
                   {!grouped && attendance.tickets[0] && <Button variant="outline" size="sm" onClick={() => onOpenTicket(attendance.tickets[0])}>Abrir chamado</Button>}
                   {(isOwner(attendance) || role === "gerencia") && <Button variant="outline" size="sm" onClick={() => { setAddingTo(attendance); setWhatsappGroupName(attendance.whatsappGroupName ?? ''); setError(''); setDialogOpen(true); }}>Adicionar FSAs</Button>}
-                  {(isOwner(attendance) || role === "gerencia") && <Button variant="outline" size="sm" aria-expanded={payoutOpen.has(attendance.id)} onClick={() => setPayoutOpen((current) => { const next = new Set(current); if (next.has(attendance.id)) next.delete(attendance.id); else next.add(attendance.id); return next; })}><Wallet aria-hidden="true" />{payoutOpen.has(attendance.id) ? "Ocultar repasse" : "Repasse"}</Button>}
                   {(isOwner(attendance) || role === "gerencia") && attendance.phase === 'preparing' && <Button size="sm" onClick={() => void begin(attendance)} disabled={startingId === attendance.id}>{startingId === attendance.id ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Play aria-hidden="true" />}Iniciar agora</Button>}
                   {(isOwner(attendance) || role === "gerencia") && attendance.phase !== 'preparing' && <Button variant="ghost" size="sm" className="text-rose-200 hover:bg-rose-400/10 hover:text-rose-100" onClick={() => void end(attendance)} disabled={endingId === attendance.id}>{endingId === attendance.id ? <Loader2 className="animate-spin" aria-hidden="true" /> : <CircleStop aria-hidden="true" />}{grouped ? "Encerrar todos" : "Encerrar"}</Button>}
                 </div>
-                {payoutOpen.has(attendance.id) && <FsaPaymentPanel attendanceId={attendance.id} />}
               </article>
             );
           })
