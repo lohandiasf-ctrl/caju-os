@@ -87,7 +87,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return Response.json({ error: 'Classifique a FSA como serviço ou evidência.' }, { status: 400 });
     }
 
-    const improdutiva = body.improdutiva === true;
+    // Evidência não tem improdutiva: entregar a evidência é o trabalho inteiro.
+    // Marcar a caixa e depois trocar o tipo não deixa um resto pendurado.
+    const improdutiva = tipo === 'servico' && body.improdutiva === true;
     const motivo = MOTIVOS_IMPRODUTIVO.find((m) => m === body.motivo) ?? null;
     // A regra é do negócio, não da tela: sem motivo não há como justificar
     // metade do valor depois.
@@ -244,7 +246,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         // Só a parte produtiva em cada categoria: o que as improdutivas
         // renderam vai na linha delas, não descontado das outras duas.
         servicosCents: visita.repasse.servicos.produtivosCents,
-        evidenciasCents: visita.repasse.evidencias.produtivasCents,
+        evidenciasCents: visita.repasse.evidencias.totalCents,
         improdutivasCents: visita.repasse.improdutivas.totalCents,
         descontoImprodutivoCents: visita.repasse.descontoImprodutivoCents,
         totalCents: visita.repasse.totalCents,
@@ -294,7 +296,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         .set({
           status: 'aprovado',
           servicosCents: visita.repasse.servicos.produtivosCents,
-          evidenciasCents: visita.repasse.evidencias.produtivasCents,
+          evidenciasCents: visita.repasse.evidencias.totalCents,
           improdutivasCents: visita.repasse.improdutivas.totalCents,
           descontoImprodutivoCents: visita.repasse.descontoImprodutivoCents,
           totalCents: visita.repasse.totalCents,

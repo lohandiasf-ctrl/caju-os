@@ -49,15 +49,7 @@ type Repasse = {
     improdutivosCents: number;
     totalCents: number;
   };
-  evidencias: {
-    quantidade: number;
-    produtivas: number;
-    improdutivas: number;
-    baseCents: number;
-    produtivasCents: number;
-    improdutivasCents: number;
-    totalCents: number;
-  };
+  evidencias: { quantidade: number; baseCents: number; totalCents: number };
   improdutivas: { quantidade: number; totalCents: number };
   descontoImprodutivoCents: number;
   totalCents: number;
@@ -266,21 +258,30 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
                   className="min-h-11"
                   disabled={ocupada}
                   aria-pressed={c?.tipo === "evidencia"}
-                  onClick={() => void classificar(fsa, { tipo: "evidencia" })}
+                  onClick={() =>
+                    void classificar(fsa, { tipo: "evidencia", improdutiva: false, motivo: null })
+                  }
                 >
                   <Camera aria-hidden="true" /> Evidência
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={c?.improdutiva ? "destructive" : "outline"}
-                  className="min-h-11"
-                  disabled={ocupada || !c}
-                  aria-pressed={c?.improdutiva ?? false}
-                  onClick={() => void classificar(fsa, { improdutiva: !c?.improdutiva, motivo: c?.improdutiva ? null : undefined })}
-                >
-                  Improdutiva
-                </Button>
+                {c?.tipo === "servico" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={c.improdutiva ? "destructive" : "outline"}
+                    className="min-h-11"
+                    disabled={ocupada}
+                    aria-pressed={c.improdutiva}
+                    onClick={() =>
+                      void classificar(fsa, {
+                        improdutiva: !c.improdutiva,
+                        motivo: c.improdutiva ? null : undefined,
+                      })
+                    }
+                  >
+                    Improdutiva
+                  </Button>
+                )}
               </div>
 
               {c && (
@@ -345,8 +346,8 @@ export function FsaPaymentPanel({ attendanceId }: { attendanceId: number }) {
           <dd className="font-bold">{reais(repasse.servicos.produtivosCents)}</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Evidências ({repasse.evidencias.produtivas})</dt>
-          <dd className="font-bold">{reais(repasse.evidencias.produtivasCents)}</dd>
+          <dt className="text-muted-foreground">Evidências ({repasse.evidencias.quantidade})</dt>
+          <dd className="font-bold">{reais(repasse.evidencias.totalCents)}</dd>
         </div>
         {repasse.improdutivas.quantidade > 0 && (
           <div className="flex justify-between gap-3 text-amber-200">

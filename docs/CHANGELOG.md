@@ -34,6 +34,13 @@ total, sem nada a subtrair.
 
 A conta não mudou — só a leitura. Os testes antigos continuam passando.
 
+**Evidência deixou de poder ser improdutiva.** Entregar a evidência é o trabalho
+inteiro: ou saiu, ou vira atuação improdutiva. Não existe meia evidência. Isso
+corrige uma suposição feita quando o documento não cobria o caso — na primeira
+versão, evidência improdutiva caía pela metade. O botão some da tela quando a
+FSA é evidência, trocar o tipo limpa a marcação, e o servidor recusa mesmo que a
+tela deixe passar.
+
 Junto veio o vocabulário da operação: "serviço" vira **atuação** na tela, e o
 botão "Não consegui resolver" vira **Improdutiva**.
 

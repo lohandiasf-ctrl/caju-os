@@ -97,7 +97,8 @@ export function memoriaDeCalculo(repasse: Repasse): string {
   }
 
   // Improdutiva entra somando, com o valor que ela vale, e não como um abatimento
-  // do que veio antes: é assim que a operação lê a categoria.
+  // do que veio antes: é assim que a operação lê a categoria. Só atuação entra
+  // aqui — evidência não tem improdutiva.
   if (repasse.improdutivas.quantidade) {
     partes.push(
       `${repasse.improdutivas.quantidade} improdutiva${repasse.improdutivas.quantidade === 1 ? '' : 's'} pela metade = ${reais(repasse.improdutivas.totalCents)}`,
@@ -123,7 +124,7 @@ export function linhasDoRelatorio(visitas: readonly VisitaDoRelatorio[]): LinhaD
     // qualquer recorte que quem recebe resolver filtrar.
     const categorias = {
       atuacaoVisita: reais(visita.repasse.servicos.produtivosCents),
-      evidenciasVisita: reais(visita.repasse.evidencias.produtivasCents),
+      evidenciasVisita: reais(visita.repasse.evidencias.totalCents),
       improdutivasVisita: reais(visita.repasse.improdutivas.totalCents),
     };
 

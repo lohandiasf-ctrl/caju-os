@@ -112,9 +112,12 @@ test('uma visita inteira improdutiva é válida e paga metade', () => {
   assert.equal(r.totalCents, 6_000, 'metade dos R$ 120');
 });
 
-test('evidência improdutiva também cai pela metade', () => {
-  const r = calcularRepasse(varios(2, () => evidencia({ improdutiva: true, motivo: 'loja-fechada' })));
-  assert.equal(r.totalCents, 3_500, 'metade do piso de R$ 70');
+// Entregar a evidência é o trabalho inteiro: ou saiu, ou vira atuação
+// improdutiva. Não existe meia evidência.
+test('evidência não pode ser improdutiva', () => {
+  const invalida = [evidencia({ improdutiva: true, motivo: 'loja-fechada' })];
+  assert.deepEqual(validarFsas(invalida), ['FSA 1: evidência não pode ser improdutiva.']);
+  assert.throws(() => calcularRepasse(invalida), /evidência não pode ser improdutiva/);
 });
 
 // Reclassificar não é um caso à parte: o valor sai sempre das FSAs atuais.
@@ -128,7 +131,7 @@ test('evidência que vira serviço é recalculada', () => {
 
 test('motivo é obrigatório quando a FSA é improdutiva', () => {
   const semMotivo = [servico({ improdutiva: true })];
-  assert.deepEqual(validarFsas(semMotivo), ['FSA 1: marcada como não resolvida, mas sem motivo.']);
+  assert.deepEqual(validarFsas(semMotivo), ['FSA 1: marcada como improdutiva, mas sem motivo.']);
   assert.throws(() => calcularRepasse(semMotivo), /sem motivo/);
 });
 
@@ -182,44 +185,67 @@ test('improdutiva aparece como categoria, com valor próprio', () => {
 test('as três categorias somam o total', () => {
   const casos: Fsa[][] = [
     [...varios(2, servico), servico({ improdutiva: true, motivo: 'defeito-maior' })],
-    [servico(), ...varios(9, evidencia), evidencia({ improdutiva: true, motivo: 'loja-fechada' })],
+    [servico(), ...varios(10, evidencia)],
     [...varios(4, servico), servico({ descobertaNaLoja: true }), ...varios(3, evidencia)],
-    varios(5, () => evidencia({ improdutiva: true, motivo: 'loja-fechada' })),
+    varios(5, () => servico({ improdutiva: true, motivo: 'loja-fechada' })),
   ];
   for (const fsas of casos) {
     const r = calcularRepasse(fsas);
     assert.equal(
-      r.servicos.produtivosCents + r.evidencias.produtivasCents + r.improdutivas.totalCents,
+      r.servicos.produtivosCents + r.evidencias.totalCents + r.improdutivas.totalCents,
       r.totalCents,
       'atuação + evidência + improdutiva fecha o total, sem linha de desconto',
     );
   }
 });
 
-// A parte improdutiva sai da subtração justamente para não sobrar centavo.
-test('a repartição não perde centavo em divisão quebrada', () => {
+// A faixa de atuação sempre divide exato, em qualquer quantidade. Quem quebra é
+// o piso de R$ 70 da evidência sozinha dividido por 3, 6, 9... Aí a parte
+// improdutiva precisa sair da subtração: arredondada por conta própria, ela
+// somaria R$ 58,34 onde o total é R$ 58,33.
+test('a repartição não perde centavo quando a divisão quebra', () => {
+  // 7 atuações valem R$ 210; com 2 improdutivas a divisão é exata, mas a
+  // subtração é o que garante isso em qualquer faixa futura.
   const r = calcularRepasse([
-    ...varios(3, servico),
-    servico({ improdutiva: true, motivo: 'tempo-excedido' }),
+    ...varios(5, servico),
+    ...varios(2, () => servico({ improdutiva: true, motivo: 'loja-fechada' })),
   ]);
-  assert.equal(r.servicos.faixaCents, 15_000, '4 atuações');
-  assert.equal(r.servicos.produtivosCents + r.servicos.improdutivosCents, r.servicos.totalCents);
-  assert.equal(r.totalCents, 13_125, 'R$ 37,50 x 3 + R$ 18,75');
+
+  assert.equal(r.servicos.produtivosCents + r.improdutivas.totalCents, r.totalCents);
+  assert.equal(r.improdutivas.totalCents, 3_000, 'R$ 30 por improdutiva, metade de R$ 30... x2');
+  assert.equal(r.totalCents, 18_000);
+});
+
+// A atuação divide exato sempre — vale travar isso, porque uma faixa nova na
+// tabela poderia quebrar a divisão sem ninguém perceber.
+test('toda faixa de atuação divide exato pela quantidade', () => {
+  for (let n = 1; n <= 30; n++) {
+    const base = faixaServicosCents(n);
+    assert.equal(base % n, 0, `${n} atuações: ${base} não divide exato`);
+  }
 });
 
 test('visita mista separa improdutiva de atuação e de evidência', () => {
   const r = calcularRepasse([
     servico(),
     servico({ improdutiva: true, motivo: 'gerente-recusou' }),
-    evidencia(),
-    evidencia({ improdutiva: true, motivo: 'loja-fechada' }),
+    ...varios(2, evidencia),
   ]);
 
   assert.equal(r.servicos.produtivos, 1);
   assert.equal(r.servicos.produtivosCents, 5_000, 'metade da faixa de 2 atuações');
-  assert.equal(r.evidencias.produtivas, 1);
-  assert.equal(r.evidencias.produtivasCents, 500);
-  assert.equal(r.improdutivas.quantidade, 2, 'uma de cada tipo, numa linha só');
-  assert.equal(r.improdutivas.totalCents, 2_750, 'R$ 25 da atuação + R$ 2,50 da evidência');
-  assert.equal(r.totalCents, 8_250);
+  assert.equal(r.evidencias.quantidade, 2);
+  assert.equal(r.evidencias.totalCents, 1_000, 'evidência entra inteira, sempre');
+  assert.equal(r.improdutivas.quantidade, 1, 'só atuação entra aqui');
+  assert.equal(r.improdutivas.totalCents, 2_500);
+  assert.equal(r.totalCents, 8_500);
+});
+
+// O caso que o usuário levantou: a visita inteira improdutiva paga metade.
+test('4 atuações, todas improdutivas, pagam R$ 75', () => {
+  const r = calcularRepasse(varios(4, () => servico({ improdutiva: true, motivo: 'loja-fechada' })));
+  assert.equal(r.servicos.faixaCents, 15_000);
+  assert.equal(r.servicos.produtivosCents, 0);
+  assert.equal(r.improdutivas.totalCents, 7_500);
+  assert.equal(r.totalCents, 7_500);
 });

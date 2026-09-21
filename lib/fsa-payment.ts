@@ -127,18 +127,17 @@ export type Repasse = {
     improdutivosCents: number;
     totalCents: number;
   };
+  // Evidência não tem improdutiva: entregar a evidência é o trabalho inteiro.
+  // Se o técnico não conseguiu registrar, ela vira atuação improdutiva, não uma
+  // evidência pela metade.
   evidencias: {
     quantidade: number;
-    produtivas: number;
-    improdutivas: number;
     baseCents: number;
-    produtivasCents: number;
-    improdutivasCents: number;
     totalCents: number;
   };
-  // A terceira categoria da leitura: reúne o que as improdutivas renderam, de
-  // atuação e de evidência. Não é um desconto a subtrair — é uma linha que soma
-  // como as outras duas, e as três fecham o total.
+  // A terceira categoria da leitura: o que as atuações improdutivas renderam.
+  // Não é um desconto a subtrair — é uma linha que soma como as outras duas, e
+  // as três fecham o total.
   improdutivas: {
     quantidade: number;
     totalCents: number;
@@ -155,7 +154,12 @@ export function validarFsas(fsas: readonly Fsa[]): string[] {
       erros.push(`FSA ${i + 1}: precisa ser classificada como serviço ou evidência.`);
     }
     if (fsa.improdutiva && !fsa.motivo) {
-      erros.push(`FSA ${i + 1}: marcada como não resolvida, mas sem motivo.`);
+      erros.push(`FSA ${i + 1}: marcada como improdutiva, mas sem motivo.`);
+    }
+    // Uma evidência que não foi entregue não é meia evidência: ou o técnico
+    // atuou e não resolveu — e aí é atuação improdutiva — ou não há o que pagar.
+    if (fsa.tipo === 'evidencia' && fsa.improdutiva) {
+      erros.push(`FSA ${i + 1}: evidência não pode ser improdutiva.`);
     }
   });
   return erros;
@@ -177,7 +181,6 @@ export function calcularRepasse(fsas: readonly Fsa[]): Repasse {
 
   const descobertos = servicos.filter((f) => f.descobertaNaLoja).length;
   const servicosImprodutivos = servicos.filter((f) => f.improdutiva).length;
-  const evidenciasImprodutivas = evidencias.filter((f) => f.improdutiva).length;
 
   const { cents: faixaCents, excecaoQuintoChamado } = baseServicosCents(
     servicos.length,
@@ -186,10 +189,9 @@ export function calcularRepasse(fsas: readonly Fsa[]): Repasse {
   const evidenciasBaseCents = evidenciasCents(evidencias.length, servicos.length > 0);
 
   const porServico = repartir(faixaCents, servicos.length, servicosImprodutivos);
-  const porEvidencia = repartir(evidenciasBaseCents, evidencias.length, evidenciasImprodutivas);
 
   const cheio = faixaCents + evidenciasBaseCents;
-  const totalCents = porServico.totalCents + porEvidencia.totalCents;
+  const totalCents = porServico.totalCents + evidenciasBaseCents;
 
   return {
     servicos: {
@@ -205,16 +207,12 @@ export function calcularRepasse(fsas: readonly Fsa[]): Repasse {
     },
     evidencias: {
       quantidade: evidencias.length,
-      produtivas: evidencias.length - evidenciasImprodutivas,
-      improdutivas: evidenciasImprodutivas,
       baseCents: evidenciasBaseCents,
-      produtivasCents: porEvidencia.produtivasCents,
-      improdutivasCents: porEvidencia.improdutivasCents,
-      totalCents: porEvidencia.totalCents,
+      totalCents: evidenciasBaseCents,
     },
     improdutivas: {
-      quantidade: servicosImprodutivos + evidenciasImprodutivas,
-      totalCents: porServico.improdutivasCents + porEvidencia.improdutivasCents,
+      quantidade: servicosImprodutivos,
+      totalCents: porServico.improdutivasCents,
     },
     descontoImprodutivoCents: cheio - totalCents,
     totalCents,
