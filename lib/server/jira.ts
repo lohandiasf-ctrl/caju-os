@@ -393,8 +393,6 @@ export async function addJiraInternalEvidence(key: string, files: Array<{ name: 
     const form = new FormData(); form.append('file', new Blob([bytes], { type: file.mimeType }), file.name);
     await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
   }
-  const body = `Evidências anexadas pelo Caju OS por ${author}: ${files.map((file) => file.name).join(', ')}`;
-  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) }).catch(() => null);
 }
 
 // Comentário interno escrito pelo Caju OS. Sempre assinado com quem confirmou:
@@ -425,7 +423,7 @@ export async function uploadJiraAttachments(key: string, files: File[], author: 
     finalizingInternalComment = true;
     await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/attachment`, {
       method: 'POST',
-      body: JSON.stringify({ temporaryAttachmentIds, public: false, additionalComment: { body: `Evidências anexadas pelo Caju OS por ${author}.` } }),
+      body: JSON.stringify({ temporaryAttachmentIds, public: false }),
     });
   } catch (error) {
     if (finalizingInternalComment) throw error;
@@ -434,8 +432,6 @@ export async function uploadJiraAttachments(key: string, files: File[], author: 
       form.append('file', file, file.name);
       await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
     }
-    const body = `Evidências anexadas pelo Caju OS por ${author}: ${files.map((file) => file.name).join(', ')}`;
-    await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, { method: 'POST', body: JSON.stringify({ body, public: false }) });
   }
   return getJiraIssue(normalizedKey);
 }
