@@ -288,7 +288,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
             : <>
               <Button variant="ghost" onClick={() => setRepasseOpen(false)} disabled={repasseSaving}>Cancelar</Button>
               <Button disabled={!repasseTecnico || repasseSaving} onClick={() => void criarGrupoDeRepasse()}>
-                {repasseSaving ? <Loader2 className="animate-spin" /> : <WalletCards />}Criar grupo
+                {repasseSaving ? <Loader2 className="animate-spin" /> : <WalletCards />}Criar grupo de repasse
               </Button>
             </>}
         </DialogFooter>
