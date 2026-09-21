@@ -11,6 +11,37 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### Cadastro de técnicos: a importação parou de duplicar, e as cópias foram mapeadas
+
+O cadastro tinha **1.794 linhas para ~900 pessoas** — 292 nomes repetidos, gente
+com até 8 cópias. A causa: a importação casava o técnico só pelo **e-mail**, e
+quem não tem e-mail (metade do cadastro) virava uma linha nova a cada planilha.
+Pessoas repetidas dentro da mesma planilha também viravam linhas separadas.
+
+A importação agora procura o técnico pela mesma regra que decide quem é quem
+(`lib/technician-identity.ts`): CPF **com** nome, depois e-mail, depois nome e
+cidade — este só quando a linha não traz CPF, para um homônimo não sobrescrever
+outra pessoa. Campo vazio na planilha não apaga o que o cadastro já tem.
+
+O CPF sozinho não basta, e isso apareceu nos dados reais:
+
+- **mesmo CPF, pessoas diferentes** — Emylli e Manoel de Oliveira Silva, cidades
+  diferentes. Provavelmente CPF de parente. Fica para decisão humana;
+- **mesmo nome, CPF com um dígito errado** — Erivelton e Lohan; em cada par, um
+  CPF não passa no dígito verificador. Mesma pessoa, fica o CPF válido;
+- **"APAGAR - Ray Henrique da Silva"** — alguém já marcou a cópia no nome. Ela
+  tinha e-mail e a regra de "fica a linha com e-mail" a manteria; a marcação
+  agora tem prioridade.
+
+A unificação das cópias existentes é um script à parte
+(`scripts/unificar-tecnicos.ts`) que só lê produção e gera o plano e o SQL numa
+pasta fora do repositório — o SQL carrega telefone, PIX e endereço. A simulação
+deu 294 pessoas com cópias, 890 linhas a remover, cadastro de 1.794 para 904.
+Nenhuma tabela aponta hoje para uma cópia, mas o SQL repõe as referências antes
+de apagar, por segurança.
+
+**Pendente:** backup do D1 e execução do SQL, com aprovação.
+
 ### "Agrupar chamados", nome pela cidade e loja, e o tipo à vista no chamado
 
 Três ajustes pedidos pelo usuário depois de usar:
