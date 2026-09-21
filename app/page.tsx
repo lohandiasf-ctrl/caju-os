@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TicketStack } from "@/components/ticket-stack";
+import { FsaClassificacao } from "@/components/fsa-classificacao";
 import { empilhar, type VinculoDeGrupo } from "@/lib/ticket-stacks";
 import {
   Activity,
@@ -401,7 +402,7 @@ export default function Home() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
   );
-  // Chamado -> grupo de repasse, para o kanban empilhar quem foi agrupado junto.
+  // Chamado -> grupo, para o kanban empilhar quem foi agrupado junto.
   const [vinculosDeGrupo, setVinculosDeGrupo] = useState<Map<string, VinculoDeGrupo>>(
     () => new Map(),
   );
@@ -1857,6 +1858,16 @@ export default function Home() {
                     ? "Pronto para solicitar a validação da equipe."
                     : "O envio é liberado somente após concluir os requisitos informados no botão.")}
               </p>
+              {/* O tipo da FSA fica à vista, logo abaixo das ações, e não dentro dos
+                  detalhes do Jira: quem atende precisa achar sem rolar a tela. */}
+              {selected && (
+                <FsaClassificacao
+                  key={selected.id}
+                  ticketKey={selected.id}
+                  user={user}
+                  chamado={{ title: selected.title, store: selected.store, city: selected.city, technician: selected.technician }}
+                />
+              )}
               {role === "n1" && selected && (
                 <N1TicketActions ticketKey={selected.id} user={user} />
               )}

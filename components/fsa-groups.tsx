@@ -240,7 +240,7 @@ export function FsaGroups() {
     <article className="surface-panel mt-6 overflow-hidden rounded-2xl">
       <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center">
         <div className="mr-auto">
-          <h2 className="text-sm font-bold">Grupos de repasse</h2>
+          <h2 className="text-sm font-bold">Grupos de chamados</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             O grupo define a faixa de preço. O tipo de cada FSA é marcado no chamado, na tela
             inicial; aqui se confere, fecha e aprova.

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Camera, Layers3, Loader2, ShieldAlert, UserRound, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { MOTIVOS_IMPRODUTIVO, type MotivoImprodutivo } from "@/lib/fsa-payment";
@@ -34,16 +35,28 @@ type Classificacao = {
 
 type Mudanca = Partial<Pick<Classificacao, "tipo" | "improdutiva" | "motivo" | "observacao" | "descobertaNaLoja">>;
 type User = { getIdToken: () => Promise<string> } | null;
+type Tecnico = { id: number; name: string; city: string; state: string };
+// O que o diálogo já sabe do chamado. Serve para montar o grupo quando o
+// chamado ainda não tem um — o nome do grupo sai da cidade e da loja.
+type ChamadoAberto = { title: string; store: string; city: string; technician?: string };
 
 /**
  * O tipo da FSA — atuação, evidência, improdutiva — marcado na tela do chamado.
  *
  * É quem opera o chamado que sabe o que aconteceu na loja; a tela financeira só
- * confere e aprova. A classificação pertence ao grupo de repasse em que o
- * chamado está, então chamado fora de grupo mostra como chegar lá em vez de um
- * formulário que não teria onde gravar.
+ * confere e aprova. O tipo pertence ao grupo em que o chamado está. Chamado
+ * ainda sem grupo não fica sem ter onde marcar: escolhido o técnico, marcar o
+ * tipo cria o grupo dele na hora.
  */
-export function FsaClassificacao({ ticketKey, user }: { ticketKey: string; user: User }) {
+export function FsaClassificacao({
+  ticketKey,
+  user,
+  chamado,
+}: {
+  ticketKey: string;
+  user: User;
+  chamado?: ChamadoAberto;
+}) {
   const [dados, setDados] = useState<Classificacao | null>(null);
   const [passadasPagas, setPassadasPagas] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -52,6 +65,10 @@ export function FsaClassificacao({ ticketKey, user }: { ticketKey: string; user:
   // Clicou em "Improdutiva" e ainda não escolheu o motivo. O servidor recusa
   // improdutiva sem motivo, então a marcação fica só na tela até ele vir.
   const [pedindoMotivo, setPedindoMotivo] = useState(false);
+  // Para o chamado sem grupo: o técnico que atendeu, escolhido no cadastro.
+  const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
+  const [busca, setBusca] = useState(chamado?.technician ?? "");
+  const [tecnicoId, setTecnicoId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -112,6 +129,64 @@ export function FsaClassificacao({ ticketKey, user }: { ticketKey: string; user:
     }
   };
 
+  const semGrupo = !loading && !dados;
+
+  // O cadastro de técnicos só é buscado quando o chamado não tem grupo: é o
+  // único caso em que o técnico precisa ser escolhido aqui.
+  useEffect(() => {
+    if (!semGrupo || !user || tecnicos.length) return;
+    let active = true;
+    void user
+      .getIdToken()
+      .then((token) => fetch("/api/technicians", { headers: { Authorization: `Bearer ${token}` } }))
+      .then(async (response) => (response.ok ? ((await response.json()) as { technicians?: Tecnico[] }) : { technicians: [] }))
+      .then((payload) => {
+        if (active) setTecnicos(payload.technicians ?? []);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [semGrupo, user, tecnicos.length]);
+
+  /**
+   * Chamado sem grupo: marcar o tipo cria o grupo dele, com este chamado só.
+   *
+   * O nome do grupo o servidor tira da cidade e da loja. Se depois aparecer
+   * outro chamado da mesma visita, dá para agrupar os dois pela fila.
+   */
+  const agruparEMarcar = async (tipo: "servico" | "evidencia") => {
+    if (!user || !tecnicoId) return;
+    setSalvando(true);
+    setError("");
+    try {
+      const headers = { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" };
+      const criado = await fetch("/api/fsa-groups", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          technicianId: tecnicoId,
+          tickets: [{ key: ticketKey, summary: chamado?.title, store: chamado?.store, city: chamado?.city }],
+        }),
+      });
+      const grupo = (await criado.json()) as { grupo?: { id: number }; error?: string };
+      if (!criado.ok || !grupo.grupo) throw new Error(grupo.error ?? "Não foi possível agrupar o chamado.");
+      const marcado = await fetch(`/api/fsa-groups/${grupo.grupo.id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ ticketKey, tipo, improdutiva: false, motivo: null, descobertaNaLoja: false }),
+      });
+      const resposta = (await marcado.json()) as { error?: string };
+      if (!marcado.ok) throw new Error(resposta.error ?? "O grupo foi criado, mas o tipo não foi salvo.");
+      await load();
+      window.dispatchEvent(new Event("caju:grupos-de-repasse"));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Não foi possível salvar.");
+    } finally {
+      setSalvando(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border bg-background/80 p-3 text-xs text-muted-foreground">
@@ -121,16 +196,81 @@ export function FsaClassificacao({ ticketKey, user }: { ticketKey: string; user:
   }
 
   if (!dados) {
+    const termo = busca.trim().toLowerCase();
+    const achados = termo.length > 1 ? tecnicos.filter((t) => t.name.toLowerCase().includes(termo)).slice(0, 6) : [];
+    const escolhido = tecnicos.find((t) => t.id === tecnicoId);
     return (
-      <div className="rounded-xl border border-dashed border-border bg-background/60 p-3">
+      <section className="rounded-xl border border-emerald-400/25 bg-background/80 p-3 shadow-sm" aria-label="Tipo da FSA">
         <p className="text-sm font-bold">Tipo da FSA</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Esta FSA ainda não está num grupo de repasse. Selecione-a na fila da tela inicial e use
-          &ldquo;Agrupar para repasse&rdquo; — aí o tipo pode ser marcado aqui.
-          {passadasPagas > 0 && ` Ela já teve ${passadasPagas === 1 ? "uma passada paga" : `${passadasPagas} passadas pagas`} antes.`}
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Escolha o técnico que atendeu e marque o tipo.
+          {passadasPagas > 0 && ` Este chamado já teve ${passadasPagas === 1 ? "um atendimento pago" : `${passadasPagas} atendimentos pagos`} antes; este conta à parte.`}
+        </p>
+
+        <label className="mt-3 block text-xs font-semibold text-muted-foreground" htmlFor={`tecnico-${ticketKey}`}>
+          Técnico que atendeu
+        </label>
+        <Input
+          id={`tecnico-${ticketKey}`}
+          className="mt-1 min-h-11"
+          value={escolhido ? escolhido.name : busca}
+          placeholder="Busque pelo nome"
+          disabled={salvando}
+          onChange={(event) => {
+            setBusca(event.target.value);
+            setTecnicoId(null);
+          }}
+        />
+        {!escolhido && achados.length > 0 && (
+          <div className="mt-1 rounded-xl border border-border bg-background/60 p-1">
+            {achados.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTecnicoId(t.id)}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <UserRound className="size-4 shrink-0 text-emerald-300" aria-hidden="true" />
+                <b>{t.name}</b>
+                <span className="text-xs text-muted-foreground">
+                  {t.city}/{t.state}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        {!escolhido && termo.length > 1 && !achados.length && tecnicos.length > 0 && (
+          <p className="mt-1 text-xs text-muted-foreground">Nenhum técnico com esse nome no cadastro.</p>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="min-h-11"
+            disabled={!tecnicoId || salvando}
+            onClick={() => void agruparEMarcar("servico")}
+          >
+            <Wrench aria-hidden="true" /> Atuação
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="min-h-11"
+            disabled={!tecnicoId || salvando}
+            onClick={() => void agruparEMarcar("evidencia")}
+          >
+            <Camera aria-hidden="true" /> Evidência
+          </Button>
+          {salvando && <Loader2 className="size-4 animate-spin self-center text-muted-foreground" aria-hidden="true" />}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Improdutiva é marcada depois de escolher Atuação, com o motivo.
         </p>
         {error && <p role="alert" className="mt-2 text-xs text-rose-200">{error}</p>}
-      </div>
+      </section>
     );
   }
 
@@ -140,7 +280,7 @@ export function FsaClassificacao({ ticketKey, user }: { ticketKey: string; user:
   return (
     <section
       className="rounded-xl border border-emerald-400/25 bg-background/80 p-3 shadow-sm"
-      aria-label="Tipo da FSA para o repasse"
+      aria-label="Tipo da FSA"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Loader2, MessageCirclePlus, Search, UserRound, WalletCards, Wrench, X, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Layers3, Loader2, MessageCirclePlus, Search, UserRound, Wrench, X, XCircle } from 'lucide-react';
+import { nomeDoGrupo } from '@/lib/group-name';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -52,11 +53,10 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
   const [results, setResults] = useState<Result[] | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'ok' | 'fail'>('idle');
   const [groupOpen, setGroupOpen] = useState(false);
-  // Agrupar para repasse é outra coisa do que agrupar no WhatsApp: aqui o grupo
+  // Agrupar chamados é outra coisa do que o grupo de WhatsApp: aqui o grupo
   // define a faixa de preço que o técnico recebe.
   const [repasseOpen, setRepasseOpen] = useState(false);
   const [repasseTecnico, setRepasseTecnico] = useState<number | null>(null);
-  const [repasseNome, setRepasseNome] = useState('');
   const [repasseSaving, setRepasseSaving] = useState(false);
   const [repasseOk, setRepasseOk] = useState('');
   const canCreateGroup = canUseWhatsapp(role);
@@ -184,17 +184,15 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
         headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           technicianId: repasseTecnico,
-          nome: repasseNome.trim() || null,
           // A descrição e a loja viajam junto: o grupo guarda a fotografia do
           // chamado, para a conferência não depender do Jira de amanhã.
-          tickets: tickets.map((ticket) => ({ key: ticket.id, summary: ticket.title, store: ticket.store })),
+          tickets: tickets.map((ticket) => ({ key: ticket.id, summary: ticket.title, store: ticket.store, city: ticket.city })),
         }),
       });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível criar o grupo.');
       window.dispatchEvent(new Event('caju:grupos-de-repasse'));
-      setRepasseOk(`Grupo criado com ${count(tickets.length, 'FSA', 'FSAs')}. Marque o tipo de cada uma abrindo o chamado na tela inicial.`);
-      setRepasseNome('');
+      setRepasseOk(`Grupo criado com ${count(tickets.length, 'chamado', 'chamados')}. Marque o tipo de cada um abrindo o chamado.`);
       setRepasseTecnico(null);
       setTechnicianQuery('');
     } catch (reason) {
@@ -237,7 +235,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
           <MessageCirclePlus /> Criar grupo
         </Button>}
         <Button variant="outline" className="h-9" onClick={() => { setRepasseOk(''); setError(''); setRepasseOpen(true); }}>
-          <WalletCards /> Agrupar para repasse
+          <Layers3 /> Agrupar chamados
         </Button>
         <Button variant="ghost" className="size-9 p-0" onClick={onClear} aria-label="Limpar seleção" title="Limpar seleção"><X /></Button>
         <span className="sr-only" aria-live="polite">{copyState === 'ok' ? `${count(tickets.length, 'chamado copiado', 'chamados copiados')}.` : copyState === 'fail' ? 'Não foi possível copiar.' : ''}</span>
@@ -249,10 +247,10 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
     <Dialog open={repasseOpen} onOpenChange={(next) => { if (!next && !repasseSaving) { setRepasseOpen(false); setRepasseOk(''); } }}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><WalletCards className="size-5 text-emerald-300" />Agrupar {count(tickets.length, 'FSA', 'FSAs')} para repasse</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Layers3 className="size-5 text-emerald-300" />Agrupar {count(tickets.length, 'chamado', 'chamados')}</DialogTitle>
           <DialogDescription>
-            O grupo define a faixa de preço: estas FSAs viram um atendimento só na conta do técnico.
-            Depois, o tipo de cada uma (atuação, evidência, improdutiva) é marcado abrindo o chamado.
+            Estes chamados viram um atendimento só: aparecem empilhados na fila, e a faixa de preço do
+            técnico é calculada pelo grupo. Depois, o tipo de cada um é marcado abrindo o chamado.
           </DialogDescription>
         </DialogHeader>
         {error && <p role="alert" className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{error}</p>}
@@ -262,13 +260,14 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
             <div className="flex flex-wrap gap-2">
               {tickets.map((ticket) => <span key={ticket.id} className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-100">{ticket.id}</span>)}
             </div>
-            <div>
-              <label htmlFor="repasse-nome" className="mb-1 block text-sm font-semibold">Nome do grupo</label>
-              <Input id="repasse-nome" maxLength={120} value={repasseNome} onChange={(event) => setRepasseNome(event.target.value)} placeholder="Ex.: Loja L252 — manhã" />
-              <p className="mt-1 text-xs text-muted-foreground">Opcional. Serve para você reconhecer o grupo na fila de repasse.</p>
+            {/* O nome sai da cidade e da loja dos próprios chamados, igual ao que o
+                servidor grava; aqui só se mostra como vai ficar. */}
+            <div className="rounded-xl border border-border bg-background/60 px-3 py-2">
+              <p className="text-xs font-semibold text-muted-foreground">Nome do grupo</p>
+              <p className="mt-0.5 text-sm font-bold">{nomeDoGrupo(tickets)}</p>
             </div>
             <div>
-              <label htmlFor="repasse-tecnico" className="mb-1 block text-sm font-semibold">Técnico que vai receber</label>
+              <label htmlFor="repasse-tecnico" className="mb-1 block text-sm font-semibold">Técnico que vai atender</label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input id="repasse-tecnico" value={technicianQuery} onChange={(event) => { setTechnicianQuery(event.target.value); setRepasseTecnico(null); }} placeholder="Busque pelo nome" className="min-h-11 pl-9" />
@@ -289,7 +288,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
             : <>
               <Button variant="ghost" onClick={() => setRepasseOpen(false)} disabled={repasseSaving}>Cancelar</Button>
               <Button disabled={!repasseTecnico || repasseSaving} onClick={() => void criarGrupoDeRepasse()}>
-                {repasseSaving ? <Loader2 className="animate-spin" /> : <WalletCards />}Criar grupo de repasse
+                {repasseSaving ? <Loader2 className="animate-spin" /> : <Layers3 />}Agrupar
               </Button>
             </>}
         </DialogFooter>
