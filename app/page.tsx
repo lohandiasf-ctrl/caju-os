@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TicketStack } from "@/components/ticket-stack";
+import { empilhar, type VinculoDeGrupo } from "@/lib/ticket-stacks";
 import {
   Activity,
   Bell,
@@ -399,6 +401,42 @@ export default function Home() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
   );
+  // Chamado -> grupo de repasse, para o kanban empilhar quem foi agrupado junto.
+  const [vinculosDeGrupo, setVinculosDeGrupo] = useState<Map<string, VinculoDeGrupo>>(
+    () => new Map(),
+  );
+  const [pilhasAbertas, setPilhasAbertas] = useState<Set<number>>(() => new Set());
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const carregar = async () => {
+      try {
+        const response = await fetch("/api/fsa-groups/vinculos", {
+          headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+          cache: "no-store",
+        });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { vinculos?: VinculoDeGrupo[] };
+        if (active) setVinculosDeGrupo(new Map((payload.vinculos ?? []).map((v) => [v.ticketKey, v])));
+      } catch {
+        // Sem os vínculos o kanban só deixa de empilhar: os cards aparecem
+        // soltos, como antes. Não é motivo para mostrar erro.
+      }
+    };
+    const primeira = window.setTimeout(() => void carregar(), 0);
+    // O grupo pode ser montado por outra pessoa; a cada minuto o kanban alcança.
+    const periodico = window.setInterval(() => void carregar(), 60_000);
+    // Quem acabou de agrupar vê a pilha na hora, sem esperar o minuto.
+    const aoAgrupar = () => void carregar();
+    window.addEventListener("caju:grupos-de-repasse", aoAgrupar);
+    return () => {
+      active = false;
+      window.clearTimeout(primeira);
+      window.clearInterval(periodico);
+      window.removeEventListener("caju:grupos-de-repasse", aoAgrupar);
+    };
+  }, [user]);
 
   useEffect(() => {
     const syncView = () => {
@@ -1510,15 +1548,47 @@ export default function Home() {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            {items.map((ticket) => (
-                              <TicketCard
-                                key={ticket.id}
-                                ticket={ticket}
-                                onOpen={() => void openTicket(ticket)}
-                                selected={selectedKeys.has(ticket.id)}
-                                onToggleSelect={() => toggleSelected(ticket.id)}
-                              />
-                            ))}
+                            {empilhar(items, vinculosDeGrupo).map((entrada) => {
+                              const cartao = (ticket: Ticket) => (
+                                <TicketCard
+                                  key={ticket.id}
+                                  ticket={ticket}
+                                  onOpen={() => void openTicket(ticket)}
+                                  selected={selectedKeys.has(ticket.id)}
+                                  onToggleSelect={() => toggleSelected(ticket.id)}
+                                />
+                              );
+                              if (entrada.tipo === "chamado") return cartao(entrada.chamado);
+                              const chaves = entrada.chamados.map((ticket) => ticket.id);
+                              const todas = chaves.every((key) => selectedKeys.has(key));
+                              const algumas = !todas && chaves.some((key) => selectedKeys.has(key));
+                              return (
+                                <TicketStack
+                                  key={`pilha-${entrada.grupo.groupId}`}
+                                  grupo={entrada.grupo}
+                                  chamados={entrada.chamados}
+                                  aberta={pilhasAbertas.has(entrada.grupo.groupId)}
+                                  onAlternar={() =>
+                                    setPilhasAbertas((atual) => {
+                                      const proximo = new Set(atual);
+                                      if (proximo.has(entrada.grupo.groupId)) proximo.delete(entrada.grupo.groupId);
+                                      else proximo.add(entrada.grupo.groupId);
+                                      return proximo;
+                                    })
+                                  }
+                                  selecionada={todas}
+                                  selecao={
+                                    <SelectBox
+                                      checked={todas}
+                                      indeterminate={algumas}
+                                      onChange={() => toggleSelectedGroup(chaves)}
+                                      label={`Selecionar as ${chaves.length} FSAs do grupo ${entrada.grupo.nome ?? ""}`.trim()}
+                                    />
+                                  }
+                                  renderChamado={cartao}
+                                />
+                              );
+                            })}
                             {!items.length && (
                               <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-xs text-muted-foreground">
                                 Nenhum chamado encontrado

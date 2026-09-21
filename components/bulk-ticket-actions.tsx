@@ -192,6 +192,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
       });
       const payload = await response.json() as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível criar o grupo.');
+      window.dispatchEvent(new Event('caju:grupos-de-repasse'));
       setRepasseOk(`Grupo criado com ${count(tickets.length, 'FSA', 'FSAs')}. Marque o tipo de cada uma abrindo o chamado na tela inicial.`);
       setRepasseNome('');
       setRepasseTecnico(null);
