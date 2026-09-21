@@ -41,6 +41,7 @@ export async function GET(request: Request) {
         tecnico: technicians.name,
         approvedBy: fsaGroups.approvedBy,
         approvedAt: fsaGroups.approvedAt,
+        dataPagamento: fsaGroups.dataPagamento,
         paidAt: fsaGroups.paidAt,
       })
       .from(fsaGroups)
@@ -99,6 +100,7 @@ export async function GET(request: Request) {
         status: g.status,
         aprovadoPor: g.approvedBy,
         aprovadoEm: g.approvedAt,
+        dataPagamento: g.dataPagamento,
         pagoEm: g.paidAt,
         repasse: calcularRepasse(paraCalcular),
         fsas,

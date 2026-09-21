@@ -45,6 +45,18 @@ Limitações conhecidas:
   (`/api/operational-dashboard`, `/api/operations`), histórico do chamado,
   assistente e o diálogo de fluxo operacional. Só o painel financeiro mudou.
 
+**Data do pagamento.** A folha não sai no dia da aprovação. Aprovar um grupo
+agora exige a data em que ele vai ser pago (`fsa_groups.data_pagamento`, na
+mesma `0040`), que pode ser mudada enquanto o grupo não foi pago. O painel
+conta a saída por essa data — é quando o dinheiro sai de fato —, e grupo ainda
+sem data conta pelo dia do atendimento. O relatório ganhou a coluna "Data do
+pagamento". Bloquear um grupo aprovado limpa a data.
+
+De passagem, o teste da coluna nova expôs um bug de fuso no relatório: dia
+sem hora (`2026-09-25`) passava por `new Date`, virava meia-noite UTC, e em
+Brasília saía como 24/09. No servidor, que roda em UTC, saía certo por acaso.
+Agora dia sem hora é formatado como texto, e há teste que roda nos dois fusos.
+
 **Pendente:** rodar `npm run db:migrate:remote`.
 
 ### Improdutiva vira categoria, não desconto

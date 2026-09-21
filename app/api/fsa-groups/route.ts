@@ -44,6 +44,7 @@ export async function GET(request: Request) {
         improdutivasCents: fsaGroups.improdutivasCents,
         totalCents: fsaGroups.totalCents,
         approvedBy: fsaGroups.approvedBy,
+        dataPagamento: fsaGroups.dataPagamento,
         createdBy: fsaGroups.createdBy,
         updatedAt: fsaGroups.updatedAt,
       })

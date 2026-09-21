@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { fsaClassifications, fsaGroups, technicians } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
@@ -25,6 +25,12 @@ export async function GET(request: Request) {
 
     const db = getDb();
 
+    // A saída conta no dia em que o dinheiro sai, e não no dia do atendimento: a
+    // folha não sai na mesma data. Grupo ainda sem data de pagamento (fechado,
+    // esperando a gerência) conta pelo dia do atendimento.
+    const dataSaida = sql<string>`coalesce(${fsaGroups.dataPagamento}, ${fsaGroups.dia})`;
+    const aPartir = sql`${dataSaida} >= ${desde}`;
+
     const porTecnico = await db
       .select({
         technicianId: fsaGroups.technicianId,
@@ -35,18 +41,18 @@ export async function GET(request: Request) {
       })
       .from(fsaGroups)
       .innerJoin(technicians, eq(technicians.id, fsaGroups.technicianId))
-      .where(and(gte(fsaGroups.dia, desde), inArray(fsaGroups.status, [...CONFIRMADO, ...PENDENTE])))
+      .where(and(aPartir, inArray(fsaGroups.status, [...CONFIRMADO, ...PENDENTE])))
       .groupBy(fsaGroups.technicianId, technicians.name, fsaGroups.status)
       .all();
 
     const porMes = await db
       .select({
-        mes: sql<string>`substr(${fsaGroups.dia}, 1, 7)`,
+        mes: sql<string>`substr(${dataSaida}, 1, 7)`,
         totalCents: sql<number>`coalesce(sum(${fsaGroups.totalCents}), 0)`,
       })
       .from(fsaGroups)
-      .where(and(gte(fsaGroups.dia, desde), inArray(fsaGroups.status, [...CONFIRMADO])))
-      .groupBy(sql`substr(${fsaGroups.dia}, 1, 7)`)
+      .where(and(aPartir, inArray(fsaGroups.status, [...CONFIRMADO])))
+      .groupBy(sql`substr(${dataSaida}, 1, 7)`)
       .all();
 
     // Quantas FSAs cada técnico teve nos grupos confirmados, para a tabela
@@ -58,7 +64,7 @@ export async function GET(request: Request) {
       })
       .from(fsaClassifications)
       .innerJoin(fsaGroups, eq(fsaGroups.id, fsaClassifications.groupId))
-      .where(and(gte(fsaGroups.dia, desde), inArray(fsaGroups.status, [...CONFIRMADO])))
+      .where(and(aPartir, inArray(fsaGroups.status, [...CONFIRMADO])))
       .groupBy(fsaGroups.technicianId)
       .all();
     const fsasPorTecnico = new Map(fsas.map((f) => [f.technicianId, Number(f.fsas)]));
