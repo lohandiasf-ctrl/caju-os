@@ -68,8 +68,24 @@ classificação pode ter mudado entre o fechamento e a conferência.
 'Pago' não paga ninguém: é o gerente registrando que a folha saiu, para a
 visita não voltar à fila. O Caju segue sem tocar em dinheiro.
 
+### Relatório de repasse
+
+Exportação em CSV pela fila da `/financeiro`, uma linha por FSA, cobrindo 30
+dias. Sai no formato que o Excel brasileiro abre sem perguntar nada: ponto e
+vírgula como separador e BOM na frente, senão os acentos viram lixo.
+
+Cada linha leva a **memória de cálculo** junto do valor — sem ela o relatório é
+um número sem defesa, e quem confere não tem como saber se os R$ 180 vieram da
+tabela, da exceção do quinto chamado ou de um desconto. Os dados da visita se
+repetem em toda linha de propósito: a planilha vai ser filtrada e ordenada por
+quem recebe, e uma linha que só faz sentido junto da de cima se perde.
+
+O valor é recalculado a partir das FSAs em vez de vir da coluna guardada: o
+relatório precisa bater com as regras de hoje, e a coluna existe para provar o
+que foi aprovado, não para alimentar a planilha.
+
 **Pendente:** rodar `npm run db:migrate:remote` para aplicar a migration.
-Falta ainda a exportação do relatório em PDF/Excel.
+Com isso a especificação de pagamento está implementada de ponta a ponta.
 
 Atenção ao gerar migration neste projeto: o journal do `drizzle-kit` está
 parado no `0024`, então `drizzle-kit generate` diffa contra um snapshot velho e

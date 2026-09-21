@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { BadgeCheck, Ban, Loader2, ShieldAlert, Unlock, WalletCards } from "lucide-react";
+import { BadgeCheck, Ban, Download, Loader2, ShieldAlert, Unlock, WalletCards } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
@@ -43,6 +43,7 @@ export function FsaPayoutReview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [agindo, setAgindo] = useState<number | null>(null);
+  const [exportando, setExportando] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -91,6 +92,34 @@ export function FsaPayoutReview() {
     }
   };
 
+  // O CSV vem do servidor, não da tela: o relatório cobre 30 dias, e a fila
+  // mostra só o filtro atual — exportar o que está à vista entregaria menos do
+  // que a folha precisa.
+  const exportar = async () => {
+    if (!user) return;
+    setExportando(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/fsa-payouts/report?status=${CONSULTA[filtro]}&dias=30`, {
+        headers: { Authorization: `Bearer ${await user.getIdToken()}` },
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? "Não foi possível gerar o relatório.");
+      }
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `repasse-fsa-${filtro}-30-dias.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Não foi possível gerar o relatório.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   // A fila é dinheiro de terceiros: quem não é gerência não vê nem a lista.
   if (role !== "gerencia") return null;
 
@@ -117,6 +146,10 @@ export function FsaPayoutReview() {
             </Button>
           ))}
         </fieldset>
+        <Button size="sm" variant="outline" disabled={exportando} onClick={() => void exportar()}>
+          {exportando ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Download aria-hidden="true" />}
+          Exportar
+        </Button>
       </div>
 
       {error && (
