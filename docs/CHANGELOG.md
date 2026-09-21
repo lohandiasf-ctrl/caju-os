@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### O tipo da FSA é marcado no chamado, não no financeiro
+
+Atuação, evidência e improdutiva passam a ser marcadas no diálogo que abre ao
+clicar no chamado, na tela inicial. É quem opera o chamado que sabe o que
+aconteceu na loja; a tela financeira ficou só para conferir, fechar, aprovar e
+pagar — a lista de FSAs do grupo lá é só leitura, com o tipo em etiqueta.
+
+A classificação continua pertencendo ao grupo de repasse. Chamado fora de grupo
+mostra como chegar lá ("Agrupar para repasse" na fila) em vez de um formulário
+sem onde gravar.
+
+A permissão não mudou: marca o tipo quem montou o grupo ou a gerência, porque o
+tipo muda o valor do repasse. Os demais veem o tipo e o motivo, sem editar. O
+diálogo lê por `/api/fsa-groups/por-chamado`, que não devolve valor nenhum — a
+tela do chamado é aberta pela equipe inteira.
+
 ### Painel financeiro: zerar a partir de uma data, e repasse vindo dos grupos
 
 A gerência quer conferir os números 1:1 a partir do zero. Duas mudanças:
