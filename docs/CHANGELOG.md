@@ -9,6 +9,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-22
+
+### Assistente geral usa a franquia gratuita do Workers AI
+
+`/api/assistant/ask` deixou de depender da chave e da cota do Gemini. Agora
+usa o binding já existente do Workers AI com `@cf/zai-org/glm-4.7-flash`, que
+suporta raciocínio e chamadas de ferramentas. As consultas de chamados, Jira,
+técnicos, spares e WhatsApp continuam no servidor; o modelo apenas decide o
+que consultar e escreve a resposta. Ações como agendamento continuam apenas
+preparadas para confirmação na tela.
+
+Cada chamada usa `store: false`, para não armazenar o conteúdo operacional
+enviado ao modelo. A franquia gratuita diária é da Cloudflare; quando ela for
+atingida, a API responde claramente para tentar no dia seguinte, sem trocar
+para um modelo pago.
+
 ## 2026-09-21
 
 ### Grupo de chamados só aceita uma cidade
