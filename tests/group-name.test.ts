@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cidadeDoChamado, nomeDoGrupo, numeroDaLoja } from '../lib/group-name.ts';
+import { cidadeDoChamado, cidadesDosChamados, erroDeCidades, nomeDoGrupo, numeroDaLoja } from '../lib/group-name.ts';
 
 test('nome do grupo é a cidade e o número da loja', () => {
   assert.equal(
@@ -66,4 +66,24 @@ test('nome muito longo é cortado', () => {
   const nome = nomeDoGrupo(muitos);
   assert.ok(nome.length <= 120);
   assert.ok(nome.endsWith('…'));
+});
+
+// Um grupo é uma visita: Nazaré da Mata (PE) e Nanuque (MG) no mesmo grupo
+// dividiam a faixa de preço de visitas que não têm nada a ver.
+test('chamados de cidades diferentes não formam grupo', () => {
+  const erro = erroDeCidades([
+    { store: 'Código da loja: 5482', city: 'Nazaré Da Mata' },
+    { store: 'Código da loja: L953', city: 'Nanuque' },
+  ]);
+  assert.ok(erro);
+  assert.match(erro, /Nazaré Da Mata e Nanuque/);
+});
+
+test('a mesma cidade escrita de outro jeito é a mesma cidade', () => {
+  assert.deepEqual(cidadesDosChamados([{ city: 'Nazaré da Mata' }, { city: 'NAZARE  DA MATA' }]), ['Nazaré da Mata']);
+  assert.equal(erroDeCidades([{ city: 'Recife' }, { city: 'recife' }]), null);
+});
+
+test('chamado sem cidade não impede o grupo', () => {
+  assert.equal(erroDeCidades([{ city: 'Recife' }, { city: '' }, { city: 'Atualizado em 21/09' }]), null);
 });

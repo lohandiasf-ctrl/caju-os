@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Layers3, Loader2, MessageCirclePlus, Search, UserRound, Wrench, X, XCircle } from 'lucide-react';
-import { nomeDoGrupo } from '@/lib/group-name';
+import { erroDeCidades, nomeDoGrupo } from '@/lib/group-name';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -60,6 +60,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
   const [repasseSaving, setRepasseSaving] = useState(false);
   const [repasseOk, setRepasseOk] = useState('');
   const canCreateGroup = canUseWhatsapp(role);
+  const cidadesDiferentes = useMemo(() => erroDeCidades(tickets), [tickets]);
 
   const canTransition = canBulkTransition(role);
   const toSchedule = useMemo(() => tickets.filter((ticket) => isBulkEligible(ticket.rawStatus, 'scheduled')), [tickets]);
@@ -266,6 +267,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
               <p className="text-xs font-semibold text-muted-foreground">Nome do grupo</p>
               <p className="mt-0.5 text-sm font-bold">{nomeDoGrupo(tickets)}</p>
             </div>
+            {cidadesDiferentes && <p role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">{cidadesDiferentes} Desmarque os chamados da outra cidade e agrupe cada cidade separadamente.</p>}
             <div>
               <label htmlFor="repasse-tecnico" className="mb-1 block text-sm font-semibold">Técnico que vai atender</label>
               <div className="relative">
@@ -287,7 +289,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
             ? <Button onClick={() => { setRepasseOpen(false); setRepasseOk(''); onClear(); }}>Fechar</Button>
             : <>
               <Button variant="ghost" onClick={() => setRepasseOpen(false)} disabled={repasseSaving}>Cancelar</Button>
-              <Button disabled={!repasseTecnico || repasseSaving} onClick={() => void criarGrupoDeRepasse()}>
+              <Button disabled={!repasseTecnico || repasseSaving || Boolean(cidadesDiferentes)} onClick={() => void criarGrupoDeRepasse()}>
                 {repasseSaving ? <Loader2 className="animate-spin" /> : <Layers3 />}Agrupar
               </Button>
             </>}

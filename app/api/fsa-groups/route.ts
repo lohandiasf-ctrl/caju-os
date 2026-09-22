@@ -4,7 +4,7 @@ import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { carregarGrupo, carregarPassesDaFsa } from '@/lib/server/fsa-payment';
 import { operationDate } from '@/lib/assistant';
-import { nomeDoGrupo } from '@/lib/group-name';
+import { erroDeCidades, nomeDoGrupo } from '@/lib/group-name';
 
 const STATUS = ['aberto', 'pronto', 'aprovado', 'pago', 'bloqueado'] as const;
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
@@ -132,6 +132,9 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    const cidadesDiferentes = erroDeCidades(unicos);
+    if (cidadesDiferentes) return Response.json({ error: cidadesDiferentes }, { status: 400 });
 
     // O dia define o relatório, então é o da operação e não o do Worker: depois
     // das 21h de Brasília o UTC já virou amanhã.

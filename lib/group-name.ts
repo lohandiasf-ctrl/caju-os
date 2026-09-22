@@ -34,6 +34,34 @@ export function cidadeDoChamado(city: string | null | undefined): string | null 
   return texto;
 }
 
+const chaveDaCidade = (cidade: string) =>
+  cidade.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Cidades diferentes entre os chamados, escritas como no primeiro chamado de
+ * cada uma. "Nazaré da Mata" e "NAZARE DA MATA" contam como a mesma. Chamado
+ * sem cidade não entra: não há com o que comparar.
+ */
+export function cidadesDosChamados(chamados: readonly ChamadoDoGrupo[]): string[] {
+  const vistas = new Map<string, string>();
+  for (const chamado of chamados) {
+    const cidade = cidadeDoChamado(chamado.city);
+    if (cidade && !vistas.has(chaveDaCidade(cidade))) vistas.set(chaveDaCidade(cidade), cidade);
+  }
+  return [...vistas.values()];
+}
+
+/**
+ * Um grupo é uma visita: técnico, dia e cidade. Chamados de cidades diferentes
+ * são visitas diferentes e não podem dividir a faixa de preço.
+ */
+export function erroDeCidades(chamados: readonly ChamadoDoGrupo[]): string | null {
+  const cidades = cidadesDosChamados(chamados);
+  if (cidades.length < 2) return null;
+  const lista = `${cidades.slice(0, -1).join(', ')} e ${cidades.at(-1)}`;
+  return `Um grupo é uma visita, então os chamados precisam ser da mesma cidade. Estes são de ${lista}.`;
+}
+
 /**
  * "Candeias — Loja L497"; com mais de uma loja na cidade, "Candeias — Lojas
  * L497, L500"; com mais de uma cidade, as partes separadas por " · ".
