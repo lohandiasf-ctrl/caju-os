@@ -11,6 +11,18 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-21
 
+### Grupo de chamados só aceita uma cidade
+
+Dava para agrupar chamados de cidades diferentes (um grupo juntou Nazaré da
+Mata/PE e Nanuque/MG), e as duas visitas passavam a dividir a mesma faixa de
+preço. Agora `POST /api/fsa-groups` recusa a criação com 400 quando os chamados
+têm mais de uma cidade, e o diálogo **Agrupar** avisa antes e desativa o botão.
+A comparação ignora acento e maiúsculas. Chamado sem cidade não bloqueia.
+Regra em `erroDeCidades` (`lib/group-name.ts`).
+
+**Pendente:** os grupos já criados com mais de uma cidade continuam como estão.
+Não existe ação para desfazer ou dividir um grupo.
+
 ### Exportar agora avisa onde o arquivo foi salvo
 
 No app desktop, o WebView salva o CSV direto na pasta Downloads sem mostrar
