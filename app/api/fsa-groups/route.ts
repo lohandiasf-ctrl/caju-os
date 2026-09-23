@@ -4,7 +4,8 @@ import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { carregarGrupo, carregarPassesDaFsa } from '@/lib/server/fsa-payment';
 import { operationDate } from '@/lib/assistant';
-import { erroDeCidades, nomeDoGrupo } from '@/lib/group-name';
+import { cidadesDosChamados, erroDeCidades, nomeDoGrupo } from '@/lib/group-name';
+import { cidadeEUf, erroDoNomeDoTecnico, nomeDoTecnico, tecnicoComMesmoNome } from '@/lib/repasse-tecnico';
 
 const STATUS = ['aberto', 'pronto', 'aprovado', 'pago', 'bloqueado'] as const;
 const DIA = /^\d{4}-\d{2}-\d{2}$/;
@@ -108,9 +109,14 @@ export async function POST(request: Request) {
     const user = await requireApiUser(request);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
-    const technicianId = Number(body.technicianId);
-    if (!Number.isInteger(technicianId) || technicianId <= 0) {
-      return Response.json({ error: 'Escolha o técnico que vai atender.' }, { status: 400 });
+    // Técnico da lista (id) ou só o nome digitado. Nome digitado vira
+    // cadastro depois de validar os chamados, para não criar técnico à toa.
+    const idInformado = Number(body.technicianId);
+    const nomeInformado = typeof body.technicianName === 'string' ? nomeDoTecnico(body.technicianName) : '';
+    const temId = Number.isInteger(idInformado) && idInformado > 0;
+    if (!temId) {
+      const erroNome = erroDoNomeDoTecnico(nomeInformado);
+      if (erroNome) return Response.json({ error: nomeInformado ? erroNome : 'Escolha o técnico que vai atender.' }, { status: 400 });
     }
 
     const brutos = Array.isArray(body.tickets) ? body.tickets : [];
@@ -145,14 +151,40 @@ export async function POST(request: Request) {
     const nome = nomeDoGrupo(unicos);
 
     const db = getDb();
-    const tecnico = await db
-      .select({ id: technicians.id, name: technicians.name })
-      .from(technicians)
-      .where(eq(technicians.id, technicianId))
-      .get();
-    if (!tecnico) return Response.json({ error: 'Técnico não encontrado.' }, { status: 404 });
-
     const now = new Date().toISOString();
+    let tecnico: { id: number; name: string } | undefined;
+    let tecnicoCriado = false;
+    if (temId) {
+      tecnico = await db
+        .select({ id: technicians.id, name: technicians.name })
+        .from(technicians)
+        .where(eq(technicians.id, idInformado))
+        .get();
+      if (!tecnico) return Response.json({ error: 'Técnico não encontrado.' }, { status: 404 });
+    } else {
+      // Mesmo nome sem acento/maiúscula é a mesma pessoa: reaproveita o
+      // cadastro para o relatório não pagar dois técnicos que são um só.
+      const cadastro = await db.select({ id: technicians.id, name: technicians.name }).from(technicians).all();
+      tecnico = tecnicoComMesmoNome(cadastro, nomeInformado) ?? undefined;
+      if (!tecnico) {
+        const { cidade, uf } = cidadeEUf(cidadesDosChamados(unicos)[0]);
+        tecnico = await db
+          .insert(technicians)
+          .values({
+            name: nomeInformado,
+            baseCity: cidade,
+            baseState: uf,
+            approved: false,
+            sourceStatus: 'Cadastro rápido pelo grupo de repasse',
+            createdAt: now,
+          })
+          .returning({ id: technicians.id, name: technicians.name })
+          .get();
+        tecnicoCriado = true;
+      }
+    }
+    const technicianId = tecnico.id;
+
     const grupo = await db
       .insert(fsaGroups)
       .values({
@@ -190,6 +222,7 @@ export async function POST(request: Request) {
           nome,
           technicianId,
           tecnico: tecnico.name,
+          ...(tecnicoCriado ? { tecnicoCriado: true } : {}),
           dia,
           ticketKeys: unicos.map((x) => x.key),
           origin: 'sistema',

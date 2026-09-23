@@ -11,6 +11,24 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Agrupar: técnico pode ser só o nome digitado
+
+No diálogo "Agrupar" (grupo de repasse), o técnico não precisa mais estar na
+lista: dá para digitar só o nome.
+
+- `app/api/fsa-groups/route.ts` aceita `technicianName` quando não vem
+  `technicianId`. O grupo continua ligado a um cadastro (`technician_id` segue
+  obrigatório, sem migration): o servidor procura técnico com o mesmo nome
+  ignorando acento/maiúscula/espaço e reaproveita; se não houver, cria um
+  cadastro mínimo (nome, cidade/UF dos chamados, `approved: false`,
+  `source_status` "Cadastro rápido pelo grupo de repasse"). A auditoria marca
+  `tecnicoCriado: true`.
+- `lib/repasse-tecnico.ts` (regras) + `tests/repasse-tecnico.test.ts`.
+- `components/bulk-ticket-actions.tsx`: botão Agrupar habilita com nome
+  válido; textos do campo explicam a regra.
+
+**Pendente:** cadastros rápidos aparecem na lista de técnicos com esse status;
+completar dados (CPF, PIX) antes do pagamento, como já acontecia no cadastro.
 ### Caju IA: resposta longa não chega mais cortada, e tabela aparece como tabela
 
 Uma lista de agendados em tabela passava do teto de 900 tokens e a resposta
