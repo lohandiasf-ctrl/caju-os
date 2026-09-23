@@ -11,6 +11,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Equipe escondida na barra em telas baixas — grupo Gestão recolhível (branch `claude/sidebar-gestao-recolhivel`)
+
+Em produção, numa tela de ~700 px de altura, o menu (12 itens) ocupava quase
+toda a barra e a seção Equipe mostrava só uma fresta (aberta: um nome cortado;
+recolhida: um avatar). O título "Equipe" também sumia: a regra que esconde os
+rótulos dos grupos em tela baixa pegava o título da seção.
+
+- **Gestão recolhível no desktop** (Equipe, Projetos e lojas, Spares,
+  Financeiro, Feedback): vira uma linha "Gestão" com seta. Sem escolha salva,
+  abre em telas com 900 px ou mais de altura, ou quando a página atual está
+  dentro dele; fechado com a página atual dentro, a linha fica marcada
+  ("Gestão · Financeiro"). A escolha fica salva no navegador
+  (`caju-nav-group:gestao`). Recolhida a barra, é um ícone com tooltip. No
+  celular o grupo fica sempre aberto (a gaveta rola inteira).
+- **Tela até 860 px de altura**: itens do menu com 32 px; só os rótulos dos
+  grupos do menu somem — o título "Equipe" volta a aparecer.
+- Resultado estimado a ~700 px: o menu cai de ~486 para ~280 px e a equipe
+  ganha ~200 px (4–5 pessoas visíveis), sem o menu rolar.
+
+**Validação:** testes, `tsc`, lint e build. O preview local a partir de uma
+worktree não subiu (otimizador do Vite com `node_modules` por junção); as
+alturas foram estimadas a partir das medições da sessão anterior.
+
 ### Perfil obrigatório, equipe e chat na barra lateral, retirar da equipe (branch `claude/perfil-e-sidebar-equipe`)
 
 - **Nome e foto obrigatórios, uma vez só** (`components/profile-setup-gate.tsx`,
