@@ -24,6 +24,13 @@ export type JiraIssueSummary = {
   partnerTriggeredAt: string | null;
   // Só com `withAttachments`: o tipo (MIME) de cada anexo do chamado.
   attachmentTypes?: string[];
+  // Valores financeiros do chamado
+  visitCost1?: string | null;
+  visitCost2?: string | null;
+  improductiveCost?: string | null;
+  equipmentTotal?: string | null;
+  valueR$?: string | null;
+  ticketTotal?: string | null;
 };
 
 export type JiraAttachmentSummary = {
@@ -73,6 +80,21 @@ type JiraIssue = {
     customfield_14880?: unknown;
     customfield_11955?: unknown;
     customfield_19825?: unknown;
+    customfield_11958?: unknown;
+    customfield_12419?: unknown;
+    customfield_11959?: unknown;
+    customfield_16195?: unknown;
+    customfield_14821?: unknown;
+    customfield_17468?: unknown;
+    customfield_13308?: unknown;
+    customfield_13501?: unknown;
+    customfield_12806?: unknown;
+    customfield_15087?: unknown;
+    customfield_15088?: unknown;
+    customfield_15089?: unknown;
+    customfield_16196?: unknown;
+    customfield_12031?: unknown;
+    customfield_12032?: unknown;
   } & Record<string, unknown>;
 };
 
@@ -202,7 +224,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
 
   const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', ...(options.withAttachments ? ['attachment'] : [])],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', 'customfield_11958', 'customfield_12419', 'customfield_11959', 'customfield_14880', 'customfield_16195', 'customfield_12413', ...(options.withAttachments ? ['attachment'] : [])],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
@@ -245,13 +267,20 @@ export async function getJiraIssue(key: string) {
     pdvNumber: value('Numero do PDV', 'Número do PDV'),
     problemType: value('Tipo de problema'),
     allegedDefect: value('Defeito alegado'),
-    visitCost1: value('Custo Visita1', 'Custo Visita 1'),
-    equipmentTotal: value('Valor Total de Equipamentos'),
+    visitCost1: value('Custo Visita1', 'Custo Visita 1') ?? customFieldText(issue.fields.customfield_11958),
+    equipmentTotal: value('Valor Total de Equipamentos') ?? customFieldText(issue.fields.customfield_14880),
     kmTotal: value('Valor total do KM', 'Valor Total do KM'),
-    visitCost2: value('Custo Visita2', 'Custo Visita 2'),
-    ticketTotal: value('Total do Tickt', 'Total do Ticket'),
+    visitCost2: value('Custo Visita2', 'Custo Visita 2') ?? customFieldText(issue.fields.customfield_12419),
+    improductiveCost: value('Custo Improdutiva', 'Custo Visita Improdutiva') ?? customFieldText(issue.fields.customfield_11959),
+    valueR$: value('Valor R$', 'Valor (R$)') ?? customFieldText(issue.fields.customfield_16195),
+    cost: value('Custo') ?? customFieldText(issue.fields.customfield_14821),
+    ticketTotal: value('Total do Tickt', 'Total do Ticket') ?? customFieldText(issue.fields.customfield_12413),
     visitNumber: value('Numero de Visita', 'Número de Visita'),
-    additionalCosts: value('Detalhes de custos adicionais'),
+    additionalCosts: value('Detalhes de custos adicionais', 'Custos Adicionais') ?? customFieldText(issue.fields.customfield_17468) ?? customFieldText(issue.fields.customfield_13308),
+    budget: value('Orçamento', 'Orcamento') ?? customFieldText(issue.fields.customfield_13501),
+    equipment: value('Equipamento') ?? customFieldText(issue.fields.customfield_15087) ?? customFieldText(issue.fields.customfield_16196),
+    serialNumber: value('Número de Série', 'Numero de Serie', 'Nº de Série') ?? customFieldText(issue.fields.customfield_15088) ?? customFieldText(issue.fields.customfield_12031),
+    patrimony: value('Patrimônio', 'Patrimonio') ?? customFieldText(issue.fields.customfield_15089) ?? customFieldText(issue.fields.customfield_12032),
     technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos') ?? customFieldText(issue.fields.customfield_12279) ?? technicianFieldsToText(issue.fields),
     scheduledDateTime: value('Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento') ?? customFieldText(issue.fields.customfield_12036),
     // These names occur more than once in the Jira configuration. Always read
@@ -260,6 +289,86 @@ export async function getJiraIssue(key: string) {
     serviceStartedAt: customFieldText(issue.fields.customfield_10702) ?? value('Data/Hora - Início', 'Data/Hora - Inicio', 'Data Hora - Início', 'Data Hora - Inicio'),
     serviceEndedAt: customFieldText(issue.fields.customfield_10703) ?? value('Data/Hora - Término', 'Data/Hora - Termino', 'Data Hora - Término', 'Data Hora - Termino'),
     defectSummary: value('Resumo do defeito'),
+
+    // ──── VALORES FINANCEIROS ────
+    valorReais: value('Valor(R$)', 'Valor', 'Valor R$') ?? customFieldText(issue.fields.customfield_16195),
+    custoTotal: value('Custo') ?? customFieldText(issue.fields.customfield_14821),
+    custosAdicionais: value('Custos adicionais', 'Detalhes de custos adicionais') ?? customFieldText(issue.fields.customfield_17468) ?? customFieldText(issue.fields.customfield_13308),
+    custoAuxiliar: value('Custo Auxiliar') ?? customFieldText(issue.fields.customfield_15012),
+    orcamento: value('Orçamento', 'Orcamento') ?? customFieldText(issue.fields.customfield_13501),
+    detalhesCustos: value('DETALHES DOS CUSTOS', 'Detalhes dos Custos') ?? customFieldText(issue.fields.customfield_12410),
+    subTotal: value('Sub_Total', 'Sub Total') ?? customFieldText(issue.fields.customfield_12806),
+    rateioPercent: value('Rateio_%', 'Rateio %') ?? customFieldText(issue.fields.customfield_12807),
+    pagamentoAntecipado: value('Pagamento Antecipado') ?? customFieldText(issue.fields.customfield_16434),
+    descricaoPagamento: value('Descrição de Pagamento', 'Descricao de Pagamento') ?? customFieldText(issue.fields.customfield_16435),
+
+    // ──── EQUIPAMENTO (detalhes) ────
+    serialSpareNumber: value('Serial Number/Spare Number', 'Serial Spare Number') ?? customFieldText(issue.fields.customfield_16196),
+    tipoEquipamento: value('Tipo de Equipamento') ?? customFieldText(issue.fields.customfield_16197),
+    marca: value('Marca') ?? customFieldText(issue.fields.customfield_16198),
+    patrimonio: value('Patrimonio', 'Patrimônio') ?? customFieldText(issue.fields.customfield_15089) ?? customFieldText(issue.fields.customfield_12032),
+    equipamentoModelo: value('Equipamento / Modelo', 'Equipamento / Modelo') ?? customFieldText(issue.fields.customfield_15088),
+    equipamentoCmdb: customFieldText(issue.fields.customfield_15087),
+    novoEquipamento: customFieldText(issue.fields.customfield_16155),
+    trocaEquipamento: value('Foi feita a troca do equipamento?') ?? customFieldText(issue.fields.customfield_16157),
+    reserva: value('Reserva') ?? customFieldText(issue.fields.customfield_16199),
+    correcaoPdv: value('Correção PDV', 'Correcao PDV') ?? customFieldText(issue.fields.customfield_16200),
+    equipComDefeito: value('Equipamento com defeito') ?? customFieldText(issue.fields.customfield_16214),
+
+    // ──── DATAS EXTRAS ────
+    dtChegadaLoja: value('Data/Hora - Chegada na Loja', 'Data/Hora Chegada na Loja') ?? customFieldText(issue.fields.customfield_14812),
+    dtChegada: value('Data/Hora - Chegada', 'Data/Hora Chegada') ?? customFieldText(issue.fields.customfield_15013),
+    dtAprovacao: value('Data/Hora da Aprovação', 'Data/Hora da Aprovacao') ?? customFieldText(issue.fields.customfield_15078),
+    dtReprovacao: value('Data/Hora da Reprovação', 'Data/Hora da Reprovacao') ?? customFieldText(issue.fields.customfield_16633),
+    dataLimite: value('Data/Limite', 'Data Limite') ?? customFieldText(issue.fields.customfield_12081),
+    previsaoEntrega: value('Previsão de Entrega', 'Previsao de Entrega') ?? customFieldText(issue.fields.customfield_16801),
+    agendamentoSpare: value('Agendamento de Spare') ?? customFieldText(issue.fields.customfield_21932),
+
+    // ──── CATEGORIZAÇÃO ────
+    severidade: value('Severidade') ?? customFieldText(issue.fields.customfield_13300),
+    tipoSolicitacao: value('Tipo de Solicitação', 'Tipo de Solicitacao') ?? customFieldText(issue.fields.customfield_13302),
+    tipoAtendimento: value('Tipo Atendimento', 'Tipo de Atendimento') ?? customFieldText(issue.fields.customfield_11954),
+    chamadoDuplicado: value('Chamado Duplicado') ?? customFieldText(issue.fields.customfield_14867),
+    aprovacao: value('Aprovação', 'Aprovacao') ?? customFieldText(issue.fields.customfield_14889),
+    causaRaiz: value('Causa Raiz') ?? customFieldText(issue.fields.customfield_22813),
+    nivelCriticidade: value('Nivel de criticidade', 'Nível de criticidade') ?? customFieldText(issue.fields.customfield_22476),
+    nps: value('NPS') ?? customFieldText(issue.fields.customfield_12218),
+    impacto: value('Impacto') ?? customFieldText(issue.fields.customfield_12207),
+    urgencia: value('Urgência', 'Urgencia') ?? customFieldText(issue.fields.customfield_12208),
+
+    // ──── PESSOAS EXTRAS ────
+    responsavelTratativa: value('Responsável pela Tratativa', 'Responsavel pela Tratativa') ?? customFieldText(issue.fields.customfield_12281),
+    responsavelResolver: value('Responsável por Resolver', 'Responsavel por Resolver') ?? customFieldText(issue.fields.customfield_12282),
+    aprovadorTecnico: value('Aprovador - Tecnico', 'Aprovador - Técnico') ?? customFieldText(issue.fields.customfield_12403),
+    responsavelN1: value('Responsável N1', 'Responsavel N1') ?? customFieldText(issue.fields.customfield_25158),
+    responsavelN2: value('Responsável N2', 'Responsavel N2') ?? customFieldText(issue.fields.customfield_25159),
+    nomeParceiro: value('Nome do Parceiro', 'Nome Parceiro') ?? customFieldText(issue.fields.customfield_15110),
+
+    // ──── LOJA EXTRAS ────
+    tipoLoja: value('Tipo de Loja') ?? customFieldText(issue.fields.customfield_14866),
+    lojaApelido: value('Loja (Apelido)') ?? customFieldText(issue.fields.customfield_16213),
+    regional: value('Regional') ?? customFieldText(issue.fields.customfield_16170),
+
+    // ──── LOGÍSTICA ────
+    codigoRastreio: value('Código de Rastreio', 'Codigo de Rastreio') ?? customFieldText(issue.fields.customfield_16189),
+    enderecoDestino: value('Endereço de Destino', 'Endereco de Destino') ?? customFieldText(issue.fields.customfield_16190),
+    cidadeDestino: value('Cidade de Destino') ?? customFieldText(issue.fields.customfield_16192),
+    cepDestino: value('CEP de Destino') ?? customFieldText(issue.fields.customfield_16194),
+
+    // ──── PEÇAS USADAS (quantidades) ────
+    hd: customFieldText(issue.fields.customfield_15111),
+    caboScannerZebra: customFieldText(issue.fields.customfield_15112),
+    caboUsb: customFieldText(issue.fields.customfield_15113),
+    caboHdmi: customFieldText(issue.fields.customfield_15114),
+    caboVga: customFieldText(issue.fields.customfield_15115),
+    caboForcaTripolar: customFieldText(issue.fields.customfield_15116),
+    fonteInterna: customFieldText(issue.fields.customfield_16140),
+    telaPdvTouch: customFieldText(issue.fields.customfield_16142),
+    monitorTouch: customFieldText(issue.fields.customfield_16144),
+    bateriaCmos: customFieldText(issue.fields.customfield_16145),
+    gabinete: customFieldText(issue.fields.customfield_16147),
+    fan: customFieldText(issue.fields.customfield_16148),
+    cabecaImpressao: customFieldText(issue.fields.customfield_17754),
   };
   const attachments: JiraAttachmentSummary[] = (issue.fields.attachment ?? []).flatMap((attachment) => attachment.id && attachment.filename ? [{ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType ?? 'application/octet-stream', size: attachment.size ?? 0, createdAt: attachment.created ?? '', author: attachment.author?.displayName ?? null }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const commentPayload = await jiraFetch<{ values?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string }; public?: boolean }> }>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment?internal=true&limit=20`).catch(() => ({ values: [] }));
@@ -767,6 +876,12 @@ function toSummary(issue: JiraIssue): JiraIssueSummary {
     city: cityWithUf(customFieldText(fields.customfield_11994), fields.customfield_12317),
     scheduledAt: customFieldText(fields.customfield_12036),
     partnerTriggeredAt: customFieldText(fields.customfield_12278),
+    visitCost1: customFieldText(fields.customfield_11958),
+    visitCost2: customFieldText(fields.customfield_12419),
+    improductiveCost: customFieldText(fields.customfield_11959),
+    equipmentTotal: customFieldText(fields.customfield_14880),
+    valueR$: customFieldText(fields.customfield_16195),
+    ticketTotal: customFieldText(fields.customfield_12413),
   };
 }
 

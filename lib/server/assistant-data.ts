@@ -103,6 +103,64 @@ async function detalharChamado(args: Args) {
   };
 }
 
+async function consultarValores(args: Args) {
+  const key = text(args, 'chamado')?.toUpperCase();
+  if (!key) return { erro: 'Informe a FSA do chamado.' };
+  const issue = await getJiraIssue(key);
+  const op = issue.operationalFields;
+  return {
+    chamado: key,
+    titulo: issue.summary,
+    loja: issue.store,
+    status: issue.status,
+    valor_reais: op.valorReais ?? op.valueR$ ?? 'não informado',
+    valor_total_equipamentos: op.equipmentTotal ?? 'não informado',
+    custo_total: op.custoTotal ?? op.cost ?? 'não informado',
+    custo_visita_1: op.visitCost1 ?? 'não informado',
+    custo_visita_2: op.visitCost2 ?? 'não informado',
+    custos_adicionais: op.custosAdicionais ?? op.additionalCosts ?? 'não informado',
+    custo_auxiliar: op.custoAuxiliar ?? 'não informado',
+    total_ticket: op.ticketTotal ?? 'não informado',
+    orcamento: op.orcamento ?? op.budget ?? 'não informado',
+    sub_total: op.subTotal ?? 'não informado',
+    detalhes_custos: op.detalhesCustos ?? 'não informado',
+  };
+}
+
+async function consultarEquipamento(args: Args) {
+  const key = text(args, 'chamado')?.toUpperCase();
+  if (!key) return { erro: 'Informe a FSA do chamado.' };
+  const issue = await getJiraIssue(key);
+  const op = issue.operationalFields;
+
+  const pecas: Record<string, number> = {};
+  const pecaFields: Array<[string, string | null | undefined]> = [
+    ['HD', op.hd], ['Cabo Scanner Zebra', op.caboScannerZebra],
+    ['Cabo USB', op.caboUsb], ['Cabo HDMI', op.caboHdmi],
+    ['Fonte Interna', op.fonteInterna], ['Tela PDV Touch', op.telaPdvTouch],
+    ['Monitor Touch', op.monitorTouch], ['Bateria CMOS', op.bateriaCmos],
+    ['Gabinete', op.gabinete], ['FAN', op.fan],
+    ['Cabeça Impressão', op.cabecaImpressao],
+  ];
+  for (const [nome, valor] of pecaFields) {
+    const num = Number(valor);
+    if (num > 0) pecas[nome] = num;
+  }
+
+  return {
+    chamado: key,
+    equipamento_modelo: op.equipmentModel ?? op.equipamentoModelo ?? 'não informado',
+    tipo_equipamento: op.tipoEquipamento ?? 'não informado',
+    marca: op.marca ?? 'não informado',
+    serial_spare_number: op.serialSpareNumber ?? op.serialNumber ?? 'não informado',
+    patrimonio: op.patrimonio ?? 'não informado',
+    troca_realizada: op.trocaEquipamento ?? 'não informado',
+    equipamento_cmdb: op.equipamentoCmdb ?? 'não vinculado ao Assets',
+    causa_raiz: op.causaRaiz ?? 'não informado',
+    pecas_usadas: Object.keys(pecas).length ? pecas : 'nenhuma peça registrada',
+  };
+}
+
 async function consultarTecnicos(args: Args) {
   const city = text(args, 'cidade');
   const state = text(args, 'estado');
@@ -704,6 +762,8 @@ const TOOLS: Record<string, (args: Args, access: AssistantAccess) => Promise<unk
   consultar_bilhetes: consultarBilhetes,
   consultar_chamados: consultarChamados,
   detalhar_chamado: detalharChamado,
+  consultar_valores: consultarValores,
+  consultar_equipamento: consultarEquipamento,
   consultar_tecnicos: consultarTecnicos,
   resumo_operacao: (_args, access) => resumoOperacao(access),
   consultar_spares: consultarSpares,

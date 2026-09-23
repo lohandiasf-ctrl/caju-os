@@ -23,6 +23,18 @@ Só documentação, sem mudança de código.
 Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
 "Dashboard Premium"" em 2026-09-22); o prompt fica como referência de design.
 
+### Integração de capacidades de busca no Jira, campos customizados e inteligência financeira
+
+Adicionado catálogo completo de métodos de busca no Jira e integração direta dos campos operacionais, financeiros e de equipamentos para a Caju IA responder com precisão perguntas como *"Quantos chamados estão agendados com o valor da primeira visita 120 reais"*.
+- **Catálogo de capacidades e campos customizados:** Seção 9 documentada em `docs/guia_completo_ia_cajutech.md` detalhando busca JQL avançada, Assets/CMDB, comentários, anexos, SLAs, e tabela completa de custom fields (`customfield_11958` Custo Visita1, `customfield_12419` Custo Visita2, `customfield_11959` Custo Improdutiva, `customfield_16195` Valor R$, `customfield_14880` Valor Total de Equipamentos, `customfield_14821` Custo, `customfield_12413` Total do Ticket, `customfield_17468`/`13308` Custos Adicionais, `customfield_13501` Orçamento, e campos de equipamento/hardware `customfield_15087`, `customfield_15088`, `customfield_15089`, `customfield_12031`, `customfield_12032`).
+- **Registro completo de campos (`lib/jira-field-registry.ts`):** Mapeamento canônico de todas as constantes de campos customizados do Jira (valores financeiros, equipamentos, peças, SLAs, datas e logística) gerado com leitura direta da API.
+- **Novas ferramentas especializadas (`consultar_valores` e `consultar_equipamento`):** Registradas em `lib/assistant-tools.ts` e implementadas em `lib/server/assistant-data.ts` para consulta cirúrgica de valores (R$, orçamento, custos adicionais) e componentes/peças com defeito ou trocadas.
+- **Integração no Jira (`lib/server/jira.ts`):** `searchJiraIssues` agora requisita campos financeiros diretamente na busca JQL; `toSummary` e `getJiraIssue` extraem os valores por ID e por nome mapeado (`namedValues`), cobrindo datas extras, pessoas extras, peças e logística.
+- **Repasse ao assistente (`lib/server/assistant-issue.ts`):** `toAssistantIssue` agora mapeia todos os campos financeiros e de hardware (`visitCost1`, `visitCost2`, `improductiveCost`, `equipmentTotal`, `valueR$`, `cost`, `ticketTotal`, `additionalCosts`, `budget`, `serialNumber`, `patrimony`, `equipment`).
+- **Formatação de moeda e agrupamento pronto (`lib/assistant.ts`):** `formatMoney` formata valores monetários em padrão BRL; `costGroups` em `queueContext` totaliza e lista chamados por valor de 1ª visita; `ticketContext` exibe todos os custos operacionais do chamado.
+- **Instruções e ferramentas (`lib/assistant-tools.ts`):** Schemas de `consultar_chamados`, `consultar_valores`, `consultar_equipamento` e `detalhar_chamado` e o `systemInstruction` orientam a IA sobre como correlacionar status e custos para contagens instantâneas e sem alucinações.
+- **Testes unitários (`tests/assistant.test.ts`):** Cobertura com 320 testes passando para formatação de moeda, dados do chamado, schemas das novas ferramentas e agrupamento por custo.
+
 ### Interceptação robusta de chamadas de ferramentas (Tool Calls) e higienização
 
 Corrigido vazamento de marcações XML cruas (`<tool_call>detalhar_chamado...`) emitidas por modelos do Workers AI (especialmente GLM-4.7-Flash).
@@ -42,6 +54,44 @@ ao `systemInstruction` em `lib/assistant-tools.ts`. O assistente passa a operar 
 - Capacidades de diagnóstico técnico em TI de varejo e estruturação para ações no Jira (summary, description padronizada, priorização e labels).
 
 ## 2026-09-22
+
+### Ditado por voz no assistente e sliders de filtro da fila (branch `claude/microfone-sliders`)
+
+**Microfone no assistente.** Botão de ditado no card do assistente (Visão
+geral) e na janela flutuante. Grava com `MediaRecorder` (até 60 s, para
+sozinho) e envia para a rota nova **`POST /api/assistant/transcribe`**
+(`requireApiUser` com os papéis do assistente geral, 10 por minuto por IP, até
+3 MB, só `audio/*`), que transcreve com Workers AI
+`@cf/openai/whisper-large-v3-turbo` em português. O texto só **preenche o
+campo**: a pessoa revisa e envia. Falha de permissão, rede ou modelo vira
+mensagem curta e o campo continua funcionando. Helpers em
+`lib/voice-transcription.ts`, com testes.
+**Pendente:** a transcrição real só roda com o binding `AI` (produção); não foi
+testada com áudio real. Confirmar no primeiro uso que o webm/opus do Chrome e
+do app desktop é aceito. Custo: Workers AI cobra por minuto de áudio (há
+franquia gratuita diária).
+
+**Sliders nas Ações rápidas.** Bloco "Filtrar a fila" com dois sliders:
+"Parado há" (0–14 dias sem atualização no Jira) e "Prioridade mínima"
+(qualquer / média ou alta / só alta), com contagem ao vivo. O botão abre
+Chamados já filtrado pela URL (`/?view=tickets&parados=5&prioridade=alta`); na
+fila, os filtros aparecem como chips removíveis. Só filtram o que já está na
+tela (`lib/queue-filters.ts`, com testes), sem consulta ou regra nova.
+### Senha ao reabrir o site ou o app (branch `claude/senha-sessao`)
+
+A sessão do Firebase passou de persistência local (IndexedDB, sobrevivia ao
+fechamento) para **`browserSessionPersistence`** (`lib/firebase.ts`): recarregar
+a página mantém o login; fechar a aba, o navegador ou o app desktop (Tauri)
+encerra a sessão. Na volta, o login mostra o e-mail da última pessoa que entrou
+neste aparelho (`localStorage` `caju-last-email`, `lib/login-memory.ts`, com
+testes) e pede **só a senha**; "Usar outra conta" volta ao formulário completo.
+A senha nunca é guardada. "Sair" (menu do usuário e tela de acesso negado)
+passa por `signOutAndForget()`, que também esquece o e-mail. Na primeira carga,
+o token antigo gravado em disco (`firebase:authUser:*` e o IndexedDB
+`firebaseLocalStorageDb`) é apagado.
+**Efeito colateral:** cada aba nova começa sem sessão (o `sessionStorage` é por
+aba), então abrir um link do app numa aba nova (ex.: `?ticket=` compartilhado)
+pede a senha também. Nenhuma regra de servidor, papel ou rota mudou.
 
 ### Redesign "Dashboard Premium" (branch `claude/dashboard-premium`)
 

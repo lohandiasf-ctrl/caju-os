@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ActivityChart } from '@/components/dashboard/activity-chart';
 import { AssistantCard } from '@/components/dashboard/assistant-card';
+import { QueueSlider } from '@/components/dashboard/queue-slider';
 import { BentoCard, CardHeader, CountUp, DeltaBadge, EmptyCard, ErrorCard, Skeleton } from '@/components/dashboard/primitives';
 import {
   dailyActivity, daysAgo, deltaPercent, parseSnapshotStore, percent, rollSnapshot, slaOnTimePercent, statusCounts,
@@ -14,6 +15,7 @@ import {
 } from '@/lib/dashboard-metrics';
 import { canUseNavItem } from '@/lib/navigation';
 import type { UserRole } from '@/lib/permissions';
+import { matchesQueueFilters, NO_QUEUE_FILTERS, PRIORITY_LABEL, PRIORITY_STEPS, queueFiltersHref, STALE_DAYS_MAX, staleLabel, type QueueFilters, type TicketPriority } from '@/lib/queue-filters';
 import { parseTicketDate, ticketActivities } from '@/lib/ticket-activities';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +24,7 @@ export type BentoTicket = DashboardTicket & {
   store: string;
   city: string;
   rawStatus: string;
+  priority: TicketPriority;
 };
 
 type Navigate = (event: MouseEvent<HTMLAnchorElement>, href: string) => void;
@@ -140,7 +143,7 @@ export function OverviewBento<T extends BentoTicket>({ tickets, loading, error, 
       </BentoCard>
 
       <BentoCard label="Ações rápidas" className="lg:order-7 lg:col-span-2 xl:col-span-4">
-        <QuickActions role={role} counts={counts} ready={ready} jiraCreateUrl={jiraCreateUrl} onNavigate={onNavigate} />
+        <QuickActions role={role} tickets={tickets} counts={counts} ready={ready} jiraCreateUrl={jiraCreateUrl} onNavigate={onNavigate} />
       </BentoCard>
     </motion.div>
   );
@@ -413,8 +416,8 @@ function RecentActivity<T extends BentoTicket>({ tickets, now, ready, criticalKe
   );
 }
 
-function QuickActions({ role, counts, ready, jiraCreateUrl, onNavigate }: {
-  role: UserRole | null; counts: ReturnType<typeof statusCounts>; ready: boolean; jiraCreateUrl: string; onNavigate: Navigate;
+function QuickActions({ role, tickets, counts, ready, jiraCreateUrl, onNavigate }: {
+  role: UserRole | null; tickets: BentoTicket[]; counts: ReturnType<typeof statusCounts>; ready: boolean; jiraCreateUrl: string; onNavigate: Navigate;
 }) {
   // Só atalhos para telas e ações que já existem, respeitando as permissões do menu.
   const actions = [
@@ -451,6 +454,50 @@ function QuickActions({ role, counts, ready, jiraCreateUrl, onNavigate }: {
           </a>
         </li>
       </ul>
+      {canUseNavItem(role, 'tickets') && <QueueFilterShortcut tickets={tickets} ready={ready} onNavigate={onNavigate} />}
+    </div>
+  );
+}
+
+/**
+ * Sliders que montam um recorte da fila (parados há N dias, prioridade
+ * mínima) e abrem a lista de Chamados já filtrada. A contagem é ao vivo,
+ * sobre os mesmos chamados da tela.
+ */
+function QueueFilterShortcut({ tickets, ready, onNavigate }: { tickets: BentoTicket[]; ready: boolean; onNavigate: Navigate }) {
+  const [filters, setFilters] = useState<QueueFilters>({ staleDays: 3, minPriority: NO_QUEUE_FILTERS.minPriority });
+  const count = useMemo(() => {
+    const now = new Date();
+    return tickets.filter((ticket) => matchesQueueFilters(ticket, filters, now, parseTicketDate)).length;
+  }, [filters, tickets]);
+  const href = queueFiltersHref(filters);
+  return (
+    <div className="mt-4 rounded-2xl bg-muted/60 p-4 dark:bg-card-elevated">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">Filtrar a fila</p>
+      <QueueSlider
+        label="Parado há"
+        value={filters.staleDays}
+        min={0}
+        max={STALE_DAYS_MAX}
+        valueText={staleLabel(filters.staleDays)}
+        onChange={(staleDays) => setFilters((current) => ({ ...current, staleDays }))}
+      />
+      <QueueSlider
+        label="Prioridade mínima"
+        value={PRIORITY_STEPS.indexOf(filters.minPriority)}
+        min={0}
+        max={PRIORITY_STEPS.length - 1}
+        valueText={PRIORITY_LABEL[filters.minPriority]}
+        onChange={(step) => setFilters((current) => ({ ...current, minPriority: PRIORITY_STEPS[step] ?? 'Baixa' }))}
+      />
+      <a
+        href={href}
+        onClick={(event) => onNavigate(event, href)}
+        className="mt-3 flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-brand px-4 text-sm font-semibold text-brand-foreground transition hover:brightness-110 max-sm:min-h-11"
+      >
+        {ready ? `Ver ${count} ${count === 1 ? 'chamado' : 'chamados'} na fila` : 'Ver na fila'}
+        <ChevronRight aria-hidden="true" className="size-4" />
+      </a>
     </div>
   );
 }

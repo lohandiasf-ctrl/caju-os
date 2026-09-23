@@ -79,12 +79,23 @@ import {
 } from "@/components/jira-ticket-details";
 import {
   dayKey,
+  parseTicketDate,
   sameDay,
   ticketActivities,
   type DatedTicketActivity,
 } from "@/lib/ticket-activities";
 import { validationRequirements as getValidationRequirements } from "@/lib/operational-rules";
 import { brazilPhone, googleContactsCsv } from "@/lib/google-contacts";
+import {
+  hasQueueFilters,
+  matchesQueueFilters,
+  NO_QUEUE_FILTERS,
+  parseQueueFilters,
+  PRIORITY_LABEL,
+  staleLabel,
+  writeQueueFilters,
+  type QueueFilters,
+} from "@/lib/queue-filters";
 
 type Status =
   | "Pendente de agendamento"
@@ -334,6 +345,8 @@ export default function Home() {
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
+  // Filtros vindos dos sliders das Ações rápidas (via URL); só na fila.
+  const [queueFilters, setQueueFilters] = useState<QueueFilters>(NO_QUEUE_FILTERS);
   const [mobileColumn, setMobileColumn] = useState<Status>(columns[0]);
   const [jiraFilterPreset, setJiraFilterPreset] =
     useState<JiraFilterPreset>("operational");
@@ -449,6 +462,7 @@ export default function Home() {
         ? requested
         : defaultDashboardView(role);
       setActiveView(next);
+      setQueueFilters(parseQueueFilters(window.location.search));
       if (requested !== next) window.history.replaceState(null, "", `/?view=${next}`);
     };
     syncView();
@@ -481,13 +495,22 @@ export default function Home() {
         ticketActivities(ticket).some((activity) =>
           sameDay(activity.date, ticketDate),
         );
+      const matchesQueue =
+        activeView !== "tickets" ||
+        matchesQueueFilters(ticket, queueFilters, new Date(), parseTicketDate);
       return (
         matchesQuery &&
         matchesDate &&
+        matchesQueue &&
         (statusFilter === "Todos" || ticket.status === statusFilter)
       );
     });
-  }, [activeView, archivedKeys, query, statusFilter, ticketDate, tickets]);
+  }, [activeView, archivedKeys, query, queueFilters, statusFilter, ticketDate, tickets]);
+  function updateQueueFilters(next: QueueFilters) {
+    setQueueFilters(next);
+    const params = writeQueueFilters(new URLSearchParams(window.location.search), next);
+    window.history.replaceState(null, "", `/?${params.toString()}`);
+  }
   // Agendamento que o assistente preparou: marca os chamados e abre o
   // diálogo de sempre, onde a pessoa escolhe o técnico e confirma.
   const [scheduleRequest, setScheduleRequest] = useState<{ at: string; id: number } | null>(null);
@@ -1101,6 +1124,7 @@ export default function Home() {
     }
     window.history.pushState(null, "", href);
     setActiveView(dashboardViewFromLocation());
+    setQueueFilters(parseQueueFilters(window.location.search));
     setMenu(false);
     setNotificationsOpen(false);
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -1353,6 +1377,23 @@ export default function Home() {
                   </Button>
                 </div>
               </div>
+              {activeView === "tickets" && hasQueueFilters(queueFilters) && (
+                <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Filtros das ações rápidas">
+                  {queueFilters.staleDays > 0 && (
+                    <button type="button" onClick={() => updateQueueFilters({ ...queueFilters, staleDays: 0 })} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-primary-soft px-3 text-xs font-semibold text-primary hover:brightness-95 max-sm:min-h-11" aria-label={`Remover filtro: parados há ${staleLabel(queueFilters.staleDays)}`}>
+                      Parados: {staleLabel(queueFilters.staleDays)}<X aria-hidden="true" className="size-3.5" />
+                    </button>
+                  )}
+                  {queueFilters.minPriority !== "Baixa" && (
+                    <button type="button" onClick={() => updateQueueFilters({ ...queueFilters, minPriority: "Baixa" })} className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-primary-soft px-3 text-xs font-semibold text-primary hover:brightness-95 max-sm:min-h-11" aria-label={`Remover filtro: prioridade ${PRIORITY_LABEL[queueFilters.minPriority]}`}>
+                      Prioridade: {PRIORITY_LABEL[queueFilters.minPriority]}<X aria-hidden="true" className="size-3.5" />
+                    </button>
+                  )}
+                  <button type="button" onClick={() => updateQueueFilters(NO_QUEUE_FILTERS)} className="min-h-9 rounded-full px-2 text-xs font-medium text-muted-foreground hover:text-foreground max-sm:min-h-11">
+                    Limpar
+                  </button>
+                </div>
+              )}
               {showFilters && (
                 <div
                   className="surface-panel mt-3 space-y-3 rounded-xl p-3"

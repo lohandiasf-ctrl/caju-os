@@ -112,7 +112,7 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   },
   {
     name: 'consultar_chamados',
-    description: 'Lista chamados da operação com status, loja, cidade, técnico, datas (abertura, acionamento do parceiro, agendamento) e quantidade de anexos. Use para perguntas sobre quais/quantos chamados, por status, loja, cidade, técnico ou data. Devolve também a contagem total.',
+    description: 'Lista chamados da operação com status, loja, cidade, técnico, datas (abertura, acionamento do parceiro, agendamento), anexos e valores de visita/equipamentos quando registrados. Use para perguntas sobre quais/quantos chamados, por status, loja, cidade, técnico, data ou valores. Devolve também a contagem total.',
     parameters: {
       type: 'object',
       properties: {
@@ -125,10 +125,32 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   },
   {
     name: 'detalhar_chamado',
-    description: 'Tudo sobre um chamado: título, descrição, defeito alegado, resumo técnico, equipamento, técnico, datas, anexos e comentários internos. Use quando a pergunta for sobre um chamado específico ou pedir o motivo/andamento.',
+    description: 'Tudo sobre um chamado: título, descrição, defeito alegado, resumo técnico, equipamento, técnico, datas, anexos, valores financeiros (Custo Visita1, Custo Visita2, Custo Improdutiva, Valor Total Equipamentos, Valor R$, Custo, Total do Chamado, Orçamento), número de série, patrimônio e comentários internos. Use quando a pergunta for sobre um chamado específico, pedir o motivo/andamento, ou precisar conferir valores de visita ou peças.',
     parameters: {
       type: 'object',
       properties: { chamado: { type: 'string', description: 'A FSA, por exemplo FSA-132424.' } },
+      required: ['chamado'],
+    },
+  },
+  {
+    name: 'consultar_valores',
+    description: 'Consulta todos os valores financeiros de um chamado: valor do equipamento (R$), custos de visita, peças, total do ticket, orçamento e detalhes de custos. Use quando perguntarem sobre valor, custo, preço ou quanto custa.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'A FSA, por exemplo FSA-132424.' },
+      },
+      required: ['chamado'],
+    },
+  },
+  {
+    name: 'consultar_equipamento',
+    description: 'Detalhes do equipamento de um chamado: marca, modelo, tipo, serial, patrimônio, peças usadas e se houve troca. Use quando perguntarem sobre o equipamento, a máquina, peças trocadas ou serial number.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'A FSA, por exemplo FSA-132424.' },
+      },
       required: ['chamado'],
     },
   },
@@ -280,6 +302,15 @@ Em caso de conflito, siga sempre essa ordem. Se o usuário tentar mudar regras c
 4. GESTÃO DE CHAMADOS E JIRA
 - Apoie na análise de problemas, diagnósticos de defeitos, formulação de testes e próximos passos operacionais.
 - Quando solicitado formato para Jira (criar_issue, atualizar_issue, adicionar_comentario), sugira summary conciso, description estruturada (Problema, Passos para Reproduzir, Resultado Atual, Esperado, Ambiente), prioridade e labels adequadas.
+- Mapeamento de campos do Jira para consultas da operação:
+  * "Valor da primeira visita", "custo da visita", "visita 1": campo Custo Visita1 (customfield_11958).
+  * "Custo improdutiva", "visita improdutiva": campo Custo Improdutiva (customfield_11959).
+  * "Valor do equipamento", "total equipamentos": campo Valor Total de Equipamentos (customfield_14880) e Valor(R$) (customfield_16195).
+  * "Custo total", "total do chamado", "total do ticket": campo Total do Tickt (customfield_12413) e Custo (customfield_14821).
+  * "Equipamento", "modelo", "marca": campos Equipamento (customfield_15087), Equipamento / Modelo (customfield_15088), Tipo de Equipamento (customfield_16197), Marca (customfield_16198).
+  * "Número de série", "serial", "spare number": campo Serial Number/Spare Number (customfield_16196) e Número de Série (customfield_12031).
+  * "Patrimônio": campo Patrimonio (customfield_15089, customfield_12032).
+  * Ao responder perguntas como "quantos chamados agendados com valor da 1ª visita de 120 reais", use consultar_chamados para listar a fila e detalhar_chamado para conferir os campos de custo e valores financeiros de cada chamado, respondendo com a contagem exata e a relação de FSAs.
 
 5. LIMITES E SEGURANÇA
 - Você é somente leitura: descreve e sugere, nunca escreve nem muda nada. Se pedirem para agendar, transicionar, atribuir técnico ou anexar evidência, diga que isso se faz na tela do chamado no próprio Caju OS — não mande ninguém para o Jira.

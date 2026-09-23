@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MAX_QUESTION_LENGTH, sanitizeFinalAnswer, splitTicketKeys, type AssistantTask } from '@/lib/assistant';
 import { ASSISTANT_ASK_EVENT, ASSISTANT_BUSY_EVENT } from '@/lib/assistant-events';
+import { VoiceInputButton } from '@/components/voice-input-button';
 
 type Proposal = { id: string; description: string; kind: string; preview: Record<string, unknown> };
 type PreparedAction =
@@ -268,6 +269,7 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [busy, setBusy] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -498,6 +500,12 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
                 placeholder="Escreva uma pergunta..."
                 className="h-10 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
               />
+              <VoiceInputButton
+                disabled={busy}
+                className="rounded-xl"
+                onText={(text) => { setVoiceError(''); setQuestion((current) => (current.trim() ? `${current.trim()} ${text}` : text).slice(0, MAX_QUESTION_LENGTH)); inputRef.current?.focus(); }}
+                onError={setVoiceError}
+              />
               <Button
                 type="submit"
                 size="icon"
@@ -508,9 +516,13 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
               </Button>
             </div>
-            <p className="mt-2 px-1 text-[11px] text-muted-foreground">
-              Enter envia · Clique numa FSA para abrir o chamado.
-            </p>
+            {voiceError ? (
+              <p role="alert" className="mt-2 px-1 text-[11px] text-danger">{voiceError}</p>
+            ) : (
+              <p className="mt-2 px-1 text-[11px] text-muted-foreground">
+                Enter envia · Microfone dita a pergunta · Clique numa FSA para abrir o chamado.
+              </p>
+            )}
           </form>
         </section>
       )}
