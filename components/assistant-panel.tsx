@@ -5,6 +5,7 @@ import { Bot, Check, Loader2, SendHorizontal, ShieldCheck, Sparkles, Trash2, X }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MAX_QUESTION_LENGTH, splitTicketKeys, type AssistantTask } from '@/lib/assistant';
+import { ASSISTANT_ASK_EVENT, ASSISTANT_BUSY_EVENT } from '@/lib/assistant-events';
 
 type Proposal = { id: string; description: string; kind: string; preview: Record<string, unknown> };
 type PreparedAction =
@@ -278,6 +279,22 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
     }
   }, [messages, busy]);
 
+  // O card do assistente no dashboard pergunta por evento: abre esta janela
+  // e envia pelo mesmo `submit`. O estado "pensando" volta para o orb do card.
+  const submitRef = useRef<(text?: string) => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    const onAsk = (event: Event) => {
+      const text = (event as CustomEvent<string>).detail;
+      setOpen(true);
+      if (typeof text === 'string') void submitRef.current(text);
+    };
+    window.addEventListener(ASSISTANT_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(ASSISTANT_ASK_EVENT, onAsk);
+  }, []);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(ASSISTANT_BUSY_EVENT, { detail: busy }));
+  }, [busy]);
+
   async function submit(textToAsk?: string) {
     const text = (textToAsk ?? question).trim();
     if (busy || text.length < 3) return;
@@ -317,6 +334,8 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
       setBusy(false);
     }
   }
+
+  submitRef.current = submit;
 
   return (
     <div className="fixed bottom-4 right-4 z-(--z-float) sm:bottom-5 sm:right-5">

@@ -73,11 +73,11 @@ export function TicketStack<T extends Chamado>({
     <div className="group/pilha relative pb-3">
       <div
         aria-hidden="true"
-        className="absolute inset-x-3 bottom-0 top-3 rounded-xl border border-white/[.05] bg-black/25 transition-transform duration-200 group-hover/pilha:translate-y-1 motion-reduce:transition-none"
+        className="absolute inset-x-3 bottom-0 top-3 rounded-xl border border-white/[.05] bg-foreground/[.035] dark:bg-black/25 transition-transform duration-200 group-hover/pilha:translate-y-1 motion-reduce:transition-none"
       />
       <div
         aria-hidden="true"
-        className="absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-xl border border-white/[.06] bg-black/20 transition-transform duration-200 group-hover/pilha:translate-y-0.5 motion-reduce:transition-none"
+        className="absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-xl border border-white/[.06] bg-foreground/[.035] dark:bg-black/20 transition-transform duration-200 group-hover/pilha:translate-y-0.5 motion-reduce:transition-none"
       />
 
       <article
@@ -90,7 +90,7 @@ export function TicketStack<T extends Chamado>({
           aria-expanded="false"
           aria-controls={conteudoId}
           aria-label={`${grupo.nome ?? "Grupo"}: ${chamados.length} FSAs de ${grupo.tecnico}. Abrir.`}
-          className="w-full rounded-xl p-3 text-left transition hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+          className="w-full rounded-xl p-3 text-left transition hover:bg-foreground/[.05] dark:hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
         >
           <div className={`flex items-center justify-between gap-2 ${selecao ? "pl-8" : ""}`}>
             <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.1em] text-emerald-300">
@@ -110,7 +110,7 @@ export function TicketStack<T extends Chamado>({
             {etiquetas.map((chamado) => (
               <span
                 key={chamado.id}
-                className="rounded-md border border-white/[.07] bg-black/25 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary"
+                className="rounded-md border border-white/[.07] bg-foreground/[.035] dark:bg-black/25 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary"
               >
                 {chamado.id}
               </span>

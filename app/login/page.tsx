@@ -1,12 +1,15 @@
 'use client';
 
-import { FormEvent, useRef, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState, type RefObject } from 'react';
 import Image from 'next/image';
 import { FirebaseError } from 'firebase/app';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { ClipboardCheck, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MapPinned, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { startLoginTransition } from '@/components/login-transition';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { auth } from '@/lib/firebase';
 
 export default function LoginPage() {
@@ -18,14 +21,23 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [leaving, setLeaving] = useState(false);
+  const desktopPanelRef = useRef<HTMLDivElement>(null);
+  const mobilePanelRef = useRef<HTMLDivElement>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError('');
     setMessage('');
+    // Mede o painel azul agora: depois do login o AuthProvider desmonta esta
+    // tela e o elemento deixa de existir.
+    const panel = [desktopPanelRef.current, mobilePanelRef.current].find((element) => element && element.offsetParent !== null);
+    const box = panel?.getBoundingClientRect();
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
+      setLeaving(true);
+      startLoginTransition(box ? { top: box.top, left: box.left, width: box.width, height: box.height } : null);
     } catch (cause) {
       setError(authErrorMessage(cause));
       setLoading(false);
@@ -61,49 +73,143 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="relative grid min-h-dvh overflow-x-hidden text-foreground lg:grid-cols-[1.08fr_.92fr]">
-      <section className="relative hidden border-r border-border bg-sidebar lg:m-4 lg:flex lg:flex-col lg:justify-between lg:rounded-[28px] lg:border lg:p-14 lg:shadow-2xl">
-        <div className="absolute inset-0 rounded-[inherit] bg-[radial-gradient(circle_at_22%_20%,rgba(240,122,63,.2),transparent_34%),radial-gradient(circle_at_78%_78%,rgba(95,219,184,.13),transparent_32%)]" />
-        <div className="relative flex items-center gap-3">
-          <div className="cockpit-brand grid size-11 place-items-center overflow-hidden rounded-xl"><Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 object-contain" /></div>
-          <div><p className="font-extrabold">Caju OS</p><p className="text-xs font-semibold uppercase tracking-[.18em] text-muted-foreground">Comando operacional</p></div>
-        </div>
-        <div className="relative max-w-xl">
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Operação em um só lugar</p>
-          <h2 className="mt-4 text-4xl font-semibold leading-tight tracking-[-.04em] xl:text-5xl">Chamados, equipe e cobertura técnica com acesso protegido.</h2>
-          <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground">Entre com a conta fornecida pelo administrador para acessar o ambiente interno da Caju Tech.</p>
-        </div>
-        <div className="relative flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="size-4 text-emerald-300" />Ambiente restrito a usuários autorizados</div>
-      </section>
+    <main className="relative grid min-h-dvh overflow-x-hidden bg-background text-foreground lg:grid-cols-2">
+      <BrandPanel panelRef={desktopPanelRef} variant="full" />
 
-      <section className="flex items-center justify-center px-5 py-10 sm:px-10">
-        <div className="surface-panel w-full max-w-[440px] rounded-[28px] p-6 sm:p-9">
-          <div className="mb-9 flex items-center gap-3 lg:hidden">
-            <div className="cockpit-brand grid size-10 place-items-center overflow-hidden rounded-xl"><Image src="/caju-tech-emblem.png" alt="" width={36} height={36} className="size-9 object-contain" /></div>
-            <div><p className="font-extrabold">Caju OS</p><p className="text-xs uppercase tracking-[.16em] text-muted-foreground">Comando operacional</p></div>
-          </div>
-          <p className="text-xs font-bold uppercase tracking-[.14em] text-primary">Acesso interno</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-.03em]">Entrar na sua conta</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Use o e-mail e a senha cadastrados pelo administrador.</p>
+      <section className="relative flex min-w-0 flex-col lg:items-center lg:justify-center lg:px-10 lg:py-10">
+        <BrandPanel panelRef={mobilePanelRef} variant="compact" />
+        <ThemeToggle className="absolute right-3 top-3 z-10 lg:right-6 lg:top-6" />
+        <motion.div
+          animate={leaving ? { opacity: 0, scale: 0.98 } : { opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+          className="relative z-[1] -mt-6 w-full flex-1 rounded-t-[24px] bg-card-elevated px-5 pb-10 pt-7 shadow-(--shadow-card) sm:px-8 lg:mt-0 lg:max-w-[400px] lg:flex-none lg:rounded-[20px] lg:border lg:border-border lg:p-8"
+        >
+          <h1 className="text-xl font-semibold tracking-[-.01em]">Que bom ter você de volta <span aria-hidden="true">👋</span></h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">Entre com suas credenciais para continuar.</p>
 
-          <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
-            <div className="block">
-              <label htmlFor="login-email" className="mb-2 block text-sm font-medium">E-mail</label>
-              <span className="relative block"><Mail className="absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" /><Input ref={emailRef} id="login-email" name="email" className="h-11 pl-10" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@cajutech.net" required /></span>
+          <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">E-mail</label>
+              <span className="relative block">
+                <Mail aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                <Input ref={emailRef} id="login-email" name="email" className={loginInput} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@cajutech.net" required />
+              </span>
             </div>
-            <div className="block">
-              <label htmlFor="login-password" className="mb-2 block text-sm font-medium">Senha</label>
-              <span className="relative block"><LockKeyhole className="absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="login-password" name="password" className="h-11 px-10" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" minLength={6} required /><button type="button" onClick={() => setShowPassword((current) => !current)} aria-pressed={showPassword} className="absolute right-0 top-0 z-10 grid size-11 place-items-center rounded-lg text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></span>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-3">
+                <label htmlFor="login-password" className="text-sm font-medium">Senha</label>
+                <button type="button" disabled={loading || resetting} onClick={() => void resetPassword()} className="-my-2 min-h-9 rounded-md px-1 text-[13px] font-semibold text-primary hover:underline disabled:opacity-60">{resetting ? 'Enviando recuperação…' : 'Esqueci a senha'}</button>
+              </div>
+              <span className="relative block">
+                <LockKeyhole aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                <Input id="login-password" name="password" className={`${loginInput} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" minLength={6} required />
+                <button type="button" onClick={() => setShowPassword((current) => !current)} aria-pressed={showPassword} className="absolute right-0.5 top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-xl text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? <EyeOff className="size-[18px]" strokeWidth={1.75} /> : <Eye className="size-[18px]" strokeWidth={1.75} />}</button>
+              </span>
             </div>
-            {error && <p role="alert" className="rounded-lg border border-red-400/20 bg-red-400/8 p-3 text-xs text-red-200">{error}</p>}
-            {message && <output className="block rounded-lg border border-emerald-400/20 bg-emerald-400/8 p-3 text-xs text-emerald-200">{message}</output>}
-            <Button className="h-11 w-full font-bold" type="submit" disabled={loading || resetting}>{loading ? <><LoaderCircle className="animate-spin" />Entrando...</> : 'Entrar'}</Button>
-            <button type="button" disabled={loading || resetting} onClick={() => void resetPassword()} className="min-h-11 w-full rounded-lg text-center text-sm font-semibold text-muted-foreground transition hover:text-primary">{resetting ? 'Enviando recuperação...' : 'Esqueci minha senha'}</button>
+            {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-[13px] text-danger">{error}</p>}
+            {message && <output className="block rounded-xl bg-success-soft p-3 text-[13px] text-success">{message}</output>}
+            <Button className="h-11 w-full rounded-xl text-[15px] font-semibold" type="submit" disabled={loading || resetting}>{loading ? <><LoaderCircle className="animate-spin" aria-hidden="true" />Entrando…</> : 'Entrar'}</Button>
           </form>
-          <p className="mt-9 text-center text-xs leading-5 text-muted-foreground">Não possui acesso? Solicite seu cadastro ao administrador da operação.</p>
-        </div>
+          <p className="mt-8 text-center text-xs leading-5 text-muted-foreground">Não possui acesso? Solicite seu cadastro ao administrador da operação.</p>
+        </motion.div>
       </section>
     </main>
+  );
+}
+
+const loginInput = 'h-11 rounded-xl border-transparent bg-muted pl-11 text-[15px] shadow-none hover:border-transparent focus-visible:border-transparent focus-visible:bg-card-elevated focus-visible:ring-2 focus-visible:ring-primary';
+
+const slides = [
+  'Operação de campo, chamados e financeiro em um só lugar.',
+  'Do acionamento à validação, cada chamado com o contexto completo.',
+  'Técnicos, agenda e cobertura por cidade no mesmo painel.',
+];
+const highlights = [
+  [ClipboardCheck, 'Chamados', 'sincronizados'],
+  [MapPinned, 'Mapa de', 'técnicos'],
+  [ShieldCheck, 'Acesso', 'seguro'],
+] as const;
+
+/**
+ * Painel da marca. No desktop ocupa a metade esquerda; no celular vira um
+ * cabeçalho de ~180 px e o card do formulário sobe 24 px por cima dele.
+ */
+function BrandPanel({ variant, panelRef }: { variant: 'full' | 'compact'; panelRef: RefObject<HTMLDivElement | null> }) {
+  const reduced = useReducedMotion();
+  const [slide, setSlide] = useState(0);
+  useEffect(() => {
+    if (variant !== 'full' || reduced) return;
+    const timer = window.setInterval(() => setSlide((current) => (current + 1) % slides.length), 5000);
+    return () => window.clearInterval(timer);
+  }, [reduced, variant]);
+  const full = variant === 'full';
+  return (
+    <div
+      ref={panelRef}
+      className={full
+        ? 'brand-surface relative m-3 hidden overflow-hidden rounded-[28px] lg:flex lg:flex-col lg:items-center lg:justify-center lg:px-12 lg:py-16'
+        : 'brand-surface relative flex h-[180px] shrink-0 items-center overflow-hidden px-6 pb-6 lg:hidden'}
+    >
+      {full && <DotGrid />}
+      <Waves />
+      <div className={full ? 'relative flex flex-col items-center text-center' : 'relative flex items-center gap-3'}>
+        <span className={`grid place-items-center rounded-[22%] bg-white shadow-[0_12px_32px_-8px_rgb(0_0_0/.35)] ${full ? 'size-24 p-3' : 'size-12 p-1.5'}`}>
+          <Image src="/caju-tech-emblem.png" alt="" width={96} height={96} priority className="size-full object-contain" />
+        </span>
+        <div>
+          <p className={full ? 'mt-6 text-2xl font-semibold tracking-[-.02em]' : 'text-lg font-semibold leading-tight'}>Caju OS</p>
+          {!full && <p className="text-xs text-white/80">Central de operações</p>}
+        </div>
+        {full && <>
+          <div className="relative mt-2 h-12 w-full max-w-sm">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.p
+                key={slide}
+                className="absolute inset-x-0 text-[15px] leading-6 text-white/80"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3 }}
+              >
+                {slides[slide]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5">
+            {slides.map((text, index) => (
+              <button key={text} type="button" onClick={() => setSlide(index)} aria-label={`Mensagem ${index + 1} de ${slides.length}`} aria-current={slide === index} className="grid h-6 place-items-center px-0.5">
+                <span className={`block h-1.5 rounded-full bg-white transition-[width,opacity] duration-300 ${slide === index ? 'w-5 opacity-100' : 'w-1.5 opacity-45'}`} />
+              </button>
+            ))}
+          </div>
+          <ul className="mt-14 grid w-full max-w-md grid-cols-3 gap-4">
+            {highlights.map(([Icon, first, second]) => (
+              <li key={first} className="flex flex-col items-center gap-2.5 text-center text-[13px] leading-snug text-white/85">
+                <span className="grid size-11 place-items-center rounded-2xl border border-white/20 bg-white/10"><Icon aria-hidden="true" strokeWidth={1.75} className="size-5" /></span>
+                <span>{first}<br />{second}</span>
+              </li>
+            ))}
+          </ul>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+function DotGrid() {
+  return (
+    <svg aria-hidden="true" className="absolute left-10 top-10 opacity-25" width="86" height="58" viewBox="0 0 86 58">
+      {Array.from({ length: 24 }, (_, index) => <circle key={index} cx={3 + (index % 6) * 16} cy={3 + Math.floor(index / 6) * 17} r="2.5" fill="currentColor" />)}
+    </svg>
+  );
+}
+
+function Waves() {
+  return (
+    <svg aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] w-full" viewBox="0 0 800 300" preserveAspectRatio="none">
+      <path d="M0 170 C 160 110 300 230 470 170 S 700 90 800 140 V300 H0 Z" fill="rgb(255 255 255 / 8%)" />
+      <path d="M0 230 C 180 180 320 280 500 225 S 720 170 800 205 V300 H0 Z" fill="rgb(255 255 255 / 14%)" />
+    </svg>
   );
 }
 

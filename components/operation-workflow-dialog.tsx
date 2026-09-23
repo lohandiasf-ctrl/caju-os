@@ -742,7 +742,7 @@ export function OperationWorkflowDialog({
                     return (
                       <article
                         key={item.id}
-                        className="rounded-lg border border-border bg-black/10 p-3 text-xs"
+                        className="rounded-lg border border-border bg-foreground/[.035] dark:bg-black/10 p-3 text-xs"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <b>{item.action}</b>

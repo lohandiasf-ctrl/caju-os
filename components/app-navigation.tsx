@@ -4,11 +4,14 @@ import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
-import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, Settings, Users } from 'lucide-react';
+import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Settings, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { canUseNavItem } from '@/lib/navigation';
+import { roleLabels } from '@/lib/permissions';
+import { isSidebarCollapsed, setSidebarCollapsed, subscribeSidebar } from '@/lib/sidebar-state';
 import { projectMomentum, rubberband } from '@/lib/gesture';
 
 // Matches the drawer's own w-[min(300px,calc(100vw-2rem))] closely enough
@@ -68,15 +71,66 @@ function subscribe(callback: () => void) {
   return () => media.removeEventListener('change', callback);
 }
 
+function isTyping(target: EventTarget | null) {
+  return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+}
+
+/**
+ * Item de menu. Recolhida, a barra mostra só o ícone e o rótulo vira tooltip.
+ * O item ativo ganha a barrinha de 3 px à esquerda, que desliza entre itens
+ * (`layoutId`) quando a troca é dentro do dashboard (?view=).
+ */
+function NavLink({ href, label, icon: Icon, current, collapsed, onNavigate }: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  current: boolean;
+  collapsed: boolean;
+  onNavigate: (event: MouseEvent<HTMLAnchorElement>, href: string) => void;
+}) {
+  const link = <Link href={href} onClick={(event) => onNavigate(event, href)} aria-current={current ? 'page' : undefined} className="app-nav-link" aria-label={collapsed ? label : undefined}>
+    {current && <motion.span layoutId="app-nav-indicator" aria-hidden="true" className="app-nav-indicator" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />}
+    <Icon aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={1.75} />
+    <span className="app-nav-label">{label}</span>
+  </Link>;
+  if (!collapsed) return link;
+  return <Tooltip>
+    <TooltipTrigger render={link} />
+    <TooltipContent side="right" sideOffset={10}>{label}</TooltipContent>
+  </Tooltip>;
+}
+
 export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
   active: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate?: (event: MouseEvent<HTMLAnchorElement>, href: string) => void;
 }) {
-  const { role, user } = useAuth();
+  const { role } = useAuth();
   const desktop = useSyncExternalStore(subscribe, () => window.matchMedia('(min-width: 1024px)').matches, () => false);
+  const storedCollapsed = useSyncExternalStore(subscribeSidebar, isSidebarCollapsed, () => false);
+  // A gaveta do celular sempre abre expandida.
+  const collapsed = desktop && storedCollapsed;
   useEffect(() => { if (desktop) onOpenChange(false); }, [desktop, onOpenChange]);
+  // A barra superior ganha vidro só depois de rolar (globals.css).
+  useEffect(() => {
+    const root = document.documentElement;
+    const update = () => { if (window.scrollY > 4) root.dataset.scrolled = ''; else delete root.dataset.scrolled; };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    return () => { window.removeEventListener('scroll', update); delete root.dataset.scrolled; };
+  }, []);
+  // Atalho "[" recolhe/expande a barra (fora de campos de texto).
+  useEffect(() => {
+    if (!desktop) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== '[' || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+      event.preventDefault();
+      setSidebarCollapsed(!isSidebarCollapsed());
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [desktop]);
   function navigate(event: MouseEvent<HTMLAnchorElement>, href: string) {
     onNavigate?.(event, href);
     const primaryNavigation = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -94,22 +148,36 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
     }
   }
   const content = <>
-    <div className="flex shrink-0 items-center gap-3 border-b border-sidebar-border px-2 pb-5">
-      <Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 rounded-xl border border-primary/25 bg-black object-contain p-1" />
-      <div><p className="text-base font-bold tracking-tight">Caju OS</p><p className="mt-0.5 text-xs text-muted-foreground">Central de operações</p></div>
+    <div className="app-sidebar-brand">
+      <Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-xl border border-border bg-black object-contain p-1" />
+      <div className="app-nav-label min-w-0">
+        <p className="truncate text-[15px] font-semibold tracking-tight">Caju OS</p>
+        <p className="truncate text-xs text-muted-foreground">{role ? roleLabels[role] : 'Operações'}</p>
+      </div>
     </div>
-    <nav aria-label="Navegação principal" className="mt-5 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-1">
-      <p className="mb-3 px-3 text-[11px] font-semibold uppercase tracking-[.14em] text-muted-foreground">Operação</p>
-      {items.filter(([, , , key]) => canUseNavItem(role, key)).map(([label, Icon, href, key]) => <Link key={key} href={href} onClick={(event) => navigate(event, href)} aria-current={active === key ? 'page' : undefined} className="app-nav-link"><Icon aria-hidden="true" className="size-[18px] shrink-0" /><span>{label}</span></Link>)}
+    <nav aria-label="Navegação principal" className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+      <p className="app-nav-section">Menu</p>
+      {items.filter(([, , , key]) => canUseNavItem(role, key)).map(([label, Icon, href, key]) => <NavLink key={key} href={href} label={label} icon={Icon} current={active === key} collapsed={collapsed} onNavigate={navigate} />)}
     </nav>
-    <div className="mt-3 shrink-0 border-t border-sidebar-border pt-3">
-      <Link href="/?view=settings" onClick={(event) => navigate(event, '/?view=settings')} aria-current={active === 'settings' ? 'page' : undefined} className="app-nav-link"><Settings aria-hidden="true" className="size-[18px]" />Configurações</Link>
-      <UserMenu />
+    <div className="mt-3 shrink-0 space-y-1 border-t border-sidebar-border pt-3">
+      <NavLink href="/?view=settings" label="Configurações" icon={Settings} current={active === 'settings'} collapsed={collapsed} onNavigate={navigate} />
+      {desktop && <button
+        type="button"
+        onClick={() => setSidebarCollapsed(!collapsed)}
+        className="app-nav-link w-full"
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+        title={collapsed ? 'Expandir menu ([)' : 'Recolher menu ([)'}
+      >
+        <PanelLeftClose aria-hidden="true" strokeWidth={1.75} className={`size-[18px] shrink-0 transition-transform duration-(--motion-layout) ${collapsed ? 'rotate-180' : ''}`} />
+        <span className="app-nav-label">Recolher</span>
+      </button>}
+      <UserMenu compact={collapsed} />
     </div>
   </>;
   return <>
     <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
-    {desktop ? <aside className="caju-sidebar app-sidebar">{content}</aside> : <Sheet open={open} onOpenChange={onOpenChange}>
+    {desktop ? <aside className="app-sidebar" data-collapsed={collapsed ? '' : undefined}>{content}</aside> : <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" keepMounted className="data-[side=left]:w-[min(300px,calc(100vw-2rem))] gap-0 px-3 py-5">
         <SheetTitle className="sr-only">Menu principal</SheetTitle>
         <SheetDescription className="sr-only">Navegue pelas áreas da operação.</SheetDescription>
