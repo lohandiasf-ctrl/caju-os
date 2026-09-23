@@ -3,6 +3,7 @@ import { carrierLabel, CLOSED_SPARE_STATUSES } from '@/lib/tracking';
 import { copyToClipboard } from '@/lib/clipboard';
 import { openExternalUrl } from '@/lib/open-external';
 import { AppNavigation } from '@/components/app-navigation';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
@@ -467,6 +468,7 @@ export default function Page() {
             )}
             {all.length} itens
           </Badge>
+          <ThemeToggle className="ml-2" />
         </header>
         <div
           id="main-content"

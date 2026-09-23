@@ -133,7 +133,7 @@ export function BulletinBoard({
       </div>
 
       <div className={`mt-4 grid gap-3 ${composing ? "xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]" : ""}`}>
-        {composing && <div id="bulletin-compose" className="rounded-2xl border border-white/10 bg-black/25 p-3">
+        {composing && <div id="bulletin-compose" className="rounded-2xl border border-white/10 bg-foreground/[.035] dark:bg-black/25 p-3">
           <div className="grid gap-2">
             <label htmlFor="note-target" className="text-xs font-medium text-muted-foreground">Para quem</label>
             <Input id="note-target"
@@ -141,7 +141,7 @@ export function BulletinBoard({
               onChange={(event) => setTargetName(event.target.value)}
               placeholder="Para quem? Ex.: Aiã"
               maxLength={80}
-              className="min-h-11 border-white/10 bg-black/30"
+              className="min-h-11 border-white/10 bg-foreground/[.035] dark:bg-black/30"
             />
             <label htmlFor="note-title" className="text-xs font-medium text-muted-foreground">Assunto <span className="font-normal">(opcional)</span></label>
             <Input id="note-title"
@@ -149,7 +149,7 @@ export function BulletinBoard({
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Assunto opcional"
               maxLength={100}
-              className="min-h-11 border-white/10 bg-black/30"
+              className="min-h-11 border-white/10 bg-foreground/[.035] dark:bg-black/30"
             />
             <label htmlFor="note-body" className="text-xs font-medium text-muted-foreground">Recado</label>
             <Textarea id="note-body"
@@ -157,7 +157,7 @@ export function BulletinBoard({
               onChange={(event) => setNote(event.target.value)}
               placeholder="Ex.: lembrar de procurar o técnico de Jaguaquara"
               maxLength={800}
-              className="min-h-24 resize-none border-white/10 bg-black/30"
+              className="min-h-24 resize-none border-white/10 bg-foreground/[.035] dark:bg-black/30"
             />
             <Button
               type="button"
@@ -179,7 +179,7 @@ export function BulletinBoard({
             </div>
           ) : notes.length ? (
             notes.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-amber-300/20 bg-black/25 p-3">
+              <article key={item.id} className="rounded-2xl border border-amber-300/20 bg-foreground/[.035] dark:bg-black/25 p-3">
                 <div className="flex items-start gap-3">
                   <div className="grid size-9 shrink-0 place-items-center rounded-xl border border-amber-300/30 bg-amber-300/10 text-amber-200">
                     <Pin className="size-4" />

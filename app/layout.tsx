@@ -7,6 +7,7 @@ import { PullRefreshGuard } from '@/components/pull-refresh-guard';
 import { GlobalAssistant } from '@/components/global-assistant';
 import { MotionProvider } from '@/components/motion-provider';
 import { themeBootScript } from '@/lib/theme';
+import { sidebarBootScript } from '@/lib/sidebar-state';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -40,7 +41,7 @@ export default function RootLayout({
     // suppressHydrationWarning só neste elemento.
     <html lang="pt-BR" className="dark" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript + sidebarBootScript }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

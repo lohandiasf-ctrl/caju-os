@@ -1965,7 +1965,7 @@ function TeamVoiceControl({
                   <div className="mt-2 space-y-2">
                     <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100">Você</div>
                     {invitedNames.slice(0, 5).map((name) => (
-                      <div key={name} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold">{name}</div>
+                      <div key={name} className="rounded-xl border border-white/10 bg-foreground/[.035] dark:bg-black/20 px-3 py-2 text-xs font-semibold">{name}</div>
                     ))}
                   </div>
                 </div>
@@ -2396,7 +2396,7 @@ function MessageAttachment({
         href={message.attachmentData}
         target="_blank"
         rel="noreferrer"
-        className="mt-2 block overflow-hidden rounded-xl border border-white/15 bg-black/15"
+        className="mt-2 block overflow-hidden rounded-xl border border-white/15 bg-foreground/[.035] dark:bg-black/15"
         aria-label={`Abrir imagem ${name}`}
       >
         <img
@@ -2414,7 +2414,7 @@ function MessageAttachment({
     );
   if (type.startsWith("audio/"))
     return (
-      <div className="mt-2 min-w-[230px] rounded-xl border border-white/15 bg-black/10 p-2">
+      <div className="mt-2 min-w-[230px] rounded-xl border border-white/15 bg-foreground/[.035] dark:bg-black/10 p-2">
         <div className="mb-1 flex items-center gap-1.5 text-[11px]">
           <FileAudio className="size-3.5" />
           Mensagem de áudio
@@ -2434,7 +2434,7 @@ function MessageAttachment({
       download={name}
       target="_blank"
       rel="noreferrer"
-      className="mt-2 flex min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-black/10 px-3 text-xs font-semibold underline"
+      className="mt-2 flex min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-foreground/[.035] dark:bg-black/10 px-3 text-xs font-semibold underline"
     >
       <File className="size-4" />
       {name}
@@ -3299,7 +3299,7 @@ function GroupChatDialog({
   );
 }
 
-export function UserMenu() {
+export function UserMenu({ compact = false }: { compact?: boolean } = {}) {
   const { user, role } = useAuth();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>("Online");
@@ -3433,16 +3433,21 @@ export function UserMenu() {
   }, [syncPresence, user]);
   const label = name || user?.email?.slice(0, 2).toUpperCase() || "US";
   return (
+    <div className="mt-2 flex items-center gap-1">
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger render={<button type="button" aria-label="Minha conta e disponibilidade" className="mt-2 flex min-h-14 w-full items-center gap-3 rounded-xl border border-border bg-card/50 p-2 text-left hover:bg-muted" />}>
-        <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">
-          {photo ? <img src={photo} alt="" className="size-full object-cover" /> : label.slice(0, 2).toUpperCase()}
+      <PopoverTrigger render={<button type="button" aria-label={`Minha conta e disponibilidade (${status})`} title={compact ? `${name || user?.email || ""} · ${status}` : undefined} className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-xl p-1.5 text-left hover:bg-muted" />}>
+        <span className="relative shrink-0">
+          <span className="grid size-9 place-items-center overflow-hidden rounded-full bg-primary-soft text-xs font-bold text-primary">
+            {photo ? <img src={photo} alt="" className="size-full object-cover" /> : label.slice(0, 2).toUpperCase()}
+          </span>
+          {/* Disponibilidade também no avatar: é o que sobra com a barra recolhida. */}
+          <span aria-hidden="true" className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background ${status === "Online" ? "bg-emerald-500" : "bg-amber-500"}`} />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-semibold">{name || user?.email}</span>
-          <span className="block truncate text-xs text-muted-foreground">{role ? roleLabels[role] : "Sem perfil"} · <span className="text-emerald-300">{status}</span></span>
+        <span className="app-nav-label min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-semibold">{name || user?.email}</span>
+          <span className="block truncate text-xs text-muted-foreground">{name ? user?.email : role ? roleLabels[role] : "Sem perfil"}</span>
         </span>
-        <ChevronUp aria-hidden="true" className={`size-4 shrink-0 transition-transform ${open ? "" : "rotate-180"}`} />
+        <ChevronUp aria-hidden="true" className={`app-nav-label size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "rotate-180"}`} />
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="max-h-[min(30rem,calc(100dvh-7rem))] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto p-4">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Meu status</p>
@@ -3454,6 +3459,8 @@ export function UserMenu() {
         <button type="button" onClick={() => void signOut(auth)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-destructive/20 text-sm text-destructive hover:bg-destructive/10"><LogOut aria-hidden="true" className="size-4" />Sair da conta</button>
       </PopoverContent>
     </Popover>
+    {!compact && <button type="button" onClick={() => void signOut(auth)} aria-label="Sair" title="Sair" className="app-nav-label grid size-10 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"><LogOut aria-hidden="true" className="size-[18px]" strokeWidth={1.75} /></button>}
+    </div>
   );
 }
 
@@ -3794,7 +3801,7 @@ function TicketShareCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`mt-2 flex w-full min-w-0 items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${mine ? "border-white/25 bg-black/15 hover:bg-black/25" : "border-primary/30 bg-primary/10 hover:bg-primary/20"}`}
+      className={`mt-2 flex w-full min-w-0 items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${mine ? "border-white/25 bg-foreground/[.035] dark:bg-black/15 hover:bg-foreground/[.05] dark:hover:bg-black/25" : "border-primary/30 bg-primary/10 hover:bg-primary/20"}`}
       aria-label={`Abrir chamado ${ticketId}`}
     >
       <span

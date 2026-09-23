@@ -107,6 +107,7 @@
   --chart-missed: #a3abc4;
   --radius: .875rem;
   --radius-card: 1.375rem;
+  --sidebar-w: 240px;
   --sidebar: var(--background);
   --sidebar-foreground: #11141b;
   --sidebar-primary: #1f3fff;
@@ -333,23 +334,43 @@
     color: var(--primary);
     box-shadow: 0 8px 24px color-mix(in oklab, var(--brand) 14%, transparent);
   }
-  .caju-sidebar, .cockpit-sidebar, main > aside.fixed {
+  .cockpit-sidebar, main > aside.fixed {
     background: var(--surface-glass);
     border-color: var(--sidebar-border);
     box-shadow: var(--shadow-panel);
     backdrop-filter: blur(20px) saturate(120%);
   }
+  /* A barra "some" no fundo: mesma cor do app, só uma borda fina — quem
+     flutua são os cards. Largura anima entre 240 e 72 px (pontual, não em
+     loop); rótulos fazem fade + slide de 8 px. */
   .app-sidebar {
     position: fixed;
-    inset: .75rem auto .75rem .75rem;
+    inset: 0 auto 0 0;
     z-index: var(--z-sidebar);
     display: flex;
-    width: 248px;
+    width: var(--sidebar-w);
     flex-direction: column;
-    border: 1px solid var(--sidebar-border);
-    border-radius: 1.25rem;
-    padding: 1rem .75rem;
+    overflow: hidden;
+    border-right: 1px solid var(--sidebar-border);
+    background: var(--sidebar);
+    padding: 1.25rem .875rem 1rem;
+    transition: width var(--motion-layout) var(--ease-ui);
   }
+  .app-sidebar-brand { display: flex; min-height: 2.5rem; align-items: center; gap: .75rem; padding-inline: .125rem; }
+  .app-nav-section {
+    margin-bottom: .5rem;
+    padding-inline: .75rem;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .app-nav-label { transition: opacity var(--motion-fast) var(--ease-ui), transform var(--motion-fast) var(--ease-ui); white-space: nowrap; }
+  .app-sidebar[data-collapsed] .app-nav-label,
+  .app-sidebar[data-collapsed] .app-nav-section { opacity: 0; transform: translateX(-8px); pointer-events: none; }
+  .app-nav-indicator { position: absolute; inset-block: .5rem; left: 0; width: 3px; border-radius: 9999px; background: var(--primary); }
   .app-content { min-width: 0; min-height: 100dvh; }
   .app-content > header, main > section > header {
     background: var(--surface-header);
@@ -358,12 +379,14 @@
   }
   .app-main { min-width: 0; outline: none; }
   .app-nav-link {
+    position: relative;
     display: flex;
-    min-height: 42px;
+    min-height: 40px;
     align-items: center;
     gap: .75rem;
-    border-radius: .625rem;
-    padding: .625rem .75rem;
+    overflow: hidden;
+    border-radius: .75rem;
+    padding: .5rem .75rem;
     color: var(--muted-foreground);
     font-size: .875rem;
     font-weight: 500;
@@ -372,7 +395,6 @@
   .app-nav-link[aria-current='page'] {
     background: var(--primary-soft);
     color: var(--primary);
-    box-shadow: inset 3px 0 0 var(--primary);
   }
   .field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'], [data-slot='native-select'] {
     min-width: 0;
@@ -433,8 +455,7 @@
   }
   .skip-link:focus { transform: translateY(0); }
   @media (min-width: 1024px) {
-    .app-content { padding-left: 272px; }
-    .app-content > header { margin: .75rem .75rem 0 0; border: 1px solid var(--border); border-radius: 1rem; top: .75rem; }
+    .app-content { padding-left: var(--sidebar-w); transition: padding-left var(--motion-layout) var(--ease-ui); }
     main > aside.fixed.colleagues-sidebar { right: 1rem; left: auto; }
   }
   @media (max-width: 639px) {
@@ -625,6 +646,22 @@ html[data-view='whatsapp'] .app-main {
 /* The idle "Reunião" and colleagues launchers would sit on top of the
    message composer; a live call surface is not tagged and stays visible. */
 html[data-view='whatsapp'] [data-floating-launcher] { display: none !important; }
+
+html[data-sidebar='collapsed'] { --sidebar-w: 72px; }
+
+/* Barra superior: transparente no topo; ao rolar ganha vidro e borda.
+   Fora de @layer para vencer os utilitários que as páginas ainda trazem. */
+.app-content > header {
+  background: transparent;
+  border-bottom-color: transparent;
+  backdrop-filter: none;
+  transition: background-color var(--motion-standard) var(--ease-ui), border-color var(--motion-standard) var(--ease-ui);
+}
+html[data-scrolled] .app-content > header {
+  background: var(--surface-header);
+  border-bottom-color: var(--border);
+  backdrop-filter: blur(12px) saturate(140%);
+}
 
 /* Troca de tema. Com View Transitions o novo tema cresce num círculo a partir
    do botão (lib/theme.ts anima o clip-path); aqui só desligamos o crossfade

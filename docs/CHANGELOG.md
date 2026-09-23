@@ -38,6 +38,20 @@ só ali dentro. O mapa não inverte os tiles no claro.
 `MotionConfig reducedMotion="user"` na raiz: toda animação do `motion`
 respeita "reduzir movimento".
 
+**2. Shell.** Sidebar (`components/app-navigation.tsx`) no mesmo fundo do app,
+240 px expandida / 72 px recolhida (botão "Recolher" ou tecla `[`; estado em
+`localStorage` `caju-sidebar`, aplicado antes da pintura por
+`lib/sidebar-state.ts`). Item ativo com barra de 3 px que desliza entre itens
+(`layoutId`); recolhida, os rótulos viram tooltip. Rodapé com avatar (ponto de
+disponibilidade), nome, e-mail e botão sair — mesmo `signOut` do menu. Itens e
+permissões iguais. Barra superior do dashboard com saudação por horário de
+Brasília ("Boa tarde, Maria 👋", `lib/greeting.ts`), busca em pílula, status
+do Jira, toggle de tema e sino com ponto vermelho que balança quando chega
+alerta novo. Mapa, Spares e Financeiro ganharam o toggle. A barra é
+transparente no topo e ganha vidro ao rolar. Superfícies "afundadas"
+(`bg-black/10–30`) ganharam equivalente claro com o original em `dark:`;
+cards do kanban viram cards brancos elevados no claro.
+
 ### Assistente ganha histórico contínuo, exibição de fontes, presença global e fallback
 
 O assistente flutuante de IA agora suporta conversas multi-turno contínuas,
