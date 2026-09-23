@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -418,4 +419,10 @@ test('queueContext agrupa e totaliza chamados por custo de primeira visita', () 
   assert.match(text, /- 1ª Visita R\$ 120,00: 2 — FSA-101, FSA-102/);
   assert.match(text, /- 1ª Visita R\$ 150,00: 1 — FSA-103/);
 });
+
+test('TOOL_SCHEMAS inclui consultar_valores e consultar_equipamento', () => {
+  assert.ok(TOOL_SCHEMAS.some((t) => t.name === 'consultar_valores'));
+  assert.ok(TOOL_SCHEMAS.some((t) => t.name === 'consultar_equipamento'));
+});
+
 

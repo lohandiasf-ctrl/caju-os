@@ -133,6 +133,28 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     },
   },
   {
+    name: 'consultar_valores',
+    description: 'Consulta todos os valores financeiros de um chamado: valor do equipamento (R$), custos de visita, peças, total do ticket, orçamento e detalhes de custos. Use quando perguntarem sobre valor, custo, preço ou quanto custa.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'A FSA, por exemplo FSA-132424.' },
+      },
+      required: ['chamado'],
+    },
+  },
+  {
+    name: 'consultar_equipamento',
+    description: 'Detalhes do equipamento de um chamado: marca, modelo, tipo, serial, patrimônio, peças usadas e se houve troca. Use quando perguntarem sobre o equipamento, a máquina, peças trocadas ou serial number.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'A FSA, por exemplo FSA-132424.' },
+      },
+      required: ['chamado'],
+    },
+  },
+  {
     name: 'consultar_tecnicos',
     description: 'Técnicos cadastrados: nome, cidade e estado de base, cidades extras, status de disponibilidade, especialidades, ferramentas, veículo e nota média. Use para perguntas sobre quem atende onde, disponibilidade ou avaliação. Não devolve dado pessoal (documento, telefone, endereço ou dado bancário).',
     parameters: {
