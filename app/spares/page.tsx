@@ -3,6 +3,7 @@ import { carrierLabel, CLOSED_SPARE_STATUSES } from '@/lib/tracking';
 import { copyToClipboard } from '@/lib/clipboard';
 import { openExternalUrl } from '@/lib/open-external';
 import { AppNavigation } from '@/components/app-navigation';
+import { ColleaguesPanel } from '@/components/user-menu';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -438,6 +439,8 @@ export default function Page() {
   return (
     <main className="min-h-screen text-foreground">
       <AppNavigation active="spares" open={menu} onOpenChange={setMenu} />
+      {/* Equipe e chat na barra lateral, como no painel principal. */}
+      <ColleaguesPanel />
       <section className="app-content">
         <header className="sticky top-0 z-20 flex h-[68px] items-center border-b border-border px-4 lg:px-8">
           <Button

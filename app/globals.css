@@ -410,6 +410,39 @@
     transition: width var(--motion-layout) var(--ease-ui);
   }
   .app-sidebar-brand { display: flex; min-height: 2.5rem; align-items: center; gap: .75rem; padding-inline: .125rem; }
+  .app-sidebar[data-collapsed] .app-sidebar-brand { justify-content: center; padding-inline: 0; }
+  .app-sidebar-toggle {
+    display: grid; width: 2rem; height: 2rem; flex: none; place-items: center;
+    border-radius: var(--radius-md); color: var(--muted-foreground);
+    transition: background-color var(--motion-fast) var(--ease-ui), color var(--motion-fast) var(--ease-ui);
+  }
+  .app-sidebar-toggle:hover { background: var(--muted); color: var(--foreground); }
+  .app-sidebar[data-collapsed] .app-sidebar-toggle { width: 100%; height: 2.5rem; border-radius: var(--radius-lg); }
+  /* Equipe na barra: ocupa a altura que o menu não usa. A lista rola por
+     dentro, sem barra visível, e some em degradê no fim quando há mais gente.
+     Recolhida, vira uma pilha de avatares (o nome aparece no tooltip). */
+  .app-team-slot { display: flex; min-height: 3.5rem; flex: 1 1 0; flex-direction: column; }
+  /* Menu mais compacto no desktop para sobrar altura para a equipe; em telas
+     baixas (notebook 768p) os rótulos dos grupos viram só espaço. */
+  .app-sidebar .app-nav-link { min-height: 36px; }
+  @media (max-height: 860px) {
+    .app-sidebar .app-nav-section { height: 0; margin: 0; opacity: 0; overflow: hidden; }
+    .app-sidebar .app-nav-group + .app-nav-group { margin-top: .75rem; }
+  }
+  .app-team-slot:empty { min-height: 0; }
+  .app-team { display: flex; min-height: 0; flex: 1 1 0; flex-direction: column; margin-top: .5rem; border-top: 1px solid var(--sidebar-border); padding-top: .5rem; }
+  .app-team-head { display: flex; min-height: 2rem; align-items: center; gap: .375rem; padding-left: .75rem; }
+  .app-team-head .app-nav-section { margin: 0; padding: 0; }
+  .app-team-scroll {
+    min-height: 0; flex: 1 1 0; overflow-y: auto; overscroll-behavior: contain;
+    scrollbar-width: none; padding-bottom: .75rem;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 1.25rem), transparent);
+  }
+  .app-team-scroll::-webkit-scrollbar { display: none; }
+  .app-team-stack { display: none; }
+  .app-sidebar[data-collapsed] .app-team-full { display: none; }
+  .app-sidebar[data-collapsed] .app-team-stack { display: flex; flex-direction: column; align-items: center; gap: .25rem; }
+  .app-sidebar[data-collapsed] .app-team { margin-top: .25rem; }
   /* Grupo da navegação: o espaço acima separa grupos; nada de linha. */
   .app-nav-group + .app-nav-group { margin-top: var(--space-4); }
   .app-nav-section {
@@ -709,6 +742,19 @@ html[data-view='whatsapp'] .app-main {
 html[data-view='whatsapp'] [data-floating-launcher] { display: none !important; }
 
 html[data-sidebar='collapsed'] { --sidebar-w: 72px; }
+/* Conversa ancorada (desktop): a barra vira trilho e o chat ocupa 320 px ao
+   lado dela; a página encolhe, não fica coberta. */
+html[data-chat-dock] { --sidebar-w: 72px; --chat-dock-w: 20rem; }
+@media (min-width: 1024px) {
+  html[data-chat-dock] .app-content { padding-left: calc(var(--sidebar-w) + var(--chat-dock-w)); }
+}
+/* Gaveta do celular: uma rolagem só (menu + equipe), com a conta fixa no
+   rodapé — sem listas aninhadas rolando num espaço pequeno. Fora de @layer
+   para vencer os utilitários do menu (overflow-y-auto). */
+.app-drawer { overflow-y: auto; overscroll-behavior: contain; }
+.app-drawer > nav, .app-drawer .app-team-slot, .app-drawer .app-team, .app-drawer .app-team-scroll { flex: none; min-height: auto; overflow: visible; }
+.app-drawer .app-team-scroll { mask-image: none; }
+.app-drawer > div:last-child { position: sticky; bottom: 0; margin-top: auto; background: var(--popover); }
 
 /* Barra superior: mesma cor do fundo; ao rolar ganha só a borda inferior,
    que marca onde o conteúdo passa por baixo. Fundo sólido, sem vidro.
