@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MAX_QUESTION_LENGTH, sanitizeFinalAnswer, splitTicketKeys, type AssistantTask } from '@/lib/assistant';
 import { ASSISTANT_ASK_EVENT, ASSISTANT_BUSY_EVENT } from '@/lib/assistant-events';
+import { answerBlocks, inlineSegments } from '@/lib/answer-markdown';
 import { VoiceInputButton } from '@/components/voice-input-button';
 
 type Proposal = { id: string; description: string; kind: string; preview: Record<string, unknown> };
@@ -60,20 +61,55 @@ async function askGeneral(
 
 // Com `onOpenTicket`, cada FSA citada vira botão que abre o chamado.
 // Higieniza contra qualquer resquício de tags de ferramentas para proteger a tela.
+// Texto de uma linha/célula: negrito do Markdown e FSA clicável.
+function Inline({ text, onOpenTicket }: { text: string; onOpenTicket?: (ticketKey: string) => void }) {
+  return <>{inlineSegments(text).map((segment, segmentIndex) => {
+    const parts = onOpenTicket ? splitTicketKeys(segment.text) : [{ text: segment.text }];
+    const content = parts.map((part, index) => 'ticketKey' in part && part.ticketKey
+      ? <button
+          key={index}
+          type="button"
+          onClick={() => onOpenTicket?.(part.ticketKey!)}
+          aria-label={`Abrir chamado ${part.ticketKey}`}
+          className="inline rounded font-semibold text-violet-300 underline decoration-violet-300/40 underline-offset-2 transition hover:text-violet-200 hover:decoration-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >{part.text}</button>
+      : <span key={index}>{part.text}</span>);
+    return segment.bold
+      ? <strong key={segmentIndex} className="font-semibold text-foreground">{content}</strong>
+      : <span key={segmentIndex}>{content}</span>;
+  })}</>;
+}
+
 function Answer({ text, onOpenTicket }: { text: string; onOpenTicket?: (ticketKey: string) => void }) {
-  const clean = sanitizeFinalAnswer(text);
-  return <div className="mt-3 whitespace-pre-wrap rounded-xl border border-border bg-background/70 p-3 text-sm leading-relaxed">
-    {onOpenTicket
-      ? splitTicketKeys(clean).map((part, index) => part.ticketKey
-        ? <button
-            key={index}
-            type="button"
-            onClick={() => onOpenTicket(part.ticketKey!)}
-            aria-label={`Abrir chamado ${part.ticketKey}`}
-            className="inline rounded font-semibold text-violet-300 underline decoration-violet-300/40 underline-offset-2 transition hover:text-violet-200 hover:decoration-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >{part.text}</button>
-        : <span key={index}>{part.text}</span>)
-      : clean}
+  const blocks = answerBlocks(sanitizeFinalAnswer(text));
+  return <div className="mt-3 min-w-0 space-y-2.5 rounded-xl border border-border bg-background/70 p-3 text-sm leading-relaxed">
+    {blocks.map((block, index) => {
+      if (block.type === 'heading') {
+        return <p key={index} className="font-semibold text-foreground"><Inline text={block.text} onOpenTicket={onOpenTicket} /></p>;
+      }
+      if (block.type === 'list') {
+        return <ul key={index} className="list-disc space-y-1 pl-5 marker:text-muted-foreground">
+          {block.items.map((item, itemIndex) => <li key={itemIndex}><Inline text={item} onOpenTicket={onOpenTicket} /></li>)}
+        </ul>;
+      }
+      if (block.type === 'table') {
+        // Célula sem quebra de linha; a tabela rola na horizontal dentro da
+        // própria caixa em vez de espremer as colunas no painel estreito.
+        return <div key={index} className="-mx-1 overflow-x-auto rounded-lg border border-border/70" tabIndex={0} role="region" aria-label="Tabela da resposta">
+          <table className="w-max min-w-full border-collapse text-xs tabular-nums">
+            {block.header && <thead className="bg-muted/40 text-left text-muted-foreground">
+              <tr>{block.header.map((cell, cellIndex) => <th key={cellIndex} scope="col" className="whitespace-nowrap px-2.5 py-1.5 font-medium"><Inline text={cell} /></th>)}</tr>
+            </thead>}
+            <tbody>
+              {block.rows.map((row, rowIndex) => <tr key={rowIndex} className="border-t border-border/60 first:border-t-0">
+                {row.map((cell, cellIndex) => <td key={cellIndex} className="whitespace-nowrap px-2.5 py-1.5 align-top"><Inline text={cell} onOpenTicket={onOpenTicket} /></td>)}
+              </tr>)}
+            </tbody>
+          </table>
+        </div>;
+      }
+      return <p key={index} className="whitespace-pre-wrap"><Inline text={block.text} onOpenTicket={onOpenTicket} /></p>;
+    })}
   </div>;
 }
 

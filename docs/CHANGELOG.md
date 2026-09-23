@@ -11,6 +11,21 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Caju IA: resposta longa não chega mais cortada, e tabela aparece como tabela
+
+Uma lista de agendados em tabela passava do teto de 900 tokens e a resposta
+terminava no meio de uma FSA ("(FSA-133"). O painel também mostrava o Markdown
+cru (`|`, `**`).
+
+- `lib/server/workers-ai-assistant.ts`: `MAX_OUTPUT_TOKENS` 900 → 2400; se o
+  modelo ainda parar por limite (`finish_reason: "length"`), a resposta ganha o
+  aviso `AVISO_RESPOSTA_CORTADA` pedindo um recorte menor.
+- `lib/answer-markdown.ts`: converte a resposta em blocos (parágrafo, título,
+  lista, tabela) e negrito inline. `components/assistant-panel.tsx` desenha a
+  tabela com rolagem horizontal própria, sem quebrar célula; FSA segue
+  clicável em qualquer bloco.
+- `tests/answer-markdown.test.ts`.
+
 ### Correção: `detalhar_chamado` quebrava com comentário "UP -" interno
 
 A API de comentários do Service Desk devolve `created` como objeto

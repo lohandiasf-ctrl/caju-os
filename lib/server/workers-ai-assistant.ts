@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import type { ToolSchema } from '@/lib/assistant-tools';
-import { readAssistantResponse, sanitizeFinalAnswer, type ToolCall } from '@/lib/assistant';
+import { AVISO_RESPOSTA_CORTADA, readAssistantResponse, respostaCortada, sanitizeFinalAnswer, type ToolCall } from '@/lib/assistant';
 
 // Assistente geral no Workers AI. O binding ja pertence ao Worker, por isso
 // nao exige chave, cartao ou outro provedor para funcionar dentro da franquia
@@ -18,7 +18,9 @@ const MODELS = [
   '@cf/mistralai/mistral-small-3.1-24b-instruct',
 ] as const;
 const MAX_ROUNDS = 5;
-const MAX_OUTPUT_TOKENS = 900;
+// Resposta com tabela da fila (20+ linhas) passava de 900 e chegava cortada
+// no meio de uma FSA. O teto novo cabe a fila inteira com folga.
+const MAX_OUTPUT_TOKENS = 2400;
 
 type Runner = { run: (model: string, input: unknown) => Promise<unknown> };
 
@@ -110,7 +112,7 @@ async function askWithModel(
     const response = readAssistantResponse(raw);
     if (!response.calls.length || last) {
       const finalAnswer = sanitizeFinalAnswer(response.text || response.rawText);
-      if (finalAnswer) return { answer: finalAnswer, model, used };
+      if (finalAnswer) return { answer: respostaCortada(raw) ? `${finalAnswer}${AVISO_RESPOSTA_CORTADA}` : finalAnswer, model, used };
       if (used.length > 0) {
         return {
           answer: 'Consultei os chamados no sistema, mas não foi possível formatar a resposta. Por favor, tente novamente.',

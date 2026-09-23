@@ -614,6 +614,17 @@ export function sanitizeFinalAnswer(text: string): string {
     .trim();
 }
 
+// O modelo parou por limite de tokens (`finish_reason: "length"`): a resposta
+// chega no meio de uma frase. Formato OpenAI e o nativo do Workers AI.
+export function respostaCortada(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  const payload = raw as { choices?: Array<{ finish_reason?: unknown }>; finish_reason?: unknown; result?: { finish_reason?: unknown } };
+  const reason = payload.choices?.[0]?.finish_reason ?? payload.finish_reason ?? payload.result?.finish_reason;
+  return reason === 'length';
+}
+
+export const AVISO_RESPOSTA_CORTADA = '\n\n(Resposta longa demais, cortada no limite. Peça um recorte menor, por exemplo só um status ou uma cidade.)';
+
 // Lê de forma universal a resposta bruta de qualquer modelo do Workers AI,
 // suportando formato OpenAI (choices[0].message.tool_calls), formato nativo Cloudflare
 // (payload.tool_calls) e tags textuais (como as geradas pelo GLM-4.7-Flash).
