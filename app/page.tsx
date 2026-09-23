@@ -65,7 +65,6 @@ import { WhatsAppInbox } from "@/components/whatsapp-inbox";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
-import { FloatingAssistant } from "@/components/assistant-panel";
 import { AssistantAudit } from "@/components/assistant-audit";
 import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -682,6 +681,48 @@ export default function Home() {
     };
     void openTicket(ticket);
   }, [tickets, user]);
+
+  useEffect(() => {
+    function onOpenTicketEvent(event: Event) {
+      const ticketKey = (event as CustomEvent<string>).detail;
+      if (!ticketKey) return;
+      const ticket = tickets.find((item) => item.id === ticketKey);
+      void openTicket(ticket ?? {
+        id: ticketKey,
+        title: "Carregando chamado...",
+        store: "",
+        city: "",
+        status: "Direcionado",
+        rawStatus: "",
+        priority: "Media",
+      });
+    }
+
+    function onPrepareScheduleEvent(event: Event) {
+      const detail = (event as CustomEvent<{ ticketKeys: string[]; at: string }>).detail;
+      if (!detail?.ticketKeys?.length) return;
+      setSelectedKeys(new Set(detail.ticketKeys));
+      setActiveView('tickets');
+      setScheduleRequest({ at: detail.at, id: Date.now() });
+    }
+
+    function onPrepareWhatsappEvent(event: Event) {
+      const detail = (event as CustomEvent<{ contato: string; nome: string; texto: string }>).detail;
+      if (!detail) return;
+      if (canUseWhatsapp(role)) {
+        setWhatsappDraft(detail);
+      }
+    }
+
+    window.addEventListener('caju:open-ticket', onOpenTicketEvent);
+    window.addEventListener('caju:prepare-schedule', onPrepareScheduleEvent);
+    window.addEventListener('caju:prepare-whatsapp', onPrepareWhatsappEvent);
+    return () => {
+      window.removeEventListener('caju:open-ticket', onOpenTicketEvent);
+      window.removeEventListener('caju:prepare-schedule', onPrepareScheduleEvent);
+      window.removeEventListener('caju:prepare-whatsapp', onPrepareWhatsappEvent);
+    };
+  }, [tickets, role]);
 
   useEffect(() => {
     knownTicketIds.current = new Set(tickets.map((ticket) => ticket.id));
@@ -1636,27 +1677,6 @@ export default function Home() {
         onOpenTicket={(ticketId) => {
           const ticket = tickets.find((item) => item.id === ticketId);
           if (ticket) void openTicket(ticket);
-        }}
-      />
-      <FloatingAssistant
-        user={user}
-        onPrepareSchedule={(ticketKeys, at) => {
-          setSelectedKeys(new Set(ticketKeys));
-          setActiveView('tickets');
-          setScheduleRequest({ at, id: Date.now() });
-        }}
-        onPrepareMessage={canUseWhatsapp(role) ? (draft) => setWhatsappDraft(draft) : undefined}
-        onOpenTicket={(ticketKey) => {
-          const ticket = tickets.find((item) => item.id === ticketKey);
-          void openTicket(ticket ?? {
-            id: ticketKey,
-            title: "Carregando chamado...",
-            store: "",
-            city: "",
-            status: "Direcionado",
-            rawStatus: "",
-            priority: "Media",
-          });
         }}
       />
       <Dialog

@@ -5,7 +5,17 @@ import type { ToolSchema } from '@/lib/assistant-tools';
 // nao exige chave, cartao ou outro provedor para funcionar dentro da franquia
 // gratuita da Cloudflare. O modelo continua podendo apenas CONSULTAR as
 // ferramentas; qualquer escrita fica no fluxo de confirmacao da interface.
-const MODEL = '@cf/zai-org/glm-4.7-flash';
+// Modelos suportados no Workers AI com suporte a chamadas de ferramentas.
+// O primário é o GLM-4.7-Flash (rápido, com capacidade de raciocínio).
+// Em caso de instabilidade transitória do endpoint primário (500/503),
+// o sistema recorre ao modelo de contingência.
+// Nota: Erro de cota (429) NUNCA chaveia para outro modelo, mantendo a
+// regra estrita de não estourar a franquia ou gerar custos adicionais.
+const MODELS = [
+  '@cf/zai-org/glm-4.7-flash',
+  '@cf/meta/llama-4-scout-17b-16e-instruct',
+  '@cf/mistralai/mistral-small-3.1-24b-instruct',
+] as const;
 const MAX_ROUNDS = 5;
 const MAX_OUTPUT_TOKENS = 900;
 
@@ -49,6 +59,35 @@ export async function askWorkersAi(options: {
     throw new WorkersAiError('O assistente gratuito da Cloudflare não está configurado neste ambiente.', 503, 'indisponivel');
   }
 
+  let lastError: Error | null = null;
+  for (const model of MODELS) {
+    try {
+      return await askWithModel(ai, model, options);
+    } catch (error) {
+      if (error instanceof WorkersAiError && error.code === 'cota') {
+        throw error;
+      }
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`Assistente geral: modelo ${model} falhou, tentando contingência...`, error);
+    }
+  }
+
+  if (lastError instanceof WorkersAiError) throw lastError;
+  throw new WorkersAiError(lastError?.message || 'O assistente não conseguiu responder agora.', 503);
+}
+
+async function askWithModel(
+  ai: Runner,
+  model: string,
+  options: {
+    systemInstruction: string;
+    question: string;
+    history?: Array<{ role: 'user' | 'assistant'; text: string }>;
+    tools: ToolSchema[];
+    runTool: (name: string, args: Record<string, unknown>) => Promise<unknown>;
+    maxRounds?: number;
+  },
+): Promise<AskResult> {
   const messages: ChatMessage[] = [
     { role: 'system', content: options.systemInstruction },
     ...(options.history ?? []).map((turn) => ({ role: turn.role, content: turn.text })),
@@ -63,18 +102,18 @@ export async function askWorkersAi(options: {
 
   for (let round = 0; round < rounds; round += 1) {
     const last = round === rounds - 1;
-    const raw = await run(ai, {
+    const raw = await run(ai, model, {
       messages,
       ...(last ? {} : { tools, tool_choice: 'auto' }),
       max_tokens: MAX_OUTPUT_TOKENS,
       temperature: 0.2,
-      // Nunca guardar os textos operacionais enviados ao modelo para avaliacao
-      // ou destilacao na Cloudflare.
+      // Nunca guardar os textos operacionais enviados ao modelo para avaliação
+      // ou destilação na Cloudflare.
       store: false,
     });
     const response = readResponse(raw);
     if (!response.calls.length || last) {
-      if (response.text) return { answer: response.text, model: MODEL, used };
+      if (response.text) return { answer: response.text, model, used };
       throw new WorkersAiError('O assistente não conseguiu responder agora.', 503);
     }
 
@@ -97,15 +136,15 @@ export async function askWorkersAi(options: {
   throw new WorkersAiError('O assistente não conseguiu responder agora.', 503);
 }
 
-async function run(ai: Runner, input: unknown): Promise<unknown> {
+async function run(ai: Runner, model: string, input: unknown): Promise<unknown> {
   try {
-    return await ai.run(MODEL, input);
+    return await ai.run(model, input);
   } catch (error) {
     const detail = String(error);
     if (/429|limit|quota|neurons/i.test(detail)) {
       throw new WorkersAiError('A franquia gratuita diária do assistente foi atingida. Tente novamente amanhã.', 429, 'cota');
     }
-    console.error('Workers AI do assistente geral', error);
+    console.error(`Workers AI do assistente geral (${model})`, error);
     throw new WorkersAiError('O assistente gratuito da Cloudflare não está disponível agora. Tente novamente em instantes.', 503, 'indisponivel');
   }
 }

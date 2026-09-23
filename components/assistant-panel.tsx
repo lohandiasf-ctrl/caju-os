@@ -26,20 +26,34 @@ async function ask(user: User, body: Record<string, unknown>) {
 }
 
 // Assistente geral: a pergunta pode ser qualquer uma, e o servidor consulta o
-// sistema até saber responder. Enquanto a chave do Gemini não estiver posta,
-// `sem_chave` faz a pergunta voltar para o assistente da fila — que responde
-// menos, mas responde.
-async function askGeneral(user: User, question: string, fallback: Record<string, unknown>) {
+// sistema até saber responder via Workers AI. O histórico recente dá contexto
+// para perguntas de continuação.
+async function askGeneral(
+  user: User,
+  question: string,
+  history?: Array<{ role: 'user' | 'assistant'; text: string }>,
+) {
   if (!user) throw new Error('Sessão expirada. Entre de novo.');
   const response = await fetch('/api/assistant/ask', {
     method: 'POST',
     headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, history }),
   });
-  const payload = await response.json() as { answer?: string; error?: string; code?: string; prepared?: PreparedAction | null };
-  if (payload.code === 'sem_chave') return { answer: await ask(user, { ...fallback, task: 'queue', question }), prepared: null };
+  const payload = await response.json() as {
+    answer?: string;
+    error?: string;
+    code?: string;
+    prepared?: PreparedAction | null;
+    used?: string[];
+    model?: string;
+  };
   if (!response.ok || !payload.answer) throw new Error(payload.error || 'O assistente não respondeu.');
-  return { answer: payload.answer, prepared: payload.prepared ?? null };
+  return {
+    answer: payload.answer,
+    prepared: payload.prepared ?? null,
+    used: payload.used ?? [],
+    model: payload.model ?? '',
+  };
 }
 
 // Com `onOpenTicket`, cada FSA citada vira botão que abre o chamado.
@@ -178,7 +192,7 @@ export function QueueAssistant({ user, status, query, onOpenTicket }: { user: Us
   async function submit() {
     if (busy || question.trim().length < 3) return;
     setBusy(true); setError(''); setAnswer('');
-    try { setAnswer((await askGeneral(user, question, { status, query })).answer); }
+    try { setAnswer((await askGeneral(user, question)).answer); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'O assistente falhou.'); }
     finally { setBusy(false); }
   }
@@ -204,6 +218,41 @@ export function QueueAssistant({ user, status, query, onOpenTicket }: { user: Us
   </Shell>;
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  consultar_chamados: 'Chamados',
+  detalhar_chamado: 'Detalhes do chamado',
+  consultar_tecnicos: 'Técnicos',
+  consultar_cobertura: 'Cobertura',
+  simular_repasse: 'Simulação de repasse',
+  consultar_repasses: 'Repasses',
+  consultar_historico_local: 'Histórico permanente',
+  consultar_catalogo_pecas: 'Catálogo de peças',
+  consultar_spares: 'Spares e rastreio',
+  resumo_operacao: 'Resumo operacional',
+  consultar_whatsapp: 'WhatsApp',
+  consultar_atendimentos: 'Atendimentos',
+  consultar_tarefas: 'Tarefas',
+  consultar_financas: 'Finanças',
+  consultar_financeiro_jira: 'Financeiro Jira',
+  consultar_lojas: 'Lojas',
+  consultar_projetos: 'Projetos',
+  consultar_colaboradores: 'Colaboradores',
+  consultar_feedback: 'Feedback',
+  consultar_bilhetes: 'Bilhetes',
+  consultar_historico: 'Auditoria',
+  preparar_agendamento: 'Agendamento',
+  preparar_mensagem_whatsapp: 'Mensagem WhatsApp',
+};
+
+type ChatMessageItem = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  used?: string[];
+  prepared?: PreparedAction | null;
+  error?: string;
+};
+
 // Janela própria da IA: não usa modal nem fundo desfocado, portanto a pessoa
 // pode continuar navegando e trabalhando enquanto conversa.
 export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPrepareMessage }: {
@@ -214,31 +263,56 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
 }) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState('');
-  const [lastQuestion, setLastQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
-  const [prepared, setPrepared] = useState<PreparedAction | null>(null);
-  const [error, setError] = useState('');
+  const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) window.setTimeout(() => inputRef.current?.focus(), 100);
   }, [open]);
 
-  async function submit() {
-    const text = question.trim();
+  useEffect(() => {
+    if (messages.length || busy) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messages, busy]);
+
+  async function submit(textToAsk?: string) {
+    const text = (textToAsk ?? question).trim();
     if (busy || text.length < 3) return;
     setBusy(true);
-    setError('');
-    setPrepared(null);
-    setLastQuestion(text);
+    setQuestion('');
+
+    const userMsg: ChatMessageItem = {
+      id: `u-${Date.now()}`,
+      role: 'user',
+      text,
+    };
+
+    // Monta o histórico das rodadas anteriores com sucesso para contexto
+    const historyPayload = messages
+      .filter((m) => !m.error && m.text.trim())
+      .map((m) => ({ role: m.role, text: m.text }));
+
+    setMessages((prev) => [...prev, userMsg]);
+
     try {
-      const result = await askGeneral(user, text, { status: '', query: '' });
-      setAnswer(result.answer);
-      setPrepared(result.prepared);
-      setQuestion('');
+      const result = await askGeneral(user, text, historyPayload);
+      const assistantMsg: ChatMessageItem = {
+        id: `a-${Date.now()}`,
+        role: 'assistant',
+        text: result.answer,
+        used: result.used,
+        prepared: result.prepared,
+      };
+      setMessages((prev) => [...prev, assistantMsg]);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'O assistente falhou.');
+      const errorMsg = reason instanceof Error ? reason.message : 'O assistente falhou.';
+      setMessages((prev) => [
+        ...prev,
+        { id: `err-${Date.now()}`, role: 'assistant', text: '', error: errorMsg },
+      ]);
     } finally {
       setBusy(false);
     }
@@ -258,7 +332,7 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
       ) : (
         <section
           aria-label="Assistente de IA"
-          className="flex h-[min(34rem,calc(100dvh-2rem))] w-[min(25rem,calc(100dvw-2rem))] flex-col overflow-hidden rounded-[1.5rem] border border-violet-300/25 bg-card shadow-[0_24px_80px_rgba(0,0,0,.48)]"
+          className="flex h-[min(36rem,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] flex-col overflow-hidden rounded-[1.5rem] border border-violet-300/25 bg-card shadow-[0_24px_80px_rgba(0,0,0,.48)] backdrop-blur-md"
         >
           <header className="flex items-center gap-3 border-b border-border/70 bg-violet-400/8 px-4 py-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
@@ -268,59 +342,154 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
               <h2 className="text-sm font-bold">Caju IA</h2>
               <p className="text-xs text-muted-foreground">Consulta segura da operação</p>
             </div>
-            {!!answer && (
-              <button type="button" onClick={() => { setAnswer(''); setError(''); setPrepared(null); }} className="grid size-10 place-items-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Limpar conversa">
+            {messages.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMessages([])}
+                className="grid size-10 place-items-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                aria-label="Limpar conversa"
+                title="Limpar conversa"
+              >
                 <Trash2 className="size-4" aria-hidden="true" />
               </button>
             )}
-            <button type="button" onClick={() => setOpen(false)} className="grid size-10 place-items-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Fechar assistente">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="grid size-10 place-items-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              aria-label="Fechar assistente"
+            >
               <X className="size-4" aria-hidden="true" />
             </button>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {!answer && !error ? (
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.length === 0 ? (
               <div className="flex h-full min-h-44 flex-col items-center justify-center text-center">
-                <span className="grid size-12 place-items-center rounded-2xl bg-violet-400/10 text-violet-300"><Sparkles className="size-5" aria-hidden="true" /></span>
+                <span className="grid size-12 place-items-center rounded-2xl bg-violet-400/10 text-violet-300">
+                  <Sparkles className="size-5" aria-hidden="true" />
+                </span>
                 <p className="mt-3 text-sm font-semibold">Como posso ajudar?</p>
-                <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">Pergunte sobre chamados, repasses, técnicos, peças ou histórico.</p>
+                <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  Pergunte sobre chamados, repasses, técnicos, peças ou histórico.
+                </p>
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   {['Como está a operação agora?', 'Quais chamados estão agendados?', 'Quem atende em Itabuna?'].map((item) => (
-                    <button key={item} type="button" onClick={() => setQuestion(item)} className="rounded-full border border-border bg-background px-3 py-2 text-xs text-muted-foreground transition hover:border-primary/50 hover:text-foreground">
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => void submit(item)}
+                      className="rounded-full border border-border bg-background px-3 py-2 text-xs text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+                    >
                       {item}
                     </button>
                   ))}
                 </div>
               </div>
             ) : (
-              <>
-                <div className="ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-foreground">{lastQuestion}</div>
-                {answer && <Answer text={answer} onOpenTicket={onOpenTicket} />}
-                {prepared?.tipo === 'agendar' && onPrepareSchedule && (
-                  <Button type="button" className="mt-3 min-h-11 w-full" onClick={() => onPrepareSchedule(prepared.chamados, prepared.quando)}>
-                    Revisar agendamento de {prepared.chamados.length} {prepared.chamados.length === 1 ? 'chamado' : 'chamados'}
-                  </Button>
-                )}
-                {prepared?.tipo === 'whatsapp' && onPrepareMessage && (
-                  <Button type="button" className="mt-3 min-h-11 w-full" onClick={() => onPrepareMessage(prepared)}>
-                    Revisar mensagem para {prepared.nome}
-                  </Button>
-                )}
-                {error && <p role="alert" className="mt-3 rounded-xl border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
-              </>
+              messages.map((item) => {
+                if (item.role === 'user') {
+                  return (
+                    <div
+                      key={item.id}
+                      className="ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-foreground shadow-sm"
+                    >
+                      {item.text}
+                    </div>
+                  );
+                }
+
+                const uniqueTools = item.used && item.used.length > 0
+                  ? [...new Set(item.used.map((name) => TOOL_LABELS[name] || name))]
+                  : [];
+                const prep = item.prepared;
+
+                return (
+                  <div key={item.id} className="space-y-2">
+                    {item.text && <Answer text={item.text} onOpenTicket={onOpenTicket} />}
+                    {uniqueTools.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
+                        <span className="font-medium text-foreground/70">Consultou:</span>
+                        {uniqueTools.map((label) => (
+                          <span
+                            key={label}
+                            className="rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 font-normal text-muted-foreground"
+                          >
+                            {label}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {prep?.tipo === 'agendar' && onPrepareSchedule && (
+                      <Button
+                        type="button"
+                        className="min-h-11 w-full"
+                        onClick={() => onPrepareSchedule(prep.chamados, prep.quando)}
+                      >
+                        Revisar agendamento de {prep.chamados.length}{' '}
+                        {prep.chamados.length === 1 ? 'chamado' : 'chamados'}
+                      </Button>
+                    )}
+                    {prep?.tipo === 'whatsapp' && onPrepareMessage && (
+                      <Button
+                        type="button"
+                        className="min-h-11 w-full"
+                        onClick={() => onPrepareMessage(prep)}
+                      >
+                        Revisar mensagem para {prep.nome}
+                      </Button>
+                    )}
+                    {item.error && (
+                      <p role="alert" className="rounded-xl border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">
+                        {item.error}
+                      </p>
+                    )}
+                  </div>
+                );
+              })
             )}
-            {busy && <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Consultando o sistema...</div>}
+            {busy && (
+              <div className="flex items-center gap-2 rounded-xl bg-muted/30 p-2.5 text-xs text-muted-foreground">
+                <Loader2 className="size-4 animate-spin text-violet-300" />
+                <span>Consultando o sistema...</span>
+              </div>
+            )}
           </div>
 
-          <form className="border-t border-border/70 p-3" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-            <label htmlFor="floating-assistant-question" className="sr-only">Pergunta para a IA</label>
+          <form
+            className="border-t border-border/70 p-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <label htmlFor="floating-assistant-question" className="sr-only">
+              Pergunta para a IA
+            </label>
             <div className="flex items-center gap-2 rounded-2xl border border-border bg-background p-1.5 focus-within:border-primary/70">
-              <Input ref={inputRef} id="floating-assistant-question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={MAX_QUESTION_LENGTH} disabled={busy} placeholder="Escreva uma pergunta..." className="h-10 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0" />
-              <Button type="submit" size="icon" className="size-10 rounded-xl" disabled={busy || question.trim().length < 3} aria-label="Enviar pergunta">
+              <Input
+                ref={inputRef}
+                id="floating-assistant-question"
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                maxLength={MAX_QUESTION_LENGTH}
+                disabled={busy}
+                placeholder="Escreva uma pergunta..."
+                className="h-10 flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                className="size-10 rounded-xl"
+                disabled={busy || question.trim().length < 3}
+                aria-label="Enviar pergunta"
+              >
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
               </Button>
             </div>
-            <p className="mt-2 px-1 text-[11px] text-muted-foreground">Enter envia · Clique numa FSA para abrir o chamado.</p>
+            <p className="mt-2 px-1 text-[11px] text-muted-foreground">
+              Enter envia · Clique numa FSA para abrir o chamado.
+            </p>
           </form>
         </section>
       )}

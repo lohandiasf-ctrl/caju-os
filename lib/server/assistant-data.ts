@@ -15,7 +15,7 @@ import { carregarGrupo } from '@/lib/server/fsa-payment';
 // Executa o que o assistente geral pediu. Cada função aqui é SOMENTE LEITURA.
 //
 // Duas regras valem para tudo que sai daqui, porque este texto vai para o
-// Google:
+// modelo de IA no Workers AI:
 // 1. Nada de dado pessoal. As consultas nem selecionam documento, telefone,
 //    endereço ou chave PIX (WORKFLOW_RULES, regra 9), e o que sobra ainda
 //    passa por `redact()`.

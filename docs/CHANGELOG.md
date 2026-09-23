@@ -11,6 +11,26 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-22
 
+### Assistente ganha histórico contínuo, exibição de fontes, presença global e fallback
+
+O assistente flutuante de IA agora suporta conversas multi-turno contínuas,
+permitindo perguntas de acompanhamento sem perder o contexto do turno anterior.
+Abaixo de cada resposta, o assistente indica de forma clara e visual as fontes e
+ferramentas consultadas (ex.: "Consultou: Chamados, Técnicos").
+
+O botão e painel do assistente flutuante (`FloatingAssistant`) foram desacoplados
+da página inicial e unificados globalmente no `RootLayout` via `GlobalAssistant`,
+tornando a IA acessível a partir de qualquer rota (Central N1, Spares, Mapa,
+Financeiro). Ao clicar numa FSA a partir de qualquer tela, o chamado é aberto
+automaticamente na interface principal via eventos customizados ou navegação direta.
+
+No servidor (`workers-ai-assistant.ts`), foi adicionado fallback de resiliência: se
+o modelo primário (`@cf/zai-org/glm-4.7-flash`) sofrer instabilidade transitória
+(500/503), o Workers AI tenta automaticamente os modelos de contingência compatíveis
+com chamadas de ferramentas (`@cf/meta/llama-4-scout-17b-16e-instruct` e
+`@cf/mistralai/mistral-small-3.1-24b-instruct`). Erro de cota diária (429) continua
+interrompendo de imediato para preservar a franquia gratuita sem cobranças surpresa.
+
 ### Assistente geral usa a franquia gratuita do Workers AI
 
 `/api/assistant/ask` deixou de depender da chave e da cota do Gemini. Agora

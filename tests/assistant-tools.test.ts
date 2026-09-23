@@ -160,6 +160,21 @@ test('a conversa anterior não cresce sem limite', () => {
   assert.equal(cleanHistory([{ role: 'assistant', text: 'x'.repeat(5000) }])[0].text.length, HISTORY_CHARS);
 });
 
+test('conversa multi-turno preserva a sequência de perguntas e respostas operacionais', () => {
+  const dialog = [
+    { role: 'user', text: 'Quais chamados estão agendados para amanhã?' },
+    { role: 'assistant', text: 'Os chamados FSA-101 e FSA-102 estão agendados.' },
+    { role: 'user', text: 'E quem atende em Itabuna?' },
+    { role: 'assistant', text: 'O técnico Carlos atende em Itabuna.' },
+  ];
+  const cleaned = cleanHistory(dialog);
+  assert.equal(cleaned.length, 4);
+  assert.equal(cleaned[0].role, 'user');
+  assert.equal(cleaned[1].role, 'assistant');
+  assert.equal(cleaned[2].role, 'user');
+  assert.equal(cleaned[3].role, 'assistant');
+});
+
 test('a instrução avisa que a conversa continua', () => {
   assert.match(INSTRUCTION, /A conversa continua/);
 });
