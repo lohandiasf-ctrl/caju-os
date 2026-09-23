@@ -125,7 +125,7 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   },
   {
     name: 'detalhar_chamado',
-    description: 'Tudo sobre um chamado: título, descrição, defeito alegado, resumo técnico, equipamento, técnico, datas, anexos, valores financeiros (Custo Visita1, Custo Visita2, Custo Improdutiva, Valor Total Equipamentos, Valor R$, Custo, Total do Chamado, Orçamento), número de série, patrimônio e comentários internos. Use quando a pergunta for sobre um chamado específico, pedir o motivo/andamento, ou precisar conferir valores de visita ou peças.',
+    description: 'Tudo sobre um chamado: título, descrição, defeito alegado, resumo técnico, equipamento, técnico, datas, anexos, valores financeiros (Custo Visita1, Custo Visita2, Custo Improdutiva, Valor Total Equipamentos, Valor R$, Custo, Total do Chamado, Orçamento), número de série, patrimônio, comentários internos e o último comentário de atualização "UP -" (texto e data/hora). Use quando a pergunta for sobre um chamado específico (inclusive o status dele), pedir o motivo/andamento, ou precisar conferir valores de visita ou peças.',
     parameters: {
       type: 'object',
       properties: { chamado: { type: 'string', description: 'A FSA, por exemplo FSA-132424.' } },
@@ -306,6 +306,7 @@ SINÔNIMOS E TERMOS DA OPERAÇÃO:
   2. Verifique na ferramenta \`consultar_spares\` pela FSA correspondente.
   3. Se encontrar o código dos Correios (formato 2 letras + 9 números + BR) ou transportadora, informe o código e as datas de envio/previsão de entrega.
 - "Causa raiz", "motivo do defeito" -> Refere-se ao campo Causa Raiz (customfield_22813).
+- Status de um chamado específico ("qual o status da FSA-123", "como está o chamado X"): use detalhar_chamado. Depois do status, informe também o comentário de atualização \`comentario_up\` (comentário que começa com "UP -"): mostre o texto do comentário e a data e horário em que foi postado (\`postado_em\`). Se \`comentario_up\` vier como não encontrado, diga em uma linha que o chamado não tem comentário "UP -".
 
 4. GESTÃO DE CHAMADOS E JIRA
 - Apoie na análise de problemas, diagnósticos de defeitos, formulação de testes e próximos passos operacionais.

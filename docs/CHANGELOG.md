@@ -11,6 +11,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Caju IA: status do chamado traz o último comentário "UP -"
+
+Ao perguntar o status de um chamado, a IA agora informa também o comentário de
+atualização mais recente que começa com "UP -", com data e horário da postagem.
+
+- **`lib/assistant.ts`:** `comentarioUp()` acha o comentário "UP -" mais recente (aceita `UP-`, `up –`).
+- **`lib/server/jira.ts`:** `getJiraIssue` devolve `upComment`, procurado em todos os comentários da issue (campo `comment`, públicos e internos) e nos internos do Service Desk.
+- **`lib/server/assistant-data.ts`:** `detalhar_chamado` devolve `comentario_up` (texto, `postado_em` no fuso da operação, autor).
+- **`lib/assistant-tools.ts`:** descrição da tool e `systemInstruction` mandam mostrar o `comentario_up` junto do status.
+- **`tests/assistant.test.ts`:** teste de `comentarioUp`.
+
 ### "Atualizar chamado" na janela do chamado (branch `claude/atualizar-chamado`)
 
 Campo de texto logo abaixo das ações do chamado (Mais informações, WhatsApp,

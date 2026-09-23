@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, dateAndTime, describeAttachments, extrairRastreioDeTexto, formatarDataExcelOuIso, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, comentarioUp, dateAndTime, describeAttachments, extrairRastreioDeTexto, formatarDataExcelOuIso, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 import { TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
@@ -494,3 +494,15 @@ test('formatarDataExcelOuIso converte serial numérico do Excel e datas ISO para
 });
 
 
+
+test('comentarioUp devolve o comentário "UP -" mais recente', () => {
+  const comentarios = [
+    { body: 'UP - Técnico a caminho da loja', createdAt: '2026-09-20T10:00:00.000-0300' },
+    { body: 'Peça enviada, sem UP - aqui', createdAt: '2026-09-22T09:00:00.000-0300' },
+    { body: '  up– Aguardando retorno da loja', createdAt: '2026-09-21T15:30:00.000-0300' },
+    { body: 'UPDATE geral', createdAt: '2026-09-23T08:00:00.000-0300' },
+  ];
+  assert.equal(comentarioUp(comentarios)?.body, '  up– Aguardando retorno da loja');
+  assert.equal(comentarioUp([{ body: 'sem atualização', createdAt: '2026-09-20T10:00:00.000-0300' }]), null);
+  assert.equal(comentarioUp([]), null);
+});

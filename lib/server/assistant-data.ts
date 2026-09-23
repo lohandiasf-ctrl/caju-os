@@ -121,6 +121,9 @@ async function detalharChamado(args: Args) {
     causa_raiz: op.causaRaiz ? redact(op.causaRaiz) : 'não informado',
     chegada_na_loja: op.dtChegadaLoja ?? 'não informado',
     data_aprovacao: op.dtAprovacao ?? 'não informado',
+    comentario_up: issue.upComment
+      ? { texto: redact(issue.upComment.body.trim()), postado_em: operationDateTime(issue.upComment.createdAt) ?? 'data não informada', autor: issue.upComment.author ?? 'sem autor' }
+      : 'Nenhum comentário começando com "UP -" neste chamado.',
     historico: history.length
       ? history.map((row) => `${operationDateTime(row.createdAt)} · ${redact(row.actorEmail)}: ${row.action}`)
       : 'Sem registro de auditoria para este chamado.',

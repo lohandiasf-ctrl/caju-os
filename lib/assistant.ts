@@ -171,6 +171,17 @@ export function extrairRastreioDeTexto(texto: string | null | undefined): string
   return null;
 }
 
+// Comentário de atualização da operação: começa com "UP -" (aceita "UP-",
+// "up –"). Devolve o mais recente, porque é o andamento atual do chamado.
+export function comentarioUp<T extends { body: string; createdAt: string }>(comentarios: T[]): T | null {
+  let ultimo: T | null = null;
+  for (const comentario of comentarios) {
+    if (!/^\s*UP\s*[-–—]/i.test(comentario.body)) continue;
+    if (!ultimo || Date.parse(comentario.createdAt) > Date.parse(ultimo.createdAt)) ultimo = comentario;
+  }
+  return ultimo;
+}
+
 // Converte datas que vieram como número serial do Excel (ex: 46252) ou ISO para DD/MM/AAAA
 export function formatarDataExcelOuIso(valor: string | number | null | undefined): string | null {
   if (valor === null || valor === undefined || valor === '') return null;
