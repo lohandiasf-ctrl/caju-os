@@ -425,4 +425,38 @@ test('TOOL_SCHEMAS inclui consultar_valores e consultar_equipamento', () => {
   assert.ok(TOOL_SCHEMAS.some((t) => t.name === 'consultar_equipamento'));
 });
 
+test('ticketContext inclui campos de REQ/Freshservice, logística e classificação', () => {
+  const text = ticketContext(issue({
+    chamadoFreshservice: 'REQ-12345',
+    tituloRequisicao: 'Troca de teclado PDV',
+    statusRequisicao: 'Em Andamento',
+    codigoRastreio: 'BR123456789JJ',
+    previsaoEntrega: '2026-09-25',
+    dataEnvio: '2026-09-21',
+    dataRecebimento: '2026-09-24',
+    dtChegadaLoja: '2026-09-22 10:00',
+    dtAprovacao: '2026-09-20 15:30',
+    dataLimite: '2026-09-26',
+    causaRaiz: 'Desgaste natural',
+    severidade: 'Média',
+    nivelCriticidade: 'Crítico',
+    aprovacao: 'Aprovado',
+  }));
+  assert.match(text, /Chamado Freshservice \(REQ\): REQ-12345/);
+  assert.match(text, /Título da Requisição: Troca de teclado PDV/);
+  assert.match(text, /Status da Requisição: Em Andamento/);
+  assert.match(text, /Código de Rastreio: BR123456789JJ/);
+  assert.match(text, /Previsão de Entrega: 2026-09-25/);
+  assert.match(text, /Data de Envio: 2026-09-21/);
+  assert.match(text, /Data de Recebimento: 2026-09-24/);
+  assert.match(text, /Chegada na Loja: 2026-09-22 10:00/);
+  assert.match(text, /Data da Aprovação: 2026-09-20 15:30/);
+  assert.match(text, /Data Limite: 2026-09-26/);
+  assert.match(text, /Causa Raiz: Desgaste natural/);
+  assert.match(text, /Severidade: Média/);
+  assert.match(text, /Nível de Criticidade: Crítico/);
+  assert.match(text, /Status Aprovação: Aprovado/);
+});
+
+
 

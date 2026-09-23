@@ -95,6 +95,12 @@ type JiraIssue = {
     customfield_16196?: unknown;
     customfield_12031?: unknown;
     customfield_12032?: unknown;
+    customfield_14886?: unknown;
+    customfield_12280?: unknown;
+    customfield_12844?: unknown;
+    customfield_12848?: unknown;
+    customfield_18558?: unknown;
+    customfield_18559?: unknown;
   } & Record<string, unknown>;
 };
 
@@ -224,7 +230,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
 
   const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', 'customfield_11958', 'customfield_12419', 'customfield_11959', 'customfield_14880', 'customfield_16195', 'customfield_12413', ...(options.withAttachments ? ['attachment'] : [])],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14810', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', 'customfield_11958', 'customfield_12419', 'customfield_11959', 'customfield_14880', 'customfield_16195', 'customfield_14821', 'customfield_12413', 'customfield_14886', 'customfield_15087', 'customfield_16196', ...(options.withAttachments ? ['attachment'] : [])],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
@@ -289,6 +295,13 @@ export async function getJiraIssue(key: string) {
     serviceStartedAt: customFieldText(issue.fields.customfield_10702) ?? value('Data/Hora - Início', 'Data/Hora - Inicio', 'Data Hora - Início', 'Data Hora - Inicio'),
     serviceEndedAt: customFieldText(issue.fields.customfield_10703) ?? value('Data/Hora - Término', 'Data/Hora - Termino', 'Data Hora - Término', 'Data Hora - Termino'),
     defectSummary: value('Resumo do defeito'),
+    // --- CAMPOS DE REQUISIÇÃO (REQ / FRESHSERVICE) ---
+    chamadoFreshservice: value('Chamado no Freshservice', 'Chamado Freshservice') ?? customFieldText(issue.fields.customfield_14886),
+    inReq: value('IN_REQ', 'IN REQ') ?? customFieldText(issue.fields.customfield_12280),
+    tituloRequisicao: value('Titulo_da_Requisição', 'Titulo da Requisicao', 'Título da Requisição') ?? customFieldText(issue.fields.customfield_12844),
+    statusRequisicao: value('Status_da_Requisição', 'Status da Requisicao', 'Status da Requisição') ?? customFieldText(issue.fields.customfield_12848),
+    dataEnvio: value('Data - Envio', 'Data Envio') ?? customFieldText(issue.fields.customfield_18558),
+    dataRecebimento: value('Data - Recebimento', 'Data Recebimento') ?? customFieldText(issue.fields.customfield_18559),
 
     // ──── VALORES FINANCEIROS ────
     valorReais: value('Valor(R$)', 'Valor', 'Valor R$') ?? customFieldText(issue.fields.customfield_16195),

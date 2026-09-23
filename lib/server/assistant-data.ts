@@ -95,8 +95,20 @@ async function detalharChamado(args: Args) {
   const history = await getDb().select({ action: operationalAudit.action, actorEmail: operationalAudit.actorEmail, createdAt: operationalAudit.createdAt })
     .from(operationalAudit).where(eq(operationalAudit.ticketKey, issue.key))
     .orderBy(desc(operationalAudit.createdAt)).limit(10).all();
+  const op = issue.operationalFields;
   return {
     chamado: ticketContext(toAssistantIssue(issue)),
+    resumo: redact(issue.summary),
+    status: issue.status,
+    loja: issue.store,
+    numero_req_freshservice: op.chamadoFreshservice ?? op.inReq ?? 'não informado',
+    valor_equipamento: op.valorReais ?? 'não informado',
+    custo_total: op.custoTotal ?? 'não informado',
+    codigo_rastreio: op.codigoRastreio ?? 'não informado',
+    previsao_entrega: op.previsaoEntrega ?? 'não informado',
+    causa_raiz: op.causaRaiz ? redact(op.causaRaiz) : 'não informado',
+    chegada_na_loja: op.dtChegadaLoja ?? 'não informado',
+    data_aprovacao: op.dtAprovacao ?? 'não informado',
     historico: history.length
       ? history.map((row) => `${operationDateTime(row.createdAt)} · ${redact(row.actorEmail)}: ${row.action}`)
       : 'Sem registro de auditoria para este chamado.',
