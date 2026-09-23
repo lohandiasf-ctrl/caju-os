@@ -7,6 +7,13 @@ export function greetingForHour(hour: number) {
   return 'Boa noite';
 }
 
+/** Emoji do período, nos mesmos cortes da saudação: manhã, tarde, noite. */
+export function greetingEmoji(hour: number) {
+  if (hour >= 5 && hour < 12) return '🌅';
+  if (hour >= 12 && hour < 18) return '☀️';
+  return '🌙';
+}
+
 export function brasiliaHour(date = new Date()) {
   const hour = new Intl.DateTimeFormat('pt-BR', { hour: 'numeric', hourCycle: 'h23', timeZone: 'America/Sao_Paulo' }).format(date);
   return Number(hour);

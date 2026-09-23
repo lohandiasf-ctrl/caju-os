@@ -72,3 +72,41 @@ export function setSidebarCollapsed(collapsed: boolean) {
   }
   window.dispatchEvent(new Event(SIDEBAR_EVENT));
 }
+
+// ── Grupos recolhíveis do menu (desktop) ──────────────────────────────────
+// Em tela baixa o menu inteiro não deixa altura para a equipe; um grupo pouco
+// usado (Gestão) pode ficar numa linha só. A escolha da pessoa é salva; sem
+// escolha, o grupo abre em telas com 900 px ou mais de altura, ou quando a
+// página atual está dentro dele.
+const NAV_GROUP_KEY = 'caju-nav-group:';
+const navGroupMemory = new Map<string, boolean>();
+
+export function isNavGroupOpen(group: string, containsActive = false) {
+  if (navGroupMemory.has(group)) return navGroupMemory.get(group)!;
+  try {
+    const stored = window.localStorage.getItem(NAV_GROUP_KEY + group);
+    if (stored) return stored === 'open';
+  } catch {
+    /* sem storage: vale o padrão */
+  }
+  return containsActive || window.innerHeight >= 900;
+}
+
+export function setNavGroupOpen(group: string, open: boolean) {
+  navGroupMemory.set(group, open);
+  try {
+    window.localStorage.setItem(NAV_GROUP_KEY + group, open ? 'open' : 'closed');
+  } catch {
+    /* sem storage vale só nesta visita (memória acima) */
+  }
+  window.dispatchEvent(new Event(SIDEBAR_EVENT));
+}
+
+export function subscribeNavGroups(callback: () => void) {
+  window.addEventListener(SIDEBAR_EVENT, callback);
+  window.addEventListener('resize', callback);
+  return () => {
+    window.removeEventListener(SIDEBAR_EVENT, callback);
+    window.removeEventListener('resize', callback);
+  };
+}
