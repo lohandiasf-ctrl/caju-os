@@ -756,3 +756,8 @@ html.theme-fading :where(body, header, aside, main, section, article, nav, [data
 @media (prefers-reduced-motion: reduce) {
   .assistant-orb, .assistant-orb--thinking, .assistant-orb__glint, .skeleton { animation: none !important; }
 }
+
+/* Gravando: ponto vermelho que pulsa ao lado do tempo. */
+.voice-dot { width: .5rem; height: .5rem; border-radius: 9999px; background: currentColor; animation: voice-dot 1s ease-in-out infinite; }
+@keyframes voice-dot { 50% { opacity: .35; transform: scale(.8); } }
+@media (prefers-reduced-motion: reduce) { .voice-dot { animation: none; } }
