@@ -31,6 +31,22 @@ ao `systemInstruction` em `lib/assistant-tools.ts`. O assistente passa a operar 
 
 ## 2026-09-22
 
+### Senha ao reabrir o site ou o app (branch `claude/senha-sessao`)
+
+A sessão do Firebase passou de persistência local (IndexedDB, sobrevivia ao
+fechamento) para **`browserSessionPersistence`** (`lib/firebase.ts`): recarregar
+a página mantém o login; fechar a aba, o navegador ou o app desktop (Tauri)
+encerra a sessão. Na volta, o login mostra o e-mail da última pessoa que entrou
+neste aparelho (`localStorage` `caju-last-email`, `lib/login-memory.ts`, com
+testes) e pede **só a senha**; "Usar outra conta" volta ao formulário completo.
+A senha nunca é guardada. "Sair" (menu do usuário e tela de acesso negado)
+passa por `signOutAndForget()`, que também esquece o e-mail. Na primeira carga,
+o token antigo gravado em disco (`firebase:authUser:*` e o IndexedDB
+`firebaseLocalStorageDb`) é apagado.
+**Efeito colateral:** cada aba nova começa sem sessão (o `sessionStorage` é por
+aba), então abrir um link do app numa aba nova (ex.: `?ticket=` compartilhado)
+pede a senha também. Nenhuma regra de servidor, papel ou rota mudou.
+
 ### Redesign "Dashboard Premium" (branch `claude/dashboard-premium`)
 
 Só camada visual/UX — nenhuma regra de negócio, rota de API, schema ou

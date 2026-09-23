@@ -11,11 +11,20 @@ import { Input } from '@/components/ui/input';
 import { startLoginTransition } from '@/components/login-transition';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { auth } from '@/lib/firebase';
+import { emailInitials, forgetRememberedEmail, readRememberedEmail, rememberEmail } from '@/lib/login-memory';
+
+function localStore() {
+  try { return window.localStorage; } catch { return null; }
+}
 
 export default function LoginPage() {
   const emailRef = useRef<HTMLInputElement>(null);
   const [resetting, setResetting] = useState(false);
-  const [email, setEmail] = useState('');
+  // E-mail de quem entrou por último neste aparelho: a volta pede só a senha.
+  // A tela só renderiza no cliente (o AuthProvider segura o SSR), então dá
+  // para ler o storage no estado inicial.
+  const [remembered, setRemembered] = useState(() => (typeof window === 'undefined' ? '' : readRememberedEmail(localStore())));
+  const [email, setEmail] = useState(remembered);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,6 +33,20 @@ export default function LoginPage() {
   const [leaving, setLeaving] = useState(false);
   const desktopPanelRef = useRef<HTMLDivElement>(null);
   const mobilePanelRef = useRef<HTMLDivElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (remembered) passwordRef.current?.focus();
+  }, [remembered]);
+
+  function switchAccount() {
+    forgetRememberedEmail(localStore());
+    setRemembered('');
+    setEmail('');
+    setPassword('');
+    setError('');
+    setMessage('');
+    window.requestAnimationFrame(() => emailRef.current?.focus());
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,6 +59,7 @@ export default function LoginPage() {
     const box = panel?.getBoundingClientRect();
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
+      rememberEmail(localStore(), email);
       setLeaving(true);
       startLoginTransition(box ? { top: box.top, left: box.left, width: box.width, height: box.height } : null);
     } catch (cause) {
@@ -84,17 +108,33 @@ export default function LoginPage() {
           transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
           className="relative z-[1] -mt-6 w-full flex-1 rounded-t-[24px] bg-card-elevated px-5 pb-10 pt-7 shadow-(--shadow-card) sm:px-8 lg:mt-0 lg:max-w-[400px] lg:flex-none lg:rounded-[20px] lg:border lg:border-border lg:p-8"
         >
-          <h1 className="text-xl font-semibold tracking-[-.01em]">Que bom ter você de volta <span aria-hidden="true">👋</span></h1>
-          <p className="mt-1.5 text-sm text-muted-foreground">Entre com suas credenciais para continuar.</p>
+          {remembered ? <>
+            <div className="flex items-center gap-3">
+              <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-bold text-primary">{emailInitials(remembered)}</span>
+              <div className="min-w-0">
+                <h1 className="text-xl font-semibold tracking-[-.01em]">Que bom ter você de volta <span aria-hidden="true">👋</span></h1>
+                <p className="truncate text-sm text-muted-foreground">{remembered}</p>
+              </div>
+            </div>
+            <p className="mt-4 text-sm text-muted-foreground">Por segurança, a sessão termina quando o app é fechado. Digite sua senha para continuar.</p>
+          </> : <>
+            <h1 className="text-xl font-semibold tracking-[-.01em]">Que bom ter você de volta <span aria-hidden="true">👋</span></h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">Entre com suas credenciais para continuar.</p>
+          </>}
 
           <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">E-mail</label>
-              <span className="relative block">
-                <Mail aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
-                <Input ref={emailRef} id="login-email" name="email" className={loginInput} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@cajutech.net" required />
-              </span>
-            </div>
+            {remembered ? (
+              // Continua no formulário para o gerenciador de senhas saber de qual conta é a senha.
+              <input ref={emailRef} type="email" name="email" autoComplete="username" value={email} readOnly hidden />
+            ) : (
+              <div>
+                <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">E-mail</label>
+                <span className="relative block">
+                  <Mail aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                  <Input ref={emailRef} id="login-email" name="email" className={loginInput} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@cajutech.net" required />
+                </span>
+              </div>
+            )}
             <div>
               <div className="mb-1.5 flex items-center justify-between gap-3">
                 <label htmlFor="login-password" className="text-sm font-medium">Senha</label>
@@ -102,7 +142,7 @@ export default function LoginPage() {
               </div>
               <span className="relative block">
                 <LockKeyhole aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
-                <Input id="login-password" name="password" className={`${loginInput} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" minLength={6} required />
+                <Input ref={passwordRef} id="login-password" name="password" className={`${loginInput} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" minLength={6} required />
                 <button type="button" onClick={() => setShowPassword((current) => !current)} aria-pressed={showPassword} className="absolute right-0.5 top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-xl text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? <EyeOff className="size-[18px]" strokeWidth={1.75} /> : <Eye className="size-[18px]" strokeWidth={1.75} />}</button>
               </span>
             </div>
@@ -110,7 +150,14 @@ export default function LoginPage() {
             {message && <output className="block rounded-xl bg-success-soft p-3 text-[13px] text-success">{message}</output>}
             <Button className="h-11 w-full rounded-xl text-[15px] font-semibold" type="submit" disabled={loading || resetting}>{loading ? <><LoaderCircle className="animate-spin" aria-hidden="true" />Entrando…</> : 'Entrar'}</Button>
           </form>
-          <p className="mt-8 text-center text-xs leading-5 text-muted-foreground">Não possui acesso? Solicite seu cadastro ao administrador da operação.</p>
+          {remembered ? (
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              Não é {remembered.split('@')[0]}?{' '}
+              <button type="button" onClick={switchAccount} className="min-h-9 rounded-md px-1 font-semibold text-primary hover:underline">Usar outra conta</button>
+            </p>
+          ) : (
+            <p className="mt-8 text-center text-xs leading-5 text-muted-foreground">Não possui acesso? Solicite seu cadastro ao administrador da operação.</p>
+          )}
         </motion.div>
       </section>
     </main>
