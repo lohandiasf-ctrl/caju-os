@@ -24,6 +24,13 @@ export type JiraIssueSummary = {
   partnerTriggeredAt: string | null;
   // Só com `withAttachments`: o tipo (MIME) de cada anexo do chamado.
   attachmentTypes?: string[];
+  // Valores financeiros do chamado
+  visitCost1?: string | null;
+  visitCost2?: string | null;
+  improductiveCost?: string | null;
+  equipmentTotal?: string | null;
+  valueR$?: string | null;
+  ticketTotal?: string | null;
 };
 
 export type JiraAttachmentSummary = {
@@ -73,6 +80,21 @@ type JiraIssue = {
     customfield_14880?: unknown;
     customfield_11955?: unknown;
     customfield_19825?: unknown;
+    customfield_11958?: unknown;
+    customfield_12419?: unknown;
+    customfield_11959?: unknown;
+    customfield_16195?: unknown;
+    customfield_14821?: unknown;
+    customfield_17468?: unknown;
+    customfield_13308?: unknown;
+    customfield_13501?: unknown;
+    customfield_12806?: unknown;
+    customfield_15087?: unknown;
+    customfield_15088?: unknown;
+    customfield_15089?: unknown;
+    customfield_16196?: unknown;
+    customfield_12031?: unknown;
+    customfield_12032?: unknown;
   } & Record<string, unknown>;
 };
 
@@ -202,7 +224,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
 
   const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', ...(options.withAttachments ? ['attachment'] : [])],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', 'customfield_11958', 'customfield_12419', 'customfield_11959', 'customfield_14880', 'customfield_16195', 'customfield_12413', ...(options.withAttachments ? ['attachment'] : [])],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
@@ -245,13 +267,20 @@ export async function getJiraIssue(key: string) {
     pdvNumber: value('Numero do PDV', 'Número do PDV'),
     problemType: value('Tipo de problema'),
     allegedDefect: value('Defeito alegado'),
-    visitCost1: value('Custo Visita1', 'Custo Visita 1'),
-    equipmentTotal: value('Valor Total de Equipamentos'),
+    visitCost1: value('Custo Visita1', 'Custo Visita 1') ?? customFieldText(issue.fields.customfield_11958),
+    equipmentTotal: value('Valor Total de Equipamentos') ?? customFieldText(issue.fields.customfield_14880),
     kmTotal: value('Valor total do KM', 'Valor Total do KM'),
-    visitCost2: value('Custo Visita2', 'Custo Visita 2'),
-    ticketTotal: value('Total do Tickt', 'Total do Ticket'),
+    visitCost2: value('Custo Visita2', 'Custo Visita 2') ?? customFieldText(issue.fields.customfield_12419),
+    improductiveCost: value('Custo Improdutiva', 'Custo Visita Improdutiva') ?? customFieldText(issue.fields.customfield_11959),
+    valueR$: value('Valor R$', 'Valor (R$)') ?? customFieldText(issue.fields.customfield_16195),
+    cost: value('Custo') ?? customFieldText(issue.fields.customfield_14821),
+    ticketTotal: value('Total do Tickt', 'Total do Ticket') ?? customFieldText(issue.fields.customfield_12413),
     visitNumber: value('Numero de Visita', 'Número de Visita'),
-    additionalCosts: value('Detalhes de custos adicionais'),
+    additionalCosts: value('Detalhes de custos adicionais', 'Custos Adicionais') ?? customFieldText(issue.fields.customfield_17468) ?? customFieldText(issue.fields.customfield_13308),
+    budget: value('Orçamento', 'Orcamento') ?? customFieldText(issue.fields.customfield_13501),
+    equipment: value('Equipamento') ?? customFieldText(issue.fields.customfield_15087) ?? customFieldText(issue.fields.customfield_16196),
+    serialNumber: value('Número de Série', 'Numero de Serie', 'Nº de Série') ?? customFieldText(issue.fields.customfield_15088) ?? customFieldText(issue.fields.customfield_12031),
+    patrimony: value('Patrimônio', 'Patrimonio') ?? customFieldText(issue.fields.customfield_15089) ?? customFieldText(issue.fields.customfield_12032),
     technicianData: value('Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos') ?? customFieldText(issue.fields.customfield_12279) ?? technicianFieldsToText(issue.fields),
     scheduledDateTime: value('Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento') ?? customFieldText(issue.fields.customfield_12036),
     // These names occur more than once in the Jira configuration. Always read
@@ -767,6 +796,12 @@ function toSummary(issue: JiraIssue): JiraIssueSummary {
     city: cityWithUf(customFieldText(fields.customfield_11994), fields.customfield_12317),
     scheduledAt: customFieldText(fields.customfield_12036),
     partnerTriggeredAt: customFieldText(fields.customfield_12278),
+    visitCost1: customFieldText(fields.customfield_11958),
+    visitCost2: customFieldText(fields.customfield_12419),
+    improductiveCost: customFieldText(fields.customfield_11959),
+    equipmentTotal: customFieldText(fields.customfield_14880),
+    valueR$: customFieldText(fields.customfield_16195),
+    ticketTotal: customFieldText(fields.customfield_12413),
   };
 }
 

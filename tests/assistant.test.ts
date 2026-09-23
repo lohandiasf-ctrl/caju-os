@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -378,3 +378,44 @@ test('sanitizeFinalAnswer limpa quaisquer tags ou resquícios de ferramentas do 
   assert.equal(sanitizeFinalAnswer('<arg_key>teste</arg_key> Resposta limpa'), 'Resposta limpa');
   assert.equal(sanitizeFinalAnswer(''), '');
 });
+
+test('formatMoney formata valores em reais', () => {
+  assert.equal(formatMoney('120'), 'R$ 120,00');
+  assert.equal(formatMoney('120.00'), 'R$ 120,00');
+  assert.equal(formatMoney(150.5), 'R$ 150,50');
+  assert.equal(formatMoney(null), null);
+});
+
+test('ticketContext inclui custos e campos de equipamento quando informados', () => {
+  const text = ticketContext(issue({
+    equipmentModel: 'Impressora Daruma',
+    serialNumber: 'SN-998877',
+    patrimony: 'PAT-1234',
+    visitCost1: '120.00',
+    visitCost2: '80.00',
+    improductiveCost: '50.00',
+    equipmentTotal: '350.00',
+    ticketTotal: '600.00',
+  }));
+  assert.match(text, /Equipamento: Impressora Daruma/);
+  assert.match(text, /Número de Série: SN-998877/);
+  assert.match(text, /Patrimônio: PAT-1234/);
+  assert.match(text, /Custo 1ª Visita: R\$ 120,00/);
+  assert.match(text, /Custo 2ª Visita: R\$ 80,00/);
+  assert.match(text, /Custo Improdutiva: R\$ 50,00/);
+  assert.match(text, /Valor Total Equipamentos: R\$ 350,00/);
+  assert.match(text, /Total do Chamado: R\$ 600,00/);
+});
+
+test('queueContext agrupa e totaliza chamados por custo de primeira visita', () => {
+  const tickets = [
+    ticket({ key: 'FSA-101', status: 'Agendado', visitCost1: '120' }),
+    ticket({ key: 'FSA-102', status: 'Agendado', visitCost1: '120.00' }),
+    ticket({ key: 'FSA-103', status: 'Agendado', visitCost1: '150' }),
+  ];
+  const text = queueContext(tickets, 60, TODAY);
+  assert.match(text, /Valores de 1ª visita registrados na fila:/);
+  assert.match(text, /- 1ª Visita R\$ 120,00: 2 — FSA-101, FSA-102/);
+  assert.match(text, /- 1ª Visita R\$ 150,00: 1 — FSA-103/);
+});
+

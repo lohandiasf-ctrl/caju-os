@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Integração de capacidades de busca no Jira, campos customizados e inteligência financeira
+
+Adicionado catálogo completo de métodos de busca no Jira e integração direta dos campos operacionais, financeiros e de equipamentos para a Caju IA responder com precisão perguntas como *"Quantos chamados estão agendados com o valor da primeira visita 120 reais"*.
+- **Catálogo de capacidades e campos customizados:** Seção 9 documentada em `docs/guia_completo_ia_cajutech.md` detalhando busca JQL avançada, Assets/CMDB, comentários, anexos, SLAs, e tabela completa de custom fields (`customfield_11958` Custo Visita1, `customfield_12419` Custo Visita2, `customfield_11959` Custo Improdutiva, `customfield_16195` Valor R$, `customfield_14880` Valor Total de Equipamentos, `customfield_14821` Custo, `customfield_12413` Total do Ticket, `customfield_17468`/`13308` Custos Adicionais, `customfield_13501` Orçamento, e campos de equipamento/hardware `customfield_15087`, `customfield_15088`, `customfield_15089`, `customfield_12031`, `customfield_12032`).
+- **Integração no Jira (`lib/server/jira.ts`):** `searchJiraIssues` agora requisita campos financeiros diretamente na busca JQL; `toSummary` e `getJiraIssue` extraem os valores por ID e por nome mapeado (`namedValues`).
+- **Repasse ao assistente (`lib/server/assistant-issue.ts`):** `toAssistantIssue` agora mapeia todos os campos financeiros e de hardware (`visitCost1`, `visitCost2`, `improductiveCost`, `equipmentTotal`, `valueR$`, `cost`, `ticketTotal`, `additionalCosts`, `budget`, `serialNumber`, `patrimony`, `equipment`).
+- **Formatação de moeda e agrupamento pronto (`lib/assistant.ts`):** `formatMoney` formata valores monetários em padrão BRL; `costGroups` em `queueContext` totaliza e lista chamados por valor de 1ª visita; `ticketContext` exibe todos os custos operacionais do chamado.
+- **Instruções e ferramentas (`lib/assistant-tools.ts`):** Schemas de `consultar_chamados` e `detalhar_chamado` e o `systemInstruction` agora orientam a IA sobre como correlacionar status e custos para contagens instantâneas e sem alucinações.
+- **Testes unitários (`tests/assistant.test.ts`):** Cobertura com 316 testes passando para formatação de moeda, dados do chamado e agrupamento por custo.
+
 ### Interceptação robusta de chamadas de ferramentas (Tool Calls) e higienização
 
 Corrigido vazamento de marcações XML cruas (`<tool_call>detalhar_chamado...`) emitidas por modelos do Workers AI (especialmente GLM-4.7-Flash).

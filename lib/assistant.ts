@@ -25,6 +25,13 @@ export type AssistantTicket = {
   // Tipo (MIME) de cada anexo do Jira. Toda evidência do Caju OS (N1, WhatsApp,
   // tela do chamado) sobe como anexo, então é aqui que ela aparece.
   attachmentTypes?: string[];
+  // Valores financeiros do chamado no Jira
+  visitCost1?: string | null;
+  visitCost2?: string | null;
+  improductiveCost?: string | null;
+  equipmentTotal?: string | null;
+  valueR$?: string | null;
+  ticketTotal?: string | null;
 };
 
 export type AssistantIssue = AssistantTicket & {
@@ -32,6 +39,12 @@ export type AssistantIssue = AssistantTicket & {
   allegedDefect: string | null;
   problemCategory: string | null;
   equipmentModel: string | null;
+  equipment?: string | null;
+  serialNumber?: string | null;
+  patrimony?: string | null;
+  cost?: string | null;
+  additionalCosts?: string | null;
+  budget?: string | null;
   defectSummary: string | null;
   technicianData: string | null;
   internalComments: Array<{ author: string | null; createdAt: string; body: string }>;
@@ -47,6 +60,18 @@ export function redact(value: string): string {
     .replace(/\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dxX]\b/g, '[RG]')
     .replace(/(?<!\d)(?:\+55[\s.-]?)?\(?\d{2}\)?[\s.-]?9?\d{4}[\s.-]?\d{4}\b/g, '[TELEFONE]')
     .replace(/\b[\w.+-]+@[\w-]+\.[\w.-]+\b/g, '[EMAIL]');
+}
+
+export function formatMoney(value: string | number | null | undefined): string | null {
+  if (value == null) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  const clean = str.replace(/[^\d.,]/g, '').replace(',', '.');
+  const num = Number(clean);
+  if (Number.isFinite(num)) {
+    return `R$ ${num.toFixed(2).replace('.', ',')}`;
+  }
+  return str;
 }
 
 function line(label: string, value: string | null | undefined) {
@@ -68,9 +93,20 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   text += line('Técnico', issue.technicianName);
   if (issue.attachmentTypes) text += line('Anexos (evidências)', describeAttachments(issue.attachmentTypes));
   text += line('Categoria do problema', issue.problemCategory);
-  text += line('Equipamento', issue.equipmentModel);
+  if (issue.equipmentModel || issue.equipment) text += line('Equipamento', issue.equipmentModel ?? issue.equipment);
+  if (issue.serialNumber) text += line('Número de Série', issue.serialNumber);
+  if (issue.patrimony) text += line('Patrimônio', issue.patrimony);
   text += line('Defeito alegado', issue.allegedDefect);
   text += line('Resumo do defeito', issue.defectSummary);
+  if (issue.visitCost1) text += line('Custo 1ª Visita', formatMoney(issue.visitCost1));
+  if (issue.visitCost2) text += line('Custo 2ª Visita', formatMoney(issue.visitCost2));
+  if (issue.improductiveCost) text += line('Custo Improdutiva', formatMoney(issue.improductiveCost));
+  if (issue.equipmentTotal) text += line('Valor Total Equipamentos', formatMoney(issue.equipmentTotal));
+  if (issue.valueR$) text += line('Valor (R$)', formatMoney(issue.valueR$));
+  if (issue.cost) text += line('Custo', formatMoney(issue.cost));
+  if (issue.ticketTotal) text += line('Total do Chamado', formatMoney(issue.ticketTotal));
+  if (issue.additionalCosts) text += line('Custos Adicionais', issue.additionalCosts);
+  if (issue.budget) text += line('Orçamento', formatMoney(issue.budget));
   text += line('Descrição', issue.description);
   const comments = issue.internalComments.slice(-maxComments);
   if (comments.length) {
@@ -211,6 +247,22 @@ function withoutAttachments(tickets: AssistantTicket[]): string[] {
   return [...byStatus].map(([status, keys]) => `- Sem nenhum anexo em "${status}": ${keys.length} — ${keys.join(', ')}`);
 }
 
+// Agrupamento por valor de 1ª visita quando presente nos chamados listados.
+// Evita erro de contagem no modelo quando a operação pergunta "quantos chamados com valor de primeira visita X".
+function costGroups(tickets: AssistantTicket[]): string[] {
+  const withCost = tickets.filter((ticket) => ticket.visitCost1 != null && String(ticket.visitCost1).trim() !== '');
+  if (!withCost.length) return [];
+  const byCost = new Map<string, string[]>();
+  for (const ticket of withCost) {
+    const formatted = formatMoney(ticket.visitCost1) ?? String(ticket.visitCost1).trim();
+    byCost.set(formatted, [...(byCost.get(formatted) ?? []), ticket.key]);
+  }
+  return [
+    'Valores de 1ª visita registrados na fila:',
+    ...[...byCost].map(([val, keys]) => `- 1ª Visita ${val}: ${keys.length} — ${keys.join(', ')}`),
+  ];
+}
+
 // Brasil não tem horário de verão desde 2019, então 24h atrás é sempre ontem.
 export function previousOperationDate(now: Date = new Date()): string {
   return operationDate(new Date(now.getTime() - 24 * 60 * 60 * 1000));
@@ -240,7 +292,16 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
   const day = operationDate(today);
   const yesterday = previousOperationDate(today);
   const stamp = `Hoje é ${day}; ontem foi ${yesterday}. As datas abaixo estão no formato AAAA-MM-DD HH:MM, no horário de Brasília; algumas não têm hora.`;
-  const counts = [...statusGroups(listed), '', 'Contagens prontas nesta lista (já conferidas):', ...dayCounts(listed, day, 'hoje'), ...dayCounts(listed, yesterday, 'ontem'), ...(listed.some((ticket) => ticket.attachmentTypes) ? withoutAttachments(listed) : [])];
+  const costs = costGroups(listed);
+  const counts = [
+    ...statusGroups(listed),
+    '',
+    'Contagens prontas nesta lista (já conferidas):',
+    ...dayCounts(listed, day, 'hoje'),
+    ...dayCounts(listed, yesterday, 'ontem'),
+    ...(listed.some((ticket) => ticket.attachmentTypes) ? withoutAttachments(listed) : []),
+    ...(costs.length ? ['', ...costs] : []),
+  ];
   return [stamp, `${tickets.length} chamados na fila.`, ...counts, '', header, ...rows].join('\n') + cut;
 }
 
@@ -273,6 +334,7 @@ Perguntas sobre data ("hoje", "ontem", "esta semana"): a primeira linha do conte
 - Se não der para saber qual é, use "acionado em".
 Para "hoje" e "ontem", copie a linha certa das "Contagens prontas" (número e FSAs), sem recontar. Para outros períodos, conte pela coluna.
 Evidência, foto, vídeo, RAT, anexo, comprovante: use a coluna "anexos" (arquivos anexados ao chamado no Jira). "Sem evidência" = "nenhum". Para "sem evidência" num status, copie a linha "Sem nenhum anexo em ..." das contagens prontas; se o status não aparecer ali, nenhum chamado nele está sem anexo. Status: compare com a coluna "status" sem diferenciar maiúsculas ("técnico em campo" = "Técnico em campo").
+Perguntas sobre custos e valores financeiros ("valor da primeira visita", "custo de visita", "chamados com valor X"): se houver contagem em "Valores de 1ª visita registrados na fila", use diretamente essas contagens e cite as FSAs. Caso contrário, use as informações de cada chamado.
 Só quando a pergunta for sobre data, diga em poucas palavras qual coluna usou (ex.: "pela data de acionamento"). Em pergunta que não é sobre data, não escreva isso. Cite sempre as FSAs.`,
 };
 
