@@ -112,6 +112,7 @@ Windows (`FileGroupDescriptorW` + `FileContents`), tambem lidos por esse comando
 | Voz | WebRTC + `socket.io-client`; servidor de sinalização em `signaling-server/` (Railway); TURN via Cloudflare Realtime |
 | Mapa | Leaflet + OpenStreetMap (migrado do Google Maps) |
 | OCR da RAT | Workers AI `@cf/meta/llama-3.2-11b-vision-instruct` |
+| Assistente geral | Workers AI `@cf/zai-org/glm-4.7-flash`, com consultas somente de leitura e confirmação na tela para ações |
 | Build | Vite 8 via `vinext build` |
 | Lint | oxlint (`npm run lint`) — regras type-aware desligadas (plugin quebra) |
 | Testes | `node --test` em `tests/*.test.ts` (3 testes) |

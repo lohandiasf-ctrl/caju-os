@@ -25,6 +25,44 @@ porque o app hoje é só escuro.
 
 ---
 
+## 2026-09-22
+
+### Assistente ganha histórico contínuo, exibição de fontes, presença global e fallback
+
+O assistente flutuante de IA agora suporta conversas multi-turno contínuas,
+permitindo perguntas de acompanhamento sem perder o contexto do turno anterior.
+Abaixo de cada resposta, o assistente indica de forma clara e visual as fontes e
+ferramentas consultadas (ex.: "Consultou: Chamados, Técnicos").
+
+O botão e painel do assistente flutuante (`FloatingAssistant`) foram desacoplados
+da página inicial e unificados globalmente no `RootLayout` via `GlobalAssistant`,
+tornando a IA acessível a partir de qualquer rota (Central N1, Spares, Mapa,
+Financeiro). Ao clicar numa FSA a partir de qualquer tela, o chamado é aberto
+automaticamente na interface principal via eventos customizados ou navegação direta.
+
+No servidor (`workers-ai-assistant.ts`), foi adicionado fallback de resiliência: se
+o modelo primário (`@cf/zai-org/glm-4.7-flash`) sofrer instabilidade transitória
+(500/503), o Workers AI tenta automaticamente os modelos de contingência compatíveis
+com chamadas de ferramentas (`@cf/meta/llama-4-scout-17b-16e-instruct` e
+`@cf/mistralai/mistral-small-3.1-24b-instruct`). Erro de cota diária (429) continua
+interrompendo de imediato para preservar a franquia gratuita sem cobranças surpresa.
+
+### Assistente geral usa a franquia gratuita do Workers AI
+
+`/api/assistant/ask` deixou de depender da chave e da cota do Gemini. Agora
+usa o binding já existente do Workers AI com `@cf/zai-org/glm-4.7-flash`, que
+suporta raciocínio e chamadas de ferramentas. As consultas de chamados, Jira,
+técnicos, spares e WhatsApp continuam no servidor; o modelo apenas decide o
+que consultar e escreve a resposta. Ações como agendamento continuam apenas
+preparadas para confirmação na tela.
+
+Cada chamada usa `store: false`, para não armazenar o conteúdo operacional
+enviado ao modelo. A franquia gratuita diária é da Cloudflare; quando ela for
+atingida, a API responde claramente para tentar no dia seguinte, sem trocar
+para um modelo pago.
+
+---
+
 ## 2026-09-21
 
 ### Grupo de chamados só aceita uma cidade

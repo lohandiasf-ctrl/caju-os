@@ -4,6 +4,7 @@ import './globals.css';
 import { AuthProvider } from '@/components/auth-provider';
 import { DesktopWindowControls } from '@/components/desktop-window-controls';
 import { PullRefreshGuard } from '@/components/pull-refresh-guard';
+import { GlobalAssistant } from '@/components/global-assistant';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -36,7 +37,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider><PullRefreshGuard /><DesktopWindowControls />{children}</AuthProvider>
+        <AuthProvider>
+          <PullRefreshGuard />
+          <DesktopWindowControls />
+          {children}
+          <GlobalAssistant />
+        </AuthProvider>
       </body>
     </html>
   );

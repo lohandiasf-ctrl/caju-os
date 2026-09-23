@@ -279,8 +279,10 @@ Reproduza o estilo "coluna com trilho":
   financeiras").
 - Input pílula no rodapé: ícone à esquerda, placeholder "Pergunte algo…",
   microfone, botão "Enviar" azul compacto.
-- Reaproveite toda a lógica do `assistant-panel.tsx`; só envolva num layout
-  compacto que expande para o painel completo.
+- Reaproveite toda a lógica do `assistant-panel.tsx`. O assistente já é global
+  (`components/global-assistant.tsx`, montado no `RootLayout`): o card do
+  dashboard **não** cria uma segunda instância — ele só abre/alimenta o painel
+  global (mesmo histórico), e o botão flutuante ganha o mesmo orb.
 
 ### 5.7 Tabela de atividades recentes
 - Cabeçalho 12 px cinza sem fundo; linhas 56 px com divisor `--border`.

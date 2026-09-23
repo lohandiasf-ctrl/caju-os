@@ -3,7 +3,7 @@ import { cleanHistory, systemInstruction, toolsFor } from '@/lib/assistant-tools
 import { assistantToolRunner } from '@/lib/server/assistant-data';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { canUseWhatsapp } from '@/lib/navigation';
-import { askGemini, GeminiError } from '@/lib/server/gemini';
+import { askWorkersAi, WorkersAiError } from '@/lib/server/workers-ai-assistant';
 import { isJiraConfigured, JiraError } from '@/lib/server/jira';
 import { enforceRateLimit } from '@/lib/server/rate-limit';
 
@@ -22,8 +22,7 @@ export async function POST(request: Request) {
   try {
     // Mesmo alcance do assistente da fila: quem opera, usa.
     const person = await requireApiUser(request, ['gerencia', 'coordenador', 'n1', 'analista']);
-    // Uma pergunta gasta várias chamadas ao Gemini (uma por rodada de
-    // consulta), e o plano gratuito tem cota por minuto. Limite curto aqui
+    // Uma pergunta pode consultar varias ferramentas. Limite curto aqui
     // evita queimar a cota de todo mundo num clique repetido.
     enforceRateLimit(request, 'assistant-ask', { limit: 8, windowMs: 60_000 });
 
@@ -36,14 +35,14 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
-    const run = assistantToolRunner({ canReadWhatsapp: canUseWhatsapp(person.role) });
+    const run = assistantToolRunner({ role: person.role, email: person.email, canReadWhatsapp: canUseWhatsapp(person.role) });
     let prepared: PreparedAction | null = null;
-    const { answer, model, used } = await askGemini({
+    const { answer, model, used } = await askWorkersAi({
       systemInstruction: systemInstruction(operationDate(now), previousOperationDate(now)),
       question: body!.question!.trim(),
       history: cleanHistory(body?.history),
       // Conversa de WhatsApp só para quem já a vê na tela.
-      tools: toolsFor(canUseWhatsapp(person.role)),
+      tools: toolsFor(canUseWhatsapp(person.role), person.role),
       runTool: async (name, args) => {
         const result = await run(name, args);
         // A ação preparada volta à tela num campo próprio: é ela que abre o
@@ -59,7 +58,7 @@ export async function POST(request: Request) {
     return Response.json({ answer, model, used, prepared });
   } catch (error) {
     if (error instanceof Response) return error;
-    if (error instanceof GeminiError) return Response.json({ error: error.message, code: error.code }, { status: error.status });
+    if (error instanceof WorkersAiError) return Response.json({ error: error.message, code: error.code }, { status: error.status });
     if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
     console.error('Assistente geral', error);
     return Response.json({ error: 'Não foi possível consultar o assistente.' }, { status: 500 });
