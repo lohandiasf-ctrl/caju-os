@@ -46,7 +46,11 @@ Leia os docs grandes somente quando a tarefa tocar aquela área:
 - Para o Jira: descubra transições e campos permitidos pela API. Não suponha
   que um `customfield` está em toda tela / tipo de chamado. Status muda só
   após clique explícito; campos obrigatórios primeiro, transição depois.
-- Preserve o visual premium (blur, transparência, transições). O usuário
+- Visual (revisão UI/UX de 2026-09-23, pedido do usuário): superfícies
+  sólidas em níveis, sem gradiente decorativo, glow ou vidro espalhado;
+  sombra só no que flutua (`--shadow-popover`/`--shadow-overlay`); cor
+  primária só para ação/seleção/foco. Use os tokens e classes de
+  `app/globals.css`. Transições e microinterações continuam — o usuário
   rejeitou a simplificação feita para "60 FPS".
 - O EXE Tauri (0.1.13) carrega `https://operacoes.cajutech.net`; mudanças
   só-web chegam nele pelo deploy. Só gere instalador novo se `src-tauri/`,

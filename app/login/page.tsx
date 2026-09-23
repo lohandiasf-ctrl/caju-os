@@ -200,7 +200,7 @@ function BrandPanel({ variant, panelRef }: { variant: 'full' | 'compact'; panelR
       {full && <DotGrid />}
       <Waves />
       <div className={full ? 'relative flex flex-col items-center text-center' : 'relative flex items-center gap-3'}>
-        <span className={`grid place-items-center rounded-[22%] bg-white shadow-[0_12px_32px_-8px_rgb(0_0_0/.35)] ${full ? 'size-24 p-3' : 'size-12 p-1.5'}`}>
+        <span className={`grid place-items-center rounded-[22%] bg-white ${full ? 'size-24 p-3' : 'size-12 p-1.5'}`}>
           <Image src="/caju-tech-emblem.png" alt="" width={96} height={96} priority className="size-full object-contain" />
         </span>
         <div>

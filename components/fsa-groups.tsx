@@ -46,8 +46,8 @@ const ROTULO_TIPO: Record<TipoLido, string> = {
 const ROTULO_TIPO_COR: Record<TipoLido, string> = {
   atuacao: "border-blue-400/30 bg-blue-400/10 text-blue-200",
   evidencia: "border-cyan-400/30 bg-cyan-400/10 text-cyan-200",
-  improdutiva: "border-amber-400/30 bg-amber-400/10 text-amber-200",
-  "sem-tipo": "border-rose-400/30 bg-rose-400/10 text-rose-200",
+  improdutiva: "border-warning/25 bg-warning-soft text-warning",
+  "sem-tipo": "border-danger/25 bg-danger-soft text-danger",
 };
 
 const ROTULO_STATUS: Record<string, string> = {
@@ -113,9 +113,9 @@ const dia = (iso: string) => iso.split("-").reverse().join("/");
 const CORES: Record<string, string> = {
   aberto: "border-cyan-400/30 bg-cyan-400/10 text-cyan-200",
   pronto: "border-blue-400/30 bg-blue-400/10 text-blue-200",
-  aprovado: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
+  aprovado: "border-success/25 bg-success-soft text-success",
   pago: "border-violet-400/30 bg-violet-400/10 text-violet-200",
-  bloqueado: "border-amber-400/30 bg-amber-400/10 text-amber-200",
+  bloqueado: "border-warning/25 bg-warning-soft text-warning",
 };
 
 export function FsaGroups() {
@@ -258,13 +258,13 @@ export function FsaGroups() {
       </div>
 
       {avisoExport && (
-        <p aria-live="polite" className="border-b border-border bg-emerald-400/10 px-5 py-3 text-sm text-emerald-100">
+        <p aria-live="polite" className="border-b border-border bg-emerald-400/10 px-5 py-3 text-sm text-success">
           {avisoExport}
         </p>
       )}
 
       {error && (
-        <p role="alert" className="border-b border-border bg-rose-400/10 px-5 py-3 text-sm text-rose-100">
+        <p role="alert" className="border-b border-border bg-rose-400/10 px-5 py-3 text-sm text-danger">
           {error}
         </p>
       )}
@@ -293,12 +293,12 @@ export function FsaGroups() {
                       </Badge>
                       <span className="text-xs text-muted-foreground">{dia(resumo.dia)}</span>
                       {(grupo?.dataPagamento ?? resumo.dataPagamento) && (
-                        <span className="text-xs text-emerald-200">
+                        <span className="text-xs text-success">
                           {(grupo?.status ?? resumo.status) === "pago" ? "pago" : "paga"} em {dia((grupo?.dataPagamento ?? resumo.dataPagamento)!)}
                         </span>
                       )}
                       {resumo.semClassificar > 0 && (
-                        <span className="text-xs text-amber-200">
+                        <span className="text-xs text-warning">
                           {resumo.semClassificar} a classificar
                         </span>
                       )}
@@ -310,7 +310,7 @@ export function FsaGroups() {
                     <p className="mt-1 text-xs text-muted-foreground">{resumo.tecnico}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-base font-bold text-emerald-300">
+                    <span className="font-mono text-base font-bold text-success">
                       {reais(grupo?.repasse.totalCents ?? resumo.totalCents)}
                     </span>
                     <Button size="sm" variant="ghost" disabled={trabalhando} onClick={() => void abrir(resumo.id)}>
@@ -329,7 +329,7 @@ export function FsaGroups() {
                 {grupo && (
                   <div className="mt-4">
                     {grupo.naoClassificadas.length > 0 && (
-                      <p className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+                      <p className="mb-3 flex items-start gap-2 rounded-xl border border-warning/25 bg-warning-soft px-3 py-2 text-sm text-warning">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                         <span>
                           {grupo.naoClassificadas.length === 1
@@ -361,7 +361,7 @@ export function FsaGroups() {
                             )}
                             {fsa.store && <p className="mt-0.5 text-xs text-muted-foreground">{fsa.store}</p>}
                             {fsa.tipo === "servico" && fsa.improdutiva && fsa.motivo && (
-                              <p className="mt-1 text-xs text-amber-200">
+                              <p className="mt-1 text-xs text-warning">
                                 {ROTULO_MOTIVO[fsa.motivo as MotivoImprodutivo] ?? fsa.motivo}
                                 {fsa.observacao && ` — ${fsa.observacao}`}
                               </p>
@@ -394,14 +394,14 @@ export function FsaGroups() {
                         <dd className="font-bold">{reais(grupo.repasse.evidencias.totalCents)}</dd>
                       </div>
                       {grupo.repasse.improdutivas.quantidade > 0 && (
-                        <div className="flex justify-between gap-3 text-amber-200">
+                        <div className="flex justify-between gap-3 text-warning">
                           <dt>Improdutivas ({grupo.repasse.improdutivas.quantidade})</dt>
                           <dd className="font-bold">{reais(grupo.repasse.improdutivas.totalCents)}</dd>
                         </div>
                       )}
                       <div className="mt-1 flex justify-between gap-3 border-t border-border pt-2 text-base">
                         <dt className="font-bold">Total do grupo</dt>
-                        <dd className="font-bold text-emerald-300">{reais(grupo.repasse.totalCents)}</dd>
+                        <dd className="font-bold text-success">{reais(grupo.repasse.totalCents)}</dd>
                       </div>
                     </dl>
 
@@ -476,7 +476,7 @@ export function FsaGroups() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-rose-200 hover:bg-rose-400/10 hover:text-rose-100"
+                          className="text-danger hover:bg-rose-400/10 hover:text-danger"
                           disabled={trabalhando}
                           onClick={() => void agir(grupo.id, "bloquear")}
                         >

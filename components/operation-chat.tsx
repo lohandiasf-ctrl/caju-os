@@ -181,7 +181,7 @@ export function OperationChat<T extends ChatTicket>({
                       message.role === 'user'
                         ? 'bg-primary/15 text-foreground'
                         : message.failed
-                          ? 'border border-red-400/25 bg-red-400/10 text-red-200'
+                          ? 'border border-danger/25 bg-danger-soft text-danger'
                           : 'border border-border bg-card',
                     )}
                   >
@@ -301,7 +301,7 @@ export function OperationChat<T extends ChatTicket>({
         </div>
 
         <div className="rounded-2xl border border-primary/15 bg-primary/8 p-4 lg:w-[360px]">
-          <p className="text-xs font-bold uppercase tracking-wide text-primary">Chamados citados</p>
+          <p className="label-caps">Chamados citados</p>
           <p className="mt-2 text-4xl font-semibold tabular-nums">{cited.length}</p>
           <p className="mt-2 text-xs text-muted-foreground">
             {cited.length

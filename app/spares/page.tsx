@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { MetricStrip } from '@/components/metric-strip';
 import { Input } from '@/components/ui/input';
 import { matchesSearch, searchTerms } from '@/lib/search-terms';
 import { Textarea } from '@/components/ui/textarea';
@@ -438,7 +439,7 @@ export default function Page() {
     <main className="min-h-screen text-foreground">
       <AppNavigation active="spares" open={menu} onOpenChange={setMenu} />
       <section className="app-content">
-        <header className="sticky top-0 z-20 flex h-[68px] items-center border-b border-border bg-background/90 px-4 backdrop-blur-xl lg:px-8">
+        <header className="sticky top-0 z-20 flex h-[68px] items-center border-b border-border px-4 lg:px-8">
           <Button
             variant="ghost"
             size="icon"
@@ -457,17 +458,17 @@ export default function Page() {
             <ArrowLeft className="size-4" />
             Operação
           </button>
-          <Badge
-            variant="outline"
-            className="ml-auto border-primary/25 bg-primary/10 text-primary"
+          <span
+            className="ml-auto inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+            title={syncConfigured ? "Sincronização com o Power Automate ativa" : "Conector do Power Automate não configurado"}
           >
             {syncConfigured ? (
-              <Cloud aria-hidden="true" className="mr-1 size-3" />
+              <Cloud aria-hidden="true" className="size-3.5" />
             ) : (
-              <CloudOff aria-hidden="true" className="mr-1 size-3" />
+              <CloudOff aria-hidden="true" className="size-3.5 text-warning" />
             )}
             {all.length} itens
-          </Badge>
+          </span>
           <ThemeToggle className="ml-2" />
         </header>
         <div
@@ -475,11 +476,11 @@ export default function Page() {
           tabIndex={-1}
           className="app-main mx-auto max-w-[1600px] px-4 pt-4 pb-36 lg:px-8 lg:pt-8"
         >
-          <p className="text-xs font-bold uppercase tracking-widest text-primary">
+          <p className="page-eyebrow">
             Peças e equipamentos
           </p>
-          <h1 className="mt-1 text-3xl font-semibold">Central de Spares</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="page-title">Central de Spares</h1>
+          <p className="page-subtitle">
             Acompanhamento do pedido à entrega e ao atendimento técnico.
           </p>
           <Tabs
@@ -531,7 +532,7 @@ export default function Page() {
               </output>
             )}
             {syncConfigured && !syncBidirectional && (
-              <div className="mt-4 flex gap-3 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-100">
+              <div className="mt-4 flex gap-3 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm text-warning">
                 <CloudOff
                   aria-hidden="true"
                   className="mt-0.5 size-4 shrink-0"
@@ -546,8 +547,8 @@ export default function Page() {
               </div>
             )}
             {!syncConfigured && (
-              <div className="mt-4 flex gap-3 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-100">
-                <CloudOff aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              <div className="mt-4 flex gap-3 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm">
+                <CloudOff aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
                 <p>
                   O cadastro no sistema está disponível, mas o conector do
                   Power Automate ainda não foi configurado neste Worker.
@@ -555,24 +556,19 @@ export default function Page() {
               </div>
             )}
             <TabsContent value="list">
-              <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <Card t="Pendentes" v={n(['PENDENTE'])} i={Clock3} />
-                <Card
-                  t="Em trânsito"
-                  v={n(['ENVIADO', 'COMPRADO', 'DIRECIONADO'])}
-                  i={Truck}
-                />
-                <Card
-                  t="Recebidos / agendados"
-                  v={n(['RECEBIDO', 'AGENDADO'])}
-                  i={PackageCheck}
-                />
-                <Card
-                  t="Sem rastreio"
-                  v={active.filter((x) => !x.tracking).length}
-                  i={Box}
-                />
-              </div>
+              {/* Pendentes é o que pede ação; trânsito e recebidos mostram o
+                  andamento; sem rastreio só ganha cor quando existe. */}
+              <MetricStrip
+                className="mt-6"
+                label="Resumo dos spares ativos"
+                loading={loading}
+                items={[
+                  { label: 'Pendentes', value: n(['PENDENTE']), note: `de ${active.length} ${active.length === 1 ? 'item ativo' : 'itens ativos'}`, icon: Clock3, tone: n(['PENDENTE']) > 0 ? 'warning' : 'default' },
+                  { label: 'Em trânsito', value: n(['ENVIADO', 'COMPRADO', 'DIRECIONADO']), note: 'Enviado, comprado ou direcionado', icon: Truck },
+                  { label: 'Recebidos / agendados', value: n(['RECEBIDO', 'AGENDADO']), note: 'Prontos para o atendimento', icon: PackageCheck },
+                  { label: 'Sem rastreio', value: active.filter((x) => !x.tracking).length, note: 'Itens ativos sem código', icon: Box, tone: active.some((x) => !x.tracking) ? 'warning' : 'default' },
+                ]}
+              />
               <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,.6fr)]">
                 <section className="overflow-hidden rounded-xl border border-border bg-card">
                   <div className="border-b border-border p-4">
@@ -626,7 +622,7 @@ export default function Page() {
                     {error && (
                       <div
                         role="alert"
-                        className="space-y-3 p-6 text-sm text-amber-200"
+                        className="space-y-3 p-6 text-sm text-warning"
                       >
                         <p>{error}</p>
                         <Button
@@ -678,7 +674,7 @@ export default function Page() {
                             {x.syncStatus === 'synced' && (
                               <Badge
                                 variant="outline"
-                                className="border-emerald-400/20 text-emerald-300"
+                                className="border-emerald-400/20 text-success"
                               >
                                 Planilha atualizada
                               </Badge>
@@ -686,7 +682,7 @@ export default function Page() {
                             {x.syncStatus === 'failed' && (
                               <Badge
                                 variant="outline"
-                                className="border-amber-400/20 text-amber-200"
+                                className="border-amber-400/20 text-warning"
                               >
                                 Sincronização pendente
                               </Badge>
@@ -786,7 +782,7 @@ export default function Page() {
                           />
                         )}
                         {selected.note && (
-                          <div className="rounded-lg border border-amber-400/20 bg-amber-400/8 p-4 text-sm">
+                          <div className="rounded-lg border border-warning/25 bg-warning-soft p-4 text-sm">
                             {selected.note}
                           </div>
                         )}
@@ -807,7 +803,7 @@ export default function Page() {
             <TabsContent value="create">
               <section className="mt-6 overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="border-b border-border p-5 sm:p-6">
-                  <p className="text-xs font-bold uppercase tracking-widest text-primary">
+                  <p className="label-caps">
                     Novo registro
                   </p>
                   <h2 className="mt-1 text-xl font-semibold">
@@ -1013,21 +1009,10 @@ export default function Page() {
     </main>
   );
 }
-function Card({ t, v, i: I }: { t: string; v: number; i: typeof Box }) {
-  return (
-    <div className="cockpit-stat metric-glow rounded-2xl p-4">
-      <div className="flex justify-between text-sm text-muted-foreground">
-        {t}
-        <I className="size-4 text-primary" />
-      </div>
-      <p className="mt-3 text-2xl font-semibold">{v}</p>
-    </div>
-  );
-}
 function D({ l, v }: { l: string; v: string }) {
   return (
     <div className="border-b border-border pb-3">
-      <p className="text-xs font-bold uppercase text-muted-foreground">{l}</p>
+      <p className="label-caps">{l}</p>
       <p className="mt-1 text-sm font-semibold">{v}</p>
     </div>
   );

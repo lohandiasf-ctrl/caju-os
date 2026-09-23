@@ -39,26 +39,30 @@ export function AssistantCard() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold">Assistente Caju IA</h2>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-          <span aria-hidden="true" className={`size-1.5 rounded-full ${busy ? 'animate-pulse bg-primary' : 'bg-success'}`} />
-          {busy ? 'Pensando…' : 'Disponível'}
-        </span>
-      </div>
-      <div className="flex flex-1 flex-col items-center justify-center py-5 text-center">
-        <span aria-hidden="true" className={`assistant-orb ${busy ? 'assistant-orb--thinking' : ''}`}><span className="assistant-orb__glint" /></span>
-        <p className="mt-5 text-sm font-semibold text-primary">Como posso ajudar?</p>
-        <p className="mt-1 max-w-[16rem] text-xs text-muted-foreground">Pergunte sobre chamados, técnicos, peças ou repasses.</p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          {suggestions.map(([Icon, label]) => (
-            <button key={label} type="button" onClick={() => setQuestion(label)} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3 text-xs text-muted-foreground hover:border-primary/40 hover:bg-primary-soft hover:text-foreground max-sm:min-h-11">
-              <Icon aria-hidden="true" className="size-3" strokeWidth={2} />{label}
-            </button>
-          ))}
+      <div className="flex items-start gap-3">
+        <span aria-hidden="true" className={`assistant-mark ${busy ? 'assistant-mark--thinking' : ''}`}><Sparkles className="size-[18px]" strokeWidth={1.75} /></span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[15px] font-semibold leading-snug">Assistente Caju IA</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Pergunte sobre chamados, técnicos, peças ou repasses.</p>
         </div>
+        <output className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <span aria-hidden="true" className={`size-1.5 rounded-full ${busy ? 'bg-primary' : 'bg-success'}`} />
+          {busy ? 'Pensando…' : 'Disponível'}
+        </output>
       </div>
-      <form onSubmit={submit} className="flex items-center gap-2 rounded-full border border-border bg-muted/60 p-1.5 pl-4 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/25">
+      <div className="flex-1 py-4">
+        <p className="mb-1.5 text-xs font-medium text-muted-foreground">Sugestões</p>
+        <ul className="-mx-2 space-y-0.5">
+          {suggestions.map(([Icon, label]) => (
+            <li key={label}>
+              <button type="button" onClick={() => setQuestion(label)} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-foreground transition-colors hover:bg-muted max-sm:min-h-11">
+                <Icon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />{label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <form onSubmit={submit} className="flex items-center gap-2 rounded-lg border border-input bg-(--surface-field) p-1 pl-3 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/20">
         <Sparkles aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
         <label htmlFor="bento-assistant-question" className="sr-only">Pergunta para a IA</label>
         <input
@@ -73,7 +77,7 @@ export function AssistantCard() {
           onText={(text) => { setVoiceError(''); setQuestion((current) => (current.trim() ? `${current.trim()} ${text}` : text).slice(0, 400)); }}
           onError={setVoiceError}
         />
-        <button type="submit" disabled={question.trim().length < 3} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-brand px-3.5 text-xs font-semibold text-brand-foreground hover:brightness-110 disabled:opacity-50 max-sm:h-11">
+        <button type="submit" disabled={question.trim().length < 3} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground transition-colors hover:bg-(--brand-strong) disabled:opacity-50 max-sm:h-11">
           Enviar<ArrowUp aria-hidden="true" className="size-3.5" />
         </button>
       </form>

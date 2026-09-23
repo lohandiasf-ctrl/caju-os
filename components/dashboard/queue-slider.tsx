@@ -39,7 +39,7 @@ export function QueueSlider({ label, value, min, max, valueText, onChange }: {
           <SliderPrimitive.Thumb
             aria-labelledby={id}
             getAriaValueText={() => valueText}
-            className="block size-5 rounded-md bg-brand shadow-[0_2px_6px_-1px_color-mix(in_oklab,var(--brand)_55%,transparent)] ring-offset-2 ring-offset-card transition-transform after:absolute after:-inset-3 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
+            className="block size-5 rounded-md bg-brand shadow-(--shadow-xs) ring-offset-2 ring-offset-card transition-transform after:absolute after:-inset-3 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-95"
           />
         </SliderPrimitive.Control>
       </SliderPrimitive.Root>

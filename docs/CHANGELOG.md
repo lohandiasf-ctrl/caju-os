@@ -23,6 +23,67 @@ Só documentação, sem mudança de código.
 Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
 "Dashboard Premium"" em 2026-09-22); o prompt fica como referência de design.
 
+### Revisão de UI/UX: hierarquia, superfícies sólidas e status da equipe (branch `claude/ui-ux-revisao`)
+
+Revisão visual de toda a interface sem mexer em API, banco, auth, permissões,
+rotas ou regras de negócio. Pedido explícito do usuário: tirar gradiente
+decorativo, glow, glass espalhado e sombra em todo card; criar hierarquia real.
+**Isto substitui a regra antiga "preserve o blur/transparência"** — ver a nota
+atualizada no `CLAUDE.md`/`AGENTS.md`. Transições continuam.
+
+- **Tokens (`app/globals.css`):** superfícies sólidas em níveis
+  (`background < card < card-elevated < popover`; escuro sem preto absoluto:
+  `#0b0d11 → #13161b → #1a1d23 → #1e2229`). `--surface-glass`,
+  `--shadow-card/panel/hero` e `--body-glow` viram sólido/`none`. Sombra só no
+  que flutua: `--shadow-popover` (menus, dropdowns, tooltips, painéis fixos) e
+  `--shadow-overlay` (modais), aplicadas por `data-slot` num lugar só. Raio com
+  escala fixa (6/8/10/12/14/16/20 px; antes `rounded-2xl` = 25 px). Escala
+  tipográfica (`text-label/caption/body/section/title/metric/metric-lg`),
+  espaçamento `--space-*`, classes `page-eyebrow/page-title/page-subtitle/
+  section-title/label-caps`. Botão primário sólido (sem gradiente, glow nem
+  "pulo" no hover). Foco de campo com anel. `.metric-glow`, hero em
+  gradiente, orb do assistente e brilho do chat removidos.
+- **Sidebar:** grupos Operação / Comunicação / Gestão (mesma ordem, rotas e
+  permissões). Item ativo = fundo suave + azul + peso.
+- **Header:** fundo sólido; ao rolar só ganha a borda. Busca com botão de
+  limpar e placeholder que diz o que ela procura (FSA, cidade, loja,
+  defeito). Estado do Jira discreto quando ok, âmbar quando falha.
+- **Visão geral:** painel primário "Fila de chamados" (número grande em aberto,
+  quantos sem técnico, em campo/agendados com variação, lista por etapa);
+  SLA e agenda viram secundários neutros — cor só no "N atrasados". Ações
+  rápidas com ícone neutro; contagem em âmbar só quando há pendência.
+  "Novo chamado no Jira" é a ação principal no cabeçalho (Visão geral e
+  Chamados). Animação de entrada encurtada (fade + 6 px).
+- **`components/metric-strip.tsx` (novo):** faixa única de métricas com
+  divisórias no lugar de 4 cards iguais com glow — Financeiro, Spares e Mapa.
+  Primeira métrica é a principal; cada número tem contexto real (período,
+  % do total, itens ativos).
+- **Status da equipe (`lib/presence.ts` + `components/presence-indicator.tsx`,
+  novos):** cada status tem cor + forma (✓ online, − ocupado/não perturbe,
+  relógio ausente/almoço/pausa, anel vazio offline) + texto. Painel
+  Comunicação agrupa por disponibilidade com resumo ("2 de 6 online · 2
+  ocupados"), mostra função e "Atualizado/Visto há X"; busca também por
+  status. Os 7 status e a API continuam iguais.
+- **Chamados:** kanban com colunas em fundo inset e cards sem sombra; seleção
+  em azul (era violeta); lista com cabeçalho de colunas alinhado, etapa com
+  ponto + texto, estado vazio que cita a busca e oferece "Limpar busca e
+  filtros". Projetos/Agenda com cabeçalho alinhado às linhas.
+- **Estados:** carregamentos de seção viram skeleton (lista, equipe,
+  bilhetes, financeiro); estados vazios com contexto. Alertas e avisos usam
+  `success/warning/danger` em vez de paleta solta (ajuste em lote em ~18
+  componentes, fora das ilhas do WhatsApp).
+- **Mural da equipe:** saiu o gradiente escuro fixo (que também ficava escuro
+  no tema claro).
+- **Testes:** `tests/presence.test.ts` (novo) e `tests/prelaunch-visual.test.ts`
+  (níveis do tema escuro, contraste, nada de glow/gradiente nos painéis).
+
+**Pendente:** não existe status "Precisa de ajuda" no sistema — não foi
+inventado; se for desejado, precisa de valor novo em `/api/colleagues`,
+`db/schema.ts` (migration) e `lib/presence.ts`. A busca de "defeito" olha o
+resumo do chamado (título do Jira); o campo `defectSummary` detalhado só é
+carregado ao abrir o chamado. O lint da `main` já tinha 156 erros; esta
+mudança não acrescenta nenhum líquido.
+
 ### Integração de capacidades de busca no Jira, campos customizados e inteligência financeira
 
 Adicionado catálogo completo de métodos de busca no Jira e integração direta dos campos operacionais, financeiros e de equipamentos para a Caju IA responder com precisão perguntas como *"Quantos chamados estão agendados com o valor da primeira visita 120 reais"*.

@@ -230,7 +230,7 @@ export function FsaClassificacao({
                 onClick={() => setTecnicoId(t.id)}
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                <UserRound className="size-4 shrink-0 text-emerald-300" aria-hidden="true" />
+                <UserRound className="size-4 shrink-0 text-success" aria-hidden="true" />
                 <b>{t.name}</b>
                 <span className="text-xs text-muted-foreground">
                   {t.city}/{t.state}
@@ -269,7 +269,7 @@ export function FsaClassificacao({
         <p className="mt-2 text-xs text-muted-foreground">
           Improdutiva é marcada depois de escolher Atuação, com o motivo.
         </p>
-        {error && <p role="alert" className="mt-2 text-xs text-rose-200">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
       </section>
     );
   }
@@ -287,7 +287,7 @@ export function FsaClassificacao({
           <p className="text-sm font-bold">Tipo da FSA</p>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Layers3 className="size-3.5 text-emerald-300" aria-hidden="true" />
+              <Layers3 className="size-3.5 text-success" aria-hidden="true" />
               {dados.nome ?? `Grupo ${dados.groupId}`}
             </span>
             <span className="flex items-center gap-1">
@@ -360,7 +360,7 @@ export function FsaClassificacao({
       </div>
 
       {!dados.tipo && dados.podeEditar && (
-        <p className="mt-2 text-xs text-amber-200">Ainda sem tipo — o grupo não fecha enquanto alguma FSA estiver assim.</p>
+        <p className="mt-2 text-xs text-warning">Ainda sem tipo — o grupo não fecha enquanto alguma FSA estiver assim.</p>
       )}
 
       {dados.tipo && (
@@ -377,7 +377,7 @@ export function FsaClassificacao({
 
       {mostrarMotivo && (
         <div className="mt-3 grid gap-2 rounded-xl border border-amber-400/25 bg-amber-400/[.06] p-3">
-          <label className="text-xs font-bold uppercase tracking-wide text-amber-200" htmlFor={`motivo-${ticketKey}`}>
+          <label className="text-xs font-bold uppercase tracking-wide text-warning" htmlFor={`motivo-${ticketKey}`}>
             Por que não foi possível resolver?
           </label>
           <NativeSelect
@@ -408,7 +408,7 @@ export function FsaClassificacao({
         </div>
       )}
 
-      {error && <p role="alert" className="mt-2 text-xs text-rose-200">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
     </section>
   );
 }
