@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, dateAndTime, describeAttachments, extrairRastreioDeTexto, formatarDataExcelOuIso, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 import { TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
@@ -458,5 +458,39 @@ test('ticketContext inclui campos de REQ/Freshservice, logística e classificaç
   assert.match(text, /Status Aprovação: Aprovado/);
 });
 
+test('extrairRastreioDeTexto localiza códigos dos Correios e transportadoras em textos/comentários', () => {
+  assert.equal(extrairRastreioDeTexto('Peça despachada hoje via Sedex: AA123456789BR para a loja.'), 'AA123456789BR');
+  assert.equal(extrairRastreioDeTexto('rastreio: qb987654321br'), 'QB987654321BR');
+  assert.equal(extrairRastreioDeTexto('envio confirmado rastreio: LOGGI-123456789'), 'LOGGI-123456789');
+  assert.equal(extrairRastreioDeTexto('objeto: SP998877665BR'), 'SP998877665BR');
+  assert.equal(extrairRastreioDeTexto('sem rastreio no momento'), null);
+  assert.equal(extrairRastreioDeTexto(''), null);
+  assert.equal(extrairRastreioDeTexto(null), null);
+});
+
+test('formatarDataExcelOuIso converte serial numérico do Excel e datas ISO para DD/MM/AAAA', () => {
+  // Número serial 46252 do Excel
+  const data46252 = formatarDataExcelOuIso('46252');
+  assert.ok(data46252?.includes('2026'), 'ano 2026');
+  assert.match(data46252 ?? '', /^\d{2}\/\d{2}\/2026$/);
+
+  // Data ISO sem hora (YYYY-MM-DD)
+  assert.equal(formatarDataExcelOuIso('2026-08-22'), '22/08/2026');
+
+  // Data ISO com hora
+  const dataIsoHora = formatarDataExcelOuIso('2026-08-22T14:00:00.000Z');
+  assert.ok(dataIsoHora?.includes('2026'));
+
+  // Data já em texto BR
+  assert.equal(formatarDataExcelOuIso('22/08/2026'), '22/08/2026');
+
+  // Valores vazios
+  assert.equal(formatarDataExcelOuIso(null), null);
+  assert.equal(formatarDataExcelOuIso(''), null);
+  assert.equal(formatarDataExcelOuIso(undefined), null);
+
+  // onlyDate com número serial do Excel
+  assert.match(onlyDate('46252') ?? '', /^2026-\d{2}-\d{2}$/);
+});
 
 
