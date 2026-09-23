@@ -593,6 +593,17 @@ export async function addJiraInternalComment(key: string, body: string, author: 
   });
 }
 
+// "Atualizar chamado" (tela do chamado): nota de quem acompanha o atendimento,
+// assinada só com nome e sobrenome — sem o e-mail e sem o "confirmado por"
+// das ações do assistente. Também é comentário interno (não vai ao cliente).
+export async function addJiraTicketUpdate(key: string, body: string) {
+  const normalizedKey = validIssueKey(key);
+  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, {
+    method: 'POST',
+    body: JSON.stringify({ body, public: false }),
+  });
+}
+
 export async function uploadJiraAttachments(key: string, files: File[], author: string) {
   const normalizedKey = validIssueKey(key);
   let finalizingInternalComment = false;

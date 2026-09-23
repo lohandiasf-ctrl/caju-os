@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { AppNavigation } from "@/components/app-navigation";
 import { TeamManagementPanel } from "@/components/team-management";
+import { TicketUpdateNote } from "@/components/ticket-update-note";
 import { AppGreeting } from "@/components/app-greeting";
 import { OverviewBento } from "@/components/dashboard/overview-bento";
 import { NotificationBell } from "@/components/notification-bell";
@@ -1887,6 +1888,9 @@ export default function Home() {
                     ? "Pronto para solicitar a validação da equipe."
                     : "O envio é liberado somente após concluir os requisitos informados no botão.")}
               </p>
+              {/* Nota rápida sobre o atendimento (ex.: técnico adoeceu) → comentário
+                  interno do Jira, assinado com nome e sobrenome. */}
+              {selected && <TicketUpdateNote key={`update-${selected.id}`} ticketKey={selected.id} user={user} />}
               {/* O tipo da FSA fica à vista, logo abaixo das ações, e não dentro dos
                   detalhes do Jira: quem atende precisa achar sem rolar a tela. */}
               {detailsVisible && selected && (

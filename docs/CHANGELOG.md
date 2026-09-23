@@ -11,6 +11,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### "Atualizar chamado" na janela do chamado (branch `claude/atualizar-chamado`)
+
+Campo de texto logo abaixo das ações do chamado (Mais informações, WhatsApp,
+Validar, Gerir operação) para registrar acontecimentos do atendimento — ex.:
+"técnico adoeceu, reagendar para amanhã". A nota vai direto para os
+**comentários internos** do Jira (Service Desk, `public: false`), assinada só
+com **nome e sobrenome** do perfil de quem escreveu ("— Lohan Dias"), sem
+e-mail.
+
+- Rota `POST /api/jira/issues/[key]/updates` (`requireApiUser` com gerência,
+  coordenação, N1 e analista). Nome vem de `employee_presence.display_name`;
+  sem nome e sobrenome no perfil a rota recusa (409) em vez de assinar com o
+  e-mail.
+- `lib/server/jira.ts`: `addJiraTicketUpdate` (mesmo endpoint do comentário
+  interno que o assistente já usa, sem o "confirmado por").
+- `lib/ticket-update.ts` (regras) + `components/ticket-update-note.tsx`
+  (campo com contador, envio com carregamento, erro sem apagar o texto,
+  confirmação "registrada nos comentários internos do Jira").
+- `tests/ticket-update.test.ts`.
+
+**Pendente:** a gravação real no Jira não foi exercitada no preview local (o
+mock recusa `/api/jira`); conferir o primeiro comentário em produção.
+
 ### Gestão vira menu flutuante em tela baixa — equipe não some mais (branch `claude/sidebar-gestao-flyout`)
 
 O grupo Gestão recolhível (PR #119) abria **dentro** da barra e guardava a
