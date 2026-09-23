@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Correção: `detalhar_chamado` quebrava com comentário "UP -" interno
+
+A API de comentários do Service Desk devolve `created` como objeto
+(`{ iso8601, jira, friendly, epochMillis }`), não texto. Com um "UP -" interno,
+formatar a data lançava erro, a tool falhava e a IA respondia sem o comentário.
+`dataDoComentario()` (`lib/assistant.ts`) normaliza a data para ISO nos dois
+formatos; de quebra, os comentários internos no contexto da IA deixam de sair
+com data `[object Object]`.
+
 ### Caju IA: status do chamado traz o último comentário "UP -"
 
 Ao perguntar o status de um chamado, a IA agora informa também o comentário de

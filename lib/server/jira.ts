@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { comentarioUp, extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
+import { comentarioUp, dataDoComentario, extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
 import { JIRA_PHONE_PLACEHOLDER, scrubTechnicianPhone } from '@/lib/technician-data';
 import { splitCityUf } from '@/lib/whatsapp-group-name';
 
@@ -419,16 +419,16 @@ export async function getJiraIssue(key: string) {
     cabecaImpressao: customFieldText(issue.fields.customfield_17754),
   };
   const attachments: JiraAttachmentSummary[] = (issue.fields.attachment ?? []).flatMap((attachment) => attachment.id && attachment.filename ? [{ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType ?? 'application/octet-stream', size: attachment.size ?? 0, createdAt: attachment.created ?? '', author: attachment.author?.displayName ?? null }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  const commentPayload = await jiraFetch<{ values?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string }; public?: boolean }> }>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment?internal=true&limit=20`).catch(() => ({ values: [] }));
-  const internalComments: JiraInternalComment[] = (commentPayload.values ?? []).filter((comment) => comment.public !== true).map((comment) => ({ id: String(comment.id ?? ''), body: adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: comment.created ?? '' })).filter((comment) => comment.id && comment.body);
+  const commentPayload = await jiraFetch<{ values?: Array<{ id?: string; body?: unknown; created?: unknown; author?: { displayName?: string }; public?: boolean }> }>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment?internal=true&limit=20`).catch(() => ({ values: [] }));
+  const internalComments: JiraInternalComment[] = (commentPayload.values ?? []).filter((comment) => comment.public !== true).map((comment) => ({ id: String(comment.id ?? ''), body: adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: dataDoComentario(comment.created) })).filter((comment) => comment.id && comment.body);
 
   // Comentário "UP -" (atualização da operação). Procura em todos os
   // comentários da issue (públicos e internos) e também nos internos do
   // Service Desk, que podem vir mesmo quando o campo `comment` não vem.
-  const issueComments = ((issue.fields as Record<string, unknown>).comment as { comments?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string } }> } | undefined)?.comments ?? [];
+  const issueComments = ((issue.fields as Record<string, unknown>).comment as { comments?: Array<{ id?: string; body?: unknown; created?: unknown; author?: { displayName?: string } }> } | undefined)?.comments ?? [];
   const upComment = comentarioUp<JiraInternalComment>([
     ...internalComments,
-    ...issueComments.map((comment) => ({ id: String(comment.id ?? ''), body: typeof comment.body === 'string' ? comment.body : adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: comment.created ?? '' })),
+    ...issueComments.map((comment) => ({ id: String(comment.id ?? ''), body: typeof comment.body === 'string' ? comment.body : adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: dataDoComentario(comment.created) })),
   ]);
 
   // Fallback inteligente: se o campo de rastreio estiver vazio, inspeciona comentários e descrição

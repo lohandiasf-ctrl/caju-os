@@ -175,11 +175,25 @@ export function extrairRastreioDeTexto(texto: string | null | undefined): string
 // "up –"). Devolve o mais recente, porque é o andamento atual do chamado.
 export function comentarioUp<T extends { body: string; createdAt: string }>(comentarios: T[]): T | null {
   let ultimo: T | null = null;
+  const quando = (comentario: T) => Date.parse(comentario.createdAt) || 0;
   for (const comentario of comentarios) {
     if (!/^\s*UP\s*[-–—]/i.test(comentario.body)) continue;
-    if (!ultimo || Date.parse(comentario.createdAt) > Date.parse(ultimo.createdAt)) ultimo = comentario;
+    if (!ultimo || quando(comentario) > quando(ultimo)) ultimo = comentario;
   }
   return ultimo;
+}
+
+// A API do Jira devolve `created` como texto ISO; a do Service Desk devolve
+// um objeto `{ iso8601, jira, friendly, epochMillis }`. Normaliza para ISO.
+export function dataDoComentario(created: unknown): string {
+  if (typeof created === 'string') return created;
+  if (created && typeof created === 'object') {
+    const data = created as { iso8601?: unknown; jira?: unknown; epochMillis?: unknown };
+    if (typeof data.iso8601 === 'string') return data.iso8601;
+    if (typeof data.jira === 'string') return data.jira;
+    if (typeof data.epochMillis === 'number') return new Date(data.epochMillis).toISOString();
+  }
+  return '';
 }
 
 // Converte datas que vieram como número serial do Excel (ex: 46252) ou ISO para DD/MM/AAAA

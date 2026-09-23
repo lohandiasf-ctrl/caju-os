@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, comentarioUp, dateAndTime, describeAttachments, extrairRastreioDeTexto, formatarDataExcelOuIso, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, comentarioUp, dataDoComentario, dateAndTime, describeAttachments, extrairRastreioDeTexto, formatarDataExcelOuIso, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 import { TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
@@ -505,4 +505,13 @@ test('comentarioUp devolve o comentário "UP -" mais recente', () => {
   assert.equal(comentarioUp(comentarios)?.body, '  up– Aguardando retorno da loja');
   assert.equal(comentarioUp([{ body: 'sem atualização', createdAt: '2026-09-20T10:00:00.000-0300' }]), null);
   assert.equal(comentarioUp([]), null);
+});
+
+test('dataDoComentario aceita o created do Jira (texto) e do Service Desk (objeto)', () => {
+  assert.equal(dataDoComentario('2026-09-23T17:50:00.000-0300'), '2026-09-23T17:50:00.000-0300');
+  assert.equal(dataDoComentario({ iso8601: '2026-09-23T17:50:00-0300', jira: '2026-09-23T17:50:00.000-0300', friendly: 'Hoje 17:50', epochMillis: 1790196600000 }), '2026-09-23T17:50:00-0300');
+  assert.equal(dataDoComentario({ epochMillis: 0 }), new Date(0).toISOString());
+  assert.equal(dataDoComentario(undefined), '');
+  const up = comentarioUp([{ body: 'UP- técnico declinou, prospectando outro\n\n— Lohan Dias', createdAt: dataDoComentario({ iso8601: '2026-09-23T17:50:00-0300' }) }]);
+  assert.equal(operationDateTime(up?.createdAt), '2026-09-23 17:50');
 });
