@@ -426,9 +426,16 @@
      baixas (notebook 768p) os rótulos dos grupos viram só espaço. */
   .app-sidebar .app-nav-link { min-height: 36px; }
   @media (max-height: 860px) {
-    .app-sidebar .app-nav-section { height: 0; margin: 0; opacity: 0; overflow: hidden; }
-    .app-sidebar .app-nav-group + .app-nav-group { margin-top: .75rem; }
+    .app-sidebar .app-nav-link { min-height: 32px; }
+    /* Só os rótulos dos grupos do menu; o título "Equipe" continua. */
+    .app-sidebar nav .app-nav-section { height: 0; margin: 0; opacity: 0; overflow: hidden; }
+    .app-sidebar .app-nav-group + .app-nav-group { margin-top: .5rem; }
   }
+  /* Grupo recolhível (Gestão): linha com seta; marcado quando a página atual
+     está dentro dele e ele está fechado. */
+  .app-nav-group-chevron { transition: transform var(--motion-standard) var(--ease-ui); }
+  .app-nav-group-toggle[aria-expanded='true'] .app-nav-group-chevron { transform: rotate(180deg); }
+  .app-nav-group-toggle[data-current] { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
   .app-team-slot:empty { min-height: 0; }
   .app-team { display: flex; min-height: 0; flex: 1 1 0; flex-direction: column; margin-top: .5rem; border-top: 1px solid var(--sidebar-border); padding-top: .5rem; }
   .app-team-head { display: flex; min-height: 2rem; align-items: center; gap: .375rem; padding-left: .75rem; }

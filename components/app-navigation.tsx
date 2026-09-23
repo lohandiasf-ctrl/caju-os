@@ -4,14 +4,14 @@ import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
-import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Users, type LucideIcon } from 'lucide-react';
+import { Archive, Briefcase, Building2, CalendarClock, ChevronDown, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { canUseNavItem } from '@/lib/navigation';
 import { roleLabels } from '@/lib/permissions';
-import { CHAT_CLOSE_EVENT, isChatDocked, isSidebarCollapsed, NAV_CLOSE_EVENT, setSidebarCollapsed, setTeamSlot, subscribeSidebar } from '@/lib/sidebar-state';
+import { CHAT_CLOSE_EVENT, isChatDocked, isNavGroupOpen, isSidebarCollapsed, NAV_CLOSE_EVENT, setNavGroupOpen, setSidebarCollapsed, setTeamSlot, subscribeNavGroups, subscribeSidebar } from '@/lib/sidebar-state';
 import { projectMomentum, rubberband } from '@/lib/gesture';
 
 // Matches the drawer's own w-[min(300px,calc(100vw-2rem))] closely enough
@@ -64,6 +64,8 @@ const groups = [
   ['Comunicação', [
     ['WhatsApp', MessageCircle, '/?view=whatsapp', 'whatsapp'],
   ]],
+  // Recolhível no desktop (fica numa linha em tela baixa, para sobrar altura
+  // para a equipe na barra).
   ['Gestão', [
     ['Equipe', Users, '/?view=technicians', 'technicians'],
     ['Projetos e lojas', Building2, '/?view=projects', 'projects'],
@@ -119,6 +121,46 @@ function NavLink({ href, label, icon: Icon, current, collapsed, onNavigate }: {
   </Tooltip>;
 }
 
+/**
+ * Cabeçalho de grupo recolhível (Gestão). Fechado, ocupa uma linha só; se a
+ * página atual estiver dentro dele, a linha fica marcada e mostra qual é.
+ * Recolhida a barra, vira um ícone com tooltip.
+ */
+function GroupToggle({ title, icon: Icon, open, currentLabel, collapsed, controls, onToggle }: {
+  title: string;
+  icon: LucideIcon;
+  open: boolean;
+  currentLabel: string | null;
+  collapsed: boolean;
+  controls: string;
+  onToggle: () => void;
+}) {
+  const marked = !open && currentLabel !== null;
+  const label = `${open ? 'Ocultar' : 'Mostrar'} ${title}${marked ? ` (página atual: ${currentLabel})` : ''}`;
+  const button = <button
+    type="button"
+    onClick={onToggle}
+    aria-expanded={open}
+    aria-controls={controls}
+    aria-label={label}
+    data-current={marked ? '' : undefined}
+    className="app-nav-link app-nav-group-toggle w-full"
+  >
+    {marked && <span aria-hidden="true" className="app-nav-indicator" />}
+    <Icon aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={1.75} />
+    <span className="app-nav-label flex min-w-0 flex-1 items-center gap-2">
+      <span className="truncate">{title}</span>
+      {marked && <span className="truncate text-xs font-normal opacity-80">· {currentLabel}</span>}
+      <ChevronDown aria-hidden="true" className="app-nav-group-chevron ml-auto size-4 shrink-0" strokeWidth={1.75} />
+    </span>
+  </button>;
+  if (!collapsed) return button;
+  return <Tooltip>
+    <TooltipTrigger render={button} />
+    <TooltipContent side="right" sideOffset={10}>{open ? `Ocultar ${title}` : `${title}${marked ? ` · ${currentLabel}` : ''}`}</TooltipContent>
+  </Tooltip>;
+}
+
 export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
   active: string;
   open: boolean;
@@ -132,6 +174,11 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
   // A gaveta do celular sempre abre expandida. No desktop, uma conversa
   // aberta recolhe a barra enquanto durar, sem mudar a escolha salva.
   const collapsed = desktop && (storedCollapsed || chatDocked);
+  const gestaoKeys: readonly string[] = groups[2][1].map((entry) => entry[3]);
+  const gestaoHasActive = gestaoKeys.includes(active);
+  const gestaoStoredOpen = useSyncExternalStore(subscribeNavGroups, () => isNavGroupOpen('gestao', gestaoHasActive), () => true);
+  // No celular a gaveta rola inteira: o grupo fica sempre aberto.
+  const gestaoOpen = !desktop || gestaoStoredOpen;
   useEffect(() => { if (desktop) onOpenChange(false); }, [desktop, onOpenChange]);
   useEffect(() => {
     const close = () => onOpenChange(false);
@@ -203,11 +250,24 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
       {groups.map(([title, entries]) => {
         const visible = entries.filter(([, , , key]) => canUseNavItem(role, key));
         if (!visible.length) return null;
+        const collapsible = desktop && title === 'Gestão';
+        const listId = `app-nav-group-${title === 'Gestão' ? 'gestao' : title === 'Operação' ? 'operacao' : 'comunicacao'}`;
+        const showItems = !collapsible || gestaoOpen;
         return <div key={title} className="app-nav-group">
-          <p className="app-nav-section">{title}</p>
-          <div className="space-y-0.5">
+          {collapsible
+            ? <GroupToggle
+                title={title}
+                icon={Briefcase}
+                open={gestaoOpen}
+                currentLabel={visible.find(([, , , key]) => key === active)?.[0] ?? null}
+                collapsed={collapsed}
+                controls={listId}
+                onToggle={() => setNavGroupOpen('gestao', !gestaoOpen)}
+              />
+            : <p className="app-nav-section">{title}</p>}
+          {showItems && <div id={listId} className={`space-y-0.5 ${collapsible ? 'mt-0.5' : ''}`}>
             {visible.map(([label, Icon, href, key]) => <NavLink key={key} href={href} label={label} icon={Icon} current={active === key} collapsed={collapsed} onNavigate={navigate} />)}
-          </div>
+          </div>}
         </div>;
       })}
     </nav>
