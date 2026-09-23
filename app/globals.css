@@ -104,7 +104,7 @@
   --chart-4: #8b3fd9;
   --chart-5: #c2410c;
   --chart-track: #e2e0da;
-  --chart-missed: #a3abc4;
+  --chart-missed: #e8761e;
   --radius: .875rem;
   --radius-card: 1.375rem;
   --sidebar-w: 240px;
@@ -204,7 +204,7 @@
   --chart-4: #c084fc;
   --chart-5: #fbbf74;
   --chart-track: #2a2d35;
-  --chart-missed: #f4f1ea;
+  --chart-missed: #d9782a;
   --sidebar: var(--background);
   --sidebar-foreground: #f1f3f8;
   --sidebar-primary: #5b7cff;
@@ -674,7 +674,85 @@ html.theme-fading :where(body, header, aside, main, section, article, nav, [data
 
 /* Superfície sólida de marca: hero do dashboard, painel do login e a
    transição login → app. Luz radial no canto superior direito. */
-.brand-surface, .login-transition {
+.brand-surface, .login-transition, .bento-card.bento-card--hero {
   background: radial-gradient(circle at 88% 0%, rgb(255 255 255 / 18%), transparent 42%), linear-gradient(135deg, var(--brand), var(--brand-strong));
   color: var(--brand-foreground);
+}
+
+/* ── Dashboard bento ─────────────────────────────────────────────────────
+   Fora de @layer: é o visual do card, não precisa ser sobrescrito por
+   utilitário. Hover só com ponteiro fino (mouse), nunca no toque. */
+.bento-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+@media (min-width: 1024px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; } }
+@media (min-width: 1280px) { .bento-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+.bento-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+  transition: box-shadow var(--motion-standard) var(--ease-ui), transform var(--motion-standard) var(--ease-ui);
+}
+@media (min-width: 640px) { .bento-card { padding: 1.5rem; } }
+.bento-card--hero { overflow: hidden; border-color: transparent; box-shadow: var(--shadow-hero); }
+@media (hover: hover) and (pointer: fine) {
+  .bento-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
+  .bento-card--hero:hover { box-shadow: var(--shadow-hero); }
+}
+.hero-pill {
+  display: inline-flex; min-height: 2.5rem; align-items: center; gap: .375rem;
+  border-radius: 9999px; padding: 0 1rem; font-size: .8125rem; font-weight: 600;
+  transition: transform var(--motion-fast) var(--ease-ui), background-color var(--motion-fast) var(--ease-ui);
+}
+.hero-pill:hover { transform: translateY(-1px); }
+.hero-pill:active { transform: scale(.98); }
+.hero-pill--solid { background: #fff; color: var(--brand-strong); }
+.hero-pill--solid:hover { background: rgb(255 255 255 / 92%); }
+.hero-pill--ghost { border: 1px solid rgb(255 255 255 / 35%); color: #fff; }
+.hero-pill--ghost:hover { background: rgb(255 255 255 / 12%); }
+.bento-card--hero :focus-visible { outline-color: #fff; }
+.recent-row { transition: background-color var(--motion-fast) var(--ease-ui); }
+.recent-row:hover { background: color-mix(in oklab, var(--muted) 60%, transparent); }
+.quick-action {
+  display: flex; min-height: 3.25rem; align-items: center; gap: .75rem;
+  border-radius: .875rem; padding: .5rem .625rem;
+  transition: background-color var(--motion-fast) var(--ease-ui);
+}
+.quick-action:hover { background: var(--muted); }
+
+/* Skeleton "fantasma" com brilho diagonal, na posição final (sem CLS). */
+.skeleton {
+  background: linear-gradient(110deg, var(--muted) 30%, color-mix(in oklab, var(--muted) 55%, var(--card-elevated)) 50%, var(--muted) 70%);
+  background-size: 250% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+@keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* Colunas do gráfico crescem de baixo para cima; o trilho só aparece. */
+.chart-bar-grow { transform-box: fill-box; transform-origin: 50% 100%; animation: chart-bar-grow 700ms cubic-bezier(.2,.8,.2,1) both; }
+.chart-track-fade { animation: chart-track-fade 400ms ease-out both; }
+@keyframes chart-bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes chart-track-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Orb do assistente: esfera em gradiente puro (sem WebGL/imagem), flutua e
+   respira parada; pulsa e gira o brilho enquanto a IA responde. */
+.assistant-orb {
+  position: relative; display: block; width: 5rem; height: 5rem; border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, #9fb2ff 0%, var(--brand) 48%, #0b1a8f 100%);
+  box-shadow: 0 18px 36px -10px color-mix(in oklab, var(--brand) 70%, transparent), inset 0 -8px 18px rgb(0 0 0 / 25%), inset 0 6px 14px rgb(255 255 255 / 25%);
+  animation: orb-float 4s ease-in-out infinite;
+}
+.assistant-orb__glint {
+  position: absolute; inset: 0; border-radius: inherit;
+  background: conic-gradient(from 0deg, transparent 0 70%, rgb(255 255 255 / 35%) 80%, transparent 90%);
+  mix-blend-mode: soft-light; opacity: .6;
+}
+.assistant-orb--thinking { animation: orb-float 4s ease-in-out infinite, orb-pulse 1.2s ease-in-out infinite; }
+.assistant-orb--thinking .assistant-orb__glint { animation: orb-spin 2.4s linear infinite; opacity: 1; }
+@keyframes orb-float { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.03); } }
+@keyframes orb-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.25) saturate(1.2); } }
+@keyframes orb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .assistant-orb, .assistant-orb--thinking, .assistant-orb__glint, .skeleton { animation: none !important; }
 }

@@ -68,6 +68,43 @@ Botão padrão (`components/ui/button.tsx`) passa a usar `bg-brand
 text-brand-foreground`: no escuro o `--primary` é claro demais para texto
 branco.
 
+**4–7. Visão geral em bento grid** (`components/dashboard/*`). Substitui os
+quatro cards de métrica da Visão geral; o kanban "Fluxo de chamados" continua
+logo abaixo. Só dados que a tela já carrega (chamados ativos do Jira +
+`/api/operational-dashboard`), contas em `lib/dashboard-metrics.ts` (com
+testes). Grade de 12 colunas no xl (3·6·3 / 8·4 / 8·4), 2 no lg, 1 no celular.
+- Hero azul com glow: "Chamados no prazo (SLA)" = fluxos ativos sem SLA
+  atrasado ÷ fluxos ativos, com count-up; pílulas "Ver fila" e "Novo chamado"
+  (Jira). Sem resumo em 8 s mostra "—" em vez de girar para sempre.
+- Resumo operacional: Em aberto / Em campo / Agendados com badge de variação
+  (sinal + seta + cor) e barra de distribuição da fila por status. **O "vs.
+  ontem" é por navegador**: não há série histórica no servidor, então cada
+  navegador guarda um retrato diário (`localStorage` `caju-dashboard-kpis`) e
+  compara com o último dia visto; sem retrato anterior não aparece badge.
+- Agenda da quinzena: 14 mini-barras (7 dias atrás em azul, 7 à frente no
+  trilho) e % de chamados com técnico.
+- Movimento por dia (Recharts): colunas "com trilho" — agendados (azul) e
+  acionados (laranja da marca) empilhados com 4 px de respiro, trilho neutro
+  da escala do período. **Não há meta no sistema**, então o trilho é só
+  escala, não "Meta". O laranja substituiu o creme/cinza sugerido: o validador
+  de paleta reprovou o cinza (croma baixo, lê como "sem dado"). Barras crescem
+  em cascata (60 ms por dia); trocar 7/14 dias interpola. Tooltip com os três
+  números, `role="img"` com resumo e tabela equivalente para leitor de tela.
+- Assistente: orb em CSS puro (flutua/respira; pulsa enquanto a IA responde),
+  chips que preenchem o campo, envio abre a janela do assistente que já
+  existia (evento `caju:assistant-ask`, `lib/assistant-events.ts`) — mesma
+  lógica, histórico e ferramentas. Sem microfone (não há recurso de voz).
+- Atividades recentes: tabela (vira lista de cards no celular), linha inteira
+  abre o chamado, status em pílula ("Atrasado" quando há alerta crítico).
+- Ações rápidas: atalhos para Agenda, Central N1, Spares, Mapa (filtrados por
+  `canUseNavItem`) e novo chamado no Jira. Sem sliders — não há ação
+  existente que eles controlariam.
+- Coreografia: skeletons com brilho nas posições finais; cards entram em
+  cascata (70 ms) com mola; com dado em cache a cascata cai para ~35 ms.
+  Cada card tem estados de carregando/vazio/erro e um error boundary próprio;
+  selo "Atualizado há X min"/"Offline" quando o dado envelhece.
+  `prefers-reduced-motion`: sem translate/escala/brilho/flutuação.
+
 ### Assistente ganha histórico contínuo, exibição de fontes, presença global e fallback
 
 O assistente flutuante de IA agora suporta conversas multi-turno contínuas,

@@ -9,13 +9,11 @@ import {
   Building2,
   CalendarClock,
   CalendarDays,
-  ClipboardList,
   DatabaseBackup,
   Download,
   ExternalLink,
   Eye,
   Filter,
-  Headphones,
   List,
   Loader2,
   MapPin,
@@ -33,6 +31,7 @@ import {
 } from "lucide-react";
 import { AppNavigation } from "@/components/app-navigation";
 import { AppGreeting } from "@/components/app-greeting";
+import { OverviewBento } from "@/components/dashboard/overview-bento";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { canUseDashboardView, canUseWhatsapp, isDashboardView, type DashboardView } from "@/lib/navigation";
@@ -271,6 +270,7 @@ const shortColumn: Record<Status, string> = {
   "Técnico em campo": "Em campo",
 };
 const KANBAN_TAB_KEY = "caju-kanban-mobile-column";
+const JIRA_CREATE_ISSUE_URL = "https://delfia.atlassian.net/secure/CreateIssue!default.jspa";
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   feedback: [
     "Voz da equipe",
@@ -461,6 +461,12 @@ export default function Home() {
     document.documentElement.dataset.view = activeView;
     return () => { delete document.documentElement.dataset.view; };
   }, [activeView]);
+  // Referência estável para o bento: ele mede "atualizado há" e grava o
+  // retrato diário quando esta lista muda.
+  const activeTickets = useMemo(
+    () => tickets.filter((ticket) => !archivedKeys.has(ticket.id)),
+    [tickets, archivedKeys],
+  );
   const filtered = useMemo(() => {
     const terms = searchTerms(query);
     return tickets.filter((ticket) => {
@@ -1269,7 +1275,7 @@ export default function Home() {
                 className="h-11 px-4 font-bold shadow-[0_10px_28px_color-mix(in_oklab,var(--primary)_20%,transparent)]"
                 render={
                   <a
-                    href="https://delfia.atlassian.net/secure/CreateIssue!default.jspa"
+                    href={JIRA_CREATE_ISSUE_URL}
                     target="_blank"
                     rel="noreferrer"
                   />
@@ -1280,72 +1286,16 @@ export default function Home() {
             )}
           </div>
           {activeView === "overview" && (
-            <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
-              {[
-                [
-                  "Chamados relevantes",
-                  String(tickets.length),
-                  "Fluxo operacional ativo",
-                  ClipboardList,
-                  "text-blue-300",
-                ],
-                [
-                  "Técnico em campo",
-                  String(
-                    tickets.filter((item) => item.status === "Técnico em campo")
-                      .length,
-                  ),
-                  "Atendimentos atuais",
-                  Headphones,
-                  "text-emerald-300",
-                ],
-                [
-                  "Pendente de agenda",
-                  String(
-                    tickets.filter(
-                      (item) => item.status === "Pendente de agendamento",
-                    ).length,
-                  ),
-                  "Requer agendamento",
-                  CalendarClock,
-                  "text-violet-300",
-                ],
-                [
-                  "Aguardando spare",
-                  String(
-                    tickets.filter((item) => item.status === "Aguardando spare")
-                      .length,
-                  ),
-                  "Material pendente",
-                  ShieldCheck,
-                  "text-amber-300",
-                ],
-              ].map(([label, value, note, Icon, color]) => (
-                <article
-                  key={label as string}
-                  className="surface-panel metric-glow rounded-2xl p-4 sm:p-5"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {label as string}
-                      </p>
-                      <p className="mt-3 text-2xl font-semibold tracking-[-.04em] sm:text-3xl">
-                        {value as string}
-                      </p>
-                    </div>
-                    <div
-                      className={`grid size-10 place-items-center rounded-xl border border-white/5 bg-foreground/[.035] dark:bg-black/15 ${color}`}
-                    >
-                      <Icon className="size-[18px]" />
-                    </div>
-                  </div>
-                  <p className="mt-4 text-xs text-muted-foreground">
-                    {note as string}
-                  </p>
-                </article>
-              ))}
-            </div>
+            <OverviewBento
+              tickets={activeTickets}
+              loading={jiraLoading}
+              error={jiraError}
+              operational={operational}
+              role={role}
+              jiraCreateUrl={JIRA_CREATE_ISSUE_URL}
+              onOpenTicket={(ticket) => void openTicket(ticket)}
+              onNavigate={navigate}
+            />
           )}
           {jiraError && (
             <div
