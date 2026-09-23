@@ -59,15 +59,12 @@ import { CajuLoading } from "@/components/caju-loading";
 import { useAuth } from "@/components/auth-provider";
 import { OperationWorkflowDialog } from "@/components/operation-workflow-dialog";
 import { FeedbackBoard } from "@/components/feedback-board";
-import { OperationChat } from "@/components/operation-chat";
 import { WhatsappSendDialog, type WhatsappDraft } from "@/components/whatsapp-send-dialog";
-import { ActiveAttendances, type ActiveAttendanceTicket } from "@/components/active-attendances";
 import { TicketHistory } from "@/components/ticket-history";
 import { WhatsAppInbox } from "@/components/whatsapp-inbox";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
-import { QueueAssistant } from "@/components/assistant-panel";
 import { AssistantAudit } from "@/components/assistant-audit";
 import type { BulkStatus } from "@/lib/bulk-actions";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -398,7 +395,11 @@ export default function Home() {
       return next;
     });
   };
-  const visibleOperationalAlerts = operational?.alerts.filter((alert) => !readAlertKeys.has(`${alert.ticketKey}|${alert.message}`)) ?? [];
+  const visibleOperationalAlerts = operational?.alerts.filter(
+    (alert) =>
+      !/^SLA excedido/i.test(alert.message) &&
+      !readAlertKeys.has(`${alert.ticketKey}|${alert.message}`),
+  ) ?? [];
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
     () => new Set(),
   );
@@ -682,6 +683,48 @@ export default function Home() {
   }, [tickets, user]);
 
   useEffect(() => {
+    function onOpenTicketEvent(event: Event) {
+      const ticketKey = (event as CustomEvent<string>).detail;
+      if (!ticketKey) return;
+      const ticket = tickets.find((item) => item.id === ticketKey);
+      void openTicket(ticket ?? {
+        id: ticketKey,
+        title: "Carregando chamado...",
+        store: "",
+        city: "",
+        status: "Direcionado",
+        rawStatus: "",
+        priority: "Media",
+      });
+    }
+
+    function onPrepareScheduleEvent(event: Event) {
+      const detail = (event as CustomEvent<{ ticketKeys: string[]; at: string }>).detail;
+      if (!detail?.ticketKeys?.length) return;
+      setSelectedKeys(new Set(detail.ticketKeys));
+      setActiveView('tickets');
+      setScheduleRequest({ at: detail.at, id: Date.now() });
+    }
+
+    function onPrepareWhatsappEvent(event: Event) {
+      const detail = (event as CustomEvent<{ contato: string; nome: string; texto: string }>).detail;
+      if (!detail) return;
+      if (canUseWhatsapp(role)) {
+        setWhatsappDraft(detail);
+      }
+    }
+
+    window.addEventListener('caju:open-ticket', onOpenTicketEvent);
+    window.addEventListener('caju:prepare-schedule', onPrepareScheduleEvent);
+    window.addEventListener('caju:prepare-whatsapp', onPrepareWhatsappEvent);
+    return () => {
+      window.removeEventListener('caju:open-ticket', onOpenTicketEvent);
+      window.removeEventListener('caju:prepare-schedule', onPrepareScheduleEvent);
+      window.removeEventListener('caju:prepare-whatsapp', onPrepareWhatsappEvent);
+    };
+  }, [tickets, role]);
+
+  useEffect(() => {
     knownTicketIds.current = new Set(tickets.map((ticket) => ticket.id));
   }, [tickets]);
 
@@ -694,6 +737,7 @@ export default function Home() {
   useEffect(() => {
     if (!operational || !user) return;
     for (const alert of operational.alerts) {
+      if (/^SLA excedido/i.test(alert.message)) continue;
       const key = `${alert.ticketKey}|${alert.message}`;
       if (!seenOperationalAlerts.current.has(key) && seenOperationalAlerts.current.size) {
         const kind = /spare|entrega|rastrei/i.test(alert.message) ? "spare" : /agend/i.test(alert.message) ? "schedule" : /campo/i.test(alert.message) ? "field-check" : "operational";
@@ -824,7 +868,7 @@ export default function Home() {
     if (!user) return;
     setSelected(ticket);
     setDetails(null);
-    setDetailsVisible(true);
+    setDetailsVisible(false);
     setWhatsappUrl("");
     setDialogError("");
     setValidationNotice("");
@@ -1304,49 +1348,6 @@ export default function Home() {
               ))}
             </div>
           )}
-          {activeView === "overview" && (
-            <OperationChat
-              tickets={tickets}
-              user={user}
-              selectedKeys={selectedKeys}
-              onToggleSelected={toggleSelected}
-              onToggleAll={toggleSelectedGroup}
-              onOpenTicket={(ticket) => void openTicket(ticket)}
-              onPrepareSchedule={(keys, at) => {
-                setSelectedKeys(new Set(keys));
-                setScheduleRequest({ at, id: Date.now() });
-              }}
-              onPrepareMessage={(draft) => setWhatsappDraft(draft)}
-            />
-          )}
-          {activeView === "overview" && (
-            <ActiveAttendances
-              availableTickets={tickets.map((ticket) => ({
-                key: ticket.id,
-                summary: ticket.title,
-                store: ticket.store,
-                city: ticket.city,
-              }))}
-              onOpenTicket={(attendanceTicket: ActiveAttendanceTicket) => {
-                void openTicket({
-                  id: attendanceTicket.ticketKey,
-                  title: attendanceTicket.summary,
-                  store: attendanceTicket.store ?? "Loja não informada",
-                  city: attendanceTicket.city ?? "",
-                  status: "Técnico em campo",
-                  rawStatus: "Técnico em campo",
-                  priority: "Media",
-                });
-              }}
-            />
-          )}
-          {activeView === "overview" && (
-            <OperationalSummary
-              data={operational}
-              tickets={tickets}
-              onOpenTicket={(ticket) => void openTicket(ticket)}
-            />
-          )}
           {jiraError && (
             <div
               role="alert"
@@ -1454,29 +1455,6 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              {/* Pergunta livre sobre a fila. O servidor relê os chamados pela
-                  mesma busca; o contexto do modelo não vem do cliente. */}
-              <div className="mt-4">
-                <QueueAssistant
-                  user={user}
-                  query={query}
-                  onOpenTicket={(ticketKey) => {
-                    // A fila do assistente é relida no servidor e pode citar um
-                    // chamado que não está carregado aqui. openTicket troca
-                    // este esboço pelos dados do Jira assim que eles chegam.
-                    const ticket = tickets.find((item) => item.id === ticketKey);
-                    void openTicket(ticket ?? {
-                      id: ticketKey,
-                      title: "Carregando chamado...",
-                      store: "",
-                      city: "",
-                      status: "Direcionado",
-                      rawStatus: "",
-                      priority: "Media",
-                    });
-                  }}
-                />
-              </div>
               {view === "kanban" ? (
                 <>
                 {/* Celular: uma coluna por vez. Lado a lado não cabe em 375px,
@@ -1736,7 +1714,20 @@ export default function Home() {
                   {dialogError}
                 </div>
               )}
-              {selected && <TicketTeamCard key={selected.id} ticketKey={selected.id} user={user} />}
+              {detailsVisible && selected && (
+                <section className="rounded-xl border border-primary/25 bg-primary/5 p-4" aria-label="Resumo para atendimento">
+                  <p className="text-xs font-bold uppercase tracking-wide text-primary">Resumo para atendimento</p>
+                  <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                    <Detail label="Loja" value={`${selected.store || "Loja não informada"}${selected.city ? ` · ${selected.city}` : ""}`} />
+                    <Detail label="Técnico" value={details?.technicianName || selected.technician || "Não atribuído"} />
+                    <Detail label="Agendamento" value={details?.scheduledAt ? formatDate(details.scheduledAt) : selected.schedule || "Sem agendamento"} />
+                    <Detail label="Status" value={details?.status || selected.rawStatus || selected.status} />
+                    <Detail label="Contato" value={[details?.operationalFields.contactName, details?.operationalFields.contactPhone].filter(Boolean).join(" · ") || "Não informado"} />
+                    <Detail label="Melhor horário" value={details?.operationalFields.preferredServiceTime || "Não informado"} />
+                    <Detail className="sm:col-span-2" label="Defeito alegado" value={details?.operationalFields.allegedDefect || "Não informado"} />
+                  </div>
+                </section>
+              )}
               <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                 <Button
                   variant="outline"
@@ -1747,14 +1738,14 @@ export default function Home() {
                   <Eye className="size-5 shrink-0 text-blue-300" />
                   <span className="min-w-0 flex-1">
                     <span className="block break-words font-bold">
-                      {detailsVisible ? "Ocultar detalhes" : "Ver detalhes"}
+                      {detailsVisible ? "Mostrar menos" : "Mais informações"}
                     </span>
                     <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
-                      Editar e sincronizar com o Jira
+                      Equipe, spare, classificação e edição no Jira
                     </span>
                   </span>
                 </Button>
-                {role !== "n1" && selected && (
+                {detailsVisible && role !== "n1" && selected && (
                   <Button
                     type="button"
                     variant="outline"
@@ -1809,7 +1800,7 @@ export default function Home() {
                     </span>
                   </span>
                 </Button>
-                <Button
+                {detailsVisible && <Button
                   variant="outline"
                   className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal p-3 text-left"
                   onClick={() =>
@@ -1830,7 +1821,7 @@ export default function Home() {
                       Compartilhar com colega
                     </span>
                   </span>
-                </Button>
+                </Button>}
                 {role !== "n1" && (
                   <Button
                     variant="outline"
@@ -1860,7 +1851,7 @@ export default function Home() {
               </p>
               {/* O tipo da FSA fica à vista, logo abaixo das ações, e não dentro dos
                   detalhes do Jira: quem atende precisa achar sem rolar a tela. */}
-              {selected && (
+              {detailsVisible && selected && (
                 <FsaClassificacao
                   key={selected.id}
                   ticketKey={selected.id}
@@ -1871,7 +1862,7 @@ export default function Home() {
               {role === "n1" && selected && (
                 <N1TicketActions ticketKey={selected.id} user={user} />
               )}
-              {linkedSpare && (
+              {detailsVisible && linkedSpare && (
                 <section className="rounded-xl border border-primary/25 bg-primary/5 p-4" aria-label="Dados do spare vinculados à planilha">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
@@ -1893,7 +1884,6 @@ export default function Home() {
                 </section>
               )}
               {detailsVisible && details && (
-                <>
                   <section className="rounded-xl border border-border bg-muted/30 p-4">
                     <div className="grid gap-3 text-sm sm:grid-cols-2">
                       <Detail label="Status" value={details.status} />
@@ -1921,22 +1911,25 @@ export default function Home() {
                       />
                     </div>
                   </section>
-                  <JiraTicketDetails
-                    details={details}
-                    user={user}
-                    onUpdated={(updated) => {
-                      const next = updated as JiraDetails;
-                      setDetails(next);
-                      setTickets((current) =>
-                        current.map((ticket) =>
-                          ticket.id === next.key ? toTicket(next) : ticket,
-                        ),
-                      );
-                    }}
-                  />
-                </>
               )}
-              {(role === "analista" || role === "gerencia") && (
+              {details && (
+                <JiraTicketDetails
+                  key={details.key}
+                  details={details}
+                  user={user}
+                  expanded={detailsVisible}
+                  onUpdated={(updated) => {
+                    const next = updated as JiraDetails;
+                    setDetails(next);
+                    setTickets((current) =>
+                      current.map((ticket) =>
+                        ticket.id === next.key ? toTicket(next) : ticket,
+                      ),
+                    );
+                  }}
+                />
+              )}
+              {detailsVisible && (role === "analista" || role === "gerencia") && (
                 <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4">
                   <div className="flex items-center gap-2">
                     <MessageCircle className="size-5 shrink-0 text-emerald-400" />

@@ -704,29 +704,6 @@ export function ColleaguesPanel({
   }
   return (
     <>
-      <button
-        type="button"
-        data-floating-launcher
-        onClick={toggleColleagues}
-        aria-label={
-          colleaguesOpen
-            ? "Fechar colegas"
-            : messageDot
-              ? "Abrir colegas, nova atividade no chat"
-              : "Abrir colegas"
-        }
-        aria-expanded={colleaguesOpen}
-        className="fixed bottom-5 right-5 z-(--z-sidebar) hidden size-11 place-items-center rounded-xl border border-primary/30 bg-sidebar text-primary shadow-xl transition hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary xl:grid"
-      >
-        <Users className="size-5" aria-hidden="true" />
-        {messageDot && (
-          <span className="absolute right-1.5 top-1.5 size-2.5 animate-pulse rounded-full border-2 border-sidebar bg-emerald-400" />
-        )}
-      </button>
-      <TeamVoiceControl
-        colleagues={colleagues}
-        onHistoryChanged={loadCollaboration}
-      />
       <aside
         inert={!colleaguesOpen}
         className={`colleagues-sidebar fixed inset-y-0 right-0 z-(--z-float) hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
@@ -806,23 +783,6 @@ export function ColleaguesPanel({
           )}
         </div>
       </aside>
-      <button
-        type="button"
-        data-floating-launcher
-        onClick={() => {
-          setMobileOpen(true);
-          setMessageDot(false);
-        }}
-        className="app-float-launcher fixed bottom-4 right-4 z-(--z-float) grid size-12 place-items-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-2xl xl:hidden"
-        aria-label={
-          messageDot ? "Abrir colegas, nova atividade no chat" : "Abrir colegas"
-        }
-      >
-        <Users className="size-5" />
-        {messageDot && (
-          <span className="absolute right-0.5 top-0.5 size-3 animate-pulse rounded-full border-2 border-background bg-emerald-400" />
-        )}
-      </button>
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>

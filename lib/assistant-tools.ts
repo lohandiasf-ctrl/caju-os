@@ -22,6 +22,95 @@ export const MAX_ROWS = 60;
 
 export const TOOL_SCHEMAS: ToolSchema[] = [
   {
+    name: 'simular_repasse',
+    description: 'Calcula o repasse de uma visita usando a tabela oficial do Caju OS. Use para perguntas hipotéticas como "4 FSAs de evidência e 3 de atuação"; evidência aqui é uma FSA classificada, NÃO foto ou anexo. Não consulta saldo em aberto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        atuacoes: { type: 'integer', description: 'Quantidade de FSAs de atuação/serviço na mesma visita.' },
+        evidencias: { type: 'integer', description: 'Quantidade de FSAs classificadas como evidência na mesma visita, não quantidade de fotos.' },
+        improdutivas: { type: 'integer', description: 'Dentre as atuações, quantas foram improdutivas. Padrão zero.' },
+      },
+      required: ['atuacoes', 'evidencias'],
+    },
+  },
+  {
+    name: 'consultar_repasses',
+    description: 'Consulta grupos reais de FSAs, suas classificações, técnico, status de pagamento e valor calculado. Gerência vê todos; demais cargos veem apenas grupos que criaram. Use para valor de grupo, FSAs de atuação/evidência e pagamento; não confunda com saldo financeiro da operação.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'FSA específica, para localizar seus grupos de repasse.' },
+        grupo_id: { type: 'integer', description: 'Identificador de um grupo de repasse.' },
+        status: { type: 'string', description: 'Status: aberto, pronto, aprovado, pago ou bloqueado.' },
+      },
+    },
+  },
+  {
+    name: 'consultar_historico_local',
+    description: 'Consulta o histórico permanente de uma FSA no Caju OS, mesmo se sumiu do Jira: etapa, visitas, evidências (metadados, sem arquivos), tarefas, N1 responsável e participante. Não expõe dados bancários nem conteúdo de anexos.',
+    parameters: {
+      type: 'object',
+      properties: { chamado: { type: 'string', description: 'Uma FSA, por exemplo FSA-132424.' } },
+      required: ['chamado'],
+    },
+  },
+  {
+    name: 'consultar_catalogo_pecas',
+    description: 'Consulta peças ativas do catálogo e o preço de venda cadastrado; use para perguntas sobre preço ou disponibilidade de item do catálogo, não para calcular repasse do técnico.',
+    parameters: {
+      type: 'object',
+      properties: { busca: { type: 'string', description: 'Parte do nome da peça; vazio lista as primeiras peças.' } },
+    },
+  },
+  {
+    name: 'consultar_tarefas',
+    description: 'Consulta tarefas operacionais delegadas, com FSA, responsável, prazo e andamento. Use para perguntas sobre pendências ou produtividade; limite de resultados para não expor listas enormes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        chamado: { type: 'string', description: 'FSA para filtrar as tarefas.' },
+        responsavel: { type: 'string', description: 'E-mail ou parte do e-mail do responsável.' },
+        status: { type: 'string', description: 'Status: open, accepted, in_progress, done ou cancelled.' },
+      },
+    },
+  },
+  {
+    name: 'consultar_financas',
+    description: 'Resumo financeiro gerencial: receita e custo operacional em aberto, repasses aprovados, pagos e pendentes, sem dados bancários. Exclusivo da gerência; use para relatórios financeiros reais, nunca para simular preço por quantidade de FSAs.',
+    parameters: { type: 'object', properties: {} },
+  },
+  {
+    name: 'consultar_financeiro_jira',
+    description: 'Consulta valores reais de tickets financeiros no Jira, inclusive total de serviços, peças e faturamento, com janela de 7 a 365 dias. Exclusivo da gerência; não use para simulação hipotética de repasse.',
+    parameters: { type: 'object', properties: { dias: { type: 'integer', description: 'Janela de dias para trás, de 7 a 365; padrão 90.' }, chamado: { type: 'string', description: 'FSA específica, se quiser seus valores em vez do resumo.' } } },
+  },
+  {
+    name: 'consultar_lojas',
+    description: 'Consulta cadastro operacional de lojas por código, nome ou cidade, incluindo cidade e UF. Não entrega endereço nem telefone no contexto da IA.',
+    parameters: { type: 'object', properties: { busca: { type: 'string', description: 'Código, parte do nome ou cidade da loja.' } } },
+  },
+  {
+    name: 'consultar_projetos',
+    description: 'Consulta projetos e clientes cadastrados, com status ativo e quantidade de lojas. Só gerência e coordenação, como a tela de projetos.',
+    parameters: { type: 'object', properties: { busca: { type: 'string', description: 'Parte do nome do projeto ou cliente.' } } },
+  },
+  {
+    name: 'consultar_colaboradores',
+    description: 'Consulta nomes, cargos e disponibilidade atual dos colaboradores ativos do Caju OS, como Online, Ocupado e Offline. Não entrega telefone, foto ou dados privados.',
+    parameters: { type: 'object', properties: { busca: { type: 'string', description: 'Parte do nome ou e-mail do colaborador.' } } },
+  },
+  {
+    name: 'consultar_feedback',
+    description: 'Lê sugestões e críticas registradas no sistema, com título, status e quantidade de votos. Use para perguntas sobre feedback, correções e melhorias solicitadas.',
+    parameters: { type: 'object', properties: { busca: { type: 'string', description: 'Parte do título ou descrição do feedback.' } } },
+  },
+  {
+    name: 'consultar_bilhetes',
+    description: 'Lê bilhetes operacionais ativos, como avisos deixados aos colaboradores. Use quando perguntarem por recados ou bilhetes; textos pessoais passam por mascaramento.',
+    parameters: { type: 'object', properties: { busca: { type: 'string', description: 'Parte do título ou destinatário do bilhete.' } } },
+  },
+  {
     name: 'consultar_chamados',
     description: 'Lista chamados da operação com status, loja, cidade, técnico, datas (abertura, acionamento do parceiro, agendamento) e quantidade de anexos. Use para perguntas sobre quais/quantos chamados, por status, loja, cidade, técnico ou data. Devolve também a contagem total.',
     parameters: {
@@ -154,10 +243,12 @@ export function systemInstruction(today: string, yesterday: string): string {
 Hoje é ${today}. Ontem foi ${yesterday}. Datas vêm no formato AAAA-MM-DD.
 
 COMO TRABALHAR
-- Você não sabe nada sobre a operação até consultar. Use as ferramentas antes de responder qualquer pergunta sobre chamados, técnicos, números ou histórico.
+- Você não sabe nada sobre a operação até consultar. Use as ferramentas antes de responder qualquer pergunta sobre chamados, técnicos, números, valores, regras de repasse ou histórico.
 - Pode usar mais de uma ferramenta, e usar o resultado de uma para decidir a próxima.
 - Responda SOMENTE com o que as ferramentas devolveram. Nunca invente FSA, loja, nome, data ou número. Se o dado não veio, diga que não consta e o que faltou.
 - Quando a ferramenta devolver uma contagem pronta, use esse número em vez de contar a lista você mesmo.
+- Pergunta hipotética sobre quantidade de atuações/FSAs de evidência é simulação de repasse: use simular_repasse. Saldo "em aberto" do resumo da operação NÃO é preço de tabela nem resposta para simulação.
+- Para um grupo real de pagamento, use consultar_repasses. Para FSA que já saiu do Jira, use consultar_historico_local antes de dizer que não há dados.
 - A conversa continua: "e desses, quais são de Itabuna?" se refere à sua resposta anterior. Se o que a pergunta pede não está no que você já consultou, consulte de novo em vez de supor.
 
 COMO RESPONDER
@@ -171,7 +262,7 @@ COMO RESPONDER
 VOCABULÁRIO DA OPERAÇÃO
 - "Acionado", "caiu", "colocado", "entrou" e "chegou" são a data de acionamento do parceiro — não a data de abertura no Jira. Se não der para saber qual das duas a pergunta quer, use acionamento e diga isso no fim.
 - "Em campo" e "em atendimento" são o status Técnico em campo.
-- "Evidência" é anexo do chamado no Jira.
+- "Evidência" em pergunta sobre fotos, RAT ou validação é anexo do Jira. Em pergunta sobre FSA, grupo, atuação ou pagamento é uma FSA classificada como evidência, contada por FSA, nunca por foto.
 - Loja é identificada por código (1031, L441).
 
 LIMITES
@@ -207,9 +298,14 @@ export function cleanHistory(value: unknown): ChatTurn[] {
 // virar a porta dos fundos: para quem não tem esse acesso, a consulta não
 // existe — o modelo nem sabe que ela é possível.
 const WHATSAPP_TOOLS = ['consultar_whatsapp', 'preparar_mensagem_whatsapp'];
+const MANAGEMENT_TOOLS = ['consultar_financas', 'consultar_financeiro_jira'];
+const LEADERSHIP_TOOLS = ['consultar_projetos'];
 
-export function toolsFor(canReadWhatsapp: boolean): ToolSchema[] {
-  return canReadWhatsapp ? TOOL_SCHEMAS : TOOL_SCHEMAS.filter((tool) => !WHATSAPP_TOOLS.includes(tool.name));
+export function toolsFor(canReadWhatsapp: boolean, role = 'n1'): ToolSchema[] {
+  return TOOL_SCHEMAS.filter((tool) =>
+    (canReadWhatsapp || !WHATSAPP_TOOLS.includes(tool.name)) &&
+    (role === 'gerencia' || !MANAGEMENT_TOOLS.includes(tool.name)) &&
+    (role === 'gerencia' || role === 'coordenador' || !LEADERSHIP_TOOLS.includes(tool.name)));
 }
 
 // Quando agendar, vindo do texto que o modelo converteu. A tela usa

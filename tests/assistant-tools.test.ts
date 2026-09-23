@@ -27,6 +27,17 @@ test('nomes de consulta não se repetem', () => {
   assert.equal(new Set(names).size, names.length);
 });
 
+test('a IA distingue simulação de repasse de saldo em aberto', () => {
+  const simulation = TOOL_SCHEMAS.find((tool) => tool.name === 'simular_repasse');
+  assert.ok(simulation);
+  assert.deepEqual(simulation.parameters.required, ['atuacoes', 'evidencias']);
+  assert.match(simulation.description, /NÃO foto ou anexo/);
+  assert.match(INSTRUCTION, /Saldo "em aberto".*NÃO é preço de tabela/);
+  for (const name of ['consultar_repasses', 'consultar_historico_local', 'consultar_catalogo_pecas', 'consultar_tarefas']) {
+    assert.ok(TOOL_SCHEMAS.some((tool) => tool.name === name), name);
+  }
+});
+
 // O modelo só sabe o que está na instrução. Estes pontos vieram de erro real
 // em produção com o assistente da fila, e não podem se perder.
 test('a instrução carrega o que a operação já ensinou ao assistente', () => {
@@ -149,6 +160,21 @@ test('a conversa anterior não cresce sem limite', () => {
   assert.equal(cleanHistory([{ role: 'assistant', text: 'x'.repeat(5000) }])[0].text.length, HISTORY_CHARS);
 });
 
+test('conversa multi-turno preserva a sequência de perguntas e respostas operacionais', () => {
+  const dialog = [
+    { role: 'user', text: 'Quais chamados estão agendados para amanhã?' },
+    { role: 'assistant', text: 'Os chamados FSA-101 e FSA-102 estão agendados.' },
+    { role: 'user', text: 'E quem atende em Itabuna?' },
+    { role: 'assistant', text: 'O técnico Carlos atende em Itabuna.' },
+  ];
+  const cleaned = cleanHistory(dialog);
+  assert.equal(cleaned.length, 4);
+  assert.equal(cleaned[0].role, 'user');
+  assert.equal(cleaned[1].role, 'assistant');
+  assert.equal(cleaned[2].role, 'user');
+  assert.equal(cleaned[3].role, 'assistant');
+});
+
 test('a instrução avisa que a conversa continua', () => {
   assert.match(INSTRUCTION, /A conversa continua/);
 });
@@ -179,6 +205,17 @@ test('o WhatsApp só é oferecido a quem já o vê na tela', () => {
   for (const name of ['consultar_chamados', 'consultar_spares', 'resumo_operacao', 'consultar_cobertura']) {
     assert.ok(semAcesso.includes(name), name);
   }
+});
+
+test('financeiro gerencial não aparece para N1 nem analista', () => {
+  assert.ok(toolsFor(false, 'gerencia').some((tool) => tool.name === 'consultar_financas'));
+  assert.ok(toolsFor(false, 'gerencia').some((tool) => tool.name === 'consultar_financeiro_jira'));
+  for (const role of ['n1', 'analista', 'coordenador']) {
+    assert.ok(!toolsFor(false, role).some((tool) => tool.name === 'consultar_financas'), role);
+    assert.ok(!toolsFor(false, role).some((tool) => tool.name === 'consultar_financeiro_jira'), role);
+  }
+  assert.ok(toolsFor(false, 'coordenador').some((tool) => tool.name === 'consultar_projetos'));
+  assert.ok(!toolsFor(false, 'n1').some((tool) => tool.name === 'consultar_projetos'));
 });
 
 // Mensagem para cliente ou técnico não sai de um texto interpretado sem
