@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Interceptação robusta de chamadas de ferramentas (Tool Calls) e higienização
+
+Corrigido vazamento de marcações XML cruas (`<tool_call>detalhar_chamado...`) emitidas por modelos do Workers AI (especialmente GLM-4.7-Flash).
+- **Causa raiz:** O GLM-4.7-Flash emite chamadas de função com tags XML nativas (`<tool_call>nome<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>`) quando o envelope `message.tool_calls` da OpenAI não é gerado pelo Cloudflare Workers AI. O backend não realizava o parsing dessas tags no texto de resposta, assumia que não havia chamadas de ferramentas e retornava o XML cru diretamente para o usuário sem executar a ferramenta.
+- **Leitor universal (`readAssistantResponse`):** Parser puro em `lib/assistant.ts` capaz de extrair e normalizar chamadas vindas de `choices[0].message.tool_calls`, `payload.tool_calls` raiz (formato tradicional Cloudflare/Mistral), e tags textuais `<tool_call>` (formato GLM / ChatML).
+- **Execução concorrente e multi-turno:** Quando múltiplas ferramentas são requisitadas na mesma resposta (ex.: 5 chamados detalhados de uma vez), o backend agora executa todas em paralelo via `Promise.all`, anexa os resultados com `role: 'tool'` e avança para a próxima rodada da IA.
+- **Higienização estrita em múltiplas camadas:** Função `sanitizeFinalAnswer` remove completamente tags e resquícios de chamadas tanto no backend antes do envio quanto no componente de exibição (`Answer` em `components/assistant-panel.tsx`).
+- **Instrução de sistema reforçada:** Adicionada regra crítica em `systemInstruction` proibindo expressamente a IA de expor tags XML ou JSON técnico de ferramentas na resposta ao usuário final.
+
 ### Guia Completo e refinamento das diretrizes da IA (System Prompt)
 
 Incorporado o Guia Completo da IA do Sistema CAJU TECH + Jira (`docs/guia_completo_ia_cajutech.md`)

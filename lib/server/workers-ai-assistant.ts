@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import type { ToolSchema } from '@/lib/assistant-tools';
+import { readAssistantResponse, sanitizeFinalAnswer, type ToolCall } from '@/lib/assistant';
 
 // Assistente geral no Workers AI. O binding ja pertence ao Worker, por isso
 // nao exige chave, cartao ou outro provedor para funcionar dentro da franquia
@@ -23,15 +24,10 @@ type Runner = { run: (model: string, input: unknown) => Promise<unknown> };
 
 type ChatMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  content: string;
+  name?: string;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
-};
-
-type ToolCall = {
-  id: string;
-  type: 'function';
-  function: { name: string; arguments: string };
 };
 
 export class WorkersAiError extends Error {
@@ -111,23 +107,40 @@ async function askWithModel(
       // ou destilação na Cloudflare.
       store: false,
     });
-    const response = readResponse(raw);
+    const response = readAssistantResponse(raw);
     if (!response.calls.length || last) {
-      if (response.text) return { answer: response.text, model, used };
+      const finalAnswer = sanitizeFinalAnswer(response.text || response.rawText);
+      if (finalAnswer) return { answer: finalAnswer, model, used };
+      if (used.length > 0) {
+        return {
+          answer: 'Consultei os chamados no sistema, mas não foi possível formatar a resposta. Por favor, tente novamente.',
+          model,
+          used,
+        };
+      }
       throw new WorkersAiError('O assistente não conseguiu responder agora.', 503);
     }
 
     messages.push({
       role: 'assistant',
-      content: response.text || null,
+      content: response.rawText || response.text || '',
       tool_calls: response.calls,
     });
-    for (const call of response.calls) {
-      used.push(call.function.name);
-      const result = await options.runTool(call.function.name, parseArguments(call.function.arguments))
-        .catch((error) => ({ erro: String(error).slice(0, 200) }));
+
+    const results = await Promise.all(
+      response.calls.map(async (call) => {
+        used.push(call.function.name);
+        const args = parseArguments(call.function.arguments);
+        const result = await options.runTool(call.function.name, args)
+          .catch((error) => ({ erro: String(error).slice(0, 200) }));
+        return { call, result };
+      }),
+    );
+
+    for (const { call, result } of results) {
       messages.push({
         role: 'tool',
+        name: call.function.name,
         tool_call_id: call.id,
         content: JSON.stringify(result),
       });
@@ -156,32 +169,4 @@ function parseArguments(value: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function readResponse(raw: unknown): { text: string; calls: ToolCall[] } {
-  if (!raw || typeof raw !== 'object') return { text: '', calls: [] };
-  const payload = raw as {
-    choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>;
-    response?: unknown;
-    result?: { response?: unknown };
-  };
-  const message = payload.choices?.[0]?.message;
-  const text = typeof message?.content === 'string'
-    ? message.content.trim()
-    : typeof payload.response === 'string'
-      ? payload.response.trim()
-      : typeof payload.result?.response === 'string'
-        ? payload.result.response.trim()
-        : '';
-  const calls = Array.isArray(message?.tool_calls)
-    ? message.tool_calls.flatMap((value) => validToolCall(value) ? [value] : [])
-    : [];
-  return { text, calls };
-}
-
-function validToolCall(value: unknown): value is ToolCall {
-  if (!value || typeof value !== 'object') return false;
-  const call = value as { id?: unknown; type?: unknown; function?: { name?: unknown; arguments?: unknown } };
-  return typeof call.function?.name === 'string' && typeof call.function.arguments === 'string'
-    && typeof call.id === 'string' && call.id.length > 0 && (!call.type || call.type === 'function');
 }
