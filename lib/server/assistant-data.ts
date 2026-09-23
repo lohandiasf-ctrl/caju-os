@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, like, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { activeAttendances, activeAttendanceTickets, operationalAudit, operationalTasks, operationalWorkflows, shipmentTracking, spares, technicianReviews, technicians, whatsappConversations, whatsappMessages } from '@/db/schema';
+import { activeAttendances, activeAttendanceTickets, appUsers, bulletinNotes, employeePresence, feedback, fsaClassifications, fsaGroups, n1TicketAssignments, operationalAudit, operationalStores, operationalTasks, operationalVisits, operationalWorkflows, partsCatalog, projects, shipmentTracking, spares, stores, technicianReviews, technicians, ticketArchives, ticketEvidence, whatsappConversations, whatsappMessages } from '@/db/schema';
 import { onlyDate, operationDateTime, queueContext, redact, statusLabel, ticketContext } from '@/lib/assistant';
 import { MAX_ROWS, parseSchedule } from '@/lib/assistant-tools';
 import { COVERAGE_RADIUS_KM, coverageFor, coverageText } from '@/lib/coverage';
@@ -8,7 +8,9 @@ import { geocodeCity } from '@/lib/server/geocode';
 import { technicianDirectory } from '@/lib/server/technician-directory';
 import { bulkIneligibleReason, isBulkEligible, MAX_BULK_TICKETS } from '@/lib/bulk-actions';
 import { toAssistantIssue } from '@/lib/server/assistant-issue';
-import { getJiraIssue, searchJiraIssues } from '@/lib/server/jira';
+import { getFinancialIssues, getJiraIssue, searchJiraIssues } from '@/lib/server/jira';
+import { calcularRepasse, type Fsa } from '@/lib/fsa-payment';
+import { carregarGrupo } from '@/lib/server/fsa-payment';
 
 // Executa o que o assistente geral pediu. Cada função aqui é SOMENTE LEITURA.
 //
@@ -25,6 +27,38 @@ const TECHNICIAN_ROWS = 40;
 const TASK_ROWS = 20;
 
 type Args = Record<string, unknown>;
+type AssistantAccess = { role: string; email: string; canReadWhatsapp: boolean };
+
+const currency = (cents: number) => `R$ ${(cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+function validQuantity(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100 ? value : null;
+}
+
+async function simularRepasse(args: Args) {
+  const atuacoes = validQuantity(args.atuacoes);
+  const evidencias = validQuantity(args.evidencias);
+  const improdutivas = args.improdutivas === undefined ? 0 : validQuantity(args.improdutivas);
+  if (atuacoes === null || evidencias === null || improdutivas === null || improdutivas > atuacoes || atuacoes + evidencias > 100) {
+    return { erro: 'Informe quantidades inteiras válidas de FSAs (0 a 100); improdutivas não podem superar atuações.' };
+  }
+  const fsas: Fsa[] = [
+    ...Array.from({ length: atuacoes }, (_, index): Fsa => index < improdutivas
+      ? { tipo: 'servico', improdutiva: true, motivo: 'problema-impeditivo' }
+      : { tipo: 'servico' }),
+    ...Array.from({ length: evidencias }, (): Fsa => ({ tipo: 'evidencia' })),
+  ];
+  const resultado = calcularRepasse(fsas);
+  return {
+    hipotetico: true,
+    regra: 'Mesmo grupo/visita; evidência conta por FSA, não por foto. Nenhuma atuação descoberta na loja foi presumida.',
+    atuacoes, evidencias, improdutivas,
+    atuacoes_valor: currency(resultado.servicos.totalCents),
+    evidencias_valor: currency(resultado.evidencias.totalCents),
+    total: currency(resultado.totalCents),
+    total_cents: resultado.totalCents,
+  };
+}
 
 function text(args: Args, key: string): string | undefined {
   const value = args[key];
@@ -117,7 +151,7 @@ async function consultarTecnicos(args: Args) {
 
 const CLOSED = ['archived', 'resolved', 'cancelled', 'validated'];
 
-async function resumoOperacao() {
+async function resumoOperacao(access: AssistantAccess) {
   const db = getDb();
   const now = Date.now();
   const [workflows, tasks, shipments] = await Promise.all([
@@ -130,7 +164,9 @@ async function resumoOperacao() {
   const open = workflows.filter((row) => !CLOSED.includes(row.status));
   const byStage = new Map<string, number>();
   for (const row of open) byStage.set(row.status, (byStage.get(row.status) ?? 0) + 1);
-  const money = (cents: number) => `R$ ${(cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  const visibleTasks = access.role === 'gerencia' || access.role === 'coordenador'
+    ? tasks
+    : tasks.filter((row) => [row.assignedTo, row.acceptedBy].some((email) => email?.toLowerCase() === access.email.toLowerCase()));
   const late = shipments.filter((row) => {
     const expected = Date.parse(row.expectedAt ?? '');
     return Number.isFinite(expected) && expected < now && !/entregue|recebido/i.test(row.status);
@@ -139,10 +175,12 @@ async function resumoOperacao() {
   return {
     chamados_em_operacao: open.length,
     por_etapa: [...byStage].map(([stage, total]) => `${stage}: ${total}`),
-    valor_cliente_em_aberto: money(open.reduce((sum, row) => sum + (row.clientValueCents ?? 0), 0)),
-    custo_em_aberto: money(open.reduce((sum, row) => sum + (row.payoutCents ?? 0) + (row.partsValueCents ?? 0), 0)),
-    tarefas_em_aberto: tasks.length,
-    tarefas: tasks.map((task) => redact([
+    ...(access.role === 'gerencia' ? {
+      valor_cliente_em_aberto: currency(open.reduce((sum, row) => sum + (row.clientValueCents ?? 0), 0)),
+      custo_em_aberto: currency(open.reduce((sum, row) => sum + (row.payoutCents ?? 0) + (row.partsValueCents ?? 0), 0)),
+    } : {}),
+    tarefas_em_aberto: visibleTasks.length,
+    tarefas: visibleTasks.map((task) => redact([
       task.ticketKey ? `${task.ticketKey}:` : '',
       task.title,
       `(${task.status})`,
@@ -152,6 +190,185 @@ async function resumoOperacao() {
     spares_a_caminho: shipments.length - late.length,
     spares_atrasados: late.map((row) => `${row.ticketKey} · ${row.trackingCode} · previsto ${onlyDate(row.expectedAt) ?? '-'} · ${row.status}`),
   };
+}
+
+async function consultarRepasses(args: Args, access: AssistantAccess) {
+  const groupId = args.grupo_id === undefined ? null : validQuantity(args.grupo_id);
+  if (args.grupo_id !== undefined && (!groupId || groupId < 1)) return { erro: 'Identificador do grupo inválido.' };
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  if (ticket && !/^FSA-\d+$/.test(ticket)) return { erro: 'Informe uma FSA válida.' };
+  const status = text(args, 'status');
+  if (status && !['aberto', 'pronto', 'aprovado', 'pago', 'bloqueado'].includes(status)) return { erro: 'Status de repasse inválido.' };
+  const db = getDb();
+  const groupIds = ticket
+    ? await db.select({ id: fsaClassifications.groupId }).from(fsaClassifications)
+      .where(eq(fsaClassifications.ticketKey, ticket)).limit(40).all()
+    : [];
+  if (ticket && !groupIds.length) return { total: 0, grupos: 'Nenhum grupo de repasse para essa FSA.' };
+  const conditions = [
+    groupId ? eq(fsaGroups.id, groupId) : undefined,
+    ticket ? inArray(fsaGroups.id, groupIds.map((row) => row.id)) : undefined,
+    status ? eq(fsaGroups.status, status as typeof fsaGroups.status.enumValues[number]) : undefined,
+    access.role === 'gerencia' ? undefined : eq(fsaGroups.createdBy, access.email),
+  ].filter(Boolean);
+  const ids = await db.select({ id: fsaGroups.id }).from(fsaGroups).where(and(...conditions))
+    .orderBy(desc(fsaGroups.dia), desc(fsaGroups.id)).limit(20).all();
+  const loaded = await Promise.all(ids.map((row) => carregarGrupo(row.id)));
+  const groups = loaded.filter((group): group is NonNullable<typeof group> => group !== null && (access.role === 'gerencia' || group.createdBy.toLowerCase() === access.email.toLowerCase()));
+  return {
+    total: groups.length,
+    grupos: groups.length ? groups.map((group) => ({
+      id: group.id, nome: group.nome, dia: group.dia, tecnico: group.tecnico, status: group.status,
+      fsas: group.fsas.map((fsa) => ({ chamado: fsa.ticketKey, tipo: fsa.tipo ?? 'não classificada', improdutiva: fsa.improdutiva, revisao: fsa.revisao })),
+      pendentes_de_classificacao: group.naoClassificadas,
+      aguardando_revisao: group.aguardandoRevisao,
+      atuacoes: group.repasse.servicos.quantidade,
+      evidencias: group.repasse.evidencias.quantidade,
+      valor_atuacoes: currency(group.repasse.servicos.totalCents),
+      valor_evidencias: currency(group.repasse.evidencias.totalCents),
+      valor_total_calculado: currency(group.repasse.totalCents),
+      data_pagamento: group.dataPagamento,
+    })) : 'Nenhum grupo visível para você com esse filtro.',
+  };
+}
+
+async function consultarHistoricoLocal(args: Args) {
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  if (!ticket || !/^FSA-\d+$/.test(ticket)) return { erro: 'Informe uma FSA válida.' };
+  const db = getDb();
+  const [archive, workflow, evidence, tasks, n1] = await Promise.all([
+    db.select({ title: ticketArchives.title, jiraStatus: ticketArchives.jiraStatus, operationalStatus: ticketArchives.operationalStatus, city: ticketArchives.city, capturedAt: ticketArchives.capturedAt }).from(ticketArchives).where(eq(ticketArchives.ticketKey, ticket)).get(),
+    db.select({ id: operationalWorkflows.id, status: operationalWorkflows.status, category: operationalWorkflows.category, description: operationalWorkflows.description, scheduledAt: operationalWorkflows.scheduledAt, validationStatus: operationalWorkflows.validationStatus, archivedAt: operationalWorkflows.archivedAt }).from(operationalWorkflows).where(eq(operationalWorkflows.ticketKey, ticket)).get(),
+    db.select({ kind: ticketEvidence.kind, name: ticketEvidence.name, createdAt: ticketEvidence.createdAt }).from(ticketEvidence).where(eq(ticketEvidence.ticketKey, ticket)).orderBy(desc(ticketEvidence.createdAt)).limit(30).all(),
+    db.select({ title: operationalTasks.title, status: operationalTasks.status, assignedTo: operationalTasks.assignedTo, dueAt: operationalTasks.dueAt, progressNote: operationalTasks.progressNote }).from(operationalTasks).where(eq(operationalTasks.ticketKey, ticket)).orderBy(desc(operationalTasks.updatedAt)).limit(20).all(),
+    db.select({ n1Email: n1TicketAssignments.n1Email, participantN1Email: n1TicketAssignments.participantN1Email, status: n1TicketAssignments.status }).from(n1TicketAssignments).where(eq(n1TicketAssignments.ticketKey, ticket)).get(),
+  ]);
+  if (!archive && !workflow && !evidence.length && !tasks.length && !n1) return { erro: 'Nenhum registro local encontrado para esta FSA.' };
+  const visits = workflow ? await db.select({ visitNumber: operationalVisits.visitNumber, scheduledAt: operationalVisits.scheduledAt, completedAt: operationalVisits.completedAt, status: operationalVisits.status, note: operationalVisits.note }).from(operationalVisits).where(eq(operationalVisits.workflowId, workflow.id)).limit(30).all() : [];
+  return {
+    chamado: ticket,
+    arquivo_permanente: archive ?? 'Sem fotografia histórica local.',
+    fluxo: workflow ? { status: workflow.status, category: workflow.category, description: redact(workflow.description ?? ''), scheduledAt: workflow.scheduledAt, validationStatus: workflow.validationStatus, archivedAt: workflow.archivedAt } : null,
+    visitas: visits.map((row) => ({ ...row, note: redact(row.note ?? '') })),
+    evidencias: evidence,
+    tarefas: tasks.map((row) => ({ ...row, progressNote: redact(row.progressNote ?? '') })),
+    n1: n1 ? { principal: n1.n1Email, participante: n1.participantN1Email, status: n1.status } : null,
+  };
+}
+
+async function consultarCatalogoPecas(args: Args) {
+  const search = text(args, 'busca');
+  const rows = await getDb().select({ name: partsCatalog.name, salePriceCents: partsCatalog.salePriceCents }).from(partsCatalog)
+    .where(and(eq(partsCatalog.active, true), search ? like(partsCatalog.name, `%${search}%`) : undefined))
+    .orderBy(partsCatalog.name).limit(40).all();
+  return { total_exibido: rows.length, pecas: rows.map((row) => ({ nome: row.name, preco_venda: currency(row.salePriceCents) })) };
+}
+
+async function consultarTarefas(args: Args, access: AssistantAccess) {
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  const owner = text(args, 'responsavel');
+  const status = text(args, 'status');
+  if (status && !['open', 'accepted', 'in_progress', 'done', 'cancelled'].includes(status)) return { erro: 'Status de tarefa inválido.' };
+  const conditions = [
+    ticket ? eq(operationalTasks.ticketKey, ticket) : undefined,
+    owner ? or(like(operationalTasks.assignedTo, `%${owner}%`), like(operationalTasks.acceptedBy, `%${owner}%`)) : undefined,
+    status ? eq(operationalTasks.status, status as typeof operationalTasks.status.enumValues[number]) : undefined,
+    access.role === 'gerencia' || access.role === 'coordenador' ? undefined : or(eq(operationalTasks.assignedTo, access.email), eq(operationalTasks.acceptedBy, access.email), eq(operationalTasks.createdBy, access.email)),
+  ].filter(Boolean);
+  const rows = await getDb().select({ ticketKey: operationalTasks.ticketKey, title: operationalTasks.title, status: operationalTasks.status, assignedTo: operationalTasks.assignedTo, acceptedBy: operationalTasks.acceptedBy, dueAt: operationalTasks.dueAt, progressNote: operationalTasks.progressNote }).from(operationalTasks)
+    .where(and(...conditions)).orderBy(desc(operationalTasks.updatedAt)).limit(40).all();
+  return { total_exibido: rows.length, tarefas: rows.map((row) => ({ ...row, progressNote: redact(row.progressNote ?? '') })) };
+}
+
+async function consultarFinancas(_args: Args, access: AssistantAccess) {
+  if (access.role !== 'gerencia') return { erro: 'Somente a gerência consulta o financeiro.' };
+  const db = getDb();
+  const [workflows, groups] = await Promise.all([
+    db.select({ status: operationalWorkflows.status, clientValueCents: operationalWorkflows.clientValueCents, payoutCents: operationalWorkflows.payoutCents, partsValueCents: operationalWorkflows.partsValueCents }).from(operationalWorkflows).all(),
+    db.select({ status: fsaGroups.status, totalCents: fsaGroups.totalCents }).from(fsaGroups).all(),
+  ]);
+  const open = workflows.filter((row) => !CLOSED.includes(row.status));
+  const sum = (values: number[]) => currency(values.reduce((a, b) => a + b, 0));
+  return {
+    nota: 'Valores registrados, não simulação de tabela. Repasses aprovados/pagos usam a fotografia de fechamento do grupo.',
+    receita_cliente_em_aberto: sum(open.map((row) => row.clientValueCents ?? 0)),
+    custo_previsto_em_aberto: sum(open.map((row) => (row.payoutCents ?? 0) + (row.partsValueCents ?? 0))),
+    repasses_aprovados: sum(groups.filter((row) => row.status === 'aprovado').map((row) => row.totalCents)),
+    repasses_pagos: sum(groups.filter((row) => row.status === 'pago').map((row) => row.totalCents)),
+    repasses_pendentes: sum(groups.filter((row) => row.status === 'pronto' || row.status === 'bloqueado').map((row) => row.totalCents)),
+  };
+}
+
+async function consultarFinanceiroJira(args: Args, access: AssistantAccess) {
+  if (access.role !== 'gerencia') return { erro: 'Somente a gerência consulta o financeiro.' };
+  const days = count(args, 'dias', 90, 365);
+  const ticket = text(args, 'chamado')?.toUpperCase();
+  if (ticket && !/^FSA-\d+$/.test(ticket)) return { erro: 'Informe uma FSA válida.' };
+  const rows = await getFinancialIssues(Math.max(7, days));
+  const selected = ticket ? rows.filter((row) => row.key === ticket) : rows;
+  return {
+    periodo_dias: days,
+    total_chamados: selected.length,
+    valor_total: currency(selected.reduce((sum, row) => sum + row.totalValue, 0) * 100),
+    valor_servicos: currency(selected.reduce((sum, row) => sum + row.serviceValue, 0) * 100),
+    valor_pecas: currency(selected.reduce((sum, row) => sum + row.spareValue, 0) * 100),
+    faturados: selected.filter((row) => row.billed).length,
+    nao_faturados: selected.filter((row) => !row.billed).length,
+    chamados: selected.slice(0, 30).map((row) => ({ chamado: row.key, status: row.status, tecnico: row.technician, loja: row.store, cidade: row.city, total: currency(row.totalValue * 100), faturado: row.billed })),
+    lista_cortada: selected.length > 30,
+  };
+}
+
+async function consultarLojas(args: Args) {
+  const search = text(args, 'busca');
+  const conditions = search ? or(like(operationalStores.code, `%${search}%`), like(operationalStores.name, `%${search}%`), like(operationalStores.city, `%${search}%`)) : undefined;
+  const rows = await getDb().select({ code: operationalStores.code, name: operationalStores.name, city: operationalStores.city, state: operationalStores.state }).from(operationalStores)
+    .where(conditions).orderBy(operationalStores.code).limit(40).all();
+  return { total_exibido: rows.length, lojas: rows };
+}
+
+async function consultarProjetos(args: Args, access: AssistantAccess) {
+  if (access.role !== 'gerencia' && access.role !== 'coordenador') return { erro: 'Seu cargo não acessa projetos.' };
+  const search = text(args, 'busca');
+  const db = getDb();
+  const rows = await db.select({ id: projects.id, name: projects.name, clientName: projects.clientName, active: projects.active }).from(projects)
+    .where(search ? or(like(projects.name, `%${search}%`), like(projects.clientName, `%${search}%`)) : undefined)
+    .orderBy(projects.name).limit(30).all();
+  const counts = rows.length ? await db.select({ projectId: stores.projectId, total: sql<number>`count(*)` }).from(stores).where(inArray(stores.projectId, rows.map((row) => row.id))).groupBy(stores.projectId).all() : [];
+  const byId = new Map(counts.map((row) => [row.projectId, Number(row.total)]));
+  return { total_exibido: rows.length, projetos: rows.map((row) => ({ nome: row.name, cliente: row.clientName, ativo: row.active, lojas: byId.get(row.id) ?? 0 })) };
+}
+
+async function consultarColaboradores(args: Args) {
+  const search = text(args, 'busca');
+  const rows = await getDb().select({ email: appUsers.email, role: appUsers.role, displayName: employeePresence.displayName, status: employeePresence.status, updatedAt: employeePresence.updatedAt })
+    .from(appUsers).leftJoin(employeePresence, eq(appUsers.email, employeePresence.email))
+    .where(and(eq(appUsers.active, true), search ? or(like(appUsers.email, `%${search}%`), like(employeePresence.displayName, `%${search}%`)) : undefined))
+    .limit(40).all();
+  const staleBefore = Date.now() - 2 * 60_000;
+  return { total_exibido: rows.length, colaboradores: rows.map((row) => ({
+    nome: row.displayName || row.email.split('@')[0], cargo: row.role,
+    disponibilidade: row.status === 'Offline' || !row.updatedAt || Date.parse(row.updatedAt) < staleBefore ? 'Offline' : row.status ?? 'Offline',
+  })) };
+}
+
+async function consultarFeedback(args: Args) {
+  const search = text(args, 'busca');
+  const rows = await getDb().select({ id: feedback.id, title: feedback.title, body: feedback.body, kind: feedback.kind, status: feedback.status, createdAt: feedback.createdAt }).from(feedback)
+    .where(search ? or(like(feedback.title, `%${search}%`), like(feedback.body, `%${search}%`)) : undefined)
+    .orderBy(desc(feedback.createdAt)).limit(30).all();
+  return { total_exibido: rows.length, feedbacks: rows.map((row) => ({ ...row, body: redact(row.body.slice(0, 500)) })) };
+}
+
+async function consultarBilhetes(args: Args) {
+  const search = text(args, 'busca');
+  const conditions = [
+    sql`${bulletinNotes.archivedAt} is null`,
+    search ? or(like(bulletinNotes.title, `%${search}%`), like(bulletinNotes.targetName, `%${search}%`)) : undefined,
+  ].filter(Boolean);
+  const rows = await getDb().select({ title: bulletinNotes.title, targetName: bulletinNotes.targetName, body: bulletinNotes.body, createdAt: bulletinNotes.createdAt }).from(bulletinNotes)
+    .where(and(...conditions)).orderBy(desc(bulletinNotes.createdAt)).limit(20).all();
+  return { total_exibido: rows.length, bilhetes: rows.map((row) => ({ ...row, body: redact(row.body) })) };
 }
 
 const SPARE_ROWS = 40;
@@ -472,11 +689,23 @@ async function prepararMensagemWhatsapp(args: Args) {
   };
 }
 
-const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
+const TOOLS: Record<string, (args: Args, access: AssistantAccess) => Promise<unknown>> = {
+  simular_repasse: simularRepasse,
+  consultar_repasses: consultarRepasses,
+  consultar_historico_local: consultarHistoricoLocal,
+  consultar_catalogo_pecas: consultarCatalogoPecas,
+  consultar_tarefas: consultarTarefas,
+  consultar_financas: consultarFinancas,
+  consultar_financeiro_jira: consultarFinanceiroJira,
+  consultar_lojas: consultarLojas,
+  consultar_projetos: consultarProjetos,
+  consultar_colaboradores: consultarColaboradores,
+  consultar_feedback: consultarFeedback,
+  consultar_bilhetes: consultarBilhetes,
   consultar_chamados: consultarChamados,
   detalhar_chamado: detalharChamado,
   consultar_tecnicos: consultarTecnicos,
-  resumo_operacao: resumoOperacao,
+  resumo_operacao: (_args, access) => resumoOperacao(access),
   consultar_spares: consultarSpares,
   consultar_cobertura: consultarCobertura,
   consultar_whatsapp: consultarWhatsapp,
@@ -489,15 +718,21 @@ const TOOLS: Record<string, (args: Args) => Promise<unknown>> = {
 // `canReadWhatsapp` é checado aqui também, e não só na hora de declarar as
 // consultas: se o modelo pedir a conversa mesmo assim, a porta continua
 // fechada.
-export function assistantToolRunner(options: { canReadWhatsapp: boolean }) {
+export function assistantToolRunner(options: AssistantAccess) {
   return async function runAssistantTool(name: string, args: Args): Promise<unknown> {
     if ((name === 'consultar_whatsapp' || name === 'preparar_mensagem_whatsapp') && !options.canReadWhatsapp) {
       return { erro: 'Quem perguntou não tem acesso ao WhatsApp no Caju OS.' };
     }
+    if ((name === 'consultar_financas' || name === 'consultar_financeiro_jira') && options.role !== 'gerencia') {
+      return { erro: 'Somente a gerência consulta o financeiro.' };
+    }
+    if (name === 'consultar_projetos' && options.role !== 'gerencia' && options.role !== 'coordenador') {
+      return { erro: 'Seu cargo não acessa projetos.' };
+    }
 
     const tool = TOOLS[name];
     if (!tool) return { erro: `Consulta desconhecida: ${name}.` };
-    return tool(args);
+    return tool(args, options);
   };
 }
 

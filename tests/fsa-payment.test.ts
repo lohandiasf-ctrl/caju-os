@@ -158,6 +158,13 @@ test('exemplo prático do documento fecha em R$ 120', () => {
   assert.equal(r.totalCents, 12_000, 'R$ 120');
 });
 
+test('3 atuações produtivas e 4 FSAs de evidência fecham em R$ 140', () => {
+  const r = calcularRepasse([...varios(3, servico), ...varios(4, evidencia)]);
+  assert.equal(r.servicos.totalCents, 12_000);
+  assert.equal(r.evidencias.totalCents, 2_000);
+  assert.equal(r.totalCents, 14_000);
+});
+
 test('o dia junta as visitas numa faixa só', () => {
   const dia = calcularRepasseDoDia([varios(4, servico), varios(3, servico), varios(2, servico)]);
 

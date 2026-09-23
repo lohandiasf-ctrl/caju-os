@@ -35,14 +35,14 @@ export async function POST(request: Request) {
     }
 
     const now = new Date();
-    const run = assistantToolRunner({ canReadWhatsapp: canUseWhatsapp(person.role) });
+    const run = assistantToolRunner({ role: person.role, email: person.email, canReadWhatsapp: canUseWhatsapp(person.role) });
     let prepared: PreparedAction | null = null;
     const { answer, model, used } = await askWorkersAi({
       systemInstruction: systemInstruction(operationDate(now), previousOperationDate(now)),
       question: body!.question!.trim(),
       history: cleanHistory(body?.history),
       // Conversa de WhatsApp só para quem já a vê na tela.
-      tools: toolsFor(canUseWhatsapp(person.role)),
+      tools: toolsFor(canUseWhatsapp(person.role), person.role),
       runTool: async (name, args) => {
         const result = await run(name, args);
         // A ação preparada volta à tela num campo próprio: é ela que abre o

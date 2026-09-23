@@ -40,13 +40,16 @@ const workflowStatuses = [
 ] as const;
 const evidenceAccept = 'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip,.rar';
 
-export function JiraTicketDetails({ details, user, onUpdated }: { details: Details; user: User; onUpdated: (details: Details) => void }) {
+type DetailTab = 'dados' | 'valores' | 'anexos';
+
+export function JiraTicketDetails({ details, user, onUpdated, expanded = false }: { details: Details; user: User; onUpdated: (details: Details) => void; expanded?: boolean }) {
   const initial = useMemo(() => ({ ...details.operationalFields, ...parseDefect(details.operationalFields.defectSummary) }), [details]);
   const initialForm = useMemo(() => Object.fromEntries(Object.entries(initial).map(([key, value]) => [key, ['scheduledDateTime', 'serviceStartedAt', 'serviceEndedAt'].includes(key) ? dateTimeLocal(value) : value ?? ''])), [initial]);
   const [form, setForm] = useState<Record<string, string>>({});
   const [ratReading, setRatReading] = useState(false);
   const [ratInfo, setRatInfo] = useState('');
   const [ratNeedsLicence, setRatNeedsLicence] = useState(false);
+  const [activeTab, setActiveTab] = useState<DetailTab>('dados');
   const [parts, setParts] = useState<Array<{ id: number; name: string; salePriceCents: number }>>([]);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [message, setMessage] = useState('');
@@ -337,8 +340,8 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
   }
 
   return <section className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
-    <TicketAssistant ticketKey={details.key} user={user} />
-    <div className="rounded-xl border border-primary/25 bg-background/80 p-3 shadow-sm">
+    {expanded && <TicketAssistant ticketKey={details.key} user={user} />}
+    {expanded && <div className="rounded-xl border border-primary/25 bg-background/80 p-3 shadow-sm">
       <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-sm font-bold">Fluxo do chamado</p><p className="text-xs text-muted-foreground">Etapa atual: {details.status}</p></div><span className="rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">{currentStatus === 'scheduling' ? '1. Agendar' : currentStatus === 'scheduled' ? '2. Preparar' : currentStatus === 'in_service' ? '3. Atender' : 'Acompanhamento'}</span></div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
         <label className="min-w-0 flex-1 sm:col-span-2 xl:col-span-1 text-xs font-semibold text-muted-foreground">Próxima etapa no Jira
@@ -355,9 +358,9 @@ export function JiraTicketDetails({ details, user, onUpdated }: { details: Detai
         </Button>
       </div>
       <p className={`mt-2 text-xs ${failed ? 'text-red-300' : dirtyCount ? 'text-amber-200' : 'text-muted-foreground'}`} role={failed ? 'alert' : 'status'}>{message || (dirtyCount ? `${dirtyCount} alteração(ões) aguardando salvamento.` : 'A etapa segue o fluxo do Jira; os demais campos são enviados pelo botão Salvar.')}</p>
-    </div>
+    </div>}
 
-    <Tabs defaultValue="dados">
+    <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as DetailTab)}>
       <TabsList className="grid h-auto w-full grid-cols-3 bg-background/70 p-1">
         <TabsTrigger value="dados" className="min-h-10"><Building2 /> Dados</TabsTrigger>
         <TabsTrigger value="valores" className="min-h-10"><CircleDollarSign /> Valores</TabsTrigger>
