@@ -11,19 +11,53 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
-### Prompt de redesign UI/UX (dashboard premium)
+### Caju IA: status do chamado traz o último comentário "UP -"
 
-Novo `docs/prompts/UI_UX_DASHBOARD_REDESIGN.md`: prompt detalhado para uma IA ou
-designer levar ao Caju OS a linguagem visual de um vídeo de referência (login em
-tela dividida azul, dashboard em bento grid, gráfico de barras com trilho, orb
-do assistente, entrada dos cards em cascata, alternância claro/escuro). Cobre
-tokens, telas, animações, estados, acessibilidade e um plano em 8 passos.
-Só documentação, sem mudança de código.
+Ao perguntar o status de um chamado, a IA agora informa também o comentário de
+atualização mais recente que começa com "UP -", com data e horário da postagem.
 
-Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
-"Dashboard Premium"" em 2026-09-22). A revisão de UI/UX abaixo substituiu parte
-da direção visual (glow, gradiente, orb), então o prompt ganhou um aviso de
-documento histórico no topo.
+- **`lib/assistant.ts`:** `comentarioUp()` acha o comentário "UP -" mais recente (aceita `UP-`, `up –`).
+- **`lib/server/jira.ts`:** `getJiraIssue` devolve `upComment`, procurado em todos os comentários da issue (campo `comment`, públicos e internos) e nos internos do Service Desk.
+- **`lib/server/assistant-data.ts`:** `detalhar_chamado` devolve `comentario_up` (texto, `postado_em` no fuso da operação, autor).
+- **`lib/assistant-tools.ts`:** descrição da tool e `systemInstruction` mandam mostrar o `comentario_up` junto do status.
+- **`tests/assistant.test.ts`:** teste de `comentarioUp`.
+
+### "Atualizar chamado" na janela do chamado (branch `claude/atualizar-chamado`)
+
+Campo de texto logo abaixo das ações do chamado (Mais informações, WhatsApp,
+Validar, Gerir operação) para registrar acontecimentos do atendimento — ex.:
+"técnico adoeceu, reagendar para amanhã". A nota vai direto para os
+**comentários internos** do Jira (Service Desk, `public: false`), assinada só
+com **nome e sobrenome** do perfil de quem escreveu ("— Lohan Dias"), sem
+e-mail.
+
+- Rota `POST /api/jira/issues/[key]/updates` (`requireApiUser` com gerência,
+  coordenação, N1 e analista). Nome vem de `employee_presence.display_name`;
+  sem nome e sobrenome no perfil a rota recusa (409) em vez de assinar com o
+  e-mail.
+- `lib/server/jira.ts`: `addJiraTicketUpdate` (mesmo endpoint do comentário
+  interno que o assistente já usa, sem o "confirmado por").
+- `lib/ticket-update.ts` (regras) + `components/ticket-update-note.tsx`
+  (campo com contador, envio com carregamento, erro sem apagar o texto,
+  confirmação "registrada nos comentários internos do Jira").
+- `tests/ticket-update.test.ts`.
+
+**Pendente:** a gravação real no Jira não foi exercitada no preview local (o
+mock recusa `/api/jira`); conferir o primeiro comentário em produção.
+
+### Gestão vira menu flutuante em tela baixa — equipe não some mais (branch `claude/sidebar-gestao-flyout`)
+
+O grupo Gestão recolhível (PR #119) abria **dentro** da barra e guardava a
+escolha: depois de aberto uma vez (ou em telas a partir de 900 px), ele
+voltava a empurrar a equipe — em produção o trilho rolava e mostrava um avatar
+só. Agora, no desktop com menos de 900 px de altura, Gestão é uma linha que
+abre um **menu flutuante** ao lado (Equipe, Projetos e lojas, Spares,
+Financeiro, Feedback) e nunca tira altura da equipe. Em telas altas o grupo
+aparece inteiro, como antes. É automático pela altura da janela; a escolha
+salva (`caju-nav-group:gestao`) saiu.
+
+Medido no preview: 1366×700 → menu sem rolar, equipe com 3 pessoas inteiras
+(aberta) e 4 (recolhida); 1366×950 → menu completo, equipe com 3 pessoas.
 
 ### Saudação do topo com o nome do perfil e emoji do período (branch `claude/saudacao-nome-perfil`)
 
@@ -233,6 +267,20 @@ ao `systemInstruction` em `lib/assistant-tools.ts`. O assistente passa a operar 
 - Pipeline de raciocínio cognitivo estruturado (checklist mental para intenção, verificação de dados externos, consultas com conectivos lógicos E/OU, ordenação e agrupamento).
 - Modos de saída adaptativos: texto explicativo em markdown, relatórios em tabelas markdown, listas simples e JSON estrito quando solicitado.
 - Capacidades de diagnóstico técnico em TI de varejo e estruturação para ações no Jira (summary, description padronizada, priorização e labels).
+
+### Prompt de redesign UI/UX (dashboard premium)
+
+Novo `docs/prompts/UI_UX_DASHBOARD_REDESIGN.md`: prompt detalhado para uma IA ou
+designer levar ao Caju OS a linguagem visual de um vídeo de referência (login em
+tela dividida azul, dashboard em bento grid, gráfico de barras com trilho, orb
+do assistente, entrada dos cards em cascata, alternância claro/escuro). Cobre
+tokens, telas, animações, estados, acessibilidade e um plano em 8 passos.
+Só documentação, sem mudança de código.
+
+Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
+"Dashboard Premium"" em 2026-09-22). A revisão de UI/UX acima substituiu parte
+da direção visual (glow, gradiente, orb), então o prompt ganhou um aviso de
+documento histórico no topo.
 
 ## 2026-09-22
 

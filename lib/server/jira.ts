@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
+import { comentarioUp, extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
 import { JIRA_PHONE_PLACEHOLDER, scrubTechnicianPhone } from '@/lib/technician-data';
 import { splitCityUf } from '@/lib/whatsapp-group-name';
 
@@ -422,6 +422,15 @@ export async function getJiraIssue(key: string) {
   const commentPayload = await jiraFetch<{ values?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string }; public?: boolean }> }>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment?internal=true&limit=20`).catch(() => ({ values: [] }));
   const internalComments: JiraInternalComment[] = (commentPayload.values ?? []).filter((comment) => comment.public !== true).map((comment) => ({ id: String(comment.id ?? ''), body: adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: comment.created ?? '' })).filter((comment) => comment.id && comment.body);
 
+  // Comentário "UP -" (atualização da operação). Procura em todos os
+  // comentários da issue (públicos e internos) e também nos internos do
+  // Service Desk, que podem vir mesmo quando o campo `comment` não vem.
+  const issueComments = ((issue.fields as Record<string, unknown>).comment as { comments?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string } }> } | undefined)?.comments ?? [];
+  const upComment = comentarioUp<JiraInternalComment>([
+    ...internalComments,
+    ...issueComments.map((comment) => ({ id: String(comment.id ?? ''), body: typeof comment.body === 'string' ? comment.body : adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: comment.created ?? '' })),
+  ]);
+
   // Fallback inteligente: se o campo de rastreio estiver vazio, inspeciona comentários e descrição
   if (!operationalFields.codigoRastreio) {
     for (const comment of internalComments) {
@@ -451,7 +460,7 @@ export async function getJiraIssue(key: string) {
       }
     }
   }
-  return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields, attachments, internalComments };
+  return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields, attachments, internalComments, upComment };
 }
 
 export async function updateJiraIssue(key: string, input: Record<string, unknown>, options: { allowNoop?: boolean } = {}) {
@@ -590,6 +599,17 @@ export async function addJiraInternalComment(key: string, body: string, author: 
   await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, {
     method: 'POST',
     body: JSON.stringify({ body: `${body}\n\n— Caju OS, confirmado por ${author}`, public: false }),
+  });
+}
+
+// "Atualizar chamado" (tela do chamado): nota de quem acompanha o atendimento,
+// assinada só com nome e sobrenome — sem o e-mail e sem o "confirmado por"
+// das ações do assistente. Também é comentário interno (não vai ao cliente).
+export async function addJiraTicketUpdate(key: string, body: string) {
+  const normalizedKey = validIssueKey(key);
+  await jiraFetch<unknown>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment`, {
+    method: 'POST',
+    body: JSON.stringify({ body, public: false }),
   });
 }
 
