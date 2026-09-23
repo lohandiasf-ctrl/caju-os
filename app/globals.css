@@ -39,6 +39,18 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-card-elevated: var(--card-elevated);
+  --color-primary-soft: var(--primary-soft);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-chart-track: var(--chart-track);
+  --color-chart-missed: var(--chart-missed);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,47 +60,92 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* One shared graphite-glass foundation. Component utilities remain overridable. */
+/* Dois temas sobre os mesmos tokens. :root é o claro ("azul elétrico sobre
+   marfim"); .dark é o grafite. O escuro continua sendo o padrão na primeira
+   carga — o script em app/layout.tsx aplica a preferência salva antes da
+   hidratação. Componentes só usam tokens; nada de hex solto. */
 :root {
-  color-scheme: dark;
-  --background: #0b0f18;
-  --foreground: #f3f6fc;
-  --card: #151c29;
-  --card-foreground: #f3f6fc;
-  --popover: #182130;
-  --popover-foreground: #f3f6fc;
-  --primary: #4f7dff;
-  /* 5.2:1 on the brand blue; white was only 3.7:1. */
-  --primary-foreground: #0b0f18;
-  --secondary: #253249;
-  --secondary-foreground: #eff4ff;
-  --muted: #1c2637;
-  --muted-foreground: #b2bed1;
-  --accent: #26344b;
-  --accent-foreground: #f3f6fc;
-  --destructive: #ff8c9a;
-  --border: rgb(179 199 232 / 15%);
-  --input: rgb(179 199 232 / 32%);
-  --ring: #a4beff;
-  --chart-1: #a99cff;
-  --chart-2: #5eead4;
-  --chart-3: #7dd3fc;
-  --chart-4: #c084fc;
-  --chart-5: #fbbf74;
+  color-scheme: light;
+  --background: #f3f2ee;
+  --foreground: #11141b;
+  --card: #fbfaf7;
+  --card-foreground: #11141b;
+  --card-elevated: #ffffff;
+  --popover: #ffffff;
+  --popover-foreground: #11141b;
+  /* 6.5:1 com texto branco; 5.8:1 como texto sobre o marfim. */
+  --primary: #1f3fff;
+  --primary-foreground: #ffffff;
+  --primary-soft: rgb(31 63 255 / 10%);
+  /* Preenchimento sólido de marca (hero, CTA, painel do login). */
+  --brand: #1f3fff;
+  --brand-strong: #1530d6;
+  --brand-foreground: #ffffff;
+  --secondary: #e7e5df;
+  --secondary-foreground: #11141b;
+  --muted: #eceae4;
+  /* #5f6474: 4.9:1 sobre --muted e 5.6:1 sobre --card. */
+  --muted-foreground: #5f6474;
+  --accent: #e9e7e1;
+  --accent-foreground: #11141b;
+  --destructive: #d92d33;
+  --success: #15803d;
+  --success-soft: rgb(22 163 74 / 12%);
+  --warning: #b45309;
+  --warning-soft: rgb(217 119 6 / 13%);
+  --danger: #d92d33;
+  --danger-soft: rgb(229 72 77 / 12%);
+  --border: rgb(17 20 27 / 9%);
+  --input: rgb(17 20 27 / 16%);
+  --ring: #1f3fff;
+  --chart-1: #1f3fff;
+  --chart-2: #0f9f8f;
+  --chart-3: #0284c7;
+  --chart-4: #8b3fd9;
+  --chart-5: #c2410c;
+  --chart-track: #e2e0da;
+  --chart-missed: #e8761e;
   --radius: .875rem;
-  --sidebar: #111927;
-  --sidebar-foreground: #f3f6fc;
-  --sidebar-primary: #4f7dff;
-  --sidebar-primary-foreground: #0b0f18;
-  --sidebar-accent: #24344f;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(179 199 232 / 13%);
-  --sidebar-ring: #a4beff;
-  --surface-glass: linear-gradient(135deg, rgb(255 255 255 / 4%), transparent 42%), linear-gradient(145deg, rgb(24 33 48 / 94%), rgb(15 22 34 / 97%));
-  --shadow-panel: 0 12px 32px rgb(0 0 0 / 18%), inset 0 1px 0 rgb(255 255 255 / 4%);
-  --shadow-overlay: 0 24px 80px rgb(0 0 0 / 48%), inset 0 1px 0 rgb(255 255 255 / 5%);
+  --radius-card: 1.375rem;
+  --sidebar-w: 240px;
+  --sidebar: var(--background);
+  --sidebar-foreground: #11141b;
+  --sidebar-primary: #1f3fff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(31 63 255 / 10%);
+  --sidebar-accent-foreground: #1f3fff;
+  --sidebar-border: rgb(17 20 27 / 8%);
+  --sidebar-ring: #1f3fff;
+  --surface-glass: linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(251 250 247 / 94%));
+  --surface-overlay: linear-gradient(145deg, #ffffff, #f8f7f3);
+  --surface-inset: rgb(17 20 27 / 3.5%);
+  --surface-field: #ffffff;
+  --surface-header: rgb(243 242 238 / 82%);
+  --surface-table-head: rgb(17 20 27 / 3%);
+  --field-hover-border: rgb(17 20 27 / 28%);
+  --scrollbar-thumb: #c4c1b8;
+  --selection: #c9d2ff;
+  --selection-foreground: #11141b;
+  --body-glow: radial-gradient(ellipse at 75% 0%, rgb(31 63 255 / 6%), transparent 52rem);
+  --shadow-card: 0 1px 2px rgb(17 20 27 / 4%), 0 12px 32px -12px rgb(17 20 27 / 12%);
+  --shadow-card-hover: 0 2px 4px rgb(17 20 27 / 5%), 0 20px 40px -14px rgb(17 20 27 / 18%);
+  --shadow-hero: 0 18px 40px -12px rgb(31 63 255 / 55%);
+  --shadow-panel: var(--shadow-card);
+  --shadow-overlay: 0 24px 64px -12px rgb(17 20 27 / 22%), 0 2px 6px rgb(17 20 27 / 6%);
+  --chat-thread: #f1f0ec;
+  --chat-in: #ffffff;
+  --chat-in-edge: #f7f6f2;
+  --chat-out: #2447f0;
+  --chat-out-edge: #3b58e6;
+  --chat-header: linear-gradient(135deg, rgb(255 255 255 / 97%), rgb(246 245 241 / 97%));
+  --chat-composer: rgb(255 255 255 / 97%);
+  --chat-compose-line: rgb(17 20 27 / 4%);
+  --chat-compose-line-focus: rgb(17 20 27 / 6%);
+  --chat-dot: #7c8499;
   --motion-fast: 150ms;
   --motion-standard: 200ms;
+  --motion-layout: 250ms;
+  --motion-theme: 450ms;
   --ease-ui: cubic-bezier(.2,.8,.2,1);
 
   /* Stacking order. Anything fixed/floating must pick a step from this scale
@@ -106,8 +163,118 @@
   --z-window-chrome: 100;
 }
 
+.dark {
+  color-scheme: dark;
+  --background: #07080c;
+  --foreground: #f1f3f8;
+  --card: #111318;
+  --card-foreground: #f1f3f8;
+  --card-elevated: #171a21;
+  --popover: #171a21;
+  --popover-foreground: #f1f3f8;
+  /* Texto/ícone/link azul: 5.1:1 sobre o card grafite. Texto escuro sobre
+     ele dá 5.5:1. Preenchimentos com texto branco usam --brand. */
+  --primary: #5b7cff;
+  --primary-foreground: #07080c;
+  --primary-soft: rgb(91 124 255 / 14%);
+  /* 5.9:1 com texto branco. */
+  --brand: #2b4bff;
+  --brand-strong: #1f3be0;
+  --brand-foreground: #ffffff;
+  --secondary: #1f232c;
+  --secondary-foreground: #eef1f7;
+  --muted: #1b1e26;
+  /* 5.9:1 sobre --card. */
+  --muted-foreground: #8b91a1;
+  --accent: #20242e;
+  --accent-foreground: #f1f3f8;
+  --destructive: #ff8c9a;
+  --success: #4ade80;
+  --success-soft: rgb(74 222 128 / 12%);
+  --warning: #fbbf24;
+  --warning-soft: rgb(251 191 36 / 12%);
+  --danger: #ff7a85;
+  --danger-soft: rgb(255 122 133 / 12%);
+  --border: rgb(255 255 255 / 7%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: #8ea4ff;
+  --chart-1: #5b7cff;
+  --chart-2: #5eead4;
+  --chart-3: #7dd3fc;
+  --chart-4: #c084fc;
+  --chart-5: #fbbf74;
+  --chart-track: #2a2d35;
+  --chart-missed: #d9782a;
+  --sidebar: var(--background);
+  --sidebar-foreground: #f1f3f8;
+  --sidebar-primary: #5b7cff;
+  --sidebar-primary-foreground: #07080c;
+  --sidebar-accent: rgb(91 124 255 / 14%);
+  --sidebar-accent-foreground: #8ea4ff;
+  --sidebar-border: rgb(255 255 255 / 7%);
+  --sidebar-ring: #8ea4ff;
+  --surface-glass: linear-gradient(135deg, rgb(255 255 255 / 3%), transparent 42%), linear-gradient(145deg, rgb(19 21 27 / 96%), rgb(15 17 22 / 97%));
+  --surface-overlay: linear-gradient(145deg, #191c24, #111318);
+  --surface-inset: rgb(0 0 0 / 28%);
+  --surface-field: rgb(255 255 255 / 4%);
+  --surface-header: rgb(7 8 12 / 80%);
+  --surface-table-head: rgb(255 255 255 / 3%);
+  --field-hover-border: rgb(255 255 255 / 26%);
+  --scrollbar-thumb: #3a3f4b;
+  --selection: #2b4bff;
+  --selection-foreground: #ffffff;
+  --body-glow: radial-gradient(ellipse at 75% 0%, rgb(43 75 255 / 9%), transparent 52rem);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 4%) inset, 0 16px 40px -16px rgb(0 0 0 / 70%);
+  --shadow-card-hover: 0 1px 0 rgb(255 255 255 / 5%) inset, 0 22px 48px -16px rgb(0 0 0 / 80%);
+  --shadow-hero: 0 18px 48px -12px rgb(43 75 255 / 65%);
+  --shadow-panel: var(--shadow-card);
+  --shadow-overlay: 0 24px 80px rgb(0 0 0 / 55%), inset 0 1px 0 rgb(255 255 255 / 5%);
+  --chat-thread: #111318;
+  --chat-in: #20242e;
+  --chat-in-edge: #262b36;
+  /* Balão azul com texto branco em AA (5.3:1). */
+  --chat-out: #3552f0;
+  --chat-out-edge: #4a5fd6;
+  --chat-header: linear-gradient(135deg, rgb(28 31 40 / 97%), rgb(19 21 27 / 97%));
+  --chat-composer: rgb(22 25 32 / 97%);
+  --chat-compose-line: rgb(0 0 0 / 30%);
+  --chat-compose-line-focus: rgb(0 0 0 / 45%);
+  --chat-dot: #aab3c8;
+}
+
+/* Tema claro: o app nasceu escuro e ~500 classes usam tons claros da paleta
+   (text-emerald-200, bg-red-400/10...) como texto sobre fundo escuro. No
+   claro, esses tons viram os escuros equivalentes (100/200→800, 300→700,
+   400→600) — o mesmo JSX fica legível nos dois temas sem reescrever cada
+   tela. Ilhas que continuam escuras (WhatsApp) recebem .dark e voltam aos
+   valores originais. */
+:root:not(.dark) {
+  --color-red-100: oklch(44.4% 0.177 26.899); --color-red-200: oklch(44.4% 0.177 26.899); --color-red-300: oklch(50.5% 0.213 27.518); --color-red-400: oklch(57.7% 0.245 27.325);
+  --color-rose-100: oklch(45.5% 0.188 13.697); --color-rose-200: oklch(45.5% 0.188 13.697); --color-rose-300: oklch(51.4% 0.222 16.935); --color-rose-400: oklch(58.6% 0.253 17.585);
+  --color-amber-100: oklch(47.3% 0.137 46.201); --color-amber-200: oklch(47.3% 0.137 46.201); --color-amber-300: oklch(55.5% 0.163 48.998); --color-amber-400: oklch(66.6% 0.179 58.318);
+  --color-yellow-100: oklch(47.6% 0.114 61.907); --color-yellow-200: oklch(47.6% 0.114 61.907); --color-yellow-300: oklch(55.4% 0.135 66.442); --color-yellow-400: oklch(68.1% 0.162 75.834);
+  --color-emerald-100: oklch(43.2% 0.095 166.913); --color-emerald-200: oklch(43.2% 0.095 166.913); --color-emerald-300: oklch(50.8% 0.118 165.612); --color-emerald-400: oklch(59.6% 0.145 163.225);
+  --color-cyan-100: oklch(45% 0.085 224.283); --color-cyan-200: oklch(45% 0.085 224.283); --color-cyan-300: oklch(52% 0.105 223.128); --color-cyan-400: oklch(60.9% 0.126 221.723);
+  --color-sky-100: oklch(44.3% 0.11 240.79); --color-sky-200: oklch(44.3% 0.11 240.79); --color-sky-300: oklch(50% 0.134 242.749); --color-sky-400: oklch(58.8% 0.158 241.966);
+  --color-blue-100: oklch(42.4% 0.199 265.638); --color-blue-200: oklch(42.4% 0.199 265.638); --color-blue-300: oklch(48.8% 0.243 264.376); --color-blue-400: oklch(54.6% 0.245 262.881);
+  --color-violet-100: oklch(43.2% 0.232 292.759); --color-violet-200: oklch(43.2% 0.232 292.759); --color-violet-300: oklch(49.1% 0.27 292.581); --color-violet-400: oklch(54.1% 0.281 293.009);
+  --color-fuchsia-100: oklch(45.2% 0.211 324.591); --color-fuchsia-200: oklch(45.2% 0.211 324.591); --color-fuchsia-300: oklch(51.8% 0.253 323.949); --color-fuchsia-400: oklch(59.1% 0.293 322.896);
+}
+:root:not(.dark) .dark {
+  --color-red-100: oklch(93.6% 0.032 17.717); --color-red-200: oklch(88.5% 0.062 18.334); --color-red-300: oklch(80.8% 0.114 19.571); --color-red-400: oklch(70.4% 0.191 22.216);
+  --color-rose-100: oklch(94.1% 0.03 12.58); --color-rose-200: oklch(89.2% 0.058 10.001); --color-rose-300: oklch(81% 0.117 11.638); --color-rose-400: oklch(71.2% 0.194 13.428);
+  --color-amber-100: oklch(96.2% 0.059 95.617); --color-amber-200: oklch(92.4% 0.12 95.746); --color-amber-300: oklch(87.9% 0.169 91.605); --color-amber-400: oklch(82.8% 0.189 84.429);
+  --color-yellow-100: oklch(97.3% 0.071 103.193); --color-yellow-200: oklch(94.5% 0.129 101.54); --color-yellow-300: oklch(90.5% 0.182 98.111); --color-yellow-400: oklch(85.2% 0.199 91.936);
+  --color-emerald-100: oklch(95% 0.052 163.051); --color-emerald-200: oklch(90.5% 0.093 164.15); --color-emerald-300: oklch(84.5% 0.143 164.978); --color-emerald-400: oklch(76.5% 0.177 163.223);
+  --color-cyan-100: oklch(95.6% 0.045 203.388); --color-cyan-200: oklch(91.7% 0.08 205.041); --color-cyan-300: oklch(86.5% 0.127 207.078); --color-cyan-400: oklch(78.9% 0.154 211.53);
+  --color-sky-100: oklch(95.1% 0.026 236.824); --color-sky-200: oklch(90.1% 0.058 230.902); --color-sky-300: oklch(82.8% 0.111 230.318); --color-sky-400: oklch(74.6% 0.16 232.661);
+  --color-blue-100: oklch(93.2% 0.032 255.585); --color-blue-200: oklch(88.2% 0.059 254.128); --color-blue-300: oklch(80.9% 0.105 251.813); --color-blue-400: oklch(70.7% 0.165 254.624);
+  --color-violet-100: oklch(94.3% 0.029 294.588); --color-violet-200: oklch(89.4% 0.057 293.283); --color-violet-300: oklch(81.1% 0.111 293.571); --color-violet-400: oklch(70.2% 0.183 293.541);
+  --color-fuchsia-100: oklch(95.2% 0.037 318.852); --color-fuchsia-200: oklch(90.3% 0.076 319.62); --color-fuchsia-300: oklch(83.3% 0.145 321.434); --color-fuchsia-400: oklch(74% 0.238 322.16);
+}
+
 @layer base {
-  * { @apply border-border; scrollbar-color: #53627c transparent; scrollbar-width: thin; }
+  * { @apply border-border; scrollbar-color: var(--scrollbar-thumb) transparent; scrollbar-width: thin; }
   /* O gesto de arrastar para baixo no topo de qualquer lista chegava à raiz
      do documento e disparava o pull-to-refresh nativo do Chrome Android — no
      WhatsApp, subir as conversas recarregava a página. `contain` mantém o
@@ -119,7 +286,7 @@
     min-width: 320px;
     font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
     line-height: 1.5;
-    background-image: radial-gradient(ellipse at 75% 0%, rgb(61 99 179 / 15%), transparent 52rem), radial-gradient(ellipse at 10% 80%, rgb(25 68 86 / 10%), transparent 38rem);
+    background-image: var(--body-glow);
     background-attachment: fixed;
   }
   /* Optical sizing: large headings track tighter and lead tighter than body
@@ -147,7 +314,7 @@
   }
   :where(input, select, textarea):disabled { cursor: not-allowed; }
   :where(textarea) { resize: vertical; }
-  ::selection { background: #3154a0; color: white; }
+  ::selection { background: var(--selection); color: var(--selection-foreground); }
 }
 
 @layer components {
@@ -160,77 +327,99 @@
   }
   /* Map renderers must not inherit a backdrop-filter compositing layer. */
   main .rounded-xl.border-border.bg-card.map-surface { backdrop-filter: none; }
-  .cockpit-inset { border: 1px solid var(--border); background: rgb(6 12 22 / 36%); }
+  .cockpit-inset { border: 1px solid var(--border); background: var(--surface-inset); }
   .cockpit-brand {
-    border: 1px solid rgb(115 152 255 / 30%);
-    background: rgb(79 125 255 / 10%);
-    color: var(--ring);
-    box-shadow: 0 8px 24px rgb(47 98 216 / 14%);
+    border: 1px solid color-mix(in oklab, var(--primary) 30%, transparent);
+    background: var(--primary-soft);
+    color: var(--primary);
+    box-shadow: 0 8px 24px color-mix(in oklab, var(--brand) 14%, transparent);
   }
-  .caju-sidebar, .cockpit-sidebar, main > aside.fixed {
+  .cockpit-sidebar, main > aside.fixed {
     background: var(--surface-glass);
     border-color: var(--sidebar-border);
     box-shadow: var(--shadow-panel);
     backdrop-filter: blur(20px) saturate(120%);
   }
+  /* A barra "some" no fundo: mesma cor do app, só uma borda fina — quem
+     flutua são os cards. Largura anima entre 240 e 72 px (pontual, não em
+     loop); rótulos fazem fade + slide de 8 px. */
   .app-sidebar {
     position: fixed;
-    inset: .75rem auto .75rem .75rem;
+    inset: 0 auto 0 0;
     z-index: var(--z-sidebar);
     display: flex;
-    width: 248px;
+    width: var(--sidebar-w);
     flex-direction: column;
-    border: 1px solid var(--sidebar-border);
-    border-radius: 1.25rem;
-    padding: 1rem .75rem;
+    overflow: hidden;
+    border-right: 1px solid var(--sidebar-border);
+    background: var(--sidebar);
+    padding: 1.25rem .875rem 1rem;
+    transition: width var(--motion-layout) var(--ease-ui);
   }
+  .app-sidebar-brand { display: flex; min-height: 2.5rem; align-items: center; gap: .75rem; padding-inline: .125rem; }
+  .app-nav-section {
+    margin-bottom: .5rem;
+    padding-inline: .75rem;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .app-nav-label { transition: opacity var(--motion-fast) var(--ease-ui), transform var(--motion-fast) var(--ease-ui); white-space: nowrap; }
+  .app-sidebar[data-collapsed] .app-nav-label,
+  .app-sidebar[data-collapsed] .app-nav-section { opacity: 0; transform: translateX(-8px); pointer-events: none; }
+  .app-nav-indicator { position: absolute; inset-block: .5rem; left: 0; width: 3px; border-radius: 9999px; background: var(--primary); }
   .app-content { min-width: 0; min-height: 100dvh; }
   .app-content > header, main > section > header {
-    background: rgb(14 22 36 / 86%);
+    background: var(--surface-header);
     backdrop-filter: blur(22px) saturate(130%);
     border-color: var(--border);
   }
   .app-main { min-width: 0; outline: none; }
   .app-nav-link {
+    position: relative;
     display: flex;
-    min-height: 42px;
+    min-height: 40px;
     align-items: center;
     gap: .75rem;
-    border-radius: .625rem;
-    padding: .625rem .75rem;
+    overflow: hidden;
+    border-radius: .75rem;
+    padding: .5rem .75rem;
     color: var(--muted-foreground);
     font-size: .875rem;
     font-weight: 500;
   }
-  .app-nav-link:hover { background: rgb(148 177 224 / 8%); color: var(--foreground); }
+  .app-nav-link:hover { background: var(--muted); color: var(--foreground); }
   .app-nav-link[aria-current='page'] {
-    background: linear-gradient(100deg, rgb(79 125 255 / 23%), rgb(79 125 255 / 8%));
-    color: #e4edff;
-    box-shadow: inset 3px 0 0 #8caeff;
+    background: var(--primary-soft);
+    color: var(--primary);
   }
   .field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'], [data-slot='native-select'] {
     min-width: 0;
     border: 1px solid var(--input);
     border-radius: .625rem;
-    background: rgb(7 13 24 / 65%);
+    background: var(--surface-field);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
     color: var(--foreground);
   }
   .field { width: 100%; min-height: 2.5rem; padding: .625rem .75rem; font-size: .875rem; }
-  :where(.field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):hover:not(:disabled) { border-color: #7187ab; }
+  :where(.field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):hover:not(:disabled) { border-color: var(--field-hover-border); }
   :where(input, select, textarea):focus-visible { border-color: var(--ring); }
   [data-slot='button'][data-variant='default'] {
-    background: linear-gradient(135deg, #356bdc, #274fb9);
-    color: white;
-    box-shadow: 0 6px 18px rgb(35 83 194 / 23%), inset 0 1px 0 rgb(255 255 255 / 14%);
+    background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+    color: var(--brand-foreground);
+    box-shadow: 0 6px 18px color-mix(in oklab, var(--brand) 26%, transparent), inset 0 1px 0 rgb(255 255 255 / 14%);
   }
   [data-slot='button'][data-variant='default']:hover:not(:disabled) {
-    background: linear-gradient(135deg, #3c73e5, #2c59c8);
-    box-shadow: 0 8px 22px rgb(35 83 194 / 30%), inset 0 1px 0 rgb(255 255 255 / 16%);
+    background: linear-gradient(135deg, color-mix(in oklab, var(--brand) 92%, white), color-mix(in oklab, var(--brand-strong) 92%, white));
+    box-shadow: 0 8px 22px color-mix(in oklab, var(--brand) 34%, transparent), inset 0 1px 0 rgb(255 255 255 / 16%);
+    transform: translateY(-1px);
   }
   [data-slot='dialog-content'], [data-slot='sheet-content'] {
-    border: 1px solid rgb(179 199 232 / 22%);
-    background: linear-gradient(145deg, #1a2537, #101825);
+    border: 1px solid var(--border);
+    background: var(--surface-overlay);
     box-shadow: var(--shadow-overlay);
   }
   [data-slot='dialog-content'] {
@@ -249,13 +438,13 @@
     scrollbar-width: none;
   }
   [data-slot='tabs-list']::-webkit-scrollbar { display: none; }
-  [data-slot='table-head'] { background: rgb(11 18 30 / 45%); color: var(--muted-foreground); font-size: .75rem; font-weight: 600; }
+  [data-slot='table-head'] { background: var(--surface-table-head); color: var(--muted-foreground); font-size: .75rem; font-weight: 600; }
   [data-slot='table-cell'] { font-variant-numeric: tabular-nums; }
   .metric-glow { position: relative; overflow: hidden; }
   .metric-glow::after {
     content: ''; position: absolute; inset: auto -1.5rem -4rem auto;
     width: 9rem; height: 9rem; border-radius: 50%;
-    background: radial-gradient(circle, rgb(79 125 255 / 12%), transparent 70%);
+    background: radial-gradient(circle, color-mix(in oklab, var(--primary) 12%, transparent), transparent 70%);
     pointer-events: none;
   }
   .skip-link {
@@ -266,8 +455,7 @@
   }
   .skip-link:focus { transform: translateY(0); }
   @media (min-width: 1024px) {
-    .app-content { padding-left: 272px; }
-    .app-content > header { margin: .75rem .75rem 0 0; border: 1px solid var(--border); border-radius: 1rem; top: .75rem; }
+    .app-content { padding-left: var(--sidebar-w); transition: padding-left var(--motion-layout) var(--ease-ui); }
     main > aside.fixed.colleagues-sidebar { right: 1rem; left: auto; }
   }
   @media (max-width: 639px) {
@@ -296,11 +484,14 @@
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* Leaflet supplies its own stylesheet at runtime; these stay unlayered. */
-.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.75); }
-.leaflet-container.leaflet-container { background: #0f1720; }
-.leaflet-control-attribution { background: rgb(12 16 25 / 78%) !important; color: #cbd5e1 !important; }
-.leaflet-control-attribution a { color: #a4beff !important; }
+/* Leaflet supplies its own stylesheet at runtime; these stay unlayered.
+   Os tiles do OSM são claros: no tema escuro são invertidos; no claro ficam
+   como vieram, só um pouco dessaturados para não brigar com os marcadores. */
+.leaflet-tile-pane { filter: saturate(.8) contrast(.96); }
+.dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.75); }
+.leaflet-container.leaflet-container { background: var(--muted); }
+.leaflet-control-attribution { background: color-mix(in oklab, var(--card) 82%, transparent) !important; color: var(--muted-foreground) !important; }
+.leaflet-control-attribution a { color: var(--primary) !important; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
@@ -335,18 +526,16 @@
 /* ── Chat bubbles (iOS-style tail + run grouping), unlayered so the tail
    pseudo-elements are not reordered by Tailwind's cascade layers. ── */
 .chat-thread {
-  --chat-thread: #141b27;
-  --chat-in: #263044;
-  /* Keep the familiar white-on-blue chat bubble at AA contrast (4.56:1). */
-  --chat-out: #426fe2;
-  background: radial-gradient(ellipse at 50% -20%, rgb(66 111 226 / 10%), transparent 58%), var(--chat-thread);
+  /* Cores do chat vêm dos tokens de tema (--chat-*); balão azul com texto
+     branco em AA nos dois temas. */
+  background: radial-gradient(ellipse at 50% -20%, color-mix(in oklab, var(--chat-out) 10%, transparent), transparent 58%), var(--chat-thread);
 }
-.chat-shell { border-color: rgb(147 166 208 / 18%); box-shadow: 0 24px 64px -16px rgb(0 0 0 / 55%); }
-.chat-header { background: linear-gradient(135deg, rgb(34 44 64 / 97%), rgb(20 27 39 / 97%)); }
-.chat-composer { background: rgb(24 32 46 / 97%); }
-.chat-compose-line { background: rgb(12 18 29 / 70%); transition: border-color .2s ease, background-color .2s ease; }
-.chat-compose-line:focus-within { background: rgb(12 18 29 / 92%); }
-.chat-send-button:not(:disabled) { box-shadow: 0 4px 16px rgb(66 111 226 / 28%); }
+.chat-shell { border-color: var(--border); box-shadow: var(--shadow-overlay); }
+.chat-header { background: var(--chat-header); }
+.chat-composer { background: var(--chat-composer); }
+.chat-compose-line { background: var(--chat-compose-line); transition: border-color .2s ease, background-color .2s ease; }
+.chat-compose-line:focus-within { background: var(--chat-compose-line-focus); }
+.chat-send-button:not(:disabled) { box-shadow: 0 4px 16px color-mix(in oklab, var(--chat-out) 28%, transparent); }
 .chat-message-row--enter { animation: chat-message-enter .28s cubic-bezier(.2,.8,.2,1) both; }
 .chat-message-row:has(.chat-bubble--out) { --chat-enter-x: 12px; }
 .chat-message-row:has(.chat-bubble--in) { --chat-enter-x: -12px; }
@@ -363,10 +552,10 @@
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
-.chat-bubble--in { background: linear-gradient(145deg, #2b354a, var(--chat-in)); color: var(--card-foreground); border: 1px solid rgb(221 231 255 / 8%); box-shadow: 0 4px 14px rgb(0 0 0 / 12%); }
-.chat-bubble--out { background: linear-gradient(125deg, var(--chat-out), #4963c8); color: #fff; box-shadow: 0 6px 18px rgb(44 76 173 / 20%); }
-.chat-typing-bubble { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 14px; border-radius: 18px 18px 18px 6px; border: 1px solid rgb(221 231 255 / 8%); background: var(--chat-in); }
-.chat-typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: #b7c9e9; animation: chat-typing-dot 1s ease-in-out infinite; }
+.chat-bubble--in { background: linear-gradient(145deg, var(--chat-in-edge), var(--chat-in)); color: var(--card-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px rgb(0 0 0 / 8%); }
+.chat-bubble--out { background: linear-gradient(125deg, var(--chat-out), var(--chat-out-edge)); color: #fff; box-shadow: 0 6px 18px color-mix(in oklab, var(--chat-out) 20%, transparent); }
+.chat-typing-bubble { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 14px; border-radius: 18px 18px 18px 6px; border: 1px solid var(--border); background: var(--chat-in); }
+.chat-typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: var(--chat-dot); animation: chat-typing-dot 1s ease-in-out infinite; }
 .chat-typing-bubble span:nth-child(2) { animation-delay: .15s; }
 .chat-typing-bubble span:nth-child(3) { animation-delay: .3s; }
 @keyframes chat-typing-dot { 0%, 60%, 100% { opacity: .45; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-4px); } }
@@ -457,3 +646,113 @@ html[data-view='whatsapp'] .app-main {
 /* The idle "Reunião" and colleagues launchers would sit on top of the
    message composer; a live call surface is not tagged and stays visible. */
 html[data-view='whatsapp'] [data-floating-launcher] { display: none !important; }
+
+html[data-sidebar='collapsed'] { --sidebar-w: 72px; }
+
+/* Barra superior: transparente no topo; ao rolar ganha vidro e borda.
+   Fora de @layer para vencer os utilitários que as páginas ainda trazem. */
+.app-content > header {
+  background: transparent;
+  border-bottom-color: transparent;
+  backdrop-filter: none;
+  transition: background-color var(--motion-standard) var(--ease-ui), border-color var(--motion-standard) var(--ease-ui);
+}
+html[data-scrolled] .app-content > header {
+  background: var(--surface-header);
+  border-bottom-color: var(--border);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+
+/* Troca de tema. Com View Transitions o novo tema cresce num círculo a partir
+   do botão (lib/theme.ts anima o clip-path); aqui só desligamos o crossfade
+   padrão para o círculo ficar nítido. Sem suporte, `theme-fading` dá um fade
+   curto só nas superfícies — nunca em `*`, para não pesar. */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html.theme-fading :where(body, header, aside, main, section, article, nav, [data-slot='card'], .surface-panel, .surface-card) {
+  transition: background-color var(--motion-layout) var(--ease-ui), color var(--motion-layout) var(--ease-ui), border-color var(--motion-layout) var(--ease-ui);
+}
+
+/* Superfície sólida de marca: hero do dashboard, painel do login e a
+   transição login → app. Luz radial no canto superior direito. */
+.brand-surface, .login-transition, .bento-card.bento-card--hero {
+  background: radial-gradient(circle at 88% 0%, rgb(255 255 255 / 18%), transparent 42%), linear-gradient(135deg, var(--brand), var(--brand-strong));
+  color: var(--brand-foreground);
+}
+
+/* ── Dashboard bento ─────────────────────────────────────────────────────
+   Fora de @layer: é o visual do card, não precisa ser sobrescrito por
+   utilitário. Hover só com ponteiro fino (mouse), nunca no toque. */
+.bento-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+@media (min-width: 1024px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; } }
+@media (min-width: 1280px) { .bento-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+.bento-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  padding: 1.25rem;
+  transition: box-shadow var(--motion-standard) var(--ease-ui), transform var(--motion-standard) var(--ease-ui);
+}
+@media (min-width: 640px) { .bento-card { padding: 1.5rem; } }
+.bento-card--hero { overflow: hidden; border-color: transparent; box-shadow: var(--shadow-hero); }
+@media (hover: hover) and (pointer: fine) {
+  .bento-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
+  .bento-card--hero:hover { box-shadow: var(--shadow-hero); }
+}
+.hero-pill {
+  display: inline-flex; min-height: 2.5rem; align-items: center; gap: .375rem;
+  border-radius: 9999px; padding: 0 1rem; font-size: .8125rem; font-weight: 600;
+  transition: transform var(--motion-fast) var(--ease-ui), background-color var(--motion-fast) var(--ease-ui);
+}
+.hero-pill:hover { transform: translateY(-1px); }
+.hero-pill:active { transform: scale(.98); }
+.hero-pill--solid { background: #fff; color: var(--brand-strong); }
+.hero-pill--solid:hover { background: rgb(255 255 255 / 92%); }
+.hero-pill--ghost { border: 1px solid rgb(255 255 255 / 35%); color: #fff; }
+.hero-pill--ghost:hover { background: rgb(255 255 255 / 12%); }
+.bento-card--hero :focus-visible { outline-color: #fff; }
+.recent-row { transition: background-color var(--motion-fast) var(--ease-ui); }
+.recent-row:hover { background: color-mix(in oklab, var(--muted) 60%, transparent); }
+.quick-action {
+  display: flex; min-height: 3.25rem; align-items: center; gap: .75rem;
+  border-radius: .875rem; padding: .5rem .625rem;
+  transition: background-color var(--motion-fast) var(--ease-ui);
+}
+.quick-action:hover { background: var(--muted); }
+
+/* Skeleton "fantasma" com brilho diagonal, na posição final (sem CLS). */
+.skeleton {
+  background: linear-gradient(110deg, var(--muted) 30%, color-mix(in oklab, var(--muted) 55%, var(--card-elevated)) 50%, var(--muted) 70%);
+  background-size: 250% 100%;
+  animation: skeleton-shimmer 1.4s linear infinite;
+}
+@keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* Colunas do gráfico crescem de baixo para cima; o trilho só aparece. */
+.chart-bar-grow { transform-box: fill-box; transform-origin: 50% 100%; animation: chart-bar-grow 700ms cubic-bezier(.2,.8,.2,1) both; }
+.chart-track-fade { animation: chart-track-fade 400ms ease-out both; }
+@keyframes chart-bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes chart-track-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* Orb do assistente: esfera em gradiente puro (sem WebGL/imagem), flutua e
+   respira parada; pulsa e gira o brilho enquanto a IA responde. */
+.assistant-orb {
+  position: relative; display: block; width: 5rem; height: 5rem; border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, #9fb2ff 0%, var(--brand) 48%, #0b1a8f 100%);
+  box-shadow: 0 18px 36px -10px color-mix(in oklab, var(--brand) 70%, transparent), inset 0 -8px 18px rgb(0 0 0 / 25%), inset 0 6px 14px rgb(255 255 255 / 25%);
+  animation: orb-float 4s ease-in-out infinite;
+}
+.assistant-orb__glint {
+  position: absolute; inset: 0; border-radius: inherit;
+  background: conic-gradient(from 0deg, transparent 0 70%, rgb(255 255 255 / 35%) 80%, transparent 90%);
+  mix-blend-mode: soft-light; opacity: .6;
+}
+.assistant-orb--thinking { animation: orb-float 4s ease-in-out infinite, orb-pulse 1.2s ease-in-out infinite; }
+.assistant-orb--thinking .assistant-orb__glint { animation: orb-spin 2.4s linear infinite; opacity: 1; }
+@keyframes orb-float { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.03); } }
+@keyframes orb-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.25) saturate(1.2); } }
+@keyframes orb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .assistant-orb, .assistant-orb--thinking, .assistant-orb__glint, .skeleton { animation: none !important; }
+}

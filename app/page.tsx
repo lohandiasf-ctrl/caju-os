@@ -6,17 +6,14 @@ import { FsaClassificacao } from "@/components/fsa-classificacao";
 import { empilhar, type VinculoDeGrupo } from "@/lib/ticket-stacks";
 import {
   Activity,
-  Bell,
   Building2,
   CalendarClock,
   CalendarDays,
-  ClipboardList,
   DatabaseBackup,
   Download,
   ExternalLink,
   Eye,
   Filter,
-  Headphones,
   List,
   Loader2,
   MapPin,
@@ -33,6 +30,10 @@ import {
   X,
 } from "lucide-react";
 import { AppNavigation } from "@/components/app-navigation";
+import { AppGreeting } from "@/components/app-greeting";
+import { OverviewBento } from "@/components/dashboard/overview-bento";
+import { NotificationBell } from "@/components/notification-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { canUseDashboardView, canUseWhatsapp, isDashboardView, type DashboardView } from "@/lib/navigation";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -269,6 +270,7 @@ const shortColumn: Record<Status, string> = {
   "Técnico em campo": "Em campo",
 };
 const KANBAN_TAB_KEY = "caju-kanban-mobile-column";
+const JIRA_CREATE_ISSUE_URL = "https://delfia.atlassian.net/secure/CreateIssue!default.jspa";
 const viewCopy: Record<DashboardView, [string, string, string]> = {
   feedback: [
     "Voz da equipe",
@@ -459,6 +461,12 @@ export default function Home() {
     document.documentElement.dataset.view = activeView;
     return () => { delete document.documentElement.dataset.view; };
   }, [activeView]);
+  // Referência estável para o bento: ele mede "atualizado há" e grava o
+  // retrato diário quando esta lista muda.
+  const activeTickets = useMemo(
+    () => tickets.filter((ticket) => !archivedKeys.has(ticket.id)),
+    [tickets, archivedKeys],
+  );
   const filtered = useMemo(() => {
     const terms = searchTerms(query);
     return tickets.filter((ticket) => {
@@ -1168,7 +1176,7 @@ export default function Home() {
     <main className="min-h-screen text-foreground">
       <AppNavigation active={activeView} open={menu} onOpenChange={setMenu} onNavigate={navigate} />
       <section className="app-content">
-        <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-5">
+        <header className="sticky top-0 z-(--z-sticky) flex h-[68px] items-center gap-3 border-b px-4 sm:px-6 lg:px-8">
           <Button
             variant="ghost"
             size="icon"
@@ -1179,41 +1187,38 @@ export default function Home() {
           >
             <Menu />
           </Button>
-          <div className="relative min-w-0 max-w-[440px] flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <AppGreeting context={viewCopy[activeView][1]} className="hidden shrink md:block md:max-w-[240px] xl:max-w-[320px]" />
+          <div className="relative min-w-0 max-w-[380px] flex-1 md:ml-2">
+            <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label="Buscar chamado, loja ou técnico"
               placeholder="Buscar chamado, loja ou técnico..."
-              className="h-10 bg-card pl-9"
+              className="h-10 rounded-full border-transparent bg-card pl-10 shadow-(--shadow-card)"
             />
           </div>
-          <div
-            className={`ml-auto hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold sm:flex ${jiraError ? "border-amber-400/20 bg-amber-400/10 text-amber-300" : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"}`}
-          >
-            <span
-              className={`size-1.5 rounded-full ${jiraError ? "bg-amber-400" : "bg-emerald-400"}`}
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <div
+              className={`hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold xl:flex ${jiraError ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`size-1.5 rounded-full ${jiraError ? "bg-warning" : "bg-success"}`}
+              />
+              {jiraLoading
+                ? "Sincronizando Jira..."
+                : jiraError
+                  ? "Jira indisponível"
+                  : "Jira conectado"}
+            </div>
+            <ThemeToggle />
+            <NotificationBell
+              count={removedTicketAlerts.length + newTicketAlerts.length + visibleOperationalAlerts.length}
+              expanded={notificationsOpen}
+              onClick={() => setNotificationsOpen((value) => !value)}
             />
-            {jiraLoading
-              ? "Sincronizando Jira..."
-              : jiraError
-                ? "Jira indisponível"
-                : "Jira conectado"}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Notificações"
-            aria-expanded={notificationsOpen}
-            className="relative"
-            onClick={() => setNotificationsOpen((value) => !value)}
-          >
-            <Bell />
-            {(removedTicketAlerts.length || newTicketAlerts.length || visibleOperationalAlerts.length) > 0 && (
-              <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-primary" />
-            )}
-          </Button>
           {notificationsOpen && (
             <div className="surface-panel absolute right-4 top-[60px] z-50 max-h-[calc(100dvh-6rem)] overflow-y-auto w-[min(360px,calc(100vw-2rem))] rounded-2xl p-4 shadow-2xl">
               <div className="flex items-center justify-between">
@@ -1270,7 +1275,7 @@ export default function Home() {
                 className="h-11 px-4 font-bold shadow-[0_10px_28px_color-mix(in_oklab,var(--primary)_20%,transparent)]"
                 render={
                   <a
-                    href="https://delfia.atlassian.net/secure/CreateIssue!default.jspa"
+                    href={JIRA_CREATE_ISSUE_URL}
                     target="_blank"
                     rel="noreferrer"
                   />
@@ -1281,72 +1286,16 @@ export default function Home() {
             )}
           </div>
           {activeView === "overview" && (
-            <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
-              {[
-                [
-                  "Chamados relevantes",
-                  String(tickets.length),
-                  "Fluxo operacional ativo",
-                  ClipboardList,
-                  "text-blue-300",
-                ],
-                [
-                  "Técnico em campo",
-                  String(
-                    tickets.filter((item) => item.status === "Técnico em campo")
-                      .length,
-                  ),
-                  "Atendimentos atuais",
-                  Headphones,
-                  "text-emerald-300",
-                ],
-                [
-                  "Pendente de agenda",
-                  String(
-                    tickets.filter(
-                      (item) => item.status === "Pendente de agendamento",
-                    ).length,
-                  ),
-                  "Requer agendamento",
-                  CalendarClock,
-                  "text-violet-300",
-                ],
-                [
-                  "Aguardando spare",
-                  String(
-                    tickets.filter((item) => item.status === "Aguardando spare")
-                      .length,
-                  ),
-                  "Material pendente",
-                  ShieldCheck,
-                  "text-amber-300",
-                ],
-              ].map(([label, value, note, Icon, color]) => (
-                <article
-                  key={label as string}
-                  className="surface-panel metric-glow rounded-2xl p-4 sm:p-5"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {label as string}
-                      </p>
-                      <p className="mt-3 text-2xl font-semibold tracking-[-.04em] sm:text-3xl">
-                        {value as string}
-                      </p>
-                    </div>
-                    <div
-                      className={`grid size-10 place-items-center rounded-xl border border-white/5 bg-black/15 ${color}`}
-                    >
-                      <Icon className="size-[18px]" />
-                    </div>
-                  </div>
-                  <p className="mt-4 text-xs text-muted-foreground">
-                    {note as string}
-                  </p>
-                </article>
-              ))}
-            </div>
+            <OverviewBento
+              tickets={activeTickets}
+              loading={jiraLoading}
+              error={jiraError}
+              operational={operational}
+              role={role}
+              jiraCreateUrl={JIRA_CREATE_ISSUE_URL}
+              onOpenTicket={(ticket) => void openTicket(ticket)}
+              onNavigate={navigate}
+            />
           )}
           {jiraError && (
             <div
@@ -1478,7 +1427,7 @@ export default function Home() {
                         >
                           <span className={`size-2 rounded-full ${dots[column]}`} aria-hidden="true" />
                           {shortColumn[column]}
-                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-primary/20" : "bg-black/20"}`}>
+                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-primary/20" : "bg-foreground/[.035] dark:bg-black/20"}`}>
                             {count}
                           </span>
                         </button>
@@ -1521,7 +1470,7 @@ export default function Home() {
                                   className="-my-3"
                                 />
                               )}
-                              <span className="rounded-lg border border-white/5 bg-black/15 px-2 py-1 text-[10px] font-bold text-muted-foreground">
+                              <span className="rounded-lg border border-white/5 bg-foreground/[.035] dark:bg-black/15 px-2 py-1 text-[10px] font-bold text-muted-foreground">
                                 {items.length}
                               </span>
                             </div>
@@ -1583,7 +1532,7 @@ export default function Home() {
               ) : (
                 <div className="surface-panel mt-4 overflow-hidden rounded-2xl">
                   {filtered.length > 0 && (
-                    <div className="flex items-center gap-1 border-b border-border bg-black/10 px-2 text-xs font-semibold text-muted-foreground">
+                    <div className="flex items-center gap-1 border-b border-border bg-foreground/[.035] dark:bg-black/10 px-2 text-xs font-semibold text-muted-foreground">
                       <SelectBox
                         checked={filtered.every((ticket) => selectedKeys.has(ticket.id))}
                         indeterminate={
@@ -2047,7 +1996,7 @@ function TicketCard({
   onToggleSelect?: () => void;
 }) {
   return (
-    <article className={`relative rounded-xl border bg-black/15 shadow-[0_14px_32px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 ${selected ? "border-violet-300/60 bg-violet-400/[.06] ring-1 ring-violet-400/30" : "border-white/[.07] hover:border-primary/40"}`}>
+    <article className={`relative rounded-xl border bg-card-elevated shadow-(--shadow-card) dark:bg-black/15 dark:shadow-[0_14px_32px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 ${selected ? "border-violet-300/60 bg-violet-400/[.06] ring-1 ring-violet-400/30" : "border-white/[.07] hover:border-primary/40"}`}>
       {onToggleSelect && (
         <SelectBox
           checked={selected}
@@ -2056,7 +2005,7 @@ function TicketCard({
           className="absolute left-1 top-1 z-10"
         />
       )}
-      <button type="button" onClick={onOpen} className="w-full rounded-xl p-3 text-left transition hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <button type="button" onClick={onOpen} className="w-full rounded-xl p-3 text-left transition hover:bg-foreground/[.05] dark:hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
       <div className="flex justify-between gap-3">
         <span className={`font-mono text-xs font-bold text-primary ${onToggleSelect ? "pl-8" : ""}`}>
           {ticket.id}
@@ -2216,7 +2165,7 @@ function TicketActivityCalendar({
                   type="button"
                   key={`${activity.ticket.id}-${activity.label}-${index}`}
                   onClick={() => onOpen(activity.ticket)}
-                  className="flex min-h-16 w-full items-start gap-3 rounded-xl border border-border bg-black/10 p-3 text-left transition hover:border-primary/35 hover:bg-white/[.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex min-h-16 w-full items-start gap-3 rounded-xl border border-border bg-foreground/[.035] dark:bg-black/10 p-3 text-left transition hover:border-primary/35 hover:bg-white/[.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <span
                     className={`mt-1.5 size-2.5 shrink-0 rounded-full ${tones[activity.tone]}`}
@@ -2273,7 +2222,7 @@ function AgendaView({
     return <EmptyState label="Nenhum atendimento aguardando agenda." />;
   return (
     <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
-      <div className="hidden border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_180px]">
+      <div className="hidden border-b border-border bg-foreground/[.035] dark:bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_180px]">
         <span>Data</span>
         <span>Chamado</span>
         <span>Responsável</span>
@@ -2969,7 +2918,7 @@ function ProjectsView({
     return <EmptyState label="Nenhuma loja encontrada nos chamados atuais." />;
   return (
     <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
-      <div className="grid border-b border-border bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid-cols-[minmax(0,1fr)_220px_120px]">
+      <div className="grid border-b border-border bg-foreground/[.035] dark:bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid-cols-[minmax(0,1fr)_220px_120px]">
         <span>Loja</span>
         <span>Cidade</span>
         <span>Chamados</span>
@@ -3556,7 +3505,7 @@ function OperationalSummary({
             {data.recentAudit.slice(0, 4).map((item) => (
               <div
                 key={item.id}
-                className="rounded-lg border border-border bg-black/10 px-3 py-2 text-xs"
+                className="rounded-lg border border-border bg-foreground/[.035] dark:bg-black/10 px-3 py-2 text-xs"
               >
                 <b className="text-primary">{item.ticketKey}</b> · {item.action}
                 <span className="mt-1 block text-muted-foreground">
@@ -3572,7 +3521,7 @@ function OperationalSummary({
           </div>
         </div>
       </div>
-      {!!data.collaborators?.length && <div className="mt-5"><h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Desempenho dos colaboradores</h3><div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{data.collaborators.slice(0, 6).map((item) => <div key={item.email} className="rounded-lg border border-border bg-black/10 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><b className="truncate">{item.email}</b><span className="font-bold text-primary">{item.score}/100</span></div><p className="mt-1 text-muted-foreground">{item.changes} alterações · {item.tasksDone} tarefas · {Math.round(item.activeSeconds / 60)} min ativos</p></div>)}</div></div>}
+      {!!data.collaborators?.length && <div className="mt-5"><h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Desempenho dos colaboradores</h3><div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{data.collaborators.slice(0, 6).map((item) => <div key={item.email} className="rounded-lg border border-border bg-foreground/[.035] dark:bg-black/10 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><b className="truncate">{item.email}</b><span className="font-bold text-primary">{item.score}/100</span></div><p className="mt-1 text-muted-foreground">{item.changes} alterações · {item.tasksDone} tarefas · {Math.round(item.activeSeconds / 60)} min ativos</p></div>)}</div></div>}
     </section>
   );
 }

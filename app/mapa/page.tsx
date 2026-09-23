@@ -2,6 +2,7 @@
 import "leaflet/dist/leaflet.css";
 import type * as L from "leaflet";
 import { AppNavigation } from "@/components/app-navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -298,6 +299,7 @@ export default function Page() {
           >
             Diretório operacional · {data.length} cidades
           </Badge>
+          <ThemeToggle className="ml-2" />
         </header>
         <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-4 pb-36 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
           <div className="flex flex-wrap items-end justify-between gap-4">

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
 
@@ -305,4 +305,76 @@ test('instante do banco sai no fuso da operação', () => {
   assert.equal(operationDateTime('2026-09-18T02:30:00.000-03:00'), '2026-09-18 02:30', 'já no fuso, fica igual');
   assert.equal(operationDateTime(null), null);
   assert.equal(operationDateTime('sem data'), 'sem data', 'o que não é data volta como veio');
+});
+
+test('extrai tool calls em XML do GLM-4.7-Flash sem vazar tags para o usuário', () => {
+  const rawGlmText = `<tool_call>detalhar_chamado<arg_key>chamado</arg_key><arg_value>FSA-133259</arg_value></tool_call>
+<tool_call>detalhar_chamado<arg_key>chamado</arg_key><arg_value>FSA-133216</arg_value></tool_call>
+<tool_call>detalhar_chamado<arg_key>chamado</arg_key><arg_value>FSA-133258</arg_value></tool_call>`;
+
+  const extracted = extractToolCallsFromText(rawGlmText);
+  assert.equal(extracted.calls.length, 3);
+  assert.equal(extracted.calls[0].function.name, 'detalhar_chamado');
+  assert.deepEqual(JSON.parse(extracted.calls[0].function.arguments), { chamado: 'FSA-133259' });
+  assert.equal(extracted.calls[1].function.name, 'detalhar_chamado');
+  assert.deepEqual(JSON.parse(extracted.calls[1].function.arguments), { chamado: 'FSA-133216' });
+  assert.equal(extracted.calls[2].function.name, 'detalhar_chamado');
+  assert.deepEqual(JSON.parse(extracted.calls[2].function.arguments), { chamado: 'FSA-133258' });
+  assert.equal(extracted.cleanedText, '', 'as tags de tool call são totalmente removidas do texto visível');
+});
+
+test('readAssistantResponse lê múltiplos formatos de Workers AI (OpenAI, Mistral, GLM-4 e raiz)', () => {
+  // 1. Formato textual do GLM-4.7-Flash com texto de introdução
+  const glmResponse = readAssistantResponse({
+    choices: [{
+      message: {
+        content: 'Vou consultar os detalhes:\n<tool_call>detalhar_chamado<arg_key>chamado</arg_key><arg_value>FSA-100</arg_value></tool_call>',
+      },
+    }],
+  });
+  assert.equal(glmResponse.calls.length, 1);
+  assert.equal(glmResponse.calls[0].function.name, 'detalhar_chamado');
+  assert.deepEqual(JSON.parse(glmResponse.calls[0].function.arguments), { chamado: 'FSA-100' });
+  assert.equal(glmResponse.text, 'Vou consultar os detalhes:');
+
+  // 2. Formato Mistral [TOOL_CALLS]
+  const mistralResponse = readAssistantResponse({
+    response: '[TOOL_CALLS] [{"name": "consultar_chamados", "arguments": {"status": "Agendado"}}]',
+  });
+  assert.equal(mistralResponse.calls.length, 1);
+  assert.equal(mistralResponse.calls[0].function.name, 'consultar_chamados');
+  assert.deepEqual(JSON.parse(mistralResponse.calls[0].function.arguments), { status: 'Agendado' });
+  assert.equal(mistralResponse.text, '');
+
+  // 3. Formato OpenAI clássico choices[0].message.tool_calls
+  const openAiResponse = readAssistantResponse({
+    choices: [{
+      message: {
+        content: '',
+        tool_calls: [{
+          id: 'call_abc',
+          type: 'function',
+          function: { name: 'resumo_operacao', arguments: '{}' },
+        }],
+      },
+    }],
+  });
+  assert.equal(openAiResponse.calls.length, 1);
+  assert.equal(openAiResponse.calls[0].function.name, 'resumo_operacao');
+
+  // 4. Formato raiz de Workers AI (payload.tool_calls com objeto de argumentos)
+  const cfNativeResponse = readAssistantResponse({
+    response: '',
+    tool_calls: [{ name: 'consultar_tecnicos', arguments: { cidade: 'Recife' } }],
+  });
+  assert.equal(cfNativeResponse.calls.length, 1);
+  assert.equal(cfNativeResponse.calls[0].function.name, 'consultar_tecnicos');
+  assert.deepEqual(JSON.parse(cfNativeResponse.calls[0].function.arguments), { cidade: 'Recife' });
+});
+
+test('sanitizeFinalAnswer limpa quaisquer tags ou resquícios de ferramentas do texto exibido', () => {
+  const dirty = 'Aqui está a resposta:\n<tool_call>detalhar_chamado<arg_key>chamado</arg_key><arg_value>FSA-1</arg_value></tool_call>\nForam encontrados 5 chamados.';
+  assert.equal(sanitizeFinalAnswer(dirty), 'Aqui está a resposta:\n\nForam encontrados 5 chamados.');
+  assert.equal(sanitizeFinalAnswer('<arg_key>teste</arg_key> Resposta limpa'), 'Resposta limpa');
+  assert.equal(sanitizeFinalAnswer(''), '');
 });

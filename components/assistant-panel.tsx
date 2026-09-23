@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Bot, Check, Loader2, SendHorizontal, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MAX_QUESTION_LENGTH, splitTicketKeys, type AssistantTask } from '@/lib/assistant';
+import { MAX_QUESTION_LENGTH, sanitizeFinalAnswer, splitTicketKeys, type AssistantTask } from '@/lib/assistant';
+import { ASSISTANT_ASK_EVENT, ASSISTANT_BUSY_EVENT } from '@/lib/assistant-events';
 
 type Proposal = { id: string; description: string; kind: string; preview: Record<string, unknown> };
 type PreparedAction =
@@ -57,10 +58,12 @@ async function askGeneral(
 }
 
 // Com `onOpenTicket`, cada FSA citada vira botão que abre o chamado.
+// Higieniza contra qualquer resquício de tags de ferramentas para proteger a tela.
 function Answer({ text, onOpenTicket }: { text: string; onOpenTicket?: (ticketKey: string) => void }) {
+  const clean = sanitizeFinalAnswer(text);
   return <div className="mt-3 whitespace-pre-wrap rounded-xl border border-border bg-background/70 p-3 text-sm leading-relaxed">
     {onOpenTicket
-      ? splitTicketKeys(text).map((part, index) => part.ticketKey
+      ? splitTicketKeys(clean).map((part, index) => part.ticketKey
         ? <button
             key={index}
             type="button"
@@ -69,7 +72,7 @@ function Answer({ text, onOpenTicket }: { text: string; onOpenTicket?: (ticketKe
             className="inline rounded font-semibold text-violet-300 underline decoration-violet-300/40 underline-offset-2 transition hover:text-violet-200 hover:decoration-violet-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >{part.text}</button>
         : <span key={index}>{part.text}</span>)
-      : text}
+      : clean}
   </div>;
 }
 
@@ -278,6 +281,22 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
     }
   }, [messages, busy]);
 
+  // O card do assistente no dashboard pergunta por evento: abre esta janela
+  // e envia pelo mesmo `submit`. O estado "pensando" volta para o orb do card.
+  const submitRef = useRef<(text?: string) => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    const onAsk = (event: Event) => {
+      const text = (event as CustomEvent<string>).detail;
+      setOpen(true);
+      if (typeof text === 'string') void submitRef.current(text);
+    };
+    window.addEventListener(ASSISTANT_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(ASSISTANT_ASK_EVENT, onAsk);
+  }, []);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(ASSISTANT_BUSY_EVENT, { detail: busy }));
+  }, [busy]);
+
   async function submit(textToAsk?: string) {
     const text = (textToAsk ?? question).trim();
     if (busy || text.length < 3) return;
@@ -317,6 +336,8 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
       setBusy(false);
     }
   }
+
+  submitRef.current = submit;
 
   return (
     <div className="fixed bottom-4 right-4 z-(--z-float) sm:bottom-5 sm:right-5">

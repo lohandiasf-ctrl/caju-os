@@ -20,12 +20,122 @@ do assistente, entrada dos cards em cascata, alternância claro/escuro). Cobre
 tokens, telas, animações, estados, acessibilidade e um plano em 8 passos.
 Só documentação, sem mudança de código.
 
-**Pendente:** executar o plano. O primeiro passo é criar o tema claro,
-porque o app hoje é só escuro.
+Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
+"Dashboard Premium"" em 2026-09-22); o prompt fica como referência de design.
 
----
+### Interceptação robusta de chamadas de ferramentas (Tool Calls) e higienização
+
+Corrigido vazamento de marcações XML cruas (`<tool_call>detalhar_chamado...`) emitidas por modelos do Workers AI (especialmente GLM-4.7-Flash).
+- **Causa raiz:** O GLM-4.7-Flash emite chamadas de função com tags XML nativas (`<tool_call>nome<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>`) quando o envelope `message.tool_calls` da OpenAI não é gerado pelo Cloudflare Workers AI. O backend não realizava o parsing dessas tags no texto de resposta, assumia que não havia chamadas de ferramentas e retornava o XML cru diretamente para o usuário sem executar a ferramenta.
+- **Leitor universal (`readAssistantResponse`):** Parser puro em `lib/assistant.ts` capaz de extrair e normalizar chamadas vindas de `choices[0].message.tool_calls`, `payload.tool_calls` raiz (formato tradicional Cloudflare/Mistral), e tags textuais `<tool_call>` (formato GLM / ChatML).
+- **Execução concorrente e multi-turno:** Quando múltiplas ferramentas são requisitadas na mesma resposta (ex.: 5 chamados detalhados de uma vez), o backend agora executa todas em paralelo via `Promise.all`, anexa os resultados com `role: 'tool'` e avança para a próxima rodada da IA.
+- **Higienização estrita em múltiplas camadas:** Função `sanitizeFinalAnswer` remove completamente tags e resquícios de chamadas tanto no backend antes do envio quanto no componente de exibição (`Answer` em `components/assistant-panel.tsx`).
+- **Instrução de sistema reforçada:** Adicionada regra crítica em `systemInstruction` proibindo expressamente a IA de expor tags XML ou JSON técnico de ferramentas na resposta ao usuário final.
+
+### Guia Completo e refinamento das diretrizes da IA (System Prompt)
+
+Incorporado o Guia Completo da IA do Sistema CAJU TECH + Jira (`docs/guia_completo_ia_cajutech.md`)
+ao `systemInstruction` em `lib/assistant-tools.ts`. O assistente passa a operar com:
+- Hierarquia estrita de prioridades: System prompt > Instruções do backend > Mensagens do usuário (com blindagem contra tentativas de metaprompt para inventar dados).
+- Pipeline de raciocínio cognitivo estruturado (checklist mental para intenção, verificação de dados externos, consultas com conectivos lógicos E/OU, ordenação e agrupamento).
+- Modos de saída adaptativos: texto explicativo em markdown, relatórios em tabelas markdown, listas simples e JSON estrito quando solicitado.
+- Capacidades de diagnóstico técnico em TI de varejo e estruturação para ações no Jira (summary, description padronizada, priorização e labels).
 
 ## 2026-09-22
+
+### Redesign "Dashboard Premium" (branch `claude/dashboard-premium`)
+
+Só camada visual/UX — nenhuma regra de negócio, rota de API, schema ou
+permissão mudou. Feito em passos, um commit por passo.
+
+**1. Tokens + tema claro.** `app/globals.css` agora tem dois temas sobre os
+mesmos tokens: `:root` é o claro (azul elétrico sobre marfim) e `.dark` o
+grafite. O escuro continua padrão na primeira carga; a escolha fica em
+`localStorage` (`caju-theme`: `dark | light | system`) e um script mínimo no
+`<head>` (`lib/theme.ts` → `app/layout.tsx`) aplica a classe antes da
+hidratação, sem flash. Tokens novos: `--card-elevated`, `--primary-soft`,
+`--brand` (preenchimento sólido com texto branco — no escuro `--primary` é um
+azul mais claro para passar AA como texto), `--success/--warning/--danger`
+(+ `-soft`), `--chart-track`, `--chart-missed`, `--shadow-card`,
+`--shadow-hero`, `--radius-card`, superfícies (`--surface-*`) e chat
+(`--chat-*`). Cores fixas do CSS global (header, campos, diálogos, tabela,
+chat, Leaflet, seleção, scrollbar) viraram tokens.
+Compatibilidade: ~500 classes do JSX usam tons claros da paleta
+(`text-emerald-200`, `bg-red-400/10`…) como texto sobre fundo escuro. No tema
+claro esses tons são remapeados para os escuros equivalentes
+(100/200→800, 300→700, 400→600), então as telas existentes ficam legíveis sem
+reescrever cada componente. O inbox do WhatsApp (pele própria do WhatsApp Web)
+continua escuro nos dois temas: recebe `.dark`, que restaura tokens e paleta
+só ali dentro. O mapa não inverte os tiles no claro.
+`MotionConfig reducedMotion="user"` na raiz: toda animação do `motion`
+respeita "reduzir movimento".
+
+**2. Shell.** Sidebar (`components/app-navigation.tsx`) no mesmo fundo do app,
+240 px expandida / 72 px recolhida (botão "Recolher" ou tecla `[`; estado em
+`localStorage` `caju-sidebar`, aplicado antes da pintura por
+`lib/sidebar-state.ts`). Item ativo com barra de 3 px que desliza entre itens
+(`layoutId`); recolhida, os rótulos viram tooltip. Rodapé com avatar (ponto de
+disponibilidade), nome, e-mail e botão sair — mesmo `signOut` do menu. Itens e
+permissões iguais. Barra superior do dashboard com saudação por horário de
+Brasília ("Boa tarde, Maria 👋", `lib/greeting.ts`), busca em pílula, status
+do Jira, toggle de tema e sino com ponto vermelho que balança quando chega
+alerta novo. Mapa, Spares e Financeiro ganharam o toggle. A barra é
+transparente no topo e ganha vidro ao rolar. Superfícies "afundadas"
+(`bg-black/10–30`) ganharam equivalente claro com o original em `dark:`;
+cards do kanban viram cards brancos elevados no claro.
+
+**3. Login.** Tela dividida no desktop: painel azul de marca (gradiente,
+grade de pontos, ondas, emblema em ladrilho branco, frases alternando a cada
+5 s com indicador em pílula, três destaques) e card do formulário à direita.
+No celular o painel vira cabeçalho de 180 px e o card sobe por cima. Campos
+com ícone, olho acessível na senha, "Esqueci a senha" ao lado do rótulo,
+toggle de tema. `signInWithEmailAndPassword`, recuperação de senha e mensagens
+de erro são os mesmos. Ao autenticar, o card some (200 ms) e o painel azul se
+expande até cobrir a tela (`components/login-transition.tsx`, fora do gate
+do AuthProvider), segurando enquanto o perfil é validado e sumindo quando a
+rota sai de `/login` (teto de 3 s). Movimento reduzido: só fade.
+Não entrou: "Lembrar de mim" (mudaria a persistência do Firebase — regra de
+auth) e botão Google (não há provedor Google configurado).
+Botão padrão (`components/ui/button.tsx`) passa a usar `bg-brand
+text-brand-foreground`: no escuro o `--primary` é claro demais para texto
+branco.
+
+**4–7. Visão geral em bento grid** (`components/dashboard/*`). Substitui os
+quatro cards de métrica da Visão geral; o kanban "Fluxo de chamados" continua
+logo abaixo. Só dados que a tela já carrega (chamados ativos do Jira +
+`/api/operational-dashboard`), contas em `lib/dashboard-metrics.ts` (com
+testes). Grade de 12 colunas no xl (3·6·3 / 8·4 / 8·4), 2 no lg, 1 no celular.
+- Hero azul com glow: "Chamados no prazo (SLA)" = fluxos ativos sem SLA
+  atrasado ÷ fluxos ativos, com count-up; pílulas "Ver fila" e "Novo chamado"
+  (Jira). Sem resumo em 8 s mostra "—" em vez de girar para sempre.
+- Resumo operacional: Em aberto / Em campo / Agendados com badge de variação
+  (sinal + seta + cor) e barra de distribuição da fila por status. **O "vs.
+  ontem" é por navegador**: não há série histórica no servidor, então cada
+  navegador guarda um retrato diário (`localStorage` `caju-dashboard-kpis`) e
+  compara com o último dia visto; sem retrato anterior não aparece badge.
+- Agenda da quinzena: 14 mini-barras (7 dias atrás em azul, 7 à frente no
+  trilho) e % de chamados com técnico.
+- Movimento por dia (Recharts): colunas "com trilho" — agendados (azul) e
+  acionados (laranja da marca) empilhados com 4 px de respiro, trilho neutro
+  da escala do período. **Não há meta no sistema**, então o trilho é só
+  escala, não "Meta". O laranja substituiu o creme/cinza sugerido: o validador
+  de paleta reprovou o cinza (croma baixo, lê como "sem dado"). Barras crescem
+  em cascata (60 ms por dia); trocar 7/14 dias interpola. Tooltip com os três
+  números, `role="img"` com resumo e tabela equivalente para leitor de tela.
+- Assistente: orb em CSS puro (flutua/respira; pulsa enquanto a IA responde),
+  chips que preenchem o campo, envio abre a janela do assistente que já
+  existia (evento `caju:assistant-ask`, `lib/assistant-events.ts`) — mesma
+  lógica, histórico e ferramentas. Sem microfone (não há recurso de voz).
+- Atividades recentes: tabela (vira lista de cards no celular), linha inteira
+  abre o chamado, status em pílula ("Atrasado" quando há alerta crítico).
+- Ações rápidas: atalhos para Agenda, Central N1, Spares, Mapa (filtrados por
+  `canUseNavItem`) e novo chamado no Jira. Sem sliders — não há ação
+  existente que eles controlariam.
+- Coreografia: skeletons com brilho nas posições finais; cards entram em
+  cascata (70 ms) com mola; com dado em cache a cascata cai para ~35 ms.
+  Cada card tem estados de carregando/vazio/erro e um error boundary próprio;
+  selo "Atualizado há X min"/"Offline" quando o dado envelhece.
+  `prefers-reduced-motion`: sem translate/escala/brilho/flutuação.
 
 ### Assistente ganha histórico contínuo, exibição de fontes, presença global e fallback
 

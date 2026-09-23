@@ -1,6 +1,7 @@
 'use client';
 
 import { AppNavigation } from "@/components/app-navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ArrowLeft, BadgeDollarSign, Building2, CalendarDays, Download, Loader2, Menu, RotateCcw, Search, TrendingUp, WalletCards } from 'lucide-react';
@@ -185,7 +186,7 @@ export default function FinanceiroPage() {
         <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border bg-background/90 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
         <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenu(true)} aria-label="Abrir menu"><Menu /></Button>
         <a href="/?view=overview" className="hidden items-center gap-2 text-xs text-muted-foreground hover:text-foreground sm:flex"><ArrowLeft className="size-4" />Operação</a>
-        <div className="ml-auto flex items-center gap-2"><Badge variant="outline" className="hidden border-emerald-400/25 bg-emerald-400/10 text-emerald-300 sm:flex">Dados reais do Jira</Badge></div>
+        <div className="ml-auto flex items-center gap-2"><Badge variant="outline" className="hidden border-emerald-400/25 bg-emerald-400/10 text-emerald-300 sm:flex">Dados reais do Jira</Badge><ThemeToggle /></div>
       </header>
       <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-6 pb-36 sm:px-6 lg:px-8 lg:pt-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between"><div><p className="mb-1 text-xs font-bold uppercase tracking-[.14em] text-primary">Gestão financeira</p><h1 className="text-2xl font-semibold tracking-[-.03em] sm:text-3xl">Financeiro</h1><p className="mt-1 text-sm text-muted-foreground">Valores do ticket, spare, repasses e margem em uma visão.</p></div><div className="flex flex-wrap items-center gap-2"><div role="group" aria-label="Período" className="flex rounded-lg border border-border bg-card p-1">{([7, 30, 90] as const).map((days) => <Button key={days} aria-pressed={period === days} size="sm" variant={period === days ? 'secondary' : 'ghost'} onClick={() => { setPeriod(days); setPage(1); }}>{days} dias</Button>)}</div><Button size="sm" onClick={exportCsv} disabled={!rows.length}><Download />Exportar</Button></div></div>
@@ -256,7 +257,7 @@ function diaBr(dia: string) { return dia.split('-').reverse().join('/'); }
 
 function Metric({ label, value, note, icon: Icon, tone }: { label: string; value: string; note: string; icon: typeof TrendingUp; tone: 'green' | 'blue' | 'amber' | 'violet' }) {
   const colors = { green: 'text-emerald-300', blue: 'text-blue-300', amber: 'text-amber-300', violet: 'text-violet-300' };
-  return <article className="cockpit-stat metric-glow rounded-2xl p-5"><div className="flex justify-between"><p className="text-sm text-muted-foreground">{label}</p><div className={`grid size-9 place-items-center rounded-lg bg-black/15 ${colors[tone]}`}><Icon className="size-[18px]" /></div></div><p className="mt-2 text-2xl font-extrabold tracking-tight">{value}</p><p className="mt-3 text-xs text-muted-foreground">{note}</p></article>;
+  return <article className="cockpit-stat metric-glow rounded-2xl p-5"><div className="flex justify-between"><p className="text-sm text-muted-foreground">{label}</p><div className={`grid size-9 place-items-center rounded-lg bg-foreground/[.035] dark:bg-black/15 ${colors[tone]}`}><Icon className="size-[18px]" /></div></div><p className="mt-2 text-2xl font-extrabold tracking-tight">{value}</p><p className="mt-3 text-xs text-muted-foreground">{note}</p></article>;
 }
 
 function Empty({ label }: { label: string }) { return <div className="grid min-h-32 place-items-center p-6 text-sm text-muted-foreground">{label}</div>; }
