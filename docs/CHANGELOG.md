@@ -9,6 +9,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-23
+
+### Prompt de redesign UI/UX (dashboard premium)
+
+Novo `docs/prompts/UI_UX_DASHBOARD_REDESIGN.md`: prompt detalhado para uma IA ou
+designer levar ao Caju OS a linguagem visual de um vídeo de referência (login em
+tela dividida azul, dashboard em bento grid, gráfico de barras com trilho, orb
+do assistente, entrada dos cards em cascata, alternância claro/escuro). Cobre
+tokens, telas, animações, estados, acessibilidade e um plano em 8 passos.
+Só documentação, sem mudança de código.
+
+**Pendente:** executar o plano. O primeiro passo é criar o tema claro,
+porque o app hoje é só escuro.
+
+---
+
 ## 2026-09-21
 
 ### Grupo de chamados só aceita uma cidade
