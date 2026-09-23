@@ -98,7 +98,7 @@ async function detalharChamado(args: Args) {
   const op = issue.operationalFields;
   return {
     chamado: ticketContext(toAssistantIssue(issue)),
-    resumo: issue.summary,
+    resumo: redact(issue.summary),
     status: issue.status,
     loja: issue.store,
     numero_req_freshservice: op.chamadoFreshservice ?? op.inReq ?? 'não informado',
@@ -106,7 +106,7 @@ async function detalharChamado(args: Args) {
     custo_total: op.custoTotal ?? 'não informado',
     codigo_rastreio: op.codigoRastreio ?? 'não informado',
     previsao_entrega: op.previsaoEntrega ?? 'não informado',
-    causa_raiz: op.causaRaiz ?? 'não informado',
+    causa_raiz: op.causaRaiz ? redact(op.causaRaiz) : 'não informado',
     chegada_na_loja: op.dtChegadaLoja ?? 'não informado',
     data_aprovacao: op.dtAprovacao ?? 'não informado',
     historico: history.length
