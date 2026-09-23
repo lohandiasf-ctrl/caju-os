@@ -47,6 +47,27 @@ export type AssistantIssue = AssistantTicket & {
   budget?: string | null;
   defectSummary: string | null;
   technicianData: string | null;
+  // --- CAMPOS DE REQUISIÇÃO / CLIENTE / REQ ---
+  chamadoFreshservice?: string | null;
+  inReq?: string | null;
+  tituloRequisicao?: string | null;
+  statusRequisicao?: string | null;
+  // --- LOGÍSTICA & RASTREIO ---
+  codigoRastreio?: string | null;
+  cidadeDestino?: string | null;
+  previsaoEntrega?: string | null;
+  dataEnvio?: string | null;
+  dataRecebimento?: string | null;
+  // --- DATAS & APROVAÇÃO ---
+  dtChegadaLoja?: string | null;
+  dtAprovacao?: string | null;
+  dataLimite?: string | null;
+  // --- CLASSIFICAÇÃO ---
+  causaRaiz?: string | null;
+  severidade?: string | null;
+  aprovacao?: string | null;
+  tipoAtendimento?: string | null;
+  nivelCriticidade?: string | null;
   internalComments: Array<{ author: string | null; createdAt: string; body: string }>;
 };
 
@@ -107,6 +128,24 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   if (issue.ticketTotal) text += line('Total do Chamado', formatMoney(issue.ticketTotal));
   if (issue.additionalCosts) text += line('Custos Adicionais', issue.additionalCosts);
   if (issue.budget) text += line('Orçamento', formatMoney(issue.budget));
+  // Requisição / REQ / Freshservice
+  text += line('Chamado Freshservice (REQ)', issue.chamadoFreshservice ?? issue.inReq);
+  text += line('Título da Requisição', issue.tituloRequisicao);
+  text += line('Status da Requisição', issue.statusRequisicao);
+  // Logística & Rastreio
+  text += line('Código de Rastreio', issue.codigoRastreio);
+  text += line('Previsão de Entrega', issue.previsaoEntrega);
+  text += line('Data de Envio', issue.dataEnvio);
+  text += line('Data de Recebimento', issue.dataRecebimento);
+  // Datas & Atendimento
+  text += line('Chegada na Loja', issue.dtChegadaLoja);
+  text += line('Data da Aprovação', issue.dtAprovacao);
+  text += line('Data Limite', issue.dataLimite);
+  // Classificação
+  text += line('Causa Raiz', issue.causaRaiz);
+  text += line('Severidade', issue.severidade);
+  text += line('Nível de Criticidade', issue.nivelCriticidade);
+  text += line('Status Aprovação', issue.aprovacao);
   text += line('Descrição', issue.description);
   const comments = issue.internalComments.slice(-maxComments);
   if (comments.length) {

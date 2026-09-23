@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Caju IA: Integração de REQ/Freshservice, Logística, Classificação e Sinônimos Operacionais
+
+Expansão das capacidades de consulta e resposta da Caju IA cobrindo os campos operacionais de REQ (Freshservice), logística de envio e entrega, datas/aprovação e classificação técnica dos chamados no Jira (instância delfia.atlassian.net / FSA).
+
+- **`lib/assistant.ts`:**
+  - Adicionados campos à interface `AssistantIssue`: `chamadoFreshservice`, `inReq`, `tituloRequisicao`, `statusRequisicao`, `codigoRastreio`, `cidadeDestino`, `previsaoEntrega`, `dataEnvio`, `dataRecebimento`, `dtChegadaLoja`, `dtAprovacao`, `dataLimite`, `causaRaiz`, `severidade`, `aprovacao`, `tipoAtendimento`, `nivelCriticidade`.
+  - Atualizada a função `ticketContext()` para formatar e exibir blocos de Requisição/REQ, Logística/Rastreio, Datas/Aprovação e Classificação quando preenchidos.
+- **`lib/server/jira.ts`:**
+  - Mapeados custom fields na consulta da API do Jira (`getJiraIssue` e `searchJiraIssues`): `customfield_14886` (REQ Freshservice), `customfield_12280` (Cidade Destino), `customfield_12844` (Previsão Entrega), `customfield_12848` (Código de Rastreio), `customfield_18558` (Data Envio), `customfield_18559` (Data Recebimento), além de `customfield_14810`, `customfield_14821`, `customfield_15087`, `customfield_16196`.
+  - Mapeamento populando `operationalFields` com `chamadoFreshservice`, `inReq`, `tituloRequisicao`, `statusRequisicao`, `dataEnvio`, `dataRecebimento`.
+- **`lib/server/assistant-issue.ts`:**
+  - Extração e mapeamento dos campos operacionais para `toAssistantIssue()`.
+- **`lib/assistant-tools.ts`:**
+  - Inclusão da diretriz "SINÔNIMOS E TERMOS DA OPERAÇÃO" nas instruções do sistema (`systemInstruction`), ensinando a IA a associar termos como REQ, Freshservice, número do chamado do cliente, código de rastreio, previsão de entrega, causa raiz, valor da primeira visita/revisita aos respectivos campos de forma fluida.
+- **`lib/server/assistant-data.ts`:**
+  - A ferramenta `detalharChamado` agora expõe campos estruturados explícitos (`numero_req_freshservice`, `valor_equipamento`, `custo_total`, `codigo_rastreio`, `previsao_entrega`, `causa_raiz`, `chegada_na_loja`, `data_aprovacao`) em conjunto com `chamado` e `historico`.
+- **`tests/assistant.test.ts`:**
+  - Adicionados testes unitários cobrindo a formatação e presença dos novos campos em `ticketContext()`.
+
 ### Revisão de UI/UX: hierarquia, superfícies sólidas e status da equipe (branch `claude/ui-ux-revisao`)
 
 Revisão visual de toda a interface sem mexer em API, banco, auth, permissões,
