@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowUp, CalendarClock, CircleDollarSign, Sparkles, TriangleAlert } from 'lucide-react';
+import { VoiceInputButton } from '@/components/voice-input-button';
 import { ASSISTANT_ASK_EVENT, ASSISTANT_BUSY_EVENT } from '@/lib/assistant-events';
 
 const suggestions = [
@@ -18,6 +19,7 @@ const suggestions = [
 export function AssistantCard() {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
+  const [voiceError, setVoiceError] = useState('');
   useEffect(() => {
     const onBusy = (event: Event) => setBusy(Boolean((event as CustomEvent<boolean>).detail));
     window.addEventListener(ASSISTANT_BUSY_EVENT, onBusy);
@@ -67,10 +69,15 @@ export function AssistantCard() {
           maxLength={400}
           className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus-visible:outline-none"
         />
+        <VoiceInputButton
+          onText={(text) => { setVoiceError(''); setQuestion((current) => (current.trim() ? `${current.trim()} ${text}` : text).slice(0, 400)); }}
+          onError={setVoiceError}
+        />
         <button type="submit" disabled={question.trim().length < 3} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-brand px-3.5 text-xs font-semibold text-brand-foreground hover:brightness-110 disabled:opacity-50 max-sm:h-11">
           Enviar<ArrowUp aria-hidden="true" className="size-3.5" />
         </button>
       </form>
+      {voiceError && <p role="alert" className="mt-2 px-2 text-xs text-danger">{voiceError}</p>}
     </div>
   );
 }

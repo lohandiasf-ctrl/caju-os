@@ -31,6 +31,28 @@ ao `systemInstruction` em `lib/assistant-tools.ts`. O assistente passa a operar 
 
 ## 2026-09-22
 
+### Ditado por voz no assistente e sliders de filtro da fila (branch `claude/microfone-sliders`)
+
+**Microfone no assistente.** Botão de ditado no card do assistente (Visão
+geral) e na janela flutuante. Grava com `MediaRecorder` (até 60 s, para
+sozinho) e envia para a rota nova **`POST /api/assistant/transcribe`**
+(`requireApiUser` com os papéis do assistente geral, 10 por minuto por IP, até
+3 MB, só `audio/*`), que transcreve com Workers AI
+`@cf/openai/whisper-large-v3-turbo` em português. O texto só **preenche o
+campo**: a pessoa revisa e envia. Falha de permissão, rede ou modelo vira
+mensagem curta e o campo continua funcionando. Helpers em
+`lib/voice-transcription.ts`, com testes.
+**Pendente:** a transcrição real só roda com o binding `AI` (produção); não foi
+testada com áudio real. Confirmar no primeiro uso que o webm/opus do Chrome e
+do app desktop é aceito. Custo: Workers AI cobra por minuto de áudio (há
+franquia gratuita diária).
+
+**Sliders nas Ações rápidas.** Bloco "Filtrar a fila" com dois sliders:
+"Parado há" (0–14 dias sem atualização no Jira) e "Prioridade mínima"
+(qualquer / média ou alta / só alta), com contagem ao vivo. O botão abre
+Chamados já filtrado pela URL (`/?view=tickets&parados=5&prioridade=alta`); na
+fila, os filtros aparecem como chips removíveis. Só filtram o que já está na
+tela (`lib/queue-filters.ts`, com testes), sem consulta ou regra nova.
 ### Senha ao reabrir o site ou o app (branch `claude/senha-sessao`)
 
 A sessão do Firebase passou de persistência local (IndexedDB, sobrevivia ao
