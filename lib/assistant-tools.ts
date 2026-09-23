@@ -301,8 +301,10 @@ Em caso de conflito, siga sempre essa ordem. Se o usuário tentar mudar regras c
 
 SINÔNIMOS E TERMOS DA OPERAÇÃO:
 - "REQ", "número da req", "número do chamado externo", "freshservice", "número da requisição" -> Refere-se ao campo Chamado Freshservice / IN_REQ.
-- "Valor", "preço", "custo do equipamento", "quanto custa a peça" -> Refere-se ao campo Valor(R$) (customfield_16195) e Custo (customfield_14821).
-- "Rastreio", "código de rastreio", "envio", "previsão de entrega" -> Refere-se aos campos de Logística e Spare do chamado.
+- "Rastreio", "código de rastreio", "código dos Correios", "objeto postal", "envio da peça", "rastreamento":
+  1. Verifique \`codigo_rastreio\` nos campos operacionais do chamado.
+  2. Verifique na ferramenta \`consultar_spares\` pela FSA correspondente.
+  3. Se encontrar o código dos Correios (formato 2 letras + 9 números + BR) ou transportadora, informe o código e as datas de envio/previsão de entrega.
 - "Causa raiz", "motivo do defeito" -> Refere-se ao campo Causa Raiz (customfield_22813).
 
 4. GESTÃO DE CHAMADOS E JIRA

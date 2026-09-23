@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, like, or, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { activeAttendances, activeAttendanceTickets, appUsers, bulletinNotes, employeePresence, feedback, fsaClassifications, fsaGroups, n1TicketAssignments, operationalAudit, operationalStores, operationalTasks, operationalVisits, operationalWorkflows, partsCatalog, projects, shipmentTracking, spares, stores, technicianReviews, technicians, ticketArchives, ticketEvidence, whatsappConversations, whatsappMessages } from '@/db/schema';
-import { onlyDate, operationDateTime, queueContext, redact, statusLabel, ticketContext } from '@/lib/assistant';
+import { formatarDataExcelOuIso, onlyDate, operationDateTime, queueContext, redact, statusLabel, ticketContext } from '@/lib/assistant';
 import { MAX_ROWS, parseSchedule } from '@/lib/assistant-tools';
 import { COVERAGE_RADIUS_KM, coverageFor, coverageText } from '@/lib/coverage';
 import { geocodeCity } from '@/lib/server/geocode';
@@ -96,6 +96,18 @@ async function detalharChamado(args: Args) {
     .from(operationalAudit).where(eq(operationalAudit.ticketKey, issue.key))
     .orderBy(desc(operationalAudit.createdAt)).limit(10).all();
   const op = issue.operationalFields;
+  let codigoRastreio = op.codigoRastreio;
+  let previsaoEntrega = op.previsaoEntrega;
+  if (!codigoRastreio) {
+    const spare = await getDb().select({ trackingCode: spares.trackingCode, expectedDelivery: spares.expectedDelivery })
+      .from(spares).where(eq(spares.ticketKey, issue.key)).limit(1).all();
+    if (spare[0]?.trackingCode) {
+      codigoRastreio = spare[0].trackingCode;
+      if (!previsaoEntrega) {
+        previsaoEntrega = formatarDataExcelOuIso(spare[0].expectedDelivery);
+      }
+    }
+  }
   return {
     chamado: ticketContext(toAssistantIssue(issue)),
     resumo: redact(issue.summary),
@@ -104,8 +116,8 @@ async function detalharChamado(args: Args) {
     numero_req_freshservice: op.chamadoFreshservice ?? op.inReq ?? 'não informado',
     valor_equipamento: op.valorReais ?? 'não informado',
     custo_total: op.custoTotal ?? 'não informado',
-    codigo_rastreio: op.codigoRastreio ?? 'não informado',
-    previsao_entrega: op.previsaoEntrega ?? 'não informado',
+    codigo_rastreio: codigoRastreio ?? 'não informado',
+    previsao_entrega: previsaoEntrega ?? 'não informado',
     causa_raiz: op.causaRaiz ? redact(op.causaRaiz) : 'não informado',
     chegada_na_loja: op.dtChegadaLoja ?? 'não informado',
     data_aprovacao: op.dtAprovacao ?? 'não informado',

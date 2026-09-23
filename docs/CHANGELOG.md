@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Rastreio Inteligente, Logística e Normalização de Datas Seriais do Excel na Caju IA
+
+Implementação da extração abrangente de rastreamento (campos do Jira, fallback via Regex em comentários/descrição e fallback na tabela de spares do D1) e normalização automática de datas no formato serial do Excel (ex: 46252).
+
+- **`lib/assistant.ts`:**
+  - `extrairRastreioDeTexto()`: detecção via Regex de códigos dos Correios (ex: `QB123456789BR`) e transportadoras/guias (`LOGGI-xxx`, etc.).
+  - `formatarDataExcelOuIso()`: conversão automática de números seriais do Excel (40000 a 55000) e datas ISO para o formato civil brasileiro (`DD/MM/AAAA`) no fuso de Brasília (`America/Sao_Paulo`).
+  - `onlyDate()`: atualizado para reconhecer e converter seriais de 5 dígitos para `AAAA-MM-DD`.
+- **`lib/server/jira.ts`:**
+  - Extração de `codigoRastreio` com fallback para `customfield_16189`, `customfield_12848` e nomes alternativos (`Rastreio`, `Objeto`).
+  - Fallback inteligente inspecionando comentários internos, comentários gerais e descrição do chamado com `extrairRastreioDeTexto()`.
+  - Tratamento de `previsaoEntrega` (`customfield_16801`), `dataEnvio` (`customfield_18558`, `customfield_16800`, `customfield_21999`), `dataRecebimento`/`dataEntrega` (`customfield_18559`, `customfield_22000`) e `dataLimite` com `formatarDataExcelOuIso()`.
+- **`lib/server/assistant-data.ts`:**
+  - `detalharChamado` busca código de rastreio e previsão de entrega na tabela `spares` do D1 caso não estejam presentes nos campos do Jira.
+- **`lib/assistant-tools.ts`:**
+  - Instruções de sistema (`systemInstruction`) detalhando passo a passo a verificação de `codigo_rastreio`, consulta a `consultar_spares` e apresentação de códigos dos Correios.
+- **`tests/assistant.test.ts`:**
+  - Testes unitários para `extrairRastreioDeTexto`, `formatarDataExcelOuIso` e seriais do Excel no `onlyDate` (totalizando 335 testes).
+
 ### Caju IA: Integração de REQ/Freshservice, Logística, Classificação e Sinônimos Operacionais
 
 Expansão das capacidades de consulta e resposta da Caju IA cobrindo os campos operacionais de REQ (Freshservice), logística de envio e entrega, datas/aprovação e classificação técnica dos chamados no Jira (instância delfia.atlassian.net / FSA).
