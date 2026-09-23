@@ -5,6 +5,8 @@ import { AuthProvider } from '@/components/auth-provider';
 import { DesktopWindowControls } from '@/components/desktop-window-controls';
 import { PullRefreshGuard } from '@/components/pull-refresh-guard';
 import { GlobalAssistant } from '@/components/global-assistant';
+import { MotionProvider } from '@/components/motion-provider';
+import { themeBootScript } from '@/lib/theme';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -33,16 +35,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="dark">
+    // O servidor sempre entrega "dark" (padrão); o script do <head> troca a
+    // classe antes da pintura para quem escolheu o claro — daí o
+    // suppressHydrationWarning só neste elemento.
+    <html lang="pt-BR" className="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          <PullRefreshGuard />
-          <DesktopWindowControls />
-          {children}
-          <GlobalAssistant />
-        </AuthProvider>
+        <MotionProvider>
+          <AuthProvider>
+            <PullRefreshGuard />
+            <DesktopWindowControls />
+            {children}
+            <GlobalAssistant />
+          </AuthProvider>
+        </MotionProvider>
       </body>
     </html>
   );

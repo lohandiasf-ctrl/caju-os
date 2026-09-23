@@ -11,6 +11,33 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-22
 
+### Redesign "Dashboard Premium" (branch `claude/dashboard-premium`)
+
+Só camada visual/UX — nenhuma regra de negócio, rota de API, schema ou
+permissão mudou. Feito em passos, um commit por passo.
+
+**1. Tokens + tema claro.** `app/globals.css` agora tem dois temas sobre os
+mesmos tokens: `:root` é o claro (azul elétrico sobre marfim) e `.dark` o
+grafite. O escuro continua padrão na primeira carga; a escolha fica em
+`localStorage` (`caju-theme`: `dark | light | system`) e um script mínimo no
+`<head>` (`lib/theme.ts` → `app/layout.tsx`) aplica a classe antes da
+hidratação, sem flash. Tokens novos: `--card-elevated`, `--primary-soft`,
+`--brand` (preenchimento sólido com texto branco — no escuro `--primary` é um
+azul mais claro para passar AA como texto), `--success/--warning/--danger`
+(+ `-soft`), `--chart-track`, `--chart-missed`, `--shadow-card`,
+`--shadow-hero`, `--radius-card`, superfícies (`--surface-*`) e chat
+(`--chat-*`). Cores fixas do CSS global (header, campos, diálogos, tabela,
+chat, Leaflet, seleção, scrollbar) viraram tokens.
+Compatibilidade: ~500 classes do JSX usam tons claros da paleta
+(`text-emerald-200`, `bg-red-400/10`…) como texto sobre fundo escuro. No tema
+claro esses tons são remapeados para os escuros equivalentes
+(100/200→800, 300→700, 400→600), então as telas existentes ficam legíveis sem
+reescrever cada componente. O inbox do WhatsApp (pele própria do WhatsApp Web)
+continua escuro nos dois temas: recebe `.dark`, que restaura tokens e paleta
+só ali dentro. O mapa não inverte os tiles no claro.
+`MotionConfig reducedMotion="user"` na raiz: toda animação do `motion`
+respeita "reduzir movimento".
+
 ### Assistente ganha histórico contínuo, exibição de fontes, presença global e fallback
 
 O assistente flutuante de IA agora suporta conversas multi-turno contínuas,
