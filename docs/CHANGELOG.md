@@ -21,7 +21,9 @@ tokens, telas, animações, estados, acessibilidade e um plano em 8 passos.
 Só documentação, sem mudança de código.
 
 Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
-"Dashboard Premium"" em 2026-09-22); o prompt fica como referência de design.
+"Dashboard Premium"" em 2026-09-22). A revisão de UI/UX abaixo substituiu parte
+da direção visual (glow, gradiente, orb), então o prompt ganhou um aviso de
+documento histórico no topo.
 
 ### Revisão de UI/UX: hierarquia, superfícies sólidas e status da equipe (branch `claude/ui-ux-revisao`)
 

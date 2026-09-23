@@ -1,5 +1,13 @@
 # Prompt — Redesign UI/UX "Dashboard Premium" do Caju OS
 
+> ⚠️ **Documento histórico — não siga como regra atual.** Os passos 1–7 foram
+> implementados em 2026-09-22 e, em 2026-09-23, a revisão de UI/UX
+> (`claude/ui-ux-revisao`, ver `docs/CHANGELOG.md`) trocou a direção visual:
+> superfícies sólidas, sem gradiente decorativo, glow, glass, sombra em card nem
+> orb do assistente. Onde este prompt pedir *glow*, gradiente no card hero, orb,
+> `--shadow-card`/`--shadow-hero` ou "pulo" no hover, vale o `CLAUDE.md`/`AGENTS.md`
+> e os tokens atuais de `app/globals.css`.
+
 > Prompt para entregar a uma IA de código (Claude Code / Codex) ou a um designer.
 > Referência visual: vídeo de @yann.uiux ("Focus Flow"): login em tela dividida azul,
 > dashboard em bento-grid com entrada em cascata, gráfico de barras empilhadas
