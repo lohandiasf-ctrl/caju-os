@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarClock, CheckCircle2, ChevronDown, Clipboard, ClipboardCheck, Clock3, Layers3, Loader2, MessageCirclePlus, Search, UserRound, Wrench, X, XCircle } from 'lucide-react';
 import { erroDeCidades, nomeDoGrupo } from '@/lib/group-name';
+import { erroDoNomeDoTecnico, nomeDoTecnico, TECNICO_NOME_MAX } from '@/lib/repasse-tecnico';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -176,7 +177,8 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
     ? { icon: 'text-success', box: 'border-success/25 bg-success-soft', label: 'text-success', chip: 'border-emerald-300/20 text-success' }
     : { icon: 'text-violet-300', box: 'border-violet-400/25 bg-violet-400/8', label: 'text-violet-200', chip: 'border-violet-300/20 text-violet-100' };
   const criarGrupoDeRepasse = async () => {
-    if (!user || !repasseTecnico) return;
+    const nomeLivre = repasseTecnico ? null : nomeDoTecnico(technicianQuery);
+    if (!user || (!repasseTecnico && (!nomeLivre || erroDoNomeDoTecnico(nomeLivre)))) return;
     setRepasseSaving(true);
     setError('');
     try {
@@ -184,7 +186,9 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
         method: 'POST',
         headers: { Authorization: `Bearer ${await user.getIdToken()}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          technicianId: repasseTecnico,
+          // Da lista vai o id; digitado, vai o nome e o servidor acha ou cria
+          // o cadastro (ver lib/repasse-tecnico.ts).
+          ...(repasseTecnico ? { technicianId: repasseTecnico } : { technicianName: nomeLivre }),
           // A descrição e a loja viajam junto: o grupo guarda a fotografia do
           // chamado, para a conferência não depender do Jira de amanhã.
           tickets: tickets.map((ticket) => ({ key: ticket.id, summary: ticket.title, store: ticket.store, city: ticket.city })),
@@ -272,16 +276,20 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
               <label htmlFor="repasse-tecnico" className="mb-1 block text-sm font-semibold">Técnico que vai atender</label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                <Input id="repasse-tecnico" value={technicianQuery} onChange={(event) => { setTechnicianQuery(event.target.value); setRepasseTecnico(null); }} placeholder="Busque pelo nome" className="min-h-11 pl-9" />
+                <Input id="repasse-tecnico" value={technicianQuery} onChange={(event) => { setTechnicianQuery(event.target.value); setRepasseTecnico(null); }} placeholder="Busque ou digite o nome" className="min-h-11 pl-9" autoComplete="off" maxLength={TECNICO_NOME_MAX} />
               </div>
               {loadingTechnicians && <p className="mt-2 text-xs text-muted-foreground"><Loader2 className="mr-1 inline size-3 animate-spin" />Carregando técnicos...</p>}
               {!loadingTechnicians && technicianQuery.trim().length > 1 && <div className="mt-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-background/60 p-1">
                 {matches.length ? matches.slice(0, 8).map((technician) => <button key={technician.id} type="button" onClick={() => { setRepasseTecnico(technician.id); setTechnicianQuery(technician.name); }} className={`flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-muted ${repasseTecnico === technician.id ? 'bg-emerald-400/10' : ''}`}>
                   <UserRound className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
                   <span className="min-w-0"><b className="text-sm">{technician.name}</b><span className="ml-1 text-xs text-muted-foreground">{technician.city}/{technician.state}</span></span>
-                </button>) : <p className="px-2 py-2 text-xs text-muted-foreground">Nenhum técnico encontrado.</p>}
+                </button>) : <p className="px-2 py-2 text-xs text-muted-foreground">Nenhum técnico na lista com esse nome. Pode agrupar assim mesmo: o grupo fica com o nome digitado.</p>}
               </div>}
-              <p className="mt-1 text-xs text-muted-foreground">Vem do cadastro, não do texto do Jira — lá o mesmo técnico aparece escrito de duas formas.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {repasseTecnico
+                  ? 'Técnico do cadastro.'
+                  : 'Escolha da lista ou só digite o nome. Nome digitado é conferido com o cadastro sem acento nem maiúscula, para a mesma pessoa não virar duas no repasse.'}
+              </p>
             </div>
           </div>}
         <DialogFooter>
@@ -289,7 +297,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
             ? <Button onClick={() => { setRepasseOpen(false); setRepasseOk(''); onClear(); }}>Fechar</Button>
             : <>
               <Button variant="ghost" onClick={() => setRepasseOpen(false)} disabled={repasseSaving}>Cancelar</Button>
-              <Button disabled={!repasseTecnico || repasseSaving || Boolean(cidadesDiferentes)} onClick={() => void criarGrupoDeRepasse()}>
+              <Button disabled={(!repasseTecnico && Boolean(erroDoNomeDoTecnico(technicianQuery))) || repasseSaving || Boolean(cidadesDiferentes)} onClick={() => void criarGrupoDeRepasse()}>
                 {repasseSaving ? <Loader2 className="animate-spin" /> : <Layers3 />}Agrupar
               </Button>
             </>}
