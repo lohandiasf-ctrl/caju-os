@@ -7,6 +7,28 @@ export type ProfileFields = { displayName?: string | null; photoUrl?: string | n
 /** Evento que avisa o app (menu da conta, equipe) que nome/foto mudaram. */
 export const PROFILE_UPDATED_EVENT = 'caju-profile-updated';
 
+// Nome de exibição do perfil (o que a pessoa preencheu), para quem não carrega
+// o perfil por conta própria — a saudação do topo. O menu da conta, que já lê
+// o perfil, é quem alimenta.
+const PROFILE_NAME_EVENT = 'caju-profile-name';
+let profileDisplayName = '';
+
+export function setProfileDisplayName(name: string | null | undefined) {
+  const next = (name ?? '').trim();
+  if (next === profileDisplayName) return;
+  profileDisplayName = next;
+  window.dispatchEvent(new Event(PROFILE_NAME_EVENT));
+}
+
+export function getProfileDisplayName() {
+  return profileDisplayName;
+}
+
+export function subscribeProfileDisplayName(callback: () => void) {
+  window.addEventListener(PROFILE_NAME_EVENT, callback);
+  return () => window.removeEventListener(PROFILE_NAME_EVENT, callback);
+}
+
 /**
  * Pede o cadastro só a quem ainda não tem nome OU foto salvos no servidor.
  * Quem já tem os dois nunca vê a tela; depois de salvar, a próxima abertura

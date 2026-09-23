@@ -65,7 +65,7 @@ import {
   type PresenceStatus,
 } from "@/lib/presence";
 import { PresenceDot, PresenceLabel } from "@/components/presence-indicator";
-import { PROFILE_UPDATED_EVENT } from "@/lib/profile";
+import { PROFILE_UPDATED_EVENT, setProfileDisplayName } from "@/lib/profile";
 import { profilePhotoDataUrl } from "@/lib/profile-photo";
 
 // A lista de status mora em lib/presence (junto com cor, forma e agrupamento);
@@ -3523,6 +3523,7 @@ export function UserMenu({ compact = false }: { compact?: boolean } = {}) {
           setName(profile.displayName || "");
           setPhone(profile.phone || "");
           setPhoto(profile.photoUrl);
+          setProfileDisplayName(profile.displayName);
         }
       } finally {
         if (active)
@@ -3542,7 +3543,10 @@ export function UserMenu({ compact = false }: { compact?: boolean } = {}) {
   useEffect(() => {
     const onProfile = (event: Event) => {
       const detail = (event as CustomEvent<{ displayName?: string; photoUrl?: string | null }>).detail;
-      if (detail?.displayName) setName(detail.displayName);
+      if (detail?.displayName) {
+        setName(detail.displayName);
+        setProfileDisplayName(detail.displayName);
+      }
       if (detail?.photoUrl) setPhoto(detail.photoUrl);
     };
     window.addEventListener(PROFILE_UPDATED_EVENT, onProfile);
@@ -3699,6 +3703,7 @@ export function ProfileSettings() {
       const payload = (await response.json()) as { error?: string };
       if (!response.ok)
         throw new Error(payload.error || "Falha ao salvar perfil.");
+      window.dispatchEvent(new CustomEvent(PROFILE_UPDATED_EVENT, { detail: { displayName: name, photoUrl: photo } }));
       window.dispatchEvent(new Event("caju-presence-updated"));
       setMessage("Perfil atualizado.");
     } catch (error) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { brasiliaHour, firstName, greetingForHour } from '../lib/greeting.ts';
+import { brasiliaHour, firstName, greetingEmoji, greetingForHour } from '../lib/greeting.ts';
 
 test('saudação muda às 5h, 12h e 18h', () => {
   assert.equal(greetingForHour(4), 'Boa noite');
@@ -10,6 +10,20 @@ test('saudação muda às 5h, 12h e 18h', () => {
   assert.equal(greetingForHour(17), 'Boa tarde');
   assert.equal(greetingForHour(18), 'Boa noite');
   assert.equal(greetingForHour(0), 'Boa noite');
+});
+
+test('emoji acompanha o período, nos mesmos cortes da saudação', () => {
+  assert.equal(greetingEmoji(4), '🌙');
+  assert.equal(greetingEmoji(5), '🌅');
+  assert.equal(greetingEmoji(11), '🌅');
+  assert.equal(greetingEmoji(12), '☀️');
+  assert.equal(greetingEmoji(17), '☀️');
+  assert.equal(greetingEmoji(18), '🌙');
+});
+
+test('nome do perfil ganha do nome da conta e do e-mail', () => {
+  assert.equal(firstName('Lohan Dias', 'lohandiasf@gmail.com'), 'Lohan');
+  assert.equal(firstName('', 'lohandiasf@gmail.com'), 'Lohandiasf');
 });
 
 test('hora é a de Brasília, não a do dispositivo', () => {
