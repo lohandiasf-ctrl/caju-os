@@ -4,14 +4,14 @@ import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
-import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Settings, Users, type LucideIcon } from 'lucide-react';
+import { Archive, Building2, CalendarClock, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { canUseNavItem } from '@/lib/navigation';
 import { roleLabels } from '@/lib/permissions';
-import { isSidebarCollapsed, setSidebarCollapsed, subscribeSidebar } from '@/lib/sidebar-state';
+import { CHAT_CLOSE_EVENT, isChatDocked, isSidebarCollapsed, NAV_CLOSE_EVENT, setSidebarCollapsed, setTeamSlot, subscribeSidebar } from '@/lib/sidebar-state';
 import { projectMomentum, rubberband } from '@/lib/gesture';
 
 // Matches the drawer's own w-[min(300px,calc(100vw-2rem))] closely enough
@@ -44,7 +44,7 @@ function DraggableDrawer({ children, onClose }: { children: ReactNode; onClose: 
     if (projected < -DRAWER_WIDTH / 3) onClose();
   }
   return (
-    <motion.div className="flex h-full flex-col" style={{ x }} onPan={onPan} onPanEnd={onPanEnd}>
+    <motion.div className="app-drawer flex h-full flex-col" style={{ x }} onPan={onPan} onPanEnd={onPanEnd}>
       {children}
     </motion.div>
   );
@@ -77,6 +77,17 @@ function subscribe(callback: () => void) {
   const media = window.matchMedia('(min-width: 1024px)');
   media.addEventListener('change', callback);
   return () => media.removeEventListener('change', callback);
+}
+
+// Botão do topo e tecla "[": com uma conversa ancorada, expandir fecha a
+// conversa e a barra volta ao estado aberto.
+function toggleSidebar() {
+  if (isChatDocked()) {
+    window.dispatchEvent(new Event(CHAT_CLOSE_EVENT));
+    setSidebarCollapsed(false);
+    return;
+  }
+  setSidebarCollapsed(!isSidebarCollapsed());
 }
 
 function isTyping(target: EventTarget | null) {
@@ -117,9 +128,16 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
   const { role } = useAuth();
   const desktop = useSyncExternalStore(subscribe, () => window.matchMedia('(min-width: 1024px)').matches, () => false);
   const storedCollapsed = useSyncExternalStore(subscribeSidebar, isSidebarCollapsed, () => false);
-  // A gaveta do celular sempre abre expandida.
-  const collapsed = desktop && storedCollapsed;
+  const chatDocked = useSyncExternalStore(subscribeSidebar, isChatDocked, () => false);
+  // A gaveta do celular sempre abre expandida. No desktop, uma conversa
+  // aberta recolhe a barra enquanto durar, sem mudar a escolha salva.
+  const collapsed = desktop && (storedCollapsed || chatDocked);
   useEffect(() => { if (desktop) onOpenChange(false); }, [desktop, onOpenChange]);
+  useEffect(() => {
+    const close = () => onOpenChange(false);
+    window.addEventListener(NAV_CLOSE_EVENT, close);
+    return () => window.removeEventListener(NAV_CLOSE_EVENT, close);
+  }, [onOpenChange]);
   // A barra superior ganha vidro só depois de rolar (globals.css).
   useEffect(() => {
     const root = document.documentElement;
@@ -134,7 +152,7 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== '[' || event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
       event.preventDefault();
-      setSidebarCollapsed(!isSidebarCollapsed());
+      toggleSidebar();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -155,15 +173,33 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
       window.location.assign(href);
     }
   }
+  // Um botão só para recolher/expandir, no topo. Aberta: logo + nome + botão à
+  // direita. Recolhida: só o botão, alinhado com os ícones (os rótulos somem em
+  // fade enquanto a largura anima — globals.css).
+  const toggle = desktop && <button
+    type="button"
+    onClick={toggleSidebar}
+    className="app-sidebar-toggle"
+    aria-expanded={!collapsed}
+    aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
+    title={collapsed ? 'Expandir menu ([)' : 'Recolher menu ([)'}
+  >
+    <PanelLeftClose aria-hidden="true" strokeWidth={1.75} className={`size-[18px] transition-transform duration-(--motion-layout) ${collapsed ? 'rotate-180' : ''}`} />
+  </button>;
   const content = <>
     <div className="app-sidebar-brand">
-      <Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg border border-border bg-black object-contain p-1" />
-      <div className="app-nav-label min-w-0">
-        <p className="truncate text-sm font-semibold tracking-tight">Caju OS</p>
-        <p className="truncate text-xs text-muted-foreground">{role ? roleLabels[role] : 'Operações'}</p>
-      </div>
+      {collapsed ? toggle : <>
+        <Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg border border-border bg-black object-contain p-1" />
+        <div className="app-nav-label min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold tracking-tight">Caju OS</p>
+          <p className="truncate text-xs text-muted-foreground">{role ? roleLabels[role] : 'Operações'}</p>
+        </div>
+        {toggle}
+      </>}
     </div>
-    <nav aria-label="Navegação principal" className="mt-6 min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+    {/* O menu fica com a altura natural; só rola em tela muito baixa. O resto
+        da altura é da equipe (o painel de colegas desenha nela). */}
+    <nav aria-label="Navegação principal" className="mt-5 min-h-0 shrink overflow-y-auto overflow-x-hidden overscroll-contain">
       {groups.map(([title, entries]) => {
         const visible = entries.filter(([, , , key]) => canUseNavItem(role, key));
         if (!visible.length) return null;
@@ -175,19 +211,9 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
         </div>;
       })}
     </nav>
-    <div className="mt-3 shrink-0 space-y-0.5 border-t border-sidebar-border pt-3">
-      <NavLink href="/?view=settings" label="Configurações" icon={Settings} current={active === 'settings'} collapsed={collapsed} onNavigate={navigate} />
-      {desktop && <button
-        type="button"
-        onClick={() => setSidebarCollapsed(!collapsed)}
-        className="app-nav-link w-full"
-        aria-expanded={!collapsed}
-        aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-        title={collapsed ? 'Expandir menu ([)' : 'Recolher menu ([)'}
-      >
-        <PanelLeftClose aria-hidden="true" strokeWidth={1.75} className={`size-[18px] shrink-0 transition-transform duration-(--motion-layout) ${collapsed ? 'rotate-180' : ''}`} />
-        <span className="app-nav-label">Recolher</span>
-      </button>}
+    <div ref={setTeamSlot} className="app-team-slot" />
+    {/* Configurações ficam no menu da conta (clique no próprio nome). */}
+    <div className="shrink-0 border-t border-sidebar-border pt-2">
       <UserMenu compact={collapsed} />
     </div>
   </>;

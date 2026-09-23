@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { AppNavigation } from "@/components/app-navigation";
+import { TeamManagementPanel } from "@/components/team-management";
 import { AppGreeting } from "@/components/app-greeting";
 import { OverviewBento } from "@/components/dashboard/overview-bento";
 import { NotificationBell } from "@/components/notification-bell";
@@ -1694,7 +1695,7 @@ export default function Home() {
                 jiraError={jiraError}
                 user={user}
               />
-              {role === "gerencia" && <EmployeeInvitePanel user={user} />}
+              {role === "gerencia" && <><EmployeeInvitePanel user={user} /><TeamManagementPanel /></>}
               {/* Auditoria da escrita assistida: coordenação e gerência. */}
               {(role === "gerencia" || role === "coordenador") && <AssistantAudit user={user} />}
             </>
@@ -2509,7 +2510,7 @@ function TechniciansView({
           <EmptyState label="Nenhuma conta N1 ativa." />
         )
       ) : null}
-      {tab === "n1" && role === "gerencia" && <EmployeeInvitePanel user={user} />}
+      {tab === "n1" && role === "gerencia" && <><EmployeeInvitePanel user={user} /><TeamManagementPanel /></>}
       {tab === "field" && (
         <>
           <section className="surface-panel max-w-4xl rounded-2xl p-4 sm:p-5" aria-labelledby="nearby-technicians-title">
@@ -3057,10 +3058,12 @@ function EmployeeInvitePanel({
         },
         body: JSON.stringify({ email, role }),
       });
-      const data = (await response.json()) as { error?: string };
+      const data = (await response.json()) as { error?: string; readmitted?: boolean };
       if (!response.ok) throw new Error(data.error);
       setMessage(
-        "Convite enviado. O funcionário receberá o link para criar a senha.",
+        data.readmitted
+          ? "Pessoa readmitida: o acesso voltou com a hierarquia escolhida."
+          : "Convite enviado. O funcionário receberá o link para criar a senha.",
       );
       setEmail("");
     } catch (error) {
