@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMessages, dateAndTime, describeAttachments, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
+import { buildMessages, dateAndTime, describeAttachments, extrairRastreioDeTexto, formatarDataExcelOuIso, onlyDate, operationDateTime, statusLabel, ticketKeysIn, operationDate, previousOperationDate, splitTicketKeys, parseAnswer, queueContext, redact, ticketContext, validQuestion, extractToolCallsFromText, normalizeToolCall, readAssistantResponse, sanitizeFinalAnswer, formatMoney, type AssistantIssue, type AssistantTicket } from '../lib/assistant.ts';
 import { TOOL_SCHEMAS } from '../lib/assistant-tools.ts';
 
 const TODAY = new Date('2026-09-17T12:00:00.000Z');
@@ -423,6 +423,74 @@ test('queueContext agrupa e totaliza chamados por custo de primeira visita', () 
 test('TOOL_SCHEMAS inclui consultar_valores e consultar_equipamento', () => {
   assert.ok(TOOL_SCHEMAS.some((t) => t.name === 'consultar_valores'));
   assert.ok(TOOL_SCHEMAS.some((t) => t.name === 'consultar_equipamento'));
+});
+
+test('ticketContext inclui campos de REQ/Freshservice, logística e classificação', () => {
+  const text = ticketContext(issue({
+    chamadoFreshservice: 'REQ-12345',
+    tituloRequisicao: 'Troca de teclado PDV',
+    statusRequisicao: 'Em Andamento',
+    codigoRastreio: 'BR123456789JJ',
+    previsaoEntrega: '2026-09-25',
+    dataEnvio: '2026-09-21',
+    dataRecebimento: '2026-09-24',
+    dtChegadaLoja: '2026-09-22 10:00',
+    dtAprovacao: '2026-09-20 15:30',
+    dataLimite: '2026-09-26',
+    causaRaiz: 'Desgaste natural',
+    severidade: 'Média',
+    nivelCriticidade: 'Crítico',
+    aprovacao: 'Aprovado',
+  }));
+  assert.match(text, /Chamado Freshservice \(REQ\): REQ-12345/);
+  assert.match(text, /Título da Requisição: Troca de teclado PDV/);
+  assert.match(text, /Status da Requisição: Em Andamento/);
+  assert.match(text, /Código de Rastreio: BR123456789JJ/);
+  assert.match(text, /Previsão de Entrega: 2026-09-25/);
+  assert.match(text, /Data de Envio: 2026-09-21/);
+  assert.match(text, /Data de Recebimento: 2026-09-24/);
+  assert.match(text, /Chegada na Loja: 2026-09-22 10:00/);
+  assert.match(text, /Data da Aprovação: 2026-09-20 15:30/);
+  assert.match(text, /Data Limite: 2026-09-26/);
+  assert.match(text, /Causa Raiz: Desgaste natural/);
+  assert.match(text, /Severidade: Média/);
+  assert.match(text, /Nível de Criticidade: Crítico/);
+  assert.match(text, /Status Aprovação: Aprovado/);
+});
+
+test('extrairRastreioDeTexto localiza códigos dos Correios e transportadoras em textos/comentários', () => {
+  assert.equal(extrairRastreioDeTexto('Peça despachada hoje via Sedex: AA123456789BR para a loja.'), 'AA123456789BR');
+  assert.equal(extrairRastreioDeTexto('rastreio: qb987654321br'), 'QB987654321BR');
+  assert.equal(extrairRastreioDeTexto('envio confirmado rastreio: LOGGI-123456789'), 'LOGGI-123456789');
+  assert.equal(extrairRastreioDeTexto('objeto: SP998877665BR'), 'SP998877665BR');
+  assert.equal(extrairRastreioDeTexto('sem rastreio no momento'), null);
+  assert.equal(extrairRastreioDeTexto(''), null);
+  assert.equal(extrairRastreioDeTexto(null), null);
+});
+
+test('formatarDataExcelOuIso converte serial numérico do Excel e datas ISO para DD/MM/AAAA', () => {
+  // Número serial 46252 do Excel
+  const data46252 = formatarDataExcelOuIso('46252');
+  assert.ok(data46252?.includes('2026'), 'ano 2026');
+  assert.match(data46252 ?? '', /^\d{2}\/\d{2}\/2026$/);
+
+  // Data ISO sem hora (YYYY-MM-DD)
+  assert.equal(formatarDataExcelOuIso('2026-08-22'), '22/08/2026');
+
+  // Data ISO com hora
+  const dataIsoHora = formatarDataExcelOuIso('2026-08-22T14:00:00.000Z');
+  assert.ok(dataIsoHora?.includes('2026'));
+
+  // Data já em texto BR
+  assert.equal(formatarDataExcelOuIso('22/08/2026'), '22/08/2026');
+
+  // Valores vazios
+  assert.equal(formatarDataExcelOuIso(null), null);
+  assert.equal(formatarDataExcelOuIso(''), null);
+  assert.equal(formatarDataExcelOuIso(undefined), null);
+
+  // onlyDate com número serial do Excel
+  assert.match(onlyDate('46252') ?? '', /^2026-\d{2}-\d{2}$/);
 });
 
 

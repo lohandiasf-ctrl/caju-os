@@ -1,6 +1,7 @@
 'use client';
 
 import { AppNavigation } from "@/components/app-navigation";
+import { ColleaguesPanel } from "@/components/user-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useEffect, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
@@ -182,6 +183,8 @@ export default function FinanceiroPage() {
 
   return <main className="min-h-screen text-foreground">
     <AppNavigation active="finance" open={menu} onOpenChange={setMenu} />
+      {/* Equipe e chat na barra lateral, como no painel principal. */}
+      <ColleaguesPanel />
       <section className="app-content">
         <header className="sticky top-0 z-20 flex h-[68px] items-center gap-3 border-b border-border px-4 sm:px-6 lg:px-8">
         <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenu(true)} aria-label="Abrir menu"><Menu /></Button>

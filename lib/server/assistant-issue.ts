@@ -5,6 +5,7 @@ import type { getJiraIssue } from '@/lib/server/jira';
 // a leitura (/api/assistant) e a escrita assistida (/api/assistant/actions)
 // precisam ver o mesmo chamado.
 export function toAssistantIssue(issue: Awaited<ReturnType<typeof getJiraIssue>>): AssistantIssue {
+  const op = issue.operationalFields;
   return {
     key: issue.key,
     summary: issue.summary,
@@ -35,6 +36,22 @@ export function toAssistantIssue(issue: Awaited<ReturnType<typeof getJiraIssue>>
     ticketTotal: issue.operationalFields.ticketTotal ?? issue.ticketTotal,
     additionalCosts: issue.operationalFields.additionalCosts,
     budget: issue.operationalFields.budget,
+    chamadoFreshservice: op.chamadoFreshservice,
+    inReq: op.inReq,
+    tituloRequisicao: op.tituloRequisicao,
+    statusRequisicao: op.statusRequisicao,
+    codigoRastreio: op.codigoRastreio,
+    cidadeDestino: op.cidadeDestino,
+    previsaoEntrega: op.previsaoEntrega,
+    dataEnvio: op.dataEnvio,
+    dataRecebimento: op.dataRecebimento,
+    dtChegadaLoja: op.dtChegadaLoja,
+    dtAprovacao: op.dtAprovacao,
+    dataLimite: op.dataLimite,
+    causaRaiz: op.causaRaiz,
+    severidade: op.severidade,
+    nivelCriticidade: op.nivelCriticidade,
+    aprovacao: op.aprovacao,
     internalComments: (issue.internalComments ?? []).map((comment) => ({ author: comment.author, createdAt: comment.createdAt, body: comment.body })),
   };
 }

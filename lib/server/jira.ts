@@ -1,6 +1,9 @@
 import { env } from 'cloudflare:workers';
+import { extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
 import { JIRA_PHONE_PLACEHOLDER, scrubTechnicianPhone } from '@/lib/technician-data';
 import { splitCityUf } from '@/lib/whatsapp-group-name';
+
+export { extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
 
 export function isJiraConfigured() {
   return Boolean(env.JIRA_BASE_URL?.trim() && env.JIRA_EMAIL?.trim() && env.JIRA_API_TOKEN?.trim());
@@ -95,6 +98,23 @@ type JiraIssue = {
     customfield_16196?: unknown;
     customfield_12031?: unknown;
     customfield_12032?: unknown;
+    customfield_14886?: unknown;
+    customfield_12280?: unknown;
+    customfield_12844?: unknown;
+    customfield_12848?: unknown;
+    customfield_18558?: unknown;
+    customfield_18559?: unknown;
+    customfield_16189?: unknown;
+    customfield_16801?: unknown;
+    customfield_16800?: unknown;
+    customfield_21999?: unknown;
+    customfield_22000?: unknown;
+    customfield_19646?: unknown;
+    customfield_16190?: unknown;
+    customfield_16191?: unknown;
+    customfield_16192?: unknown;
+    customfield_16194?: unknown;
+    customfield_12081?: unknown;
   } & Record<string, unknown>;
 };
 
@@ -224,7 +244,7 @@ export async function searchJiraIssues(options: { query?: string; status?: strin
 
   const response = await jiraSearch({
       jql: `${clauses.join(' AND ')} ${preset?.orderBy ?? 'ORDER BY updated DESC'}`,
-      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', 'customfield_11958', 'customfield_12419', 'customfield_11959', 'customfield_14880', 'customfield_16195', 'customfield_12413', ...(options.withAttachments ? ['attachment'] : [])],
+      fields: ['summary', 'status', 'priority', 'assignee', 'created', 'updated', 'duedate', 'labels', 'customfield_14954', 'customfield_14809', 'customfield_14810', 'customfield_14827', 'customfield_11994', 'customfield_12317', 'customfield_12036', 'customfield_12278', 'customfield_12316', 'customfield_11958', 'customfield_12419', 'customfield_11959', 'customfield_14880', 'customfield_16195', 'customfield_14821', 'customfield_12413', 'customfield_14886', 'customfield_15087', 'customfield_16196', ...(options.withAttachments ? ['attachment'] : [])],
       maxResults: Math.min(Math.max(options.maxResults ?? 50, 1), 100),
       ...(options.nextPageToken ? { nextPageToken: options.nextPageToken } : {}),
   });
@@ -289,6 +309,27 @@ export async function getJiraIssue(key: string) {
     serviceStartedAt: customFieldText(issue.fields.customfield_10702) ?? value('Data/Hora - Início', 'Data/Hora - Inicio', 'Data Hora - Início', 'Data Hora - Inicio'),
     serviceEndedAt: customFieldText(issue.fields.customfield_10703) ?? value('Data/Hora - Término', 'Data/Hora - Termino', 'Data Hora - Término', 'Data Hora - Termino'),
     defectSummary: value('Resumo do defeito'),
+    // --- CAMPOS DE REQUISIÇÃO (REQ / FRESHSERVICE) ---
+    chamadoFreshservice: value('Chamado no Freshservice', 'Chamado Freshservice') ?? customFieldText(issue.fields.customfield_14886),
+    inReq: value('IN_REQ', 'IN REQ') ?? customFieldText(issue.fields.customfield_12280),
+    tituloRequisicao: value('Titulo_da_Requisição', 'Titulo da Requisicao', 'Título da Requisição') ?? customFieldText(issue.fields.customfield_12844),
+    statusRequisicao: value('Status_da_Requisição', 'Status da Requisicao', 'Status da Requisição') ?? customFieldText(issue.fields.customfield_12848),
+    dataEnvio: formatarDataExcelOuIso(
+      value('Data - Envio', 'Data Envio', 'Data de Saída', 'Data de Saida')
+      ?? customFieldText(issue.fields.customfield_18558)
+      ?? customFieldText(issue.fields.customfield_16800)
+      ?? customFieldText(issue.fields.customfield_21999)
+    ),
+    dataRecebimento: formatarDataExcelOuIso(
+      value('Data - Recebimento', 'Data Recebimento', 'Data/hora objeto entregue', 'Data/Hora Objeto Entregue')
+      ?? customFieldText(issue.fields.customfield_18559)
+      ?? customFieldText(issue.fields.customfield_22000)
+    ),
+    dataEntrega: formatarDataExcelOuIso(
+      value('Data - Recebimento', 'Data Recebimento', 'Data/hora objeto entregue', 'Data/Hora Objeto Entregue')
+      ?? customFieldText(issue.fields.customfield_18559)
+      ?? customFieldText(issue.fields.customfield_22000)
+    ),
 
     // ──── VALORES FINANCEIROS ────
     valorReais: value('Valor(R$)', 'Valor', 'Valor R$') ?? customFieldText(issue.fields.customfield_16195),
@@ -316,12 +357,16 @@ export async function getJiraIssue(key: string) {
     equipComDefeito: value('Equipamento com defeito') ?? customFieldText(issue.fields.customfield_16214),
 
     // ──── DATAS EXTRAS ────
-    dtChegadaLoja: value('Data/Hora - Chegada na Loja', 'Data/Hora Chegada na Loja') ?? customFieldText(issue.fields.customfield_14812),
-    dtChegada: value('Data/Hora - Chegada', 'Data/Hora Chegada') ?? customFieldText(issue.fields.customfield_15013),
-    dtAprovacao: value('Data/Hora da Aprovação', 'Data/Hora da Aprovacao') ?? customFieldText(issue.fields.customfield_15078),
-    dtReprovacao: value('Data/Hora da Reprovação', 'Data/Hora da Reprovacao') ?? customFieldText(issue.fields.customfield_16633),
-    dataLimite: value('Data/Limite', 'Data Limite') ?? customFieldText(issue.fields.customfield_12081),
-    previsaoEntrega: value('Previsão de Entrega', 'Previsao de Entrega') ?? customFieldText(issue.fields.customfield_16801),
+    dtChegadaLoja: formatarDataExcelOuIso(value('Data/Hora - Chegada na Loja', 'Data/Hora Chegada na Loja') ?? customFieldText(issue.fields.customfield_14812)),
+    dtChegada: formatarDataExcelOuIso(value('Data/Hora - Chegada', 'Data/Hora Chegada') ?? customFieldText(issue.fields.customfield_15013)),
+    dtAprovacao: formatarDataExcelOuIso(value('Data/Hora da Aprovação', 'Data/Hora da Aprovacao') ?? customFieldText(issue.fields.customfield_15078)),
+    dtReprovacao: formatarDataExcelOuIso(value('Data/Hora da Reprovação', 'Data/Hora da Reprovacao') ?? customFieldText(issue.fields.customfield_16633)),
+    dataLimite: formatarDataExcelOuIso(value('Data/Limite', 'Data Limite') ?? customFieldText(issue.fields.customfield_12081)),
+    previsaoEntrega: formatarDataExcelOuIso(
+      value('Previsão de Entrega', 'Previsao de Entrega')
+      ?? customFieldText(issue.fields.customfield_16801)
+      ?? customFieldText(issue.fields.customfield_12844)
+    ),
     agendamentoSpare: value('Agendamento de Spare') ?? customFieldText(issue.fields.customfield_21932),
 
     // ──── CATEGORIZAÇÃO ────
@@ -350,10 +395,13 @@ export async function getJiraIssue(key: string) {
     regional: value('Regional') ?? customFieldText(issue.fields.customfield_16170),
 
     // ──── LOGÍSTICA ────
-    codigoRastreio: value('Código de Rastreio', 'Codigo de Rastreio') ?? customFieldText(issue.fields.customfield_16189),
+    codigoRastreio: value('Código de Rastreio', 'Codigo de Rastreio', 'Rastreio', 'Objeto')
+      ?? customFieldText(issue.fields.customfield_16189)
+      ?? customFieldText(issue.fields.customfield_12848),
     enderecoDestino: value('Endereço de Destino', 'Endereco de Destino') ?? customFieldText(issue.fields.customfield_16190),
     cidadeDestino: value('Cidade de Destino') ?? customFieldText(issue.fields.customfield_16192),
     cepDestino: value('CEP de Destino') ?? customFieldText(issue.fields.customfield_16194),
+    qtdVolumes: value('Qtd. Volumes', 'Quantidade de Volumes') ?? customFieldText(issue.fields.customfield_19646),
 
     // ──── PEÇAS USADAS (quantidades) ────
     hd: customFieldText(issue.fields.customfield_15111),
@@ -373,6 +421,36 @@ export async function getJiraIssue(key: string) {
   const attachments: JiraAttachmentSummary[] = (issue.fields.attachment ?? []).flatMap((attachment) => attachment.id && attachment.filename ? [{ id: attachment.id, filename: attachment.filename, mimeType: attachment.mimeType ?? 'application/octet-stream', size: attachment.size ?? 0, createdAt: attachment.created ?? '', author: attachment.author?.displayName ?? null }] : []).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const commentPayload = await jiraFetch<{ values?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string }; public?: boolean }> }>(`/rest/servicedeskapi/request/${encodeURIComponent(normalizedKey)}/comment?internal=true&limit=20`).catch(() => ({ values: [] }));
   const internalComments: JiraInternalComment[] = (commentPayload.values ?? []).filter((comment) => comment.public !== true).map((comment) => ({ id: String(comment.id ?? ''), body: adfToText(comment.body), author: comment.author?.displayName ?? null, createdAt: comment.created ?? '' })).filter((comment) => comment.id && comment.body);
+
+  // Fallback inteligente: se o campo de rastreio estiver vazio, inspeciona comentários e descrição
+  if (!operationalFields.codigoRastreio) {
+    for (const comment of internalComments) {
+      const achou = extrairRastreioDeTexto(comment.body || '');
+      if (achou) {
+        operationalFields.codigoRastreio = achou;
+        break;
+      }
+    }
+    if (!operationalFields.codigoRastreio && (issue.fields as Record<string, unknown>).comment) {
+      const comments = ((issue.fields as Record<string, unknown>).comment as { comments?: Array<{ body?: unknown }> })?.comments;
+      if (Array.isArray(comments)) {
+        for (const c of comments.slice().reverse()) {
+          const bodyText = typeof c.body === 'string' ? c.body : adfToText(c.body);
+          const achou = extrairRastreioDeTexto(bodyText);
+          if (achou) {
+            operationalFields.codigoRastreio = achou;
+            break;
+          }
+        }
+      }
+    }
+    if (!operationalFields.codigoRastreio && issue.fields.description) {
+      const achou = extrairRastreioDeTexto(adfToText(issue.fields.description));
+      if (achou) {
+        operationalFields.codigoRastreio = achou;
+      }
+    }
+  }
   return { ...toSummary(issue), store: storeCode, description: adfToText(issue.fields.description), reporter: issue.fields.reporter?.displayName ?? null, issueType: issue.fields.issuetype?.name ?? '', project: issue.fields.project?.name ?? '', jiraUrl: `${requiredEnv('JIRA_BASE_URL').replace(/\/+$/, '')}/browse/${normalizedKey}`, operationalFields, attachments, internalComments };
 }
 

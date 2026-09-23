@@ -47,6 +47,27 @@ export type AssistantIssue = AssistantTicket & {
   budget?: string | null;
   defectSummary: string | null;
   technicianData: string | null;
+  // --- CAMPOS DE REQUISIÇÃO / CLIENTE / REQ ---
+  chamadoFreshservice?: string | null;
+  inReq?: string | null;
+  tituloRequisicao?: string | null;
+  statusRequisicao?: string | null;
+  // --- LOGÍSTICA & RASTREIO ---
+  codigoRastreio?: string | null;
+  cidadeDestino?: string | null;
+  previsaoEntrega?: string | null;
+  dataEnvio?: string | null;
+  dataRecebimento?: string | null;
+  // --- DATAS & APROVAÇÃO ---
+  dtChegadaLoja?: string | null;
+  dtAprovacao?: string | null;
+  dataLimite?: string | null;
+  // --- CLASSIFICAÇÃO ---
+  causaRaiz?: string | null;
+  severidade?: string | null;
+  aprovacao?: string | null;
+  tipoAtendimento?: string | null;
+  nivelCriticidade?: string | null;
   internalComments: Array<{ author: string | null; createdAt: string; body: string }>;
 };
 
@@ -107,6 +128,24 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   if (issue.ticketTotal) text += line('Total do Chamado', formatMoney(issue.ticketTotal));
   if (issue.additionalCosts) text += line('Custos Adicionais', issue.additionalCosts);
   if (issue.budget) text += line('Orçamento', formatMoney(issue.budget));
+  // Requisição / REQ / Freshservice
+  text += line('Chamado Freshservice (REQ)', issue.chamadoFreshservice ?? issue.inReq);
+  text += line('Título da Requisição', issue.tituloRequisicao);
+  text += line('Status da Requisição', issue.statusRequisicao);
+  // Logística & Rastreio
+  text += line('Código de Rastreio', issue.codigoRastreio);
+  text += line('Previsão de Entrega', issue.previsaoEntrega);
+  text += line('Data de Envio', issue.dataEnvio);
+  text += line('Data de Recebimento', issue.dataRecebimento);
+  // Datas & Atendimento
+  text += line('Chegada na Loja', issue.dtChegadaLoja);
+  text += line('Data da Aprovação', issue.dtAprovacao);
+  text += line('Data Limite', issue.dataLimite);
+  // Classificação
+  text += line('Causa Raiz', issue.causaRaiz);
+  text += line('Severidade', issue.severidade);
+  text += line('Nível de Criticidade', issue.nivelCriticidade);
+  text += line('Status Aprovação', issue.aprovacao);
   text += line('Descrição', issue.description);
   const comments = issue.internalComments.slice(-maxComments);
   if (comments.length) {
@@ -118,10 +157,60 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   return text.trimEnd();
 }
 
+// Detecta e extrai código de rastreio de texto (Correios ou transportadoras)
+export function extrairRastreioDeTexto(texto: string | null | undefined): string | null {
+  if (!texto) return null;
+  // Padrão Correios (ex: AA123456789BR, QB987654321BR)
+  const padraoCorreios = /\b[A-Z]{2}[0-9]{9}[A-Z]{2}\b/i;
+  const matchCorreios = texto.match(padraoCorreios);
+  if (matchCorreios) return matchCorreios[0].toUpperCase();
+  // Padrão genérico "rastreio: XXXXX" ou "objeto: XXXXX" ou "guia: XXXXX"
+  const padraoGenerico = /(?:rastreio|objeto|código|codigo|guia)[:\s]+([A-Z0-9_-]{8,25})/i;
+  const matchGenerico = texto.match(padraoGenerico);
+  if (matchGenerico) return matchGenerico[1];
+  return null;
+}
+
+// Converte datas que vieram como número serial do Excel (ex: 46252) ou ISO para DD/MM/AAAA
+export function formatarDataExcelOuIso(valor: string | number | null | undefined): string | null {
+  if (valor === null || valor === undefined || valor === '') return null;
+
+  const str = String(valor).trim();
+  if (!str) return null;
+
+  // 1. Se for número serial do Excel (ex: 46252 -> anos entre 2010 e 2050)
+  const serial = Number(str);
+  if (!isNaN(serial) && serial >= 40000 && serial <= 55000) {
+    // 25569 é o offset entre 01/01/1900 (Excel) e 01/01/1970 (Unix Epoch)
+    // + 12h (meio-dia UTC) evita que o fuso horário de Brasília (UTC-3) retroceda um dia
+    const milissegundos = (serial - 25569) * 86400 * 1000 + 12 * 3600 * 1000;
+    const data = new Date(milissegundos);
+    return data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  }
+
+  // 2. Se for data no formato ISO (YYYY-MM-DD ou YYYY-MM-DDTHH:mm:ss)
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match && !str.includes('T') && !str.includes(':')) {
+      return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+    const data = new Date(str);
+    if (!isNaN(data.getTime())) {
+      return data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    }
+  }
+
+  return str;
+}
+
 // Datas do Jira vêm com hora e fuso ("2026-09-16T10:23:00.000-0300"); campos
 // de texto podem vir em DD/MM/AAAA. Na fila só o dia interessa, sempre em
 // AAAA-MM-DD para o modelo comparar com "Hoje é".
 export function onlyDate(value: string | null | undefined): string | null {
+  if (value && /^\d{5}$/.test(value.trim())) {
+    const formatted = formatarDataExcelOuIso(value);
+    if (formatted) return onlyDate(formatted);
+  }
   const iso = value?.match(/^\s*(\d{4}-\d{2}-\d{2})/);
   if (iso) return iso[1];
   const br = value?.match(/^\s*(\d{2})\/(\d{2})\/(\d{4})/);

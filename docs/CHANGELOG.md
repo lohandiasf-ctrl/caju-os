@@ -25,6 +25,87 @@ Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
 da direção visual (glow, gradiente, orb), então o prompt ganhou um aviso de
 documento histórico no topo.
 
+### Perfil obrigatório, equipe e chat na barra lateral, retirar da equipe (branch `claude/perfil-e-sidebar-equipe`)
+
+- **Nome e foto obrigatórios, uma vez só** (`components/profile-setup-gate.tsx`,
+  `lib/profile.ts`): ao abrir o app, quem ainda não tem nome **ou** foto salvos
+  em `employee_presence` vê "Complete seu perfil" (nome e sobrenome + foto). Não
+  fecha sem salvar (saída: "Sair da conta"). Quem já tem os dois nunca vê; depois
+  de salvar, o servidor já tem os dados e não pergunta de novo. Se a leitura do
+  perfil falhar (rede/5xx), não bloqueia. Sem migration: usa `PATCH
+  /api/colleagues`, que já existia.
+- **Foto reduzida no navegador** (`lib/profile-photo.ts`): recorte quadrado de
+  320 px em JPEG (foto de câmera de 5 MB vira poucos KB). Também vale na tela de
+  Configurações, que antes recusava imagens acima de 650 KB.
+- **Retirar da equipe (gerência)**: rota nova `GET/PATCH /api/users/team`
+  (`requireApiUser(['gerencia'])`, log de segurança) e painel "Pessoas na
+  equipe" (`components/team-management.tsx`) em Configurações e em Equipe →
+  Equipe interna. Retirar = `app_users.active = false`: a pessoa perde o acesso
+  na próxima chamada à API (403) e some da lista de colegas; nada é apagado.
+  "Readmitir" reativa. Não dá para retirar a própria conta nem a última
+  gerência ativa. Convidar de novo um e-mail retirado agora readmite (antes
+  falhava com "e-mail já possui conta").
+- **Equipe na barra lateral**: o painel "Comunicação" da direita saiu (o botão
+  que o abria tinha sido removido em `c6819b3`, então ele estava inacessível).
+  A equipe é a última seção da barra (`SidebarTeam` em `user-menu.tsx`,
+  desenhada via portal no espaço que a `AppNavigation` oferece —
+  `lib/sidebar-state.ts`). Ocupa a altura que o menu não usa; só a lista rola.
+  Recolhida: pilha de avatares com tooltip. O ícone no cabeçalho abre
+  "Comunicação" (grupos, chamadas e busca de mensagens). Montado também em
+  Financeiro, Spares e Mapa.
+- **Chat ancorado**: no desktop, a conversa (direta ou de grupo) abre encostada
+  na barra, com a altura toda; a barra vira trilho enquanto a conversa está
+  aberta e volta como estava ao fechar (`<html data-chat-dock>`). A página
+  encolhe, não fica coberta. No celular continua flutuando.
+- **Barra**: saíram "Configurações" e "Recolher" do rodapé. Recolher/expandir é
+  o botão no topo (e a tecla `[`); Configurações fica no menu da conta. Itens do
+  menu com 36 px no desktop e, em telas de até 860 px de altura, os rótulos dos
+  grupos viram só espaço — o menu não rola em 1366×768. Na gaveta do celular,
+  menu e equipe rolam juntos, com a conta fixa embaixo.
+- **Testes:** `tests/profile.test.ts`.
+
+**Pendente:** nada de banco (sem migration). O mock de `/api/colleagues` do
+preview local sempre devolve lista vazia, então "não perguntar de novo" foi
+coberto por teste e pela leitura do servidor, não pelo preview.
+
+### Rastreio Inteligente, Logística e Normalização de Datas Seriais do Excel na Caju IA
+
+Implementação da extração abrangente de rastreamento (campos do Jira, fallback via Regex em comentários/descrição e fallback na tabela de spares do D1) e normalização automática de datas no formato serial do Excel (ex: 46252).
+
+- **`lib/assistant.ts`:**
+  - `extrairRastreioDeTexto()`: detecção via Regex de códigos dos Correios (ex: `QB123456789BR`) e transportadoras/guias (`LOGGI-xxx`, etc.).
+  - `formatarDataExcelOuIso()`: conversão automática de números seriais do Excel (40000 a 55000) e datas ISO para o formato civil brasileiro (`DD/MM/AAAA`) no fuso de Brasília (`America/Sao_Paulo`).
+  - `onlyDate()`: atualizado para reconhecer e converter seriais de 5 dígitos para `AAAA-MM-DD`.
+- **`lib/server/jira.ts`:**
+  - Extração de `codigoRastreio` com fallback para `customfield_16189`, `customfield_12848` e nomes alternativos (`Rastreio`, `Objeto`).
+  - Fallback inteligente inspecionando comentários internos, comentários gerais e descrição do chamado com `extrairRastreioDeTexto()`.
+  - Tratamento de `previsaoEntrega` (`customfield_16801`), `dataEnvio` (`customfield_18558`, `customfield_16800`, `customfield_21999`), `dataRecebimento`/`dataEntrega` (`customfield_18559`, `customfield_22000`) e `dataLimite` com `formatarDataExcelOuIso()`.
+- **`lib/server/assistant-data.ts`:**
+  - `detalharChamado` busca código de rastreio e previsão de entrega na tabela `spares` do D1 caso não estejam presentes nos campos do Jira.
+- **`lib/assistant-tools.ts`:**
+  - Instruções de sistema (`systemInstruction`) detalhando passo a passo a verificação de `codigo_rastreio`, consulta a `consultar_spares` e apresentação de códigos dos Correios.
+- **`tests/assistant.test.ts`:**
+  - Testes unitários para `extrairRastreioDeTexto`, `formatarDataExcelOuIso` e seriais do Excel no `onlyDate` (totalizando 335 testes).
+
+### Caju IA: Integração de REQ/Freshservice, Logística, Classificação e Sinônimos Operacionais
+
+Expansão das capacidades de consulta e resposta da Caju IA cobrindo os campos operacionais de REQ (Freshservice), logística de envio e entrega, datas/aprovação e classificação técnica dos chamados no Jira (instância delfia.atlassian.net / FSA).
+
+- **`lib/assistant.ts`:**
+  - Adicionados campos à interface `AssistantIssue`: `chamadoFreshservice`, `inReq`, `tituloRequisicao`, `statusRequisicao`, `codigoRastreio`, `cidadeDestino`, `previsaoEntrega`, `dataEnvio`, `dataRecebimento`, `dtChegadaLoja`, `dtAprovacao`, `dataLimite`, `causaRaiz`, `severidade`, `aprovacao`, `tipoAtendimento`, `nivelCriticidade`.
+  - Atualizada a função `ticketContext()` para formatar e exibir blocos de Requisição/REQ, Logística/Rastreio, Datas/Aprovação e Classificação quando preenchidos.
+- **`lib/server/jira.ts`:**
+  - Mapeados custom fields na consulta da API do Jira (`getJiraIssue` e `searchJiraIssues`): `customfield_14886` (REQ Freshservice), `customfield_12280` (Cidade Destino), `customfield_12844` (Previsão Entrega), `customfield_12848` (Código de Rastreio), `customfield_18558` (Data Envio), `customfield_18559` (Data Recebimento), além de `customfield_14810`, `customfield_14821`, `customfield_15087`, `customfield_16196`.
+  - Mapeamento populando `operationalFields` com `chamadoFreshservice`, `inReq`, `tituloRequisicao`, `statusRequisicao`, `dataEnvio`, `dataRecebimento`.
+- **`lib/server/assistant-issue.ts`:**
+  - Extração e mapeamento dos campos operacionais para `toAssistantIssue()`.
+- **`lib/assistant-tools.ts`:**
+  - Inclusão da diretriz "SINÔNIMOS E TERMOS DA OPERAÇÃO" nas instruções do sistema (`systemInstruction`), ensinando a IA a associar termos como REQ, Freshservice, número do chamado do cliente, código de rastreio, previsão de entrega, causa raiz, valor da primeira visita/revisita aos respectivos campos de forma fluida.
+- **`lib/server/assistant-data.ts`:**
+  - A ferramenta `detalharChamado` agora expõe campos estruturados explícitos (`numero_req_freshservice`, `valor_equipamento`, `custo_total`, `codigo_rastreio`, `previsao_entrega`, `causa_raiz`, `chegada_na_loja`, `data_aprovacao`) em conjunto com `chamado` e `historico`.
+- **`tests/assistant.test.ts`:**
+  - Adicionados testes unitários cobrindo a formatação e presença dos novos campos em `ticketContext()`.
+
 ### Revisão de UI/UX: hierarquia, superfícies sólidas e status da equipe (branch `claude/ui-ux-revisao`)
 
 Revisão visual de toda a interface sem mexer em API, banco, auth, permissões,

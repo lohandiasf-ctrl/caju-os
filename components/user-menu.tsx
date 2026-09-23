@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import {
   Camera,
   Check,
@@ -37,6 +38,8 @@ import { signOutAndForget } from "@/lib/firebase";
 import { hasSafeDataUrlType } from "@/lib/safe-data-url";
 import { haptic } from "@/lib/haptics";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CHAT_CLOSE_EVENT, getTeamSlot, NAV_CLOSE_EVENT, setChatDocked, subscribeTeamSlot } from "@/lib/sidebar-state";
 import { ChatMessageRow, ChatTypingIndicator } from "@/components/ui/chat-message-row";
 import { useAuth } from "@/components/auth-provider";
 import { roleLabels } from "@/lib/permissions";
@@ -62,6 +65,8 @@ import {
   type PresenceStatus,
 } from "@/lib/presence";
 import { PresenceDot, PresenceLabel } from "@/components/presence-indicator";
+import { PROFILE_UPDATED_EVENT } from "@/lib/profile";
+import { profilePhotoDataUrl } from "@/lib/profile-photo";
 
 // A lista de status mora em lib/presence (junto com cor, forma e agrupamento);
 // os nomes exportados daqui continuam os mesmos.
@@ -294,11 +299,12 @@ export function ColleaguesPanel({
   const [shareRecipients, setShareRecipients] = useState<string[]>([]);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState('');
+  // "Comunicação": grupos, histórico de chamadas e busca de mensagens.
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [colleaguesOpen, setColleaguesOpen] = useState(false);
+  const teamSlot = useSyncExternalStore(subscribeTeamSlot, getTeamSlot, () => null);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState<NewMessageNotice | null>(null);
-  const [messageDot, setMessageDot] = useState(false);
+  const [, setMessageDot] = useState(false);
   const [incomingVoice, setIncomingVoice] = useState<VoiceInvitation | null>(
     null,
   );
@@ -632,7 +638,8 @@ export function ColleaguesPanel({
     setChatTicket(null);
     setSelected(colleague);
     setMobileOpen(false);
-    setColleaguesOpen(false);
+    // Aberta pela gaveta do celular: a gaveta fecha para a conversa aparecer.
+    window.dispatchEvent(new Event(NAV_CLOSE_EVENT));
   };
   async function shareTicketWithMany() {
     if (!user || !ticketToShare || !shareRecipients.length) return;
@@ -680,122 +687,88 @@ export function ColleaguesPanel({
       3_500,
     );
   }
-  function toggleColleagues() {
-    setColleaguesOpen((open) => {
-      const next = !open;
-      if (next) setMessageDot(false);
-      return next;
-    });
-  }
   return (
     <>
-      <aside
-        inert={!colleaguesOpen}
-        className={`colleagues-sidebar fixed inset-y-0 right-0 z-(--z-float) hidden w-[264px] flex-col border-l border-sidebar-border bg-popover px-3 py-4 shadow-(--shadow-popover) transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
-        aria-label="Colegas"
-        aria-hidden={!colleaguesOpen}
-      >
-        <div className="flex h-10 items-center justify-between px-1">
-          <div>
-            <p className="text-sm font-semibold">Comunicação</p>
-            <p className="text-[11px] text-muted-foreground">
-              Equipe, grupos e chamadas
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={toggleColleagues}
-            className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Fechar comunicação"
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
-        </div>
-        <div role="tablist" aria-label="Seção" className="mt-3 flex rounded-lg bg-muted p-0.5">
-          {(
-            [
-              ["people", "Pessoas"],
-              ["groups", "Grupos"],
-              ["history", "Chamadas"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={section === value}
-              onClick={() => setSection(value)}
-              className={`min-h-8 flex-1 rounded-md px-1 text-xs font-medium transition-colors ${section === value ? "bg-card-elevated text-foreground shadow-(--shadow-xs)" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {label}
-              {value === "groups" && groups.some((group) => group.unread)
-                ? ` (${groups.reduce((sum, group) => sum + group.unread, 0)})`
-                : ""}
-            </button>
-          ))}
-        </div>
-        {section !== "history" && (
-          <label className="relative mt-2 block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <span className="sr-only">Buscar conversas</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={section === "people" ? "Buscar pessoa ou status…" : "Buscar grupo…"}
-              className="field h-10 pl-9 pr-3 text-xs"
-            />
-          </label>
-        )}
-        <div className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1">
-          {section === "people" ? (
-            <>
-              {list}
-              {query.trim().length >= 2 && (
-                <MessageSearchResults
-                  messages={searchResults}
-                  currentEmail={user?.email || ""}
-                  colleagues={colleagues}
-                  onSelect={openChat}
-                />
-              )}
-            </>
-          ) : section === "groups" ? (
-            <GroupList
-              groups={filteredGroups}
-              onSelect={setSelectedGroup}
-              onCreate={() => setCreateGroupOpen(true)}
-            />
-          ) : (
-            <CallHistoryList calls={callHistory} />
-          )}
-        </div>
-      </aside>
+      {teamSlot && createPortal(
+        <SidebarTeam
+          colleagues={colleagues}
+          loading={loading}
+          selectedEmail={selected?.email ?? null}
+          groupsUnread={groups.reduce((sum, group) => sum + group.unread, 0)}
+          onSelect={openChat}
+          onOpenCommunication={() => { setMobileOpen(true); window.dispatchEvent(new Event(NAV_CLOSE_EVENT)); }}
+        />,
+        teamSlot,
+      )}
       <Dialog open={mobileOpen} onOpenChange={setMobileOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent className="grid max-h-[85vh] grid-rows-[auto_auto_auto_minmax(0,1fr)] overflow-hidden sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Comunicação</DialogTitle>
             <DialogDescription>
-              Status, mensagens, grupos e chamadas.
+              Pessoas, grupos, chamadas e busca nas mensagens.
             </DialogDescription>
           </DialogHeader>
-          <button
-            type="button"
-            onClick={() => setCreateGroupOpen(true)}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border text-sm font-semibold"
-          >
-            <Plus className="size-4" />
-            Novo grupo
-          </button>
-          {list}
-          <GroupList
-            groups={groups}
-            onSelect={(group) => {
-              setSelectedGroup(group);
-              setMobileOpen(false);
-            }}
-            onCreate={() => setCreateGroupOpen(true)}
-          />
-          <CallHistoryList calls={callHistory.slice(0, 5)} />
+          <div role="tablist" aria-label="Seção" className="flex rounded-lg bg-muted p-0.5">
+            {(
+              [
+                ["people", "Pessoas"],
+                ["groups", "Grupos"],
+                ["history", "Chamadas"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={section === value}
+                onClick={() => setSection(value)}
+                className={`min-h-9 flex-1 rounded-md px-1 text-xs font-medium transition-colors ${section === value ? "bg-card-elevated text-foreground shadow-(--shadow-xs)" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {label}
+                {value === "groups" && groups.some((group) => group.unread)
+                  ? ` (${groups.reduce((sum, group) => sum + group.unread, 0)})`
+                  : ""}
+              </button>
+            ))}
+          </div>
+          {section !== "history" ? (
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <span className="sr-only">Buscar conversas</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={section === "people" ? "Buscar pessoa, status ou mensagem…" : "Buscar grupo…"}
+                className="field h-10 pl-9 pr-3 text-sm"
+              />
+            </label>
+          ) : <span />}
+          <div className="min-h-0 overflow-y-auto pr-1">
+            {section === "people" ? (
+              <>
+                {list}
+                {query.trim().length >= 2 && (
+                  <MessageSearchResults
+                    messages={searchResults}
+                    currentEmail={user?.email || ""}
+                    colleagues={colleagues}
+                    onSelect={openChat}
+                  />
+                )}
+              </>
+            ) : section === "groups" ? (
+              <GroupList
+                groups={filteredGroups}
+                onSelect={(group) => {
+                  setSelectedGroup(group);
+                  setMobileOpen(false);
+                }}
+                onCreate={() => setCreateGroupOpen(true)}
+              />
+            ) : (
+              <CallHistoryList calls={callHistory} />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
@@ -948,6 +921,140 @@ function sameSender(a?: { senderEmail: string }, b?: { senderEmail: string }) {
 }
 
 /**
+ * Seção "Equipe" dentro da barra lateral (desenhada no espaço que a
+ * AppNavigation oferece). Aberta: quem está disponível primeiro, com status,
+ * função e quando atualizou. Recolhida: pilha de avatares com o selo de
+ * status; o nome aparece no tooltip. A lista rola por dentro, o menu não.
+ */
+function SidebarTeam({
+  colleagues,
+  loading,
+  selectedEmail,
+  groupsUnread,
+  onSelect,
+  onOpenCommunication,
+}: {
+  colleagues: Colleague[];
+  loading: boolean;
+  selectedEmail: string | null;
+  groupsUnread: number;
+  onSelect: (colleague: Colleague) => void;
+  onOpenCommunication: () => void;
+}) {
+  const sorted = sortByPresence(colleagues);
+  const summary = presenceSummary(colleagues);
+  const nameOf = (colleague: Colleague) => colleague.displayName || colleague.email.split("@")[0];
+  return (
+    <section className="app-team" aria-labelledby="app-team-title">
+      <div className="app-team-full app-team-head">
+        <h2 id="app-team-title" className="app-nav-section">Equipe</h2>
+        {!loading && colleagues.length > 0 && (
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+            <b className="font-semibold text-foreground">{summary.available}</b>/{colleagues.length} online
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={onOpenCommunication}
+          className={`relative grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground ${loading || !colleagues.length ? "ml-auto" : ""}`}
+          aria-label={groupsUnread ? `Grupos, chamadas e busca — ${groupsUnread} mensagens novas em grupos` : "Grupos, chamadas e busca"}
+          title="Grupos, chamadas e busca"
+        >
+          <Users aria-hidden="true" className="size-4" />
+          {groupsUnread > 0 && <span aria-hidden="true" className="absolute right-1 top-1 size-2 rounded-full bg-brand ring-2 ring-sidebar" />}
+        </button>
+      </div>
+      <div className="app-team-scroll">
+        {loading ? (
+          <div className="app-team-full space-y-1 px-1.5 pt-1" aria-label="Carregando equipe">
+            {Array.from({ length: 3 }, (_, index) => (
+              <div key={index} className="flex items-center gap-2.5 py-1.5">
+                <span aria-hidden="true" className="skeleton size-8 shrink-0 rounded-full" />
+                <span className="min-w-0 flex-1 space-y-1.5">
+                  <span aria-hidden="true" className="skeleton block h-3 w-24 rounded" />
+                  <span aria-hidden="true" className="skeleton block h-2.5 w-16 rounded" />
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : !colleagues.length ? (
+          <p className="app-team-full px-3 py-2 text-xs text-muted-foreground">Ninguém mais na equipe ainda.</p>
+        ) : (
+          <>
+            <ul className="app-team-full space-y-0.5 pt-1" aria-label="Equipe">
+              {sorted.map((colleague) => {
+                const name = nameOf(colleague);
+                const offline = colleague.status === "Offline";
+                const when = offline ? colleague.lastSeenAt : colleague.updatedAt;
+                const current = selectedEmail?.toLowerCase() === colleague.email.toLowerCase();
+                return (
+                  <li key={colleague.email}>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(colleague)}
+                      aria-current={current ? "true" : undefined}
+                      aria-label={`Conversar com ${name}, ${roleLabels[colleague.role]}, status ${colleague.status}${when ? `, ${offline ? "visto" : "atualizado"} ${relativeTime(when)}` : ""}`}
+                      className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${current ? "bg-primary-soft" : ""}`}
+                    >
+                      <span className={`relative grid size-8 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-semibold ${offline ? "opacity-70" : ""}`}>
+                        {/* Foto em data URL vinda do perfil: next/image não otimiza isso. */}
+                        {/* oxlint-disable-next-line nextjs/no-img-element */}
+                        {colleague.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full rounded-full object-cover" /> : initials(name)}
+                        <PresenceDot status={colleague.status} className="absolute -bottom-0.5 -right-0.5" ring="ring-sidebar" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className={`block truncate text-[13px] font-medium ${offline ? "text-muted-foreground" : ""}`}>{name}</span>
+                        <span className="flex min-w-0 items-center gap-1 text-[11px]">
+                          <PresenceLabel status={colleague.status} className="shrink-0" />
+                          {when && <span className="truncate text-muted-foreground">· {relativeTime(when)}</span>}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <ul className="app-team-stack pt-1" aria-label="Equipe">
+              {sorted.map((colleague) => {
+                const name = nameOf(colleague);
+                const current = selectedEmail?.toLowerCase() === colleague.email.toLowerCase();
+                return (
+                  <li key={colleague.email}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            onClick={() => onSelect(colleague)}
+                            aria-current={current ? "true" : undefined}
+                            aria-label={`Conversar com ${name}, status ${colleague.status}`}
+                            className={`relative grid size-11 place-items-center rounded-xl transition-colors hover:bg-muted ${current ? "bg-primary-soft ring-1 ring-primary/50" : ""}`}
+                          />
+                        }
+                      >
+                        <span className={`relative grid size-8 place-items-center rounded-full bg-muted text-[11px] font-semibold ${colleague.status === "Offline" ? "opacity-70" : ""}`}>
+                          {/* oxlint-disable-next-line nextjs/no-img-element */}
+                          {colleague.photoUrl ? <img src={colleague.photoUrl} alt="" className="size-full rounded-full object-cover" /> : initials(name)}
+                          <PresenceDot status={colleague.status} className="absolute -bottom-0.5 -right-0.5" ring="ring-sidebar" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" sideOffset={10}>
+                        <span className="block font-medium">{name}</span>
+                        <span className="block opacity-80">{colleague.status} · {roleLabels[colleague.role]}</span>
+                      </TooltipContent>
+                    </Tooltip>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
  * Equipe agrupada por disponibilidade (online → ocupados → ausentes →
  * offline), com um resumo no topo. Cada pessoa mostra nome, status (cor +
  * forma + texto), função e quando o status foi atualizado pela última vez.
@@ -1050,6 +1157,33 @@ function ColleagueList({
       ))}
     </div>
   );
+}
+
+// Janela de conversa: no desktop fica ancorada ao lado da barra (que vira
+// trilho) e ocupa a altura toda; no celular continua flutuando embaixo.
+const CHAT_FLOAT_CLASS = "chat-shell chat-float-window !fixed !top-auto !right-4 !bottom-4 !left-auto grid h-[min(560px,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] !max-w-none !translate-x-0 !translate-y-0 grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:!max-w-none max-sm:!right-3 max-sm:!bottom-3 max-sm:!left-3 max-sm:h-[min(620px,calc(100dvh-1.5rem))] max-sm:w-auto";
+const CHAT_DOCK_CLASS = "chat-shell chat-dock-window !fixed !top-0 !bottom-0 !right-auto !left-(--sidebar-w) grid !h-dvh !max-h-none w-(--chat-dock-w) !max-w-none !translate-x-0 !translate-y-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr_auto] overflow-hidden !rounded-none border-y-0 border-l-0 p-0 sm:!max-w-none transition-[left] duration-(--motion-layout)";
+function chatWindowClass(docked: boolean) {
+  return docked ? CHAT_DOCK_CLASS : CHAT_FLOAT_CLASS;
+}
+
+function subscribeDesktop(callback: () => void) {
+  const media = window.matchMedia("(min-width: 1024px)");
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+/** Conversa aberta no desktop: ancora ao lado da barra e recolhe a barra enquanto durar. */
+function useChatDock(open: boolean) {
+  const desktop = useSyncExternalStore(subscribeDesktop, () => window.matchMedia("(min-width: 1024px)").matches, () => false);
+  const owner = useId();
+  const docked = open && desktop;
+  useEffect(() => {
+    if (!docked) return;
+    setChatDocked(owner, true);
+    return () => setChatDocked(owner, false);
+  }, [docked, owner]);
+  return docked;
 }
 
 function ChatDialog({
@@ -1374,27 +1508,40 @@ function ChatDialog({
     onClose();
     onOpenTicket?.(ticketId);
   }
+  // Fechar pela janela, pelo X ou pelo botão da barra lateral: com chamada em
+  // andamento a conversa só minimiza, para desligar continuar ao alcance.
+  const requestClose = () => {
+    if (callActive) {
+      setChatMinimized(true);
+      return;
+    }
+    stopRecording();
+    onClose();
+  };
+  const requestCloseRef = useRef(requestClose);
+  useEffect(() => { requestCloseRef.current = requestClose; });
+  const chatOpen = Boolean(colleague) && !chatMinimized;
+  const docked = useChatDock(chatOpen);
+  useEffect(() => {
+    if (!chatOpen) return;
+    const close = () => requestCloseRef.current();
+    window.addEventListener(CHAT_CLOSE_EVENT, close);
+    return () => window.removeEventListener(CHAT_CLOSE_EVENT, close);
+  }, [chatOpen]);
   return (
     <>
     <Dialog
       modal={false}
       disablePointerDismissal
-      open={Boolean(colleague) && !chatMinimized}
+      open={chatOpen}
       onOpenChange={(open) => {
-        if (!open) {
-          if (callActive) {
-            setChatMinimized(true);
-            return;
-          }
-          stopRecording();
-          onClose();
-        }
+        if (!open) requestClose();
       }}
     >
       <DialogContent
         keepMounted
         overlayClassName="hidden"
-        className="chat-shell chat-float-window !fixed !top-auto !right-4 !bottom-4 !left-auto grid h-[min(560px,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] !max-w-none !translate-x-0 !translate-y-0 grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:!max-w-none max-sm:!right-3 max-sm:!bottom-3 max-sm:!left-3 max-sm:h-[min(620px,calc(100dvh-1.5rem))] max-sm:w-auto"
+        className={chatWindowClass(docked)}
       >
         <DialogHeader className="chat-header border-b border-border/60 p-4 pr-14">
           <div className="flex items-center gap-3">
@@ -2946,6 +3093,15 @@ function GroupChatDialog({
     }
   }
   const owner = group?.createdBy.toLowerCase() === user?.email?.toLowerCase();
+  const docked = useChatDock(Boolean(group));
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; });
+  useEffect(() => {
+    if (!group) return;
+    const close = () => onCloseRef.current();
+    window.addEventListener(CHAT_CLOSE_EVENT, close);
+    return () => window.removeEventListener(CHAT_CLOSE_EVENT, close);
+  }, [group]);
   return (
     <>
       <Dialog
@@ -2958,7 +3114,7 @@ function GroupChatDialog({
       >
         <DialogContent
           overlayClassName="hidden"
-          className="chat-shell chat-float-window !fixed !top-auto !right-4 !bottom-4 !left-auto grid h-[min(560px,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] !max-w-none !translate-x-0 !translate-y-0 grid-rows-[auto_1fr_auto] overflow-hidden p-0 sm:!max-w-none max-sm:!right-3 max-sm:!bottom-3 max-sm:!left-3 max-sm:h-[min(620px,calc(100dvh-1.5rem))] max-sm:w-auto"
+          className={chatWindowClass(docked)}
         >
           <DialogHeader className="chat-header border-b border-border/60 p-4 pr-14">
             <DialogTitle>{group?.name}</DialogTitle>
@@ -3382,6 +3538,16 @@ export function UserMenu({ compact = false }: { compact?: boolean } = {}) {
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+  // Cadastro obrigatório (ProfileSetupGate) salvou nome/foto: mostra na hora.
+  useEffect(() => {
+    const onProfile = (event: Event) => {
+      const detail = (event as CustomEvent<{ displayName?: string; photoUrl?: string | null }>).detail;
+      if (detail?.displayName) setName(detail.displayName);
+      if (detail?.photoUrl) setPhoto(detail.photoUrl);
+    };
+    window.addEventListener(PROFILE_UPDATED_EVENT, onProfile);
+    return () => window.removeEventListener(PROFILE_UPDATED_EVENT, onProfile);
+  }, []);
   async function updateStatus(value: Status) {
     const manual = value !== "Online";
     manualStatusRef.current = manual;
@@ -3464,7 +3630,7 @@ export function UserMenu({ compact = false }: { compact?: boolean } = {}) {
         <div className="mt-2 grid gap-0.5">
           {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => void updateStatus(item)} className={`flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${status === item ? "bg-primary-soft font-medium text-foreground" : "hover:bg-muted"}`}><PresenceDot status={item} size="sm" ring="ring-transparent" /><span className="flex-1">{item}</span>{status === item && <Check aria-hidden="true" className="size-4 text-primary" />}</button>)}
         </div>
-        <a href="/?view=settings" onClick={() => setOpen(false)} className="mt-3 flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted">Editar perfil em Configurações</a>
+        <a href="/?view=settings" onClick={() => setOpen(false)} className="mt-3 flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted">Configurações e perfil</a>
         {feedback && <p role="status" className="mt-2 text-xs text-muted-foreground">{feedback}</p>}
         <button type="button" onClick={() => void signOutAndForget()} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-destructive/20 text-sm text-destructive hover:bg-destructive/10"><LogOut aria-hidden="true" className="size-4" />Sair da conta</button>
       </PopoverContent>
@@ -3508,15 +3674,14 @@ export function ProfileSettings() {
       active = false;
     };
   }, [user]);
-  function choosePhoto(file?: File) {
+  // Reduz no navegador (320 px, JPEG): foto de câmera de celular também serve.
+  async function choosePhoto(file?: File) {
     if (!file) return;
-    if (file.size > 650_000) {
-      setMessage("Escolha uma imagem de até 650 KB.");
-      return;
+    try {
+      setPhoto(await profilePhotoDataUrl(file));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível usar esta imagem.");
     }
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(String(reader.result));
-    reader.readAsDataURL(file);
   }
   async function save() {
     if (!user) return;
@@ -3570,7 +3735,7 @@ export function ProfileSettings() {
               className="sr-only"
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => choosePhoto(event.target.files?.[0])}
+              onChange={(event) => void choosePhoto(event.target.files?.[0])}
             />
           </label>
         </div>
