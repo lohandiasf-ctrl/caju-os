@@ -1,17 +1,18 @@
 'use client';
 
-import { useEffect, useSyncExternalStore, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
-import { Archive, Briefcase, Building2, CalendarClock, ChevronDown, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Users, type LucideIcon } from 'lucide-react';
+import { Archive, Briefcase, Building2, CalendarClock, ChevronRight, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { canUseNavItem } from '@/lib/navigation';
 import { roleLabels } from '@/lib/permissions';
-import { CHAT_CLOSE_EVENT, isChatDocked, isNavGroupOpen, isSidebarCollapsed, NAV_CLOSE_EVENT, setNavGroupOpen, setSidebarCollapsed, setTeamSlot, subscribeNavGroups, subscribeSidebar } from '@/lib/sidebar-state';
+import { CHAT_CLOSE_EVENT, isChatDocked, isSidebarCollapsed, NAV_CLOSE_EVENT, setSidebarCollapsed, setTeamSlot, subscribeSidebar } from '@/lib/sidebar-state';
 import { projectMomentum, rubberband } from '@/lib/gesture';
 
 // Matches the drawer's own w-[min(300px,calc(100vw-2rem))] closely enough
@@ -64,8 +65,8 @@ const groups = [
   ['Comunicação', [
     ['WhatsApp', MessageCircle, '/?view=whatsapp', 'whatsapp'],
   ]],
-  // Recolhível no desktop (fica numa linha em tela baixa, para sobrar altura
-  // para a equipe na barra).
+  // Em tela baixa (desktop) vira uma linha com menu flutuante, para sobrar
+  // altura para a equipe na barra.
   ['Gestão', [
     ['Equipe', Users, '/?view=technicians', 'technicians'],
     ['Projetos e lojas', Building2, '/?view=projects', 'projects'],
@@ -77,6 +78,14 @@ const groups = [
 
 function subscribe(callback: () => void) {
   const media = window.matchMedia('(min-width: 1024px)');
+  media.addEventListener('change', callback);
+  return () => media.removeEventListener('change', callback);
+}
+
+// Altura em que o menu inteiro + umas 3 pessoas da equipe cabem na barra.
+const TALL_QUERY = '(min-height: 900px)';
+function subscribeTall(callback: () => void) {
+  const media = window.matchMedia(TALL_QUERY);
   media.addEventListener('change', callback);
   return () => media.removeEventListener('change', callback);
 }
@@ -121,44 +130,53 @@ function NavLink({ href, label, icon: Icon, current, collapsed, onNavigate }: {
   </Tooltip>;
 }
 
+type NavEntry = readonly [string, LucideIcon, string, string];
+
 /**
- * Cabeçalho de grupo recolhível (Gestão). Fechado, ocupa uma linha só; se a
- * página atual estiver dentro dele, a linha fica marcada e mostra qual é.
- * Recolhida a barra, vira um ícone com tooltip.
+ * Grupo compacto (Gestão) em tela baixa: uma linha que abre um menu flutuante
+ * ao lado, em vez de abrir dentro da barra — assim ele nunca tira altura da
+ * equipe. Se a página atual está no grupo, a linha fica marcada e diz qual é.
  */
-function GroupToggle({ title, icon: Icon, open, currentLabel, collapsed, controls, onToggle }: {
+function GroupFlyout({ title, icon: Icon, items, active, onNavigate }: {
   title: string;
   icon: LucideIcon;
-  open: boolean;
-  currentLabel: string | null;
-  collapsed: boolean;
-  controls: string;
-  onToggle: () => void;
+  items: readonly NavEntry[];
+  active: string;
+  onNavigate: (event: MouseEvent<HTMLAnchorElement>, href: string) => void;
 }) {
-  const marked = !open && currentLabel !== null;
-  const label = `${open ? 'Ocultar' : 'Mostrar'} ${title}${marked ? ` (página atual: ${currentLabel})` : ''}`;
-  const button = <button
-    type="button"
-    onClick={onToggle}
-    aria-expanded={open}
-    aria-controls={controls}
-    aria-label={label}
-    data-current={marked ? '' : undefined}
-    className="app-nav-link app-nav-group-toggle w-full"
-  >
-    {marked && <span aria-hidden="true" className="app-nav-indicator" />}
-    <Icon aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={1.75} />
-    <span className="app-nav-label flex min-w-0 flex-1 items-center gap-2">
-      <span className="truncate">{title}</span>
-      {marked && <span className="truncate text-xs font-normal opacity-80">· {currentLabel}</span>}
-      <ChevronDown aria-hidden="true" className="app-nav-group-chevron ml-auto size-4 shrink-0" strokeWidth={1.75} />
-    </span>
-  </button>;
-  if (!collapsed) return button;
-  return <Tooltip>
-    <TooltipTrigger render={button} />
-    <TooltipContent side="right" sideOffset={10}>{open ? `Ocultar ${title}` : `${title}${marked ? ` · ${currentLabel}` : ''}`}</TooltipContent>
-  </Tooltip>;
+  const [open, setOpen] = useState(false);
+  const current = items.find(([, , , key]) => key === active);
+  return <Popover open={open} onOpenChange={setOpen}>
+    <PopoverTrigger
+      render={<button
+        type="button"
+        className="app-nav-link app-nav-group-toggle w-full"
+        data-current={current ? '' : undefined}
+        aria-label={`${title}${current ? ` (página atual: ${current[0]})` : ''}`}
+        title={current ? `${title} · ${current[0]}` : title}
+      />}
+    >
+      {current && <span aria-hidden="true" className="app-nav-indicator" />}
+      <Icon aria-hidden="true" className="size-[18px] shrink-0" strokeWidth={1.75} />
+      <span className="app-nav-label flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate">{title}</span>
+        {current && <span className="truncate text-xs font-normal opacity-80">· {current[0]}</span>}
+        <ChevronRight aria-hidden="true" className="ml-auto size-4 shrink-0" strokeWidth={1.75} />
+      </span>
+    </PopoverTrigger>
+    <PopoverContent side="right" align="start" sideOffset={20} className="w-60 gap-0.5 p-1.5">
+      <p className="label-caps px-2.5 pb-1 pt-1">{title}</p>
+      {items.map(([label, ItemIcon, href, key]) => <NavLink
+        key={key}
+        href={href}
+        label={label}
+        icon={ItemIcon}
+        current={active === key}
+        collapsed={false}
+        onNavigate={(event, target) => { setOpen(false); onNavigate(event, target); }}
+      />)}
+    </PopoverContent>
+  </Popover>;
 }
 
 export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
@@ -174,11 +192,10 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
   // A gaveta do celular sempre abre expandida. No desktop, uma conversa
   // aberta recolhe a barra enquanto durar, sem mudar a escolha salva.
   const collapsed = desktop && (storedCollapsed || chatDocked);
-  const gestaoKeys: readonly string[] = groups[2][1].map((entry) => entry[3]);
-  const gestaoHasActive = gestaoKeys.includes(active);
-  const gestaoStoredOpen = useSyncExternalStore(subscribeNavGroups, () => isNavGroupOpen('gestao', gestaoHasActive), () => true);
-  // No celular a gaveta rola inteira: o grupo fica sempre aberto.
-  const gestaoOpen = !desktop || gestaoStoredOpen;
+  // Tela baixa no desktop: Gestão vira menu flutuante (automático, pela
+  // altura da janela). Celular: a gaveta rola inteira, grupo sempre aberto.
+  const tall = useSyncExternalStore(subscribeTall, () => window.matchMedia(TALL_QUERY).matches, () => true);
+  const compactGestao = desktop && !tall;
   useEffect(() => { if (desktop) onOpenChange(false); }, [desktop, onOpenChange]);
   useEffect(() => {
     const close = () => onOpenChange(false);
@@ -250,24 +267,16 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
       {groups.map(([title, entries]) => {
         const visible = entries.filter(([, , , key]) => canUseNavItem(role, key));
         if (!visible.length) return null;
-        const collapsible = desktop && title === 'Gestão';
-        const listId = `app-nav-group-${title === 'Gestão' ? 'gestao' : title === 'Operação' ? 'operacao' : 'comunicacao'}`;
-        const showItems = !collapsible || gestaoOpen;
+        if (compactGestao && title === 'Gestão') {
+          return <div key={title} className="app-nav-group">
+            <GroupFlyout title={title} icon={Briefcase} items={visible} active={active} onNavigate={navigate} />
+          </div>;
+        }
         return <div key={title} className="app-nav-group">
-          {collapsible
-            ? <GroupToggle
-                title={title}
-                icon={Briefcase}
-                open={gestaoOpen}
-                currentLabel={visible.find(([, , , key]) => key === active)?.[0] ?? null}
-                collapsed={collapsed}
-                controls={listId}
-                onToggle={() => setNavGroupOpen('gestao', !gestaoOpen)}
-              />
-            : <p className="app-nav-section">{title}</p>}
-          {showItems && <div id={listId} className={`space-y-0.5 ${collapsible ? 'mt-0.5' : ''}`}>
+          <p className="app-nav-section">{title}</p>
+          <div className="space-y-0.5">
             {visible.map(([label, Icon, href, key]) => <NavLink key={key} href={href} label={label} icon={Icon} current={active === key} collapsed={collapsed} onNavigate={navigate} />)}
-          </div>}
+          </div>
         </div>;
       })}
     </nav>

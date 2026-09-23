@@ -11,6 +11,20 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Gestão vira menu flutuante em tela baixa — equipe não some mais (branch `claude/sidebar-gestao-flyout`)
+
+O grupo Gestão recolhível (PR #119) abria **dentro** da barra e guardava a
+escolha: depois de aberto uma vez (ou em telas a partir de 900 px), ele
+voltava a empurrar a equipe — em produção o trilho rolava e mostrava um avatar
+só. Agora, no desktop com menos de 900 px de altura, Gestão é uma linha que
+abre um **menu flutuante** ao lado (Equipe, Projetos e lojas, Spares,
+Financeiro, Feedback) e nunca tira altura da equipe. Em telas altas o grupo
+aparece inteiro, como antes. É automático pela altura da janela; a escolha
+salva (`caju-nav-group:gestao`) saiu.
+
+Medido no preview: 1366×700 → menu sem rolar, equipe com 3 pessoas inteiras
+(aberta) e 4 (recolhida); 1366×950 → menu completo, equipe com 3 pessoas.
+
 ### Saudação do topo com o nome do perfil e emoji do período (branch `claude/saudacao-nome-perfil`)
 
 A saudação ("Boa tarde, Lohandiasf 👋") usava o nome da conta Firebase, que
