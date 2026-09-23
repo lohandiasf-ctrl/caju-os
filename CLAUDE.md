@@ -41,7 +41,12 @@ Leia os docs grandes somente quando a tarefa tocar aquela área:
   `import { env } from 'cloudflare:workers'`.
 - Rota de API nova: `requireApiUser(request, roles?)` + padrão de erro do
   projeto.
-- Preserve o visual premium. Não simplifique em nome de FPS.
+- Visual (revisão UI/UX de 2026-09-23, pedido do usuário): superfícies
+  sólidas em níveis, sem gradiente decorativo, glow ou vidro espalhado;
+  sombra só no que flutua (`--shadow-popover`/`--shadow-overlay`); cor
+  primária só para ação/seleção/foco. Use os tokens e classes de
+  `app/globals.css`. Transições e microinterações continuam — não
+  simplifique em nome de FPS.
 - Antes de commitar código: `npm test`, `npx tsc --noEmit`, `npm run build`.
 - **Push na `main` publica produção** (Cloudflare Workers Builds, desde
   2026-09-11 — ver `docs/DEPLOYMENT.md`). Só envie para a `main` o

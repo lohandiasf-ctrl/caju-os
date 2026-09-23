@@ -592,7 +592,7 @@ export function OperationWorkflowDialog({
         ) : (
           <>
           <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain pr-2 pb-2">
-            <section className="grid gap-3 rounded-xl border border-primary/25 bg-background p-4 shadow-lg sm:grid-cols-3">
+            <section className="grid gap-3 rounded-xl border border-primary/25 bg-background p-4 sm:grid-cols-3">
               <Field label="Etapa">
                 <select
                   value={String(form.status ?? "triage")}
@@ -659,7 +659,7 @@ export function OperationWorkflowDialog({
               </Field>
             </section>
             <section
-              className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4 ${margin <= 0 ? "border-amber-400/30 bg-amber-400/10" : "border-emerald-400/30 bg-emerald-400/10"}`}
+              className={`flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4 ${margin <= 0 ? "border-warning/25 bg-warning-soft" : "border-success/25 bg-success-soft"}`}
             >
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-bold">
@@ -758,9 +758,9 @@ export function OperationWorkflowDialog({
                             {details.changes.map((change) => (
                               <p key={`${change.field}-${String(change.previous)}-${String(change.next)}`} className="rounded bg-background/60 px-2 py-1">
                                 <b>{fieldLabel(change.field)}:</b>{" "}
-                                <span className="text-red-200">{formatAuditValue(change.previous)}</span>{" "}
+                                <span className="text-danger">{formatAuditValue(change.previous)}</span>{" "}
                                 →{" "}
-                                <span className="text-emerald-200">{formatAuditValue(change.next)}</span>
+                                <span className="text-success">{formatAuditValue(change.next)}</span>
                               </p>
                             ))}
                           </div>
@@ -1153,7 +1153,7 @@ export function OperationWorkflowDialog({
                   return (
                   <div
                     key={task.id}
-                    className={`rounded-lg border p-3 text-xs ${state.kind === "manager" ? "border-red-400/30 bg-red-400/10" : state.kind === "followup" ? "border-amber-400/30 bg-amber-400/10" : "border-border bg-background/40"}`}
+                    className={`rounded-lg border p-3 text-xs ${state.kind === "manager" ? "border-danger/25 bg-danger-soft" : state.kind === "followup" ? "border-warning/25 bg-warning-soft" : "border-border bg-background/40"}`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span>
@@ -1360,7 +1360,7 @@ ${chosen.name}` : chosen.name);
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-emerald-400/30 text-emerald-300"
+                  className="border-emerald-400/30 text-success"
                   onClick={() => void save(false, true)}
                   disabled={saving}
                 >

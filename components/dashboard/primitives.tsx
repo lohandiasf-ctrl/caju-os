@@ -5,25 +5,22 @@ import { animate, motion, useReducedMotion, type Variants } from 'motion/react';
 import { ArrowDownRight, ArrowUpRight, RotateCcw, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Entrada em cascata dos cards: a grade orquestra, cada card sobe 12 px e
-// chega à escala 1 com mola. `MotionConfig reducedMotion="user"` (raiz) tira
-// transform/escala para quem pediu menos movimento — sobra só o fade.
+// Entrada em cascata dos cards: fade + 6 px, curto e sem mola — o dado
+// aparece rápido. `MotionConfig reducedMotion="user"` (raiz) tira o
+// deslocamento para quem pediu menos movimento; sobra só o fade.
 export const bentoItem: Variants = {
-  hidden: { opacity: 0, y: 12, scale: 0.98 },
-  show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 260, damping: 26 } },
+  hidden: { opacity: 0, y: 6 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] } },
 };
 
-export function BentoCard({ className, children, tone = 'default', label }: {
+export function BentoCard({ className, children, label }: {
   className?: string;
   children: ReactNode;
-  tone?: 'default' | 'hero';
   label?: string;
 }) {
-  // Wrapper de entrada separado da superfície: o `motion` deixa transform
-  // inline no elemento que anima, o que anularia o hover em CSS do card.
   return (
     <motion.section variants={bentoItem} className={cn('min-w-0', className)} aria-label={label}>
-      <div className={cn('bento-card h-full', tone === 'hero' ? 'bento-card--hero brand-surface' : '')}>
+      <div className="bento-card h-full">
         <CardBoundary>{children}</CardBoundary>
       </div>
     </motion.section>
@@ -37,7 +34,7 @@ export function CardHeader({ title, description, action }: { title: string; desc
         <h2 className="text-[15px] font-semibold leading-snug">{title}</h2>
         {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
       </div>
-      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
+      {action && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{action}</div>}
     </div>
   );
 }
@@ -48,8 +45,8 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function EmptyCard({ icon: Icon, text, action }: { icon: LucideIcon; text: string; action?: ReactNode }) {
   return (
-    <div className="flex h-full min-h-40 flex-col items-center justify-center gap-3 px-4 py-6 text-center">
-      <span className="grid size-14 place-items-center rounded-full bg-muted text-muted-foreground"><Icon aria-hidden="true" className="size-7" strokeWidth={1.75} /></span>
+    <div className="flex h-full min-h-40 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+      <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground"><Icon aria-hidden="true" className="size-5" strokeWidth={1.75} /></span>
       <p className="max-w-xs text-sm text-muted-foreground">{text}</p>
       {action}
     </div>
@@ -60,7 +57,7 @@ export function ErrorCard({ text, onRetry }: { text: string; onRetry?: () => voi
   return (
     <div role="alert" className="flex h-full min-h-40 flex-col items-center justify-center gap-3 px-4 py-6 text-center">
       <p className="max-w-xs text-sm text-muted-foreground">{text}</p>
-      {onRetry && <button type="button" onClick={onRetry} className="inline-flex min-h-10 items-center gap-2 rounded-full bg-muted px-4 text-sm font-semibold hover:bg-accent"><RotateCcw aria-hidden="true" className="size-4" />Tentar de novo</button>}
+      {onRetry && <button type="button" onClick={onRetry} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium hover:bg-muted"><RotateCcw aria-hidden="true" className="size-4" />Tentar de novo</button>}
     </div>
   );
 }
@@ -84,25 +81,22 @@ export function DeltaBadge({ value, upIsGood = true }: { value: number | null; u
   const good = flat ? null : up === upIsGood;
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
-    <motion.span
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 24, delay: 0.25 }}
+    <span
       className={cn(
-        'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-full px-2 text-[11px] font-semibold tabular-nums',
+        'inline-flex h-6 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-[11px] font-medium tabular-nums',
         good === null ? 'bg-muted text-muted-foreground' : good ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger',
       )}
       title="Variação desde o último dia visto neste navegador"
     >
-      {!flat && <motion.span initial={{ y: up ? 2 : -2 }} animate={{ y: 0 }} transition={{ delay: 0.35, duration: 0.3 }} className="grid"><Icon aria-hidden="true" className="size-3" strokeWidth={2.25} /></motion.span>}
+      {!flat && <Icon aria-hidden="true" className="size-3" strokeWidth={2.25} />}
       {value > 0 ? '+' : ''}{value}%
       <span className="sr-only">{flat ? ' sem variação' : up ? ' de aumento' : ' de queda'} desde ontem</span>
-    </motion.span>
+    </span>
   );
 }
 
 /**
- * Número que conta de 0 até o valor na primeira exibição (900 ms) e depois
+ * Número que conta de 0 até o valor na primeira exibição (500 ms) e depois
  * só desliza curto (200 ms) quando o dado atualiza. Movimento reduzido: valor
  * final direto.
  */
@@ -120,7 +114,7 @@ export function CountUp({ value, suffix = '' }: { value: number; suffix?: string
       return;
     }
     const controls = animate(from, value, {
-      duration: shown.current === null ? 0.9 : 0.2,
+      duration: shown.current === null ? 0.5 : 0.2,
       ease: [0.2, 0.8, 0.2, 1],
       onUpdate: (latest) => { node.textContent = `${Math.round(latest)}${suffix}`; },
     });

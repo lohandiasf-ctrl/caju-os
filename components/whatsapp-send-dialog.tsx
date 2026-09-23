@@ -72,7 +72,7 @@ export function WhatsappSendDialog({ draft, user, onClose, onSent }: {
         />
         <p className="text-xs text-muted-foreground">{text.length}/{MAX_CHARS} caracteres</p>
 
-        {error && <p role="alert" className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-danger/25 bg-danger-soft p-3 text-sm text-danger">{error}</p>}
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={onClose} disabled={sending}>Cancelar</Button>

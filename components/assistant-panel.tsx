@@ -162,11 +162,11 @@ export function TicketAssistant({ ticketKey, user, onApplied }: { ticketKey: str
         {task === 'action' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}Sugerir ação no Jira
       </Button>
     </div>
-    {error && <p role="alert" className="mt-3 rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
+    {error && <p role="alert" className="mt-3 rounded-lg border border-danger/25 bg-danger-soft p-3 text-sm text-danger">{error}</p>}
     {answer && <Answer text={answer} />}
 
-    {proposal && <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3">
-      <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-amber-200"><ShieldCheck className="size-4" />Confirmação necessária</p>
+    {proposal && <div className="mt-3 rounded-xl border border-warning/25 bg-warning-soft p-3">
+      <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-warning"><ShieldCheck className="size-4" />Confirmação necessária</p>
       <p className="mt-2 text-sm font-semibold">{proposal.description}</p>
       {proposal.kind === 'comment' && typeof proposal.preview.body === 'string' &&
         <p className="mt-2 whitespace-pre-wrap rounded-lg border border-border bg-background/70 p-3 text-sm">{proposal.preview.body}</p>}
@@ -179,8 +179,8 @@ export function TicketAssistant({ ticketKey, user, onApplied }: { ticketKey: str
       </div>
     </div>}
 
-    {warning && <p className="mt-3 rounded-lg border border-amber-400/25 bg-amber-400/10 p-3 text-xs text-amber-100">{warning}</p>}
-    {applied && <p role="status" className="mt-3 rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-3 text-sm text-emerald-100">{applied}</p>}
+    {warning && <p className="mt-3 rounded-lg border border-warning/25 bg-warning-soft p-3 text-xs text-warning">{warning}</p>}
+    {applied && <p role="status" className="mt-3 rounded-lg border border-success/25 bg-success-soft p-3 text-sm text-success">{applied}</p>}
     {answer && !proposal && <p className="mt-2 text-xs text-muted-foreground">Gerado por IA a partir do chamado. Confira antes de agir.</p>}
   </Shell>;
 }
@@ -216,7 +216,7 @@ export function QueueAssistant({ user, status, query, onOpenTicket }: { user: Us
         {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}Perguntar
       </Button>
     </form>
-    {error && <p role="alert" className="mt-3 rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
+    {error && <p role="alert" className="mt-3 rounded-lg border border-danger/25 bg-danger-soft p-3 text-sm text-danger">{error}</p>}
     {answer && <Answer text={answer} onOpenTicket={onOpenTicket} />}
     {answer && <p className="mt-2 text-xs text-muted-foreground">Resposta gerada por IA a partir do que ela consultou no sistema. Toque numa FSA para abrir o chamado. Confira antes de agir.</p>}
   </Shell>;
@@ -348,14 +348,14 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Abrir assistente de IA"
-          className="grid size-14 place-items-center rounded-2xl border border-violet-300/35 bg-primary text-primary-foreground shadow-[0_18px_45px_rgba(0,0,0,.38)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="grid size-14 place-items-center rounded-2xl border border-transparent bg-brand text-brand-foreground shadow-(--shadow-popover) transition-colors hover:bg-(--brand-strong) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <Sparkles className="size-5" aria-hidden="true" />
         </button>
       ) : (
         <section
           aria-label="Assistente de IA"
-          className="flex h-[min(36rem,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] flex-col overflow-hidden rounded-[1.5rem] border border-violet-300/25 bg-card shadow-[0_24px_80px_rgba(0,0,0,.48)] backdrop-blur-md"
+          className="flex h-[min(36rem,calc(100dvh-2rem))] w-[min(26rem,calc(100dvw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-(--shadow-overlay)"
         >
           <header className="flex items-center gap-3 border-b border-border/70 bg-violet-400/8 px-4 py-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
@@ -463,7 +463,7 @@ export function FloatingAssistant({ user, onOpenTicket, onPrepareSchedule, onPre
                       </Button>
                     )}
                     {item.error && (
-                      <p role="alert" className="rounded-xl border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">
+                      <p role="alert" className="rounded-xl border border-danger/25 bg-danger-soft p-3 text-sm text-danger">
                         {item.error}
                       </p>
                     )}

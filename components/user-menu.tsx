@@ -53,17 +53,20 @@ import {
   VoiceCallReceiver,
   VoiceChatClient,
 } from "@/lib/voice-chat";
+import {
+  presenceGroupLabel,
+  presenceOf,
+  presenceStatuses,
+  presenceSummary,
+  sortByPresence,
+  type PresenceStatus,
+} from "@/lib/presence";
+import { PresenceDot, PresenceLabel } from "@/components/presence-indicator";
 
-export const statuses = [
-  "Online",
-  "Ocupado",
-  "Ausente",
-  "Não perturbe",
-  "Almoçando",
-  "Pausa de 15 minutos",
-  "Offline",
-] as const;
-export type Status = (typeof statuses)[number];
+// A lista de status mora em lib/presence (junto com cor, forma e agrupamento);
+// os nomes exportados daqui continuam os mesmos.
+export const statuses = presenceStatuses;
+export type Status = PresenceStatus;
 type Colleague = {
   email: string;
   role: "gerencia" | "coordenador" | "n1" | "analista" | "tecnico";
@@ -240,25 +243,6 @@ async function showDesktopCallNotification(
     /* O convite também fica visível dentro do Caju OS. */
   }
 }
-
-const statusColors: Record<Status, string> = {
-  Online: "bg-emerald-400",
-  Ocupado: "bg-rose-400",
-  Ausente: "bg-yellow-400",
-  "Não perturbe": "bg-fuchsia-400",
-  Almoçando: "bg-amber-400",
-  "Pausa de 15 minutos": "bg-sky-400",
-  Offline: "bg-slate-500",
-};
-const statusTextColors: Record<Status, string> = {
-  Online: "text-emerald-300",
-  Ocupado: "text-rose-300",
-  Ausente: "text-yellow-300",
-  "Não perturbe": "text-fuchsia-300",
-  Almoçando: "text-amber-300",
-  "Pausa de 15 minutos": "text-sky-300",
-  Offline: "text-slate-400",
-};
 
 function inQuietHours(preferences: CommunicationPreferences) {
   if (!preferences.quietHoursEnabled) return false;
@@ -662,8 +646,9 @@ export function ColleaguesPanel({
     } catch (error) { setShareError(error instanceof Error ? error.message : 'Falha ao compartilhar chamado.'); }
     finally { setSharing(false); }
   }
+  // A busca também acha pelo status ("online", "almoçando").
   const filteredColleagues = colleagues.filter((item) =>
-    `${item.displayName || ""} ${item.email} ${roleLabels[item.role]}`
+    `${item.displayName || ""} ${item.email} ${roleLabels[item.role]} ${item.status}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
@@ -673,6 +658,7 @@ export function ColleaguesPanel({
   const list = (
     <ColleagueList
       colleagues={filteredColleagues}
+      total={colleagues.length}
       loading={loading}
       onSelect={openChat}
     />
@@ -705,13 +691,13 @@ export function ColleaguesPanel({
     <>
       <aside
         inert={!colleaguesOpen}
-        className={`colleagues-sidebar fixed inset-y-0 right-0 z-(--z-float) hidden w-[228px] flex-col border-l border-sidebar-border bg-sidebar/95 px-3 py-4 shadow-[-18px_0_50px_rgba(0,0,0,.18)] backdrop-blur-xl transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
+        className={`colleagues-sidebar fixed inset-y-0 right-0 z-(--z-float) hidden w-[264px] flex-col border-l border-sidebar-border bg-popover px-3 py-4 shadow-(--shadow-popover) transition-transform duration-200 motion-reduce:transition-none xl:flex ${colleaguesOpen ? "translate-x-0" : "pointer-events-none translate-x-[calc(100%+1.5rem)]"}`}
         aria-label="Colegas"
         aria-hidden={!colleaguesOpen}
       >
         <div className="flex h-10 items-center justify-between px-1">
           <div>
-            <p className="text-sm font-bold">Comunicação</p>
+            <p className="text-sm font-semibold">Comunicação</p>
             <p className="text-[11px] text-muted-foreground">
               Equipe, grupos e chamadas
             </p>
@@ -719,13 +705,13 @@ export function ColleaguesPanel({
           <button
             type="button"
             onClick={toggleColleagues}
-            className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary transition hover:bg-primary/20"
+            className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Fechar comunicação"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="mt-3 flex rounded-xl border border-border bg-background/50 p-1">
+        <div role="tablist" aria-label="Seção" className="mt-3 flex rounded-lg bg-muted p-0.5">
           {(
             [
               ["people", "Pessoas"],
@@ -736,8 +722,10 @@ export function ColleaguesPanel({
             <button
               key={value}
               type="button"
+              role="tab"
+              aria-selected={section === value}
               onClick={() => setSection(value)}
-              className={`min-h-9 flex-1 rounded-lg px-1 text-[11px] font-semibold transition ${section === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              className={`min-h-8 flex-1 rounded-md px-1 text-xs font-medium transition-colors ${section === value ? "bg-card-elevated text-foreground shadow-(--shadow-xs)" : "text-muted-foreground hover:text-foreground"}`}
             >
               {label}
               {value === "groups" && groups.some((group) => group.unread)
@@ -753,8 +741,8 @@ export function ColleaguesPanel({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar..."
-              className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-3 text-xs"
+              placeholder={section === "people" ? "Buscar pessoa ou status…" : "Buscar grupo…"}
+              className="field h-10 pl-9 pr-3 text-xs"
             />
           </label>
         )}
@@ -823,7 +811,7 @@ export function ColleaguesPanel({
           <div className="flex flex-wrap gap-2"><button type="button" onClick={() => setShareRecipients(colleagues.filter((item) => item.role === 'n1').map((item) => item.email))} className="min-h-9 rounded-lg border border-border px-3 text-xs font-semibold">Todos os N1</button><button type="button" onClick={() => setShareRecipients(colleagues.filter((item) => item.role === 'analista').map((item) => item.email))} className="min-h-9 rounded-lg border border-border px-3 text-xs font-semibold">Todos os analistas</button><button type="button" onClick={() => setShareRecipients(colleagues.map((item) => item.email))} className="min-h-9 rounded-lg border border-border px-3 text-xs font-semibold">Toda a equipe</button></div>
           <div className="max-h-72 space-y-1 overflow-y-auto">{colleagues.map((colleague) => <label key={colleague.email} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-border px-3"><input type="checkbox" checked={shareRecipients.includes(colleague.email)} onChange={() => setShareRecipients((current) => current.includes(colleague.email) ? current.filter((email) => email !== colleague.email) : [...current, colleague.email])} /><span className="min-w-0 flex-1 truncate text-sm font-semibold">{colleague.displayName || colleague.email.split('@')[0]}</span><span className="text-xs text-muted-foreground">{roleLabels[colleague.role]}</span></label>)}</div>
           <button type="button" disabled={!shareRecipients.length || sharing} onClick={() => void shareTicketWithMany()} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{sharing ? 'Enviando…' : `Enviar para ${shareRecipients.length} pessoa(s)`}</button>
-          {shareError && <p role="alert" className="text-xs text-rose-300">{shareError}</p>}
+          {shareError && <p role="alert" className="text-xs text-danger">{shareError}</p>}
         </DialogContent>
       </Dialog>
       <ChatDialog
@@ -878,7 +866,7 @@ export function ColleaguesPanel({
       {notice && (
         <div
           aria-live="assertive"
-          className="fixed right-4 top-4 z-(--z-incoming-call) flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-card shadow-2xl ring-1 ring-primary/10"
+          className="fixed right-4 top-4 z-(--z-incoming-call) flex w-[min(22rem,calc(100vw-2rem))] items-start rounded-2xl border border-primary/35 bg-popover shadow-(--shadow-overlay)"
         >
           <button
             type="button"
@@ -959,81 +947,107 @@ function sameSender(a?: { senderEmail: string }, b?: { senderEmail: string }) {
   return a.senderEmail.toLowerCase() === b.senderEmail.toLowerCase();
 }
 
+/**
+ * Equipe agrupada por disponibilidade (online → ocupados → ausentes →
+ * offline), com um resumo no topo. Cada pessoa mostra nome, status (cor +
+ * forma + texto), função e quando o status foi atualizado pela última vez.
+ */
 function ColleagueList({
   colleagues,
+  total,
   loading,
   onSelect,
 }: {
   colleagues: Colleague[];
+  /** Tamanho da equipe sem o filtro da busca, para o estado vazio dizer o motivo certo. */
+  total?: number;
   loading: boolean;
   onSelect: (colleague: Colleague) => void;
 }) {
   if (loading)
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-card/40 p-3 text-sm text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
-        Carregando equipe...
-      </div>
+      <output className="block space-y-1" aria-label="Carregando equipe">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="flex items-center gap-2.5 px-1.5 py-2">
+            <span aria-hidden="true" className="skeleton size-8 shrink-0 rounded-full" />
+            <span className="min-w-0 flex-1 space-y-1.5">
+              <span aria-hidden="true" className="skeleton block h-3 w-24 rounded" />
+              <span aria-hidden="true" className="skeleton block h-2.5 w-32 rounded" />
+            </span>
+          </div>
+        ))}
+      </output>
     );
   if (!colleagues.length)
     return (
-      <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
-        Nenhum outro funcionário ativo.
+      <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+        {total ? "Ninguém da equipe encontrado com essa busca." : "Nenhum outro funcionário ativo."}
       </div>
     );
+  const summary = presenceSummary(colleagues);
+  const sorted = sortByPresence(colleagues);
+  const groups = (["available", "busy", "away", "offline"] as const)
+    .map((group) => ({ group, people: sorted.filter((person) => presenceOf(person.status).group === group) }))
+    .filter((entry) => entry.people.length);
   return (
-    <div className="space-y-1.5">
-      {colleagues.map((colleague) => {
-        const name = colleague.displayName || colleague.email.split("@")[0];
-        return (
-          <button
-            key={colleague.email}
-            type="button"
-            onClick={() => onSelect(colleague)}
-            className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition hover:border-border hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label={`Conversar com ${name}, status ${colleague.status}`}
-          >
-            <span className="relative grid size-8 shrink-0 place-items-center overflow-visible rounded-full border border-white/10 bg-muted text-[10px] font-bold text-foreground">
-              {colleague.photoUrl ? (
-                <img
-                  src={colleague.photoUrl}
-                  alt=""
-                  className="size-full rounded-full object-cover"
-                />
-              ) : (
-                initials(name)
-              )}
-              <span
-                className={`absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-sidebar ${statusColors[colleague.status]}`}
-              />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-semibold">
-                {name}
-              </span>
-              <span className="block truncate text-[11px]">
-                <span className="text-muted-foreground">
-                  {roleLabels[colleague.role]} ·{" "}
-                </span>
-                <span
-                  className={`font-medium ${statusTextColors[colleague.status]}`}
+    <div>
+      <p className="px-1.5 text-xs text-muted-foreground" aria-live="polite">
+        <span className="font-semibold text-foreground tabular-nums">{summary.available}</span> de {colleagues.length} online
+        {summary.busy > 0 && <> · {summary.busy} {summary.busy === 1 ? "ocupado" : "ocupados"}</>}
+        {summary.away > 0 && <> · {summary.away} {summary.away === 1 ? "ausente" : "ausentes"}</>}
+      </p>
+      {groups.map(({ group, people }) => (
+        <section key={group} className="mt-3" aria-label={`${presenceGroupLabel[group]}: ${people.length}`}>
+          <h3 className="label-caps px-1.5">{presenceGroupLabel[group]} · {people.length}</h3>
+          <div className="mt-1 space-y-0.5">
+            {people.map((colleague) => {
+              const name = colleague.displayName || colleague.email.split("@")[0];
+              const offline = colleague.status === "Offline";
+              const when = offline ? colleague.lastSeenAt : colleague.updatedAt;
+              return (
+                <button
+                  key={colleague.email}
+                  type="button"
+                  onClick={() => onSelect(colleague)}
+                  className="group flex min-h-12 w-full items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label={`Conversar com ${name}, ${roleLabels[colleague.role]}, status ${colleague.status}${when ? `, ${offline ? "visto" : "atualizado"} ${relativeTime(when)}` : ""}`}
                 >
-                  {colleague.status}
-                </span>
-              </span>
-              {colleague.status === "Offline" && colleague.lastSeenAt && (
-                <span className="block truncate text-[10px] text-muted-foreground">
-                  Visto {relativeTime(colleague.lastSeenAt)}
-                </span>
-              )}
-            </span>
-            <MessageCircle
-              className="size-4 shrink-0 text-muted-foreground transition group-hover:text-primary"
-              aria-hidden="true"
-            />
-          </button>
-        );
-      })}
+                  <span className={`relative grid size-8 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-semibold text-foreground ${offline ? "opacity-70" : ""}`}>
+                    {colleague.photoUrl ? (
+                      <img
+                        src={colleague.photoUrl}
+                        alt=""
+                        className="size-full rounded-full object-cover"
+                      />
+                    ) : (
+                      initials(name)
+                    )}
+                    <PresenceDot status={colleague.status} className="absolute -bottom-0.5 -right-0.5" ring="ring-popover" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-sm font-medium ${offline ? "text-muted-foreground" : ""}`}>
+                      {name}
+                    </span>
+                    <span className="flex min-w-0 items-center gap-1 text-[11px]">
+                      <PresenceLabel status={colleague.status} className="shrink-0" />
+                      <span className="truncate text-muted-foreground">· {roleLabels[colleague.role]}</span>
+                    </span>
+                    {when && (
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {offline ? "Visto" : "Atualizado"} {relativeTime(when)}
+                      </span>
+                    )}
+                  </span>
+                  <MessageCircle
+                    className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-primary group-focus-visible:opacity-100"
+                    aria-hidden="true"
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -1460,7 +1474,7 @@ function ChatDialog({
             </div>
           )}
           {error && (
-            <p role="alert" className="mt-3 text-sm text-rose-300">
+            <p role="alert" className="mt-3 text-sm text-danger">
               {error}
             </p>
           )}
@@ -1473,11 +1487,11 @@ function ChatDialog({
             <div
               role="status"
               aria-live="polite"
-              className="mb-2 flex min-h-10 items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 text-sm text-rose-200"
+              className="mb-2 flex min-h-10 items-center gap-2 rounded-xl border border-danger/25 bg-danger-soft px-3 text-sm text-danger"
             >
               <span className="size-2 animate-pulse rounded-full bg-rose-400" />
               Gravando áudio · {formatDuration(recordingSeconds)}
-              <span className="ml-auto text-xs text-rose-200/70">
+              <span className="ml-auto text-xs text-danger/70">
                 máx. 1:30
               </span>
             </div>
@@ -1524,7 +1538,7 @@ function ChatDialog({
               onClick={() =>
                 recording ? stopRecording() : void startRecording()
               }
-              className={`grid size-11 shrink-0 place-items-center rounded-xl transition-colors ${recording ? "bg-rose-400/15 text-rose-300" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+              className={`grid size-11 shrink-0 place-items-center rounded-xl transition-colors ${recording ? "bg-rose-400/15 text-danger" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
               aria-label={recording ? "Parar gravação" : "Gravar áudio"}
             >
               {recording ? (
@@ -1578,8 +1592,8 @@ function ChatDialog({
       </DialogContent>
     </Dialog>
     {colleague && callActive && chatMinimized && (
-      <button type="button" onClick={() => setChatMinimized(false)} className="fixed bottom-4 right-4 z-(--z-live-call) inline-flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-400/30 bg-card px-4 text-left shadow-2xl" aria-label="Restaurar chamada em andamento">
-        <span className="grid size-9 place-items-center rounded-xl bg-emerald-400/12 text-emerald-300"><Phone className="size-4" /></span>
+      <button type="button" onClick={() => setChatMinimized(false)} className="fixed bottom-4 right-4 z-(--z-live-call) inline-flex min-h-14 items-center gap-3 rounded-2xl border border-emerald-400/30 bg-popover px-4 text-left shadow-(--shadow-popover)" aria-label="Restaurar chamada em andamento">
+        <span className="grid size-9 place-items-center rounded-xl bg-emerald-400/12 text-success"><Phone className="size-4" /></span>
         <span><strong className="block text-sm">Chamada em andamento</strong><small className="text-muted-foreground">Clique para restaurar</small></span>
       </button>
     )}
@@ -1699,7 +1713,7 @@ function VoiceCallControl({ colleague, onActiveChange }: { colleague: Colleague;
               </p>
               <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
                 <Signal
-                  className={`size-3 ${quality === "poor" ? "text-rose-300" : quality === "reconnecting" ? "text-amber-300" : "text-emerald-300"}`}
+                  className={`size-3 ${quality === "poor" ? "text-danger" : quality === "reconnecting" ? "text-amber-300" : "text-success"}`}
                 />
                 {participants
                   ? `${participants + 1} participantes · ${qualityLabel(quality)}`
@@ -1769,7 +1783,7 @@ function VoiceCallControl({ colleague, onActiveChange }: { colleague: Colleague;
       </div>
       {screenStream && <ScreenPreview stream={screenStream} label={sharingScreen ? "Sua tela compartilhada" : "Tela compartilhada pelo colega"} />}
       {error && (
-        <p role="alert" className="mt-2 text-xs text-rose-300">
+        <p role="alert" className="mt-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -1913,7 +1927,7 @@ function TeamVoiceControl({
           type="button"
           data-floating-launcher
           onClick={() => openPicker("start")}
-          className="pointer-events-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-4 text-sm font-bold text-primary-foreground shadow-2xl transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          className="pointer-events-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-transparent bg-brand px-4 text-sm font-semibold text-brand-foreground shadow-(--shadow-popover) transition-colors hover:bg-(--brand-strong) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
         >
           <Users className="size-4" aria-hidden="true" />
           Reunião
@@ -1921,10 +1935,10 @@ function TeamVoiceControl({
       ) : (
         <section
           aria-label="Reunião de voz em andamento"
-          className={`pointer-events-auto overflow-hidden rounded-[1.7rem] border border-emerald-400/25 bg-slate-950/95 shadow-[0_24px_90px_rgba(0,0,0,.45)] backdrop-blur-xl transition-[width,transform] motion-reduce:transition-none ${minimized ? "w-[min(19rem,calc(100vw-2rem))]" : "w-[min(44rem,calc(100vw-2rem))]"}`}
+          className={`dark pointer-events-auto overflow-hidden rounded-2xl border border-emerald-400/25 bg-slate-950 text-foreground shadow-(--shadow-overlay) transition-[width,transform] motion-reduce:transition-none ${minimized ? "w-[min(19rem,calc(100vw-2rem))]" : "w-[min(44rem,calc(100vw-2rem))]"}`}
         >
           <div className="flex min-h-16 items-center gap-3 border-b border-white/10 bg-white/[.03] p-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-400/15 text-emerald-300">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-emerald-400/15 text-success">
               <Phone className="size-5" />
             </span>
             <div role="status" aria-live="polite" className="min-w-0 flex-1">
@@ -1932,7 +1946,7 @@ function TeamVoiceControl({
                 {state === "connecting" ? "Conectando..." : "Reunião em andamento"}
               </p>
               <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Signal className={`size-3 ${quality === "poor" ? "text-rose-300" : quality === "reconnecting" ? "text-amber-300" : "text-emerald-300"}`} />
+                <Signal className={`size-3 ${quality === "poor" ? "text-danger" : quality === "reconnecting" ? "text-amber-300" : "text-success"}`} />
                 {participants ? `${participants + 1} participantes · ${qualityLabel(quality)}` : "Aguardando colegas"}
               </p>
             </div>
@@ -1952,7 +1966,7 @@ function TeamVoiceControl({
                   ) : (
                     <div className="grid min-h-40 place-items-center text-center text-sm text-muted-foreground">
                       <div>
-                        <Users className="mx-auto mb-3 size-10 text-emerald-300" />
+                        <Users className="mx-auto mb-3 size-10 text-success" />
                         <p className="font-semibold text-foreground">Sala de voz ativa</p>
                         <p className="mt-1 text-xs">Compartilhe tela quando precisar mostrar algo.</p>
                       </div>
@@ -1962,7 +1976,7 @@ function TeamVoiceControl({
                 <div className="rounded-2xl border border-white/10 bg-white/[.03] p-3">
                   <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Participantes</p>
                   <div className="mt-2 space-y-2">
-                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-semibold text-emerald-100">Você</div>
+                    <div className="rounded-xl border border-success/25 bg-success-soft px-3 py-2 text-xs font-semibold text-success">Você</div>
                     {invitedNames.slice(0, 5).map((name) => (
                       <div key={name} className="rounded-xl border border-white/10 bg-foreground/[.035] dark:bg-black/20 px-3 py-2 text-xs font-semibold">{name}</div>
                     ))}
@@ -1970,9 +1984,9 @@ function TeamVoiceControl({
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-2 border-t border-white/10 p-3">
-                <button type="button" disabled={state !== "connected"} onClick={() => { if (sharingScreen) { clientRef.current?.stopScreenShare(); setSharingScreen(false); setScreenStream(null); } else void clientRef.current?.startScreenShare().then((stream) => { setSharingScreen(true); setScreenStream(stream); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Falha ao compartilhar tela.")); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${sharingScreen ? "border-emerald-300/40 bg-emerald-400/20 text-emerald-100" : "border-white/10 bg-white/5"}`} aria-label={sharingScreen ? "Parar compartilhamento de tela" : "Compartilhar tela"}><MonitorUp className="mx-auto mb-1 size-4" />Tela</button>
-                <button type="button" disabled={state !== "connected"} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${muted ? "border-rose-300/35 bg-rose-400/15 text-rose-100" : "border-white/10 bg-white/5"}`} aria-label={muted ? "Ativar microfone" : "Silenciar microfone"}>{muted ? <MicOff className="mx-auto mb-1 size-4" /> : <Mic className="mx-auto mb-1 size-4" />}{muted ? "Mudo" : "Mic"}</button>
-                <button type="button" disabled={state !== "connected"} onClick={() => { const next = !remoteMuted; setRemoteMuted(next); audioRef.current.forEach((audio) => { audio.muted = next; }); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${remoteMuted ? "border-amber-300/35 bg-amber-400/15 text-amber-100" : "border-white/10 bg-white/5"}`} aria-label={remoteMuted ? "Ouvir participantes" : "Silenciar participantes"}><FileAudio className="mx-auto mb-1 size-4" />Som</button>
+                <button type="button" disabled={state !== "connected"} onClick={() => { if (sharingScreen) { clientRef.current?.stopScreenShare(); setSharingScreen(false); setScreenStream(null); } else void clientRef.current?.startScreenShare().then((stream) => { setSharingScreen(true); setScreenStream(stream); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Falha ao compartilhar tela.")); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${sharingScreen ? "border-emerald-300/40 bg-emerald-400/20 text-success" : "border-white/10 bg-white/5"}`} aria-label={sharingScreen ? "Parar compartilhamento de tela" : "Compartilhar tela"}><MonitorUp className="mx-auto mb-1 size-4" />Tela</button>
+                <button type="button" disabled={state !== "connected"} onClick={() => { const next = !muted; setMuted(next); clientRef.current?.setMuted(next); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${muted ? "border-rose-300/35 bg-rose-400/15 text-danger" : "border-white/10 bg-white/5"}`} aria-label={muted ? "Ativar microfone" : "Silenciar microfone"}>{muted ? <MicOff className="mx-auto mb-1 size-4" /> : <Mic className="mx-auto mb-1 size-4" />}{muted ? "Mudo" : "Mic"}</button>
+                <button type="button" disabled={state !== "connected"} onClick={() => { const next = !remoteMuted; setRemoteMuted(next); audioRef.current.forEach((audio) => { audio.muted = next; }); }} className={`min-h-12 rounded-2xl border px-2 text-xs font-bold disabled:opacity-50 ${remoteMuted ? "border-amber-300/35 bg-amber-400/15 text-warning" : "border-white/10 bg-white/5"}`} aria-label={remoteMuted ? "Ouvir participantes" : "Silenciar participantes"}><FileAudio className="mx-auto mb-1 size-4" />Som</button>
                 <button type="button" disabled={state !== "connected" || !inviteLimit} onClick={() => openPicker("add")} className="min-h-12 rounded-2xl border border-white/10 bg-white/5 px-2 text-xs font-bold disabled:opacity-50" aria-label="Adicionar participantes"><UserPlus className="mx-auto mb-1 size-4" />Adicionar</button>
               </div>
             </>
@@ -1980,7 +1994,7 @@ function TeamVoiceControl({
         </section>
       )}
       {error && (
-        <p role="alert" className="pointer-events-auto mt-2 rounded-xl border border-rose-400/25 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">
+        <p role="alert" className="pointer-events-auto mt-2 rounded-xl border border-danger/25 bg-danger-soft px-3 py-2 text-xs text-danger">
           {error}
         </p>
       )}
@@ -2030,9 +2044,7 @@ function TeamVoiceControl({
                       }
                       className="size-4 accent-primary"
                     />
-                    <span
-                      className={`size-2.5 rounded-full ${statusColors[colleague.status]}`}
-                    />
+                    <PresenceDot status={colleague.status} size="sm" ring="ring-transparent" />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold">
                       {name}
                     </span>
@@ -2232,7 +2244,7 @@ function IncomingVoiceCall({
             <button
               type="button"
               onClick={() => invitation && onDecline(invitation)}
-              className="min-h-11 flex-1 rounded-xl border border-rose-400/40 bg-rose-400/10 px-3 text-sm font-semibold text-rose-200"
+              className="min-h-11 flex-1 rounded-xl border border-danger/25 bg-danger-soft px-3 text-sm font-semibold text-danger"
             >
               Recusar
             </button>
@@ -2245,7 +2257,7 @@ function IncomingVoiceCall({
             </button>
           </div>
           {error && (
-            <p role="alert" className="text-xs text-rose-300">
+            <p role="alert" className="text-xs text-danger">
               {error}
             </p>
           )}
@@ -2254,10 +2266,10 @@ function IncomingVoiceCall({
       {active && (
         <section
           aria-label="Chamada de voz em andamento"
-          className={`fixed bottom-4 right-4 z-(--z-live-call) rounded-2xl border border-emerald-400/30 bg-card/95 shadow-2xl backdrop-blur-xl transition-[width] motion-reduce:transition-none ${minimized ? "w-56" : "w-[min(25rem,calc(100vw-2rem))]"}`}
+          className={`fixed bottom-4 right-4 z-(--z-live-call) rounded-2xl border border-emerald-400/30 bg-popover shadow-(--shadow-popover) transition-[width] motion-reduce:transition-none ${minimized ? "w-56" : "w-[min(25rem,calc(100vw-2rem))]"}`}
         >
           <div className="flex min-h-14 items-center gap-3 p-3">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-400/12 text-emerald-300">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-400/12 text-success">
               <Phone className="size-5" />
             </span>
             <div className="min-w-0 flex-1">
@@ -2319,7 +2331,7 @@ function IncomingVoiceCall({
             </div>{screenStream && <div className="px-3 pb-3"><ScreenPreview stream={screenStream} label={sharingScreen ? "Sua tela compartilhada" : "Tela compartilhada"} /></div>}</>
           )}
           {error && (
-            <p role="alert" className="px-3 pb-3 text-xs text-rose-300">
+            <p role="alert" className="px-3 pb-3 text-xs text-danger">
               {error}
             </p>
           )}
@@ -2616,7 +2628,7 @@ function CallHistoryList({ calls }: { calls: CallLog[] }) {
           className="flex min-h-12 items-center gap-2.5 rounded-xl border border-border/70 px-2"
         >
           <span
-            className={`grid size-8 shrink-0 place-items-center rounded-full ${call.status === "missed" || call.status === "failed" ? "bg-rose-400/10 text-rose-300" : "bg-emerald-400/10 text-emerald-300"}`}
+            className={`grid size-8 shrink-0 place-items-center rounded-full ${call.status === "missed" || call.status === "failed" ? "bg-rose-400/10 text-danger" : "bg-emerald-400/10 text-success"}`}
           >
             <History className="size-4" />
           </span>
@@ -2725,9 +2737,7 @@ function CreateGroupDialog({
                   )
                 }
               />
-              <span
-                className={`size-2.5 rounded-full ${statusColors[colleague.status]}`}
-              />
+              <PresenceDot status={colleague.status} size="sm" ring="ring-transparent" />
               <span className="min-w-0 flex-1 truncate text-sm">
                 {colleague.displayName || colleague.email}
               </span>
@@ -2735,7 +2745,7 @@ function CreateGroupDialog({
           ))}
         </div>
         {error && (
-          <p role="alert" className="text-xs text-rose-300">
+          <p role="alert" className="text-xs text-danger">
             {error}
           </p>
         )}
@@ -2977,7 +2987,7 @@ function GroupChatDialog({
                   <button
                     type="button"
                     onClick={() => void deleteGroup()}
-                    className="inline-flex items-center gap-1 text-xs text-rose-300 hover:text-rose-200"
+                    className="inline-flex items-center gap-1 text-xs text-danger hover:text-danger"
                   >
                     <Trash2 className="size-3.5" />
                     Excluir grupo
@@ -3099,7 +3109,7 @@ function GroupChatDialog({
                             <button
                               type="button"
                               onClick={() => void deleteMessage(message.id)}
-                              className="text-muted-foreground/70 hover:text-rose-300"
+                              className="text-muted-foreground/70 hover:text-danger"
                               aria-label="Apagar mensagem"
                             >
                               <Trash2 className="size-3" />
@@ -3119,7 +3129,7 @@ function GroupChatDialog({
               </div>
             )}
             {error && (
-              <p role="alert" className="mt-2 text-xs text-rose-300">
+              <p role="alert" className="mt-2 text-xs text-danger">
                 {error}
               </p>
             )}
@@ -3218,7 +3228,7 @@ function GroupChatDialog({
                         );
                         onUpdated();
                       }}
-                      className="text-xs text-rose-300"
+                      className="text-xs text-danger"
                     >
                       Remover
                     </button>
@@ -3436,22 +3446,23 @@ export function UserMenu({ compact = false }: { compact?: boolean } = {}) {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<button type="button" aria-label={`Minha conta e disponibilidade (${status})`} title={compact ? `${name || user?.email || ""} · ${status}` : undefined} className="flex min-h-12 min-w-0 flex-1 items-center gap-3 rounded-xl p-1.5 text-left hover:bg-muted" />}>
         <span className="relative shrink-0">
-          <span className="grid size-9 place-items-center overflow-hidden rounded-full bg-primary-soft text-xs font-bold text-primary">
+          <span className="grid size-9 place-items-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-foreground">
             {photo ? <img src={photo} alt="" className="size-full object-cover" /> : label.slice(0, 2).toUpperCase()}
           </span>
           {/* Disponibilidade também no avatar: é o que sobra com a barra recolhida. */}
-          <span aria-hidden="true" className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background ${status === "Online" ? "bg-emerald-500" : "bg-amber-500"}`} />
+          <PresenceDot status={status} className="absolute -bottom-0.5 -right-0.5" ring="ring-sidebar" />
         </span>
         <span className="app-nav-label min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold">{name || user?.email}</span>
-          <span className="block truncate text-xs text-muted-foreground">{name ? user?.email : role ? roleLabels[role] : "Sem perfil"}</span>
+          <span className="block truncate text-[13px] font-medium">{name || user?.email}</span>
+          <PresenceLabel status={status} className="flex text-xs" />
         </span>
         <ChevronUp aria-hidden="true" className={`app-nav-label size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "rotate-180"}`} />
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="max-h-[min(30rem,calc(100dvh-7rem))] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Meu status</p>
-        <div className="mt-2 grid gap-1">
-          {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => void updateStatus(item)} className={`flex min-h-11 items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${status === item ? "border-primary/50 bg-primary/15 font-semibold text-foreground" : "border-transparent hover:bg-muted"}`}>{item}{status === item && <Check aria-hidden="true" className="size-4 text-primary" />}</button>)}
+        <p className="label-caps">Meu status</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{name ? user?.email : role ? roleLabels[role] : "Sem perfil"}</p>
+        <div className="mt-2 grid gap-0.5">
+          {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => void updateStatus(item)} className={`flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${status === item ? "bg-primary-soft font-medium text-foreground" : "hover:bg-muted"}`}><PresenceDot status={item} size="sm" ring="ring-transparent" /><span className="flex-1">{item}</span>{status === item && <Check aria-hidden="true" className="size-4 text-primary" />}</button>)}
         </div>
         <a href="/?view=settings" onClick={() => setOpen(false)} className="mt-3 flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted">Editar perfil em Configurações</a>
         {feedback && <p role="status" className="mt-2 text-xs text-muted-foreground">{feedback}</p>}

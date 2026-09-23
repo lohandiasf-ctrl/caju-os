@@ -111,16 +111,15 @@ export function BulletinBoard({
 
   return (
     <section
-      className="relative mt-6 overflow-hidden rounded-2xl border border-amber-300/25 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,.10),transparent_34%),linear-gradient(135deg,rgba(30,41,59,.96),rgba(15,23,42,.98))] p-4 shadow-[0_10px_30px_rgba(0,0,0,.18)] sm:p-5"
+      className="surface-panel mt-6 p-4 sm:p-6"
       aria-labelledby="bulletin-title"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-200/50 to-transparent" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 id="bulletin-title" className="flex flex-wrap items-center gap-2 font-semibold">
-            <StickyNote className="size-[18px] shrink-0 text-amber-200" aria-hidden="true" />
+          <h2 id="bulletin-title" className="section-title flex flex-wrap items-center gap-2">
+            <StickyNote className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
             Mural da equipe
-            <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-100">
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
               {notes.length}
               <span className="sr-only"> {notes.length === 1 ? "bilhete ativo" : "bilhetes ativos"}</span>
             </span>
@@ -129,11 +128,11 @@ export function BulletinBoard({
             Recados importantes aparecem aqui no início para ninguém perder.
           </p>
         </div>
-        <Button variant="outline" aria-expanded={composing} aria-controls="bulletin-compose" onClick={() => setComposing((current) => !current)} className="border-amber-300/30 text-amber-100"><Plus />{composing ? "Fechar formulário" : "Novo bilhete"}</Button>
+        <Button variant="outline" aria-expanded={composing} aria-controls="bulletin-compose" onClick={() => setComposing((current) => !current)} ><Plus />{composing ? "Fechar formulário" : "Novo bilhete"}</Button>
       </div>
 
       <div className={`mt-4 grid gap-3 ${composing ? "xl:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]" : ""}`}>
-        {composing && <div id="bulletin-compose" className="rounded-2xl border border-white/10 bg-foreground/[.035] dark:bg-black/25 p-3">
+        {composing && <div id="bulletin-compose" className="rounded-xl border border-border bg-card-elevated p-3">
           <div className="grid gap-2">
             <label htmlFor="note-target" className="text-xs font-medium text-muted-foreground">Para quem</label>
             <Input id="note-target"
@@ -141,7 +140,7 @@ export function BulletinBoard({
               onChange={(event) => setTargetName(event.target.value)}
               placeholder="Para quem? Ex.: Aiã"
               maxLength={80}
-              className="min-h-11 border-white/10 bg-foreground/[.035] dark:bg-black/30"
+              className="min-h-11"
             />
             <label htmlFor="note-title" className="text-xs font-medium text-muted-foreground">Assunto <span className="font-normal">(opcional)</span></label>
             <Input id="note-title"
@@ -149,7 +148,7 @@ export function BulletinBoard({
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Assunto opcional"
               maxLength={100}
-              className="min-h-11 border-white/10 bg-foreground/[.035] dark:bg-black/30"
+              className="min-h-11"
             />
             <label htmlFor="note-body" className="text-xs font-medium text-muted-foreground">Recado</label>
             <Textarea id="note-body"
@@ -157,14 +156,12 @@ export function BulletinBoard({
               onChange={(event) => setNote(event.target.value)}
               placeholder="Ex.: lembrar de procurar o técnico de Jaguaquara"
               maxLength={800}
-              className="min-h-24 resize-none border-white/10 bg-foreground/[.035] dark:bg-black/30"
+              className="min-h-24 resize-none"
             />
             <Button
               type="button"
               onClick={() => void submit()}
               disabled={sending || note.trim().length < 6}
-              variant="secondary"
-              className="min-h-11 bg-amber-300 text-slate-950 hover:bg-amber-200"
             >
               {sending ? <Loader2 className="animate-spin" /> : <Send />}
               Deixar bilhete
@@ -174,21 +171,22 @@ export function BulletinBoard({
 
         <div className="min-w-0 space-y-2">
           {loading ? (
-            <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
-              Carregando bilhetes...
-            </div>
+            <output className="block space-y-2" aria-label="Carregando bilhetes">
+              <span aria-hidden="true" className="skeleton block h-20 rounded-xl" />
+              <span aria-hidden="true" className="skeleton block h-20 rounded-xl" />
+            </output>
           ) : notes.length ? (
             notes.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-amber-300/20 bg-foreground/[.035] dark:bg-black/25 p-3">
+              <article key={item.id} className="rounded-xl border border-border bg-card-elevated p-3">
                 <div className="flex items-start gap-3">
-                  <div className="grid size-9 shrink-0 place-items-center rounded-xl border border-amber-300/30 bg-amber-300/10 text-amber-200">
-                    <Pin className="size-4" />
+                  <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                    <Pin aria-hidden="true" className="size-4" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-sm font-bold">{item.title}</h3>
+                      <h3 className="text-sm font-semibold">{item.title}</h3>
                       {item.targetName && (
-                        <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        <span className="rounded-md bg-primary-soft px-1.5 py-0.5 text-[11px] font-medium text-primary">
                           Para {item.targetName}
                         </span>
                       )}
@@ -214,12 +212,12 @@ export function BulletinBoard({
             ))
           ) : (
             <div className="grid min-h-40 place-items-center rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-              Nenhum bilhete ativo.
+              Nenhum recado ativo. Use “Novo bilhete” para deixar um aviso para a equipe.
             </div>
           )}
         </div>
       </div>
-      {message && <p className="mt-3 text-sm text-amber-200">{message}</p>}
+      {message && <p role="alert" className="mt-3 text-sm text-warning">{message}</p>}
     </section>
   );
 }

@@ -42,7 +42,7 @@ export function TicketStack<T extends Chamado>({
 
   if (aberta) {
     return (
-      <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/[.04] p-1.5">
+      <div className="rounded-xl border border-border bg-card-elevated p-1.5">
         <div className="flex items-center gap-1 px-1 pb-1.5">
           {selecao}
           <button
@@ -50,15 +50,15 @@ export function TicketStack<T extends Chamado>({
             onClick={onAlternar}
             aria-expanded="true"
             aria-controls={conteudoId}
-            className="flex min-h-9 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs font-semibold text-emerald-100 transition hover:bg-emerald-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+            className="flex min-h-9 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            <Layers3 className="size-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
+            <Layers3 className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{grupo.nome ?? "Grupo"}</span>
-            <span className="shrink-0 text-emerald-200/80">Recolher</span>
-            <ChevronUp className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="shrink-0 text-muted-foreground">Recolher</span>
+            <ChevronUp className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         </div>
-        <div id={conteudoId} className="space-y-2 border-l border-emerald-400/25 pl-1.5">
+        <div id={conteudoId} className="space-y-2 border-l border-border pl-1.5">
           {chamados.map((chamado) => (
             <div key={chamado.id}>{renderChamado(chamado)}</div>
           ))}
@@ -73,15 +73,15 @@ export function TicketStack<T extends Chamado>({
     <div className="group/pilha relative pb-3">
       <div
         aria-hidden="true"
-        className="absolute inset-x-3 bottom-0 top-3 rounded-xl border border-white/[.05] bg-foreground/[.035] dark:bg-black/25 transition-transform duration-200 group-hover/pilha:translate-y-1 motion-reduce:transition-none"
+        className="absolute inset-x-3 bottom-0 top-3 rounded-xl border border-border bg-card-elevated transition-transform duration-200 group-hover/pilha:translate-y-1 motion-reduce:transition-none"
       />
       <div
         aria-hidden="true"
-        className="absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-xl border border-white/[.06] bg-foreground/[.035] dark:bg-black/20 transition-transform duration-200 group-hover/pilha:translate-y-0.5 motion-reduce:transition-none"
+        className="absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-xl border border-border bg-card-elevated transition-transform duration-200 group-hover/pilha:translate-y-0.5 motion-reduce:transition-none"
       />
 
       <article
-        className={`relative rounded-xl border bg-card shadow-[0_14px_32px_rgba(0,0,0,.18)] transition hover:-translate-y-0.5 motion-reduce:transition-none ${selecionada ? "border-violet-300/60 ring-1 ring-violet-400/30" : "border-emerald-400/25 hover:border-emerald-300/45"}`}
+        className={`relative rounded-xl border bg-card transition-colors motion-reduce:transition-none ${selecionada ? "border-primary/60 ring-1 ring-primary/30" : "border-border hover:border-primary/40"}`}
       >
         {selecao && <div className="absolute left-1 top-1 z-10">{selecao}</div>}
         <button
@@ -90,19 +90,19 @@ export function TicketStack<T extends Chamado>({
           aria-expanded="false"
           aria-controls={conteudoId}
           aria-label={`${grupo.nome ?? "Grupo"}: ${chamados.length} FSAs de ${grupo.tecnico}. Abrir.`}
-          className="w-full rounded-xl p-3 text-left transition hover:bg-foreground/[.05] dark:hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+          className="w-full rounded-xl p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <div className={`flex items-center justify-between gap-2 ${selecao ? "pl-8" : ""}`}>
-            <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.1em] text-emerald-300">
+            <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
               <Layers3 className="size-3.5" aria-hidden="true" />
-              Grupo
+              Grupo de FSAs
             </span>
-            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold tabular-nums text-emerald-100">
+            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-foreground">
               {chamados.length} FSAs
             </span>
           </div>
 
-          <h4 className="mt-2 truncate text-sm font-semibold leading-snug">
+          <h4 className="mt-1.5 truncate text-sm font-medium leading-snug">
             {grupo.nome ?? "Grupo"}
           </h4>
 
@@ -110,13 +110,13 @@ export function TicketStack<T extends Chamado>({
             {etiquetas.map((chamado) => (
               <span
                 key={chamado.id}
-                className="rounded-md border border-white/[.07] bg-foreground/[.035] dark:bg-black/25 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary"
+                className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[11px] font-medium text-primary"
               >
                 {chamado.id}
               </span>
             ))}
             {resto > 0 && (
-              <span className="rounded-md px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+              <span className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                 +{resto}
               </span>
             )}
@@ -138,7 +138,7 @@ export function TicketStack<T extends Chamado>({
             )}
           </div>
 
-          <p className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-emerald-200/90">
+          <p className="mt-2.5 flex items-center gap-1 text-xs font-medium text-primary">
             Ver as {chamados.length} FSAs
             <ChevronDown className="size-3.5 transition-transform duration-200 group-hover/pilha:translate-y-0.5 motion-reduce:transition-none" aria-hidden="true" />
           </p>

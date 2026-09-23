@@ -51,19 +51,54 @@
   --color-danger-soft: var(--danger-soft);
   --color-chart-track: var(--chart-track);
   --color-chart-missed: var(--chart-missed);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /* Escala de raio fixa (revisão UI/UX 2026-09-23). Antes era multiplicador
+     de --radius e `rounded-2xl` virava 25 px; agora cada degrau tem um uso:
+     sm/md = controles pequenos, lg = botões/campos, xl = itens internos,
+     2xl = painéis e cards, 3xl/4xl = pílulas e casos especiais. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
+  --radius-4xl: 20px;
+
+  /* Escala tipográfica: `text-label` (rótulos, cabeçalho de coluna),
+     `text-caption` (secundário), `text-body`, `text-section` (título de
+     seção), `text-title` (título da página), `text-metric`/`text-metric-lg`
+     (números). Peso cria hierarquia; nem tudo é negrito. */
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.125rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-section: 1rem;
+  --text-section--line-height: 1.5rem;
+  --text-title: 1.625rem;
+  --text-title--line-height: 2rem;
+  --text-metric: 1.75rem;
+  --text-metric--line-height: 2rem;
+  --text-metric-lg: 2.25rem;
+  --text-metric-lg--line-height: 2.5rem;
 }
 
 /* Dois temas sobre os mesmos tokens. :root é o claro ("azul elétrico sobre
    marfim"); .dark é o grafite. O escuro continua sendo o padrão na primeira
    carga — o script em app/layout.tsx aplica a preferência salva antes da
-   hidratação. Componentes só usam tokens; nada de hex solto. */
+   hidratação. Componentes só usam tokens; nada de hex solto.
+
+   Regras visuais (revisão UI/UX 2026-09-23):
+   - Superfícies sólidas em níveis: background < card < card-elevated <
+     popover. Profundidade vem do nível + borda, não de sombra, blur ou glow.
+   - Sombra só no que flutua sobre a interface: --shadow-popover (menus,
+     dropdowns, tooltips, painéis flutuantes) e --shadow-overlay (modais).
+     --shadow-card/--shadow-panel/--shadow-hero ficam por compatibilidade e
+     valem `none`.
+   - Azul (--primary/--brand) = ação, seleção, foco, link. Verde/âmbar/
+     vermelho = sucesso/atenção/erro. Cor nunca é só decoração.
+   - Espaço em múltiplos de 4 px (--space-*): 4–8 relacionados, 12–16 mesmo
+     grupo, 24 entre grupos, 32+ entre seções. */
 :root {
   color-scheme: light;
   --background: #f3f2ee;
@@ -105,8 +140,15 @@
   --chart-5: #c2410c;
   --chart-track: #e2e0da;
   --chart-missed: #e8761e;
-  --radius: .875rem;
-  --radius-card: 1.375rem;
+  --radius: .625rem;
+  --radius-card: 14px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
   --sidebar-w: 240px;
   --sidebar: var(--background);
   --sidebar-foreground: #11141b;
@@ -116,29 +158,33 @@
   --sidebar-accent-foreground: #1f3fff;
   --sidebar-border: rgb(17 20 27 / 8%);
   --sidebar-ring: #1f3fff;
-  --surface-glass: linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(251 250 247 / 94%));
-  --surface-overlay: linear-gradient(145deg, #ffffff, #f8f7f3);
+  --surface-glass: var(--card);
+  --surface-overlay: var(--popover);
   --surface-inset: rgb(17 20 27 / 3.5%);
   --surface-field: #ffffff;
-  --surface-header: rgb(243 242 238 / 82%);
+  --surface-header: var(--background);
   --surface-table-head: rgb(17 20 27 / 3%);
   --field-hover-border: rgb(17 20 27 / 28%);
   --scrollbar-thumb: #c4c1b8;
   --selection: #c9d2ff;
   --selection-foreground: #11141b;
-  --body-glow: radial-gradient(ellipse at 75% 0%, rgb(31 63 255 / 6%), transparent 52rem);
-  --shadow-card: 0 1px 2px rgb(17 20 27 / 4%), 0 12px 32px -12px rgb(17 20 27 / 12%);
-  --shadow-card-hover: 0 2px 4px rgb(17 20 27 / 5%), 0 20px 40px -14px rgb(17 20 27 / 18%);
-  --shadow-hero: 0 18px 40px -12px rgb(31 63 255 / 55%);
-  --shadow-panel: var(--shadow-card);
-  --shadow-overlay: 0 24px 64px -12px rgb(17 20 27 / 22%), 0 2px 6px rgb(17 20 27 / 6%);
+  --body-glow: none;
+  /* Elevação: estático = none; controle ativo num segmento = xs;
+     menus/dropdowns/tooltips/painéis flutuantes = popover; modal = overlay. */
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --shadow-hero: none;
+  --shadow-panel: none;
+  --shadow-xs: 0 1px 2px rgb(17 20 27 / 8%);
+  --shadow-popover: 0 10px 28px -10px rgb(17 20 27 / 20%), 0 1px 3px rgb(17 20 27 / 6%);
+  --shadow-overlay: 0 24px 56px -16px rgb(17 20 27 / 24%), 0 2px 6px rgb(17 20 27 / 6%);
   --chat-thread: #f1f0ec;
   --chat-in: #ffffff;
   --chat-in-edge: #f7f6f2;
   --chat-out: #2447f0;
   --chat-out-edge: #3b58e6;
-  --chat-header: linear-gradient(135deg, rgb(255 255 255 / 97%), rgb(246 245 241 / 97%));
-  --chat-composer: rgb(255 255 255 / 97%);
+  --chat-header: #ffffff;
+  --chat-composer: #ffffff;
   --chat-compose-line: rgb(17 20 27 / 4%);
   --chat-compose-line-focus: rgb(17 20 27 / 6%);
   --chat-dot: #7c8499;
@@ -165,12 +211,14 @@
 
 .dark {
   color-scheme: dark;
-  --background: #07080c;
+  /* Níveis: fundo #0b0d11 → card #13161b → elevado #1a1d23 → popover
+     #1e2229. Passos sutis e constantes, sem preto absoluto. */
+  --background: #0b0d11;
   --foreground: #f1f3f8;
-  --card: #111318;
+  --card: #13161b;
   --card-foreground: #f1f3f8;
-  --card-elevated: #171a21;
-  --popover: #171a21;
+  --card-elevated: #1a1d23;
+  --popover: #1e2229;
   --popover-foreground: #f1f3f8;
   /* Texto/ícone/link azul: 5.1:1 sobre o card grafite. Texto escuro sobre
      ele dá 5.5:1. Preenchimentos com texto branco usam --brand. */
@@ -181,9 +229,9 @@
   --brand: #2b4bff;
   --brand-strong: #1f3be0;
   --brand-foreground: #ffffff;
-  --secondary: #1f232c;
+  --secondary: #20242b;
   --secondary-foreground: #eef1f7;
-  --muted: #1b1e26;
+  --muted: #1c1f26;
   /* 5.9:1 sobre --card. */
   --muted-foreground: #8b91a1;
   --accent: #20242e;
@@ -195,7 +243,7 @@
   --warning-soft: rgb(251 191 36 / 12%);
   --danger: #ff7a85;
   --danger-soft: rgb(255 122 133 / 12%);
-  --border: rgb(255 255 255 / 7%);
+  --border: rgb(255 255 255 / 8%);
   --input: rgb(255 255 255 / 14%);
   --ring: #8ea4ff;
   --chart-1: #5b7cff;
@@ -213,30 +261,32 @@
   --sidebar-accent-foreground: #8ea4ff;
   --sidebar-border: rgb(255 255 255 / 7%);
   --sidebar-ring: #8ea4ff;
-  --surface-glass: linear-gradient(135deg, rgb(255 255 255 / 3%), transparent 42%), linear-gradient(145deg, rgb(19 21 27 / 96%), rgb(15 17 22 / 97%));
-  --surface-overlay: linear-gradient(145deg, #191c24, #111318);
-  --surface-inset: rgb(0 0 0 / 28%);
-  --surface-field: rgb(255 255 255 / 4%);
-  --surface-header: rgb(7 8 12 / 80%);
+  --surface-glass: var(--card);
+  --surface-overlay: var(--popover);
+  --surface-inset: rgb(0 0 0 / 22%);
+  --surface-field: rgb(255 255 255 / 3%);
+  --surface-header: var(--background);
   --surface-table-head: rgb(255 255 255 / 3%);
   --field-hover-border: rgb(255 255 255 / 26%);
   --scrollbar-thumb: #3a3f4b;
   --selection: #2b4bff;
   --selection-foreground: #ffffff;
-  --body-glow: radial-gradient(ellipse at 75% 0%, rgb(43 75 255 / 9%), transparent 52rem);
-  --shadow-card: 0 1px 0 rgb(255 255 255 / 4%) inset, 0 16px 40px -16px rgb(0 0 0 / 70%);
-  --shadow-card-hover: 0 1px 0 rgb(255 255 255 / 5%) inset, 0 22px 48px -16px rgb(0 0 0 / 80%);
-  --shadow-hero: 0 18px 48px -12px rgb(43 75 255 / 65%);
-  --shadow-panel: var(--shadow-card);
-  --shadow-overlay: 0 24px 80px rgb(0 0 0 / 55%), inset 0 1px 0 rgb(255 255 255 / 5%);
-  --chat-thread: #111318;
+  --body-glow: none;
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --shadow-hero: none;
+  --shadow-panel: none;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-popover: 0 12px 32px -10px rgb(0 0 0 / 60%), 0 1px 3px rgb(0 0 0 / 30%);
+  --shadow-overlay: 0 24px 64px -12px rgb(0 0 0 / 65%);
+  --chat-thread: #13161b;
   --chat-in: #20242e;
   --chat-in-edge: #262b36;
   /* Balão azul com texto branco em AA (5.3:1). */
   --chat-out: #3552f0;
   --chat-out-edge: #4a5fd6;
-  --chat-header: linear-gradient(135deg, rgb(28 31 40 / 97%), rgb(19 21 27 / 97%));
-  --chat-composer: rgb(22 25 32 / 97%);
+  --chat-header: #1a1d23;
+  --chat-composer: #1a1d23;
   --chat-compose-line: rgb(0 0 0 / 30%);
   --chat-compose-line-focus: rgb(0 0 0 / 45%);
   --chat-dot: #aab3c8;
@@ -286,8 +336,6 @@
     min-width: 320px;
     font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
     line-height: 1.5;
-    background-image: var(--body-glow);
-    background-attachment: fixed;
   }
   /* Optical sizing: large headings track tighter and lead tighter than body
      copy; body stays near 0 tracking for legibility at small sizes. */
@@ -318,28 +366,33 @@
 }
 
 @layer components {
+  /* Painel estático: fundo sólido + borda. Sem sombra, sem blur. */
   .surface-panel, .cockpit-stat, main .rounded-xl.border-border.bg-card {
     border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    background: var(--surface-glass);
-    box-shadow: var(--shadow-panel);
-    backdrop-filter: blur(18px) saturate(120%);
+    border-radius: var(--radius-card);
+    background: var(--card);
   }
-  /* Map renderers must not inherit a backdrop-filter compositing layer. */
-  main .rounded-xl.border-border.bg-card.map-surface { backdrop-filter: none; }
   .cockpit-inset { border: 1px solid var(--border); background: var(--surface-inset); }
   .cockpit-brand {
     border: 1px solid color-mix(in oklab, var(--primary) 30%, transparent);
     background: var(--primary-soft);
     color: var(--primary);
-    box-shadow: 0 8px 24px color-mix(in oklab, var(--brand) 14%, transparent);
   }
+  /* Painéis fixos que ficam por cima do conteúdo (colegas, detalhe no mapa):
+     esses têm elevação real, então levam a sombra de popover. */
   .cockpit-sidebar, main > aside.fixed {
-    background: var(--surface-glass);
+    background: var(--popover);
     border-color: var(--sidebar-border);
-    box-shadow: var(--shadow-panel);
-    backdrop-filter: blur(20px) saturate(120%);
+    box-shadow: var(--shadow-popover);
   }
+  /* Tipografia de página: rótulo discreto, título, subtítulo, título de seção. */
+  .page-eyebrow { margin-bottom: var(--space-1); color: var(--muted-foreground); font-size: var(--text-caption); font-weight: 500; }
+  .page-title { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -0.02em; }
+  @media (min-width: 640px) { .page-title { font-size: var(--text-title); } }
+  .page-subtitle { margin-top: var(--space-1); color: var(--muted-foreground); font-size: var(--text-body); }
+  .section-title { font-size: var(--text-section); line-height: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
+  /* Rótulo de coluna/grupo: pequeno, peso médio, contraste reduzido. */
+  .label-caps { color: var(--muted-foreground); font-size: var(--text-label); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
   /* A barra "some" no fundo: mesma cor do app, só uma borda fina — quem
      flutua são os cards. Largura anima entre 240 e 72 px (pontual, não em
      loop); rótulos fazem fade + slide de 8 px. */
@@ -357,13 +410,16 @@
     transition: width var(--motion-layout) var(--ease-ui);
   }
   .app-sidebar-brand { display: flex; min-height: 2.5rem; align-items: center; gap: .75rem; padding-inline: .125rem; }
+  /* Grupo da navegação: o espaço acima separa grupos; nada de linha. */
+  .app-nav-group + .app-nav-group { margin-top: var(--space-4); }
   .app-nav-section {
-    margin-bottom: .5rem;
+    margin-bottom: var(--space-1);
     padding-inline: .75rem;
     color: var(--muted-foreground);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: .08em;
+    font-size: var(--text-label);
+    line-height: 1.25rem;
+    font-weight: 500;
+    letter-spacing: .06em;
     text-transform: uppercase;
     white-space: nowrap;
   }
@@ -374,7 +430,6 @@
   .app-content { min-width: 0; min-height: 100dvh; }
   .app-content > header, main > section > header {
     background: var(--surface-header);
-    backdrop-filter: blur(22px) saturate(130%);
     border-color: var(--border);
   }
   .app-main { min-width: 0; outline: none; }
@@ -385,38 +440,46 @@
     align-items: center;
     gap: .75rem;
     overflow: hidden;
-    border-radius: .75rem;
+    border-radius: var(--radius-lg);
     padding: .5rem .75rem;
     color: var(--muted-foreground);
     font-size: .875rem;
     font-weight: 500;
+    transition: background-color var(--motion-fast) var(--ease-ui), color var(--motion-fast) var(--ease-ui);
   }
   .app-nav-link:hover { background: var(--muted); color: var(--foreground); }
   .app-nav-link[aria-current='page'] {
     background: var(--primary-soft);
     color: var(--primary);
+    font-weight: 600;
   }
   .field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'], [data-slot='native-select'] {
     min-width: 0;
     border: 1px solid var(--input);
-    border-radius: .625rem;
+    border-radius: var(--radius-lg);
     background: var(--surface-field);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
     color: var(--foreground);
   }
   .field { width: 100%; min-height: 2.5rem; padding: .625rem .75rem; font-size: .875rem; }
   :where(.field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):hover:not(:disabled) { border-color: var(--field-hover-border); }
+  /* Foco de campo: borda na cor de foco + anel suave; o contorno global
+     continua valendo para o teclado. */
   :where(input, select, textarea):focus-visible { border-color: var(--ring); }
+  :where(.field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 22%, transparent);
+    outline-offset: 1px;
+  }
+  /* Botão primário: cor sólida da marca. Hover escurece um tom; sem
+     gradiente, sem brilho colorido, sem "pular" 1 px. */
   [data-slot='button'][data-variant='default'] {
-    background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+    background: var(--brand);
     color: var(--brand-foreground);
-    box-shadow: 0 6px 18px color-mix(in oklab, var(--brand) 26%, transparent), inset 0 1px 0 rgb(255 255 255 / 14%);
   }
   [data-slot='button'][data-variant='default']:hover:not(:disabled) {
-    background: linear-gradient(135deg, color-mix(in oklab, var(--brand) 92%, white), color-mix(in oklab, var(--brand-strong) 92%, white));
-    box-shadow: 0 8px 22px color-mix(in oklab, var(--brand) 34%, transparent), inset 0 1px 0 rgb(255 255 255 / 16%);
-    transform: translateY(-1px);
+    background: var(--brand-strong);
+    filter: none;
   }
+  [data-slot='button'][aria-busy='true'] { cursor: progress; }
   [data-slot='dialog-content'], [data-slot='sheet-content'] {
     border: 1px solid var(--border);
     background: var(--surface-overlay);
@@ -438,15 +501,9 @@
     scrollbar-width: none;
   }
   [data-slot='tabs-list']::-webkit-scrollbar { display: none; }
-  [data-slot='table-head'] { background: var(--surface-table-head); color: var(--muted-foreground); font-size: .75rem; font-weight: 600; }
+  [data-slot='table-head'] { background: var(--surface-table-head); color: var(--muted-foreground); font-size: var(--text-caption); font-weight: 500; }
   [data-slot='table-cell'] { font-variant-numeric: tabular-nums; }
-  .metric-glow { position: relative; overflow: hidden; }
-  .metric-glow::after {
-    content: ''; position: absolute; inset: auto -1.5rem -4rem auto;
-    width: 9rem; height: 9rem; border-radius: 50%;
-    background: radial-gradient(circle, color-mix(in oklab, var(--primary) 12%, transparent), transparent 70%);
-    pointer-events: none;
-  }
+  [data-slot='table-row'] { transition: background-color var(--motion-fast) var(--ease-ui); }
   .skip-link {
     position: fixed; top: .5rem; left: 1rem; z-index: 100;
     transform: translateY(-180%); border-radius: .5rem;
@@ -500,26 +557,18 @@
   .caju-loading-mark { aspect-ratio: 32 / 25; background: url("/brand/caju-loading-static.png") center / contain no-repeat; }
 }
 
-/* Frostier, near-solid glass for people who asked the OS to reduce
-   transparency — same hierarchy, less see-through. */
+/* Quem pediu menos transparência ao sistema: tira o blur que sobrou nos
+   fundos de modal e nas superfícies translúcidas pontuais. */
 @media (prefers-reduced-transparency: reduce) {
-  .surface-panel, .cockpit-stat, main .rounded-xl.border-border.bg-card,
-  .caju-sidebar, .cockpit-sidebar, main > aside.fixed,
-  .app-content > header, main > section > header,
-  [data-slot='dialog-content'], [data-slot='sheet-content'] {
-    backdrop-filter: none !important;
-    background: var(--card) !important;
-  }
+  [data-slot='dialog-overlay'], [data-slot='sheet-overlay'], [data-slot='alert-dialog-overlay'] { backdrop-filter: none !important; }
 }
 
-/* Near-solid backgrounds with a defined border instead of relying on subtle
-   contrast between translucent layers. */
+/* Alto contraste: borda mais grossa nas superfícies em vez de depender de
+   diferenças sutis de nível. */
 @media (prefers-contrast: more) {
-  .surface-panel, .cockpit-stat, main .rounded-xl.border-border.bg-card,
+  .surface-panel, .cockpit-stat, .bento-card, .metric-strip, main .rounded-xl.border-border.bg-card,
   [data-slot='dialog-content'], [data-slot='sheet-content'] {
     border-width: 2px;
-    background: var(--card);
-    backdrop-filter: none;
   }
 }
 
@@ -528,14 +577,13 @@
 .chat-thread {
   /* Cores do chat vêm dos tokens de tema (--chat-*); balão azul com texto
      branco em AA nos dois temas. */
-  background: radial-gradient(ellipse at 50% -20%, color-mix(in oklab, var(--chat-out) 10%, transparent), transparent 58%), var(--chat-thread);
+  background: var(--chat-thread);
 }
 .chat-shell { border-color: var(--border); box-shadow: var(--shadow-overlay); }
 .chat-header { background: var(--chat-header); }
 .chat-composer { background: var(--chat-composer); }
 .chat-compose-line { background: var(--chat-compose-line); transition: border-color .2s ease, background-color .2s ease; }
 .chat-compose-line:focus-within { background: var(--chat-compose-line-focus); }
-.chat-send-button:not(:disabled) { box-shadow: 0 4px 16px color-mix(in oklab, var(--chat-out) 28%, transparent); }
 .chat-message-row--enter { animation: chat-message-enter .28s cubic-bezier(.2,.8,.2,1) both; }
 .chat-message-row:has(.chat-bubble--out) { --chat-enter-x: 12px; }
 .chat-message-row:has(.chat-bubble--in) { --chat-enter-x: -12px; }
@@ -552,8 +600,8 @@
   overflow-wrap: anywhere;
   text-wrap: pretty;
 }
-.chat-bubble--in { background: linear-gradient(145deg, var(--chat-in-edge), var(--chat-in)); color: var(--card-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px rgb(0 0 0 / 8%); }
-.chat-bubble--out { background: linear-gradient(125deg, var(--chat-out), var(--chat-out-edge)); color: #fff; box-shadow: 0 6px 18px color-mix(in oklab, var(--chat-out) 20%, transparent); }
+.chat-bubble--in { background: var(--chat-in); color: var(--card-foreground); border: 1px solid var(--border); }
+.chat-bubble--out { background: var(--chat-out); color: #fff; }
 .chat-typing-bubble { display: inline-flex; align-items: center; gap: 4px; min-height: 38px; padding: 0 14px; border-radius: 18px 18px 18px 6px; border: 1px solid var(--border); background: var(--chat-in); }
 .chat-typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: var(--chat-dot); animation: chat-typing-dot 1s ease-in-out infinite; }
 .chat-typing-bubble span:nth-child(2) { animation-delay: .15s; }
@@ -614,6 +662,19 @@
   .chat-bubble::before, .chat-bubble::after { forced-color-adjust: none; }
 }
 
+/* Elevação e tempo das superfícies flutuantes num só lugar. Menus, popovers,
+   selects e tooltips: sombra de popover e 160 ms. Modais: sombra de overlay
+   e 200 ms. Fundo do modal com blur mínimo (só separa planos). */
+:is([data-slot='popover-content'], [data-slot='dropdown-menu-content'], [data-slot='dropdown-menu-sub-content'],
+  [data-slot='select-content'], [data-slot='combobox-content'], [data-slot='context-menu-content'],
+  [data-slot='context-menu-sub-content'], [data-slot='hover-card-content'], [data-slot='menubar-content'],
+  [data-slot='menubar-sub-content'], [data-slot='tooltip-content']) {
+  box-shadow: var(--shadow-popover);
+  animation-duration: 160ms;
+}
+:is([data-slot='dialog-content'], [data-slot='alert-dialog-content']) { box-shadow: var(--shadow-overlay); animation-duration: var(--motion-standard); }
+:is([data-slot='dialog-overlay'], [data-slot='alert-dialog-overlay']) { animation-duration: var(--motion-standard); }
+
 /* Materialize, don't just fade: a glass surface should read as arriving as
    a real material, not a flat opacity fade — blur and opacity settle
    together on enter/exit. */
@@ -649,18 +710,17 @@ html[data-view='whatsapp'] [data-floating-launcher] { display: none !important; 
 
 html[data-sidebar='collapsed'] { --sidebar-w: 72px; }
 
-/* Barra superior: transparente no topo; ao rolar ganha vidro e borda.
+/* Barra superior: mesma cor do fundo; ao rolar ganha só a borda inferior,
+   que marca onde o conteúdo passa por baixo. Fundo sólido, sem vidro.
    Fora de @layer para vencer os utilitários que as páginas ainda trazem. */
 .app-content > header {
-  background: transparent;
+  background: var(--surface-header);
   border-bottom-color: transparent;
   backdrop-filter: none;
-  transition: background-color var(--motion-standard) var(--ease-ui), border-color var(--motion-standard) var(--ease-ui);
+  transition: border-color var(--motion-standard) var(--ease-ui);
 }
 html[data-scrolled] .app-content > header {
-  background: var(--surface-header);
   border-bottom-color: var(--border);
-  backdrop-filter: blur(12px) saturate(140%);
 }
 
 /* Troca de tema. Com View Transitions o novo tema cresce num círculo a partir
@@ -672,54 +732,63 @@ html.theme-fading :where(body, header, aside, main, section, article, nav, [data
   transition: background-color var(--motion-layout) var(--ease-ui), color var(--motion-layout) var(--ease-ui), border-color var(--motion-layout) var(--ease-ui);
 }
 
-/* Superfície sólida de marca: hero do dashboard, painel do login e a
-   transição login → app. Luz radial no canto superior direito. */
-.brand-surface, .login-transition, .bento-card.bento-card--hero {
-  background: radial-gradient(circle at 88% 0%, rgb(255 255 255 / 18%), transparent 42%), linear-gradient(135deg, var(--brand), var(--brand-strong));
+/* Superfície sólida de marca: painel do login e a transição login → app.
+   Cor única, sem luz radial. */
+.brand-surface, .login-transition {
+  background: var(--brand);
   color: var(--brand-foreground);
 }
 
-/* ── Dashboard bento ─────────────────────────────────────────────────────
+/* ── Dashboard ───────────────────────────────────────────────────────────
    Fora de @layer: é o visual do card, não precisa ser sobrescrito por
-   utilitário. Hover só com ponteiro fino (mouse), nunca no toque. */
-.bento-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-@media (min-width: 1024px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; } }
+   utilitário. Card estático não flutua: sem sombra e sem subir no hover. */
+.bento-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+@media (min-width: 1024px) { .bento-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 1280px) { .bento-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
 .bento-card {
   position: relative;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--card);
-  box-shadow: var(--shadow-card);
-  padding: 1.25rem;
-  transition: box-shadow var(--motion-standard) var(--ease-ui), transform var(--motion-standard) var(--ease-ui);
+  padding: var(--space-4);
 }
-@media (min-width: 640px) { .bento-card { padding: 1.5rem; } }
-.bento-card--hero { overflow: hidden; border-color: transparent; box-shadow: var(--shadow-hero); }
-@media (hover: hover) and (pointer: fine) {
-  .bento-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-card-hover); }
-  .bento-card--hero:hover { box-shadow: var(--shadow-hero); }
-}
-.hero-pill {
-  display: inline-flex; min-height: 2.5rem; align-items: center; gap: .375rem;
-  border-radius: 9999px; padding: 0 1rem; font-size: .8125rem; font-weight: 600;
-  transition: transform var(--motion-fast) var(--ease-ui), background-color var(--motion-fast) var(--ease-ui);
-}
-.hero-pill:hover { transform: translateY(-1px); }
-.hero-pill:active { transform: scale(.98); }
-.hero-pill--solid { background: #fff; color: var(--brand-strong); }
-.hero-pill--solid:hover { background: rgb(255 255 255 / 92%); }
-.hero-pill--ghost { border: 1px solid rgb(255 255 255 / 35%); color: #fff; }
-.hero-pill--ghost:hover { background: rgb(255 255 255 / 12%); }
-.bento-card--hero :focus-visible { outline-color: #fff; }
+@media (min-width: 640px) { .bento-card { padding: var(--space-6); } }
 .recent-row { transition: background-color var(--motion-fast) var(--ease-ui); }
 .recent-row:hover { background: color-mix(in oklab, var(--muted) 60%, transparent); }
 .quick-action {
-  display: flex; min-height: 3.25rem; align-items: center; gap: .75rem;
-  border-radius: .875rem; padding: .5rem .625rem;
+  display: flex; min-height: 3rem; align-items: center; gap: var(--space-3);
+  border-radius: var(--radius-lg); padding: var(--space-2);
   transition: background-color var(--motion-fast) var(--ease-ui);
 }
 .quick-action:hover { background: var(--muted); }
+
+/* Faixa de métricas: um único painel dividido em células, em vez de N
+   cards iguais. A primeira célula pode ser a primária (maior). */
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+.metric-strip > * { min-width: 0; padding: var(--space-4); box-shadow: -1px 0 0 var(--border), 0 -1px 0 var(--border); }
+@media (min-width: 640px) { .metric-strip > * { padding: var(--space-4) var(--space-6); } }
+/* Celular/tablet: a primária ocupa a linha inteira; as demais em pares, e a
+   que sobrar sozinha estica para não deixar buraco. */
+@media (max-width: 1279px) {
+  .metric-strip[data-primary='true'] > :first-child,
+  .metric-strip[data-primary='true'] > :last-child:nth-child(even),
+  .metric-strip[data-primary='false'] > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+@media (min-width: 768px) and (max-width: 1279px) {
+  .metric-strip[data-primary='true'] { grid-template-columns: repeat(var(--metric-rest, 3), minmax(0, 1fr)); }
+  .metric-strip[data-primary='true'] > :last-child:nth-child(even) { grid-column: auto; }
+}
+@media (min-width: 1280px) {
+  .metric-strip { grid-template-columns: minmax(0, 1.4fr) repeat(var(--metric-rest, 3), minmax(0, 1fr)); }
+  .metric-strip[data-primary='false'] { grid-template-columns: repeat(var(--metric-count, 4), minmax(0, 1fr)); }
+}
 
 /* Skeleton "fantasma" com brilho diagonal, na posição final (sem CLS). */
 .skeleton {
@@ -735,26 +804,16 @@ html.theme-fading :where(body, header, aside, main, section, article, nav, [data
 @keyframes chart-bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes chart-track-fade { from { opacity: 0; } to { opacity: 1; } }
 
-/* Orb do assistente: esfera em gradiente puro (sem WebGL/imagem), flutua e
-   respira parada; pulsa e gira o brilho enquanto a IA responde. */
-.assistant-orb {
-  position: relative; display: block; width: 5rem; height: 5rem; border-radius: 9999px;
-  background: radial-gradient(circle at 30% 30%, #9fb2ff 0%, var(--brand) 48%, #0b1a8f 100%);
-  box-shadow: 0 18px 36px -10px color-mix(in oklab, var(--brand) 70%, transparent), inset 0 -8px 18px rgb(0 0 0 / 25%), inset 0 6px 14px rgb(255 255 255 / 25%);
-  animation: orb-float 4s ease-in-out infinite;
+/* Marcador do assistente: ícone sobre o tom suave da marca. Só pulsa (opacidade)
+   enquanto a IA responde — o movimento indica estado, não decora. */
+.assistant-mark {
+  display: grid; width: 2.25rem; height: 2.25rem; flex: none; place-items: center;
+  border-radius: var(--radius-lg); background: var(--primary-soft); color: var(--primary);
 }
-.assistant-orb__glint {
-  position: absolute; inset: 0; border-radius: inherit;
-  background: conic-gradient(from 0deg, transparent 0 70%, rgb(255 255 255 / 35%) 80%, transparent 90%);
-  mix-blend-mode: soft-light; opacity: .6;
-}
-.assistant-orb--thinking { animation: orb-float 4s ease-in-out infinite, orb-pulse 1.2s ease-in-out infinite; }
-.assistant-orb--thinking .assistant-orb__glint { animation: orb-spin 2.4s linear infinite; opacity: 1; }
-@keyframes orb-float { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.03); } }
-@keyframes orb-pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.25) saturate(1.2); } }
-@keyframes orb-spin { to { transform: rotate(360deg); } }
+.assistant-mark--thinking { animation: assistant-thinking 1.2s ease-in-out infinite; }
+@keyframes assistant-thinking { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) {
-  .assistant-orb, .assistant-orb--thinking, .assistant-orb__glint, .skeleton { animation: none !important; }
+  .assistant-mark--thinking, .skeleton { animation: none !important; }
 }
 
 /* Gravando: ponto vermelho que pulsa ao lado do tempo. */
