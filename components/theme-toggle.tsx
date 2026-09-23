@@ -35,7 +35,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     >
       <span className="relative block h-7 w-[52px] rounded-full border border-border bg-muted transition-colors group-hover:border-(--field-hover-border)">
         <motion.span
-          className="absolute left-[2px] top-[2px] grid size-[22px] place-items-center rounded-full bg-card-elevated text-foreground shadow-[0_1px_3px_rgb(0_0_0/.18),0_4px_10px_-2px_rgb(0_0_0/.18)]"
+          className="absolute left-[2px] top-[2px] grid size-[22px] place-items-center rounded-full bg-card-elevated text-foreground shadow-[0_1px_3px_rgb(0_0_0/.18),0_4px_10px_-2px_rgb(0_0_0/.18)] dark:bg-white/15"
           initial={false}
           animate={{ x: dark ? 24 : 0 }}
           transition={{ type: 'spring', stiffness: 500, damping: 34 }}

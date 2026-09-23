@@ -6,6 +6,7 @@ import { DesktopWindowControls } from '@/components/desktop-window-controls';
 import { PullRefreshGuard } from '@/components/pull-refresh-guard';
 import { GlobalAssistant } from '@/components/global-assistant';
 import { MotionProvider } from '@/components/motion-provider';
+import { LoginTransitionOverlay } from '@/components/login-transition';
 import { themeBootScript } from '@/lib/theme';
 import { sidebarBootScript } from '@/lib/sidebar-state';
 
@@ -53,6 +54,7 @@ export default function RootLayout({
             {children}
             <GlobalAssistant />
           </AuthProvider>
+          <LoginTransitionOverlay />
         </MotionProvider>
       </body>
     </html>

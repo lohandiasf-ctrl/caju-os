@@ -671,3 +671,10 @@ html[data-scrolled] .app-content > header {
 html.theme-fading :where(body, header, aside, main, section, article, nav, [data-slot='card'], .surface-panel, .surface-card) {
   transition: background-color var(--motion-layout) var(--ease-ui), color var(--motion-layout) var(--ease-ui), border-color var(--motion-layout) var(--ease-ui);
 }
+
+/* Superfície sólida de marca: hero do dashboard, painel do login e a
+   transição login → app. Luz radial no canto superior direito. */
+.brand-surface, .login-transition {
+  background: radial-gradient(circle at 88% 0%, rgb(255 255 255 / 18%), transparent 42%), linear-gradient(135deg, var(--brand), var(--brand-strong));
+  color: var(--brand-foreground);
+}

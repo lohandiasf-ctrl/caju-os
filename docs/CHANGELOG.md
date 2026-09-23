@@ -52,6 +52,22 @@ transparente no topo e ganha vidro ao rolar. Superfícies "afundadas"
 (`bg-black/10–30`) ganharam equivalente claro com o original em `dark:`;
 cards do kanban viram cards brancos elevados no claro.
 
+**3. Login.** Tela dividida no desktop: painel azul de marca (gradiente,
+grade de pontos, ondas, emblema em ladrilho branco, frases alternando a cada
+5 s com indicador em pílula, três destaques) e card do formulário à direita.
+No celular o painel vira cabeçalho de 180 px e o card sobe por cima. Campos
+com ícone, olho acessível na senha, "Esqueci a senha" ao lado do rótulo,
+toggle de tema. `signInWithEmailAndPassword`, recuperação de senha e mensagens
+de erro são os mesmos. Ao autenticar, o card some (200 ms) e o painel azul se
+expande até cobrir a tela (`components/login-transition.tsx`, fora do gate
+do AuthProvider), segurando enquanto o perfil é validado e sumindo quando a
+rota sai de `/login` (teto de 3 s). Movimento reduzido: só fade.
+Não entrou: "Lembrar de mim" (mudaria a persistência do Firebase — regra de
+auth) e botão Google (não há provedor Google configurado).
+Botão padrão (`components/ui/button.tsx`) passa a usar `bg-brand
+text-brand-foreground`: no escuro o `--primary` é claro demais para texto
+branco.
+
 ### Assistente ganha histórico contínuo, exibição de fontes, presença global e fallback
 
 O assistente flutuante de IA agora suporta conversas multi-turno contínuas,
