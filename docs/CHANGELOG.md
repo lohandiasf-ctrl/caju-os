@@ -11,6 +11,20 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Saudação do topo com o nome do perfil e emoji do período (branch `claude/saudacao-nome-perfil`)
+
+A saudação ("Boa tarde, Lohandiasf 👋") usava o nome da conta Firebase, que
+na prática vinha do e-mail. Agora usa o primeiro nome do perfil que a pessoa
+preencheu ("Boa tarde, Lohan") e o emoji acompanha o período: 🌅 manhã,
+☀️ tarde, 🌙 noite (mesmos cortes da saudação, hora de Brasília). Sem perfil
+preenchido, continua caindo no nome da conta/e-mail.
+
+- `lib/greeting.ts`: `greetingEmoji(hour)`.
+- `lib/profile.ts`: nome de exibição do perfil num store pequeno; o menu da
+  conta (que já lê o perfil) alimenta, e salvar o perfil (cadastro obrigatório
+  ou Configurações) atualiza na hora.
+- `tests/greeting.test.ts`: emoji por período e prioridade do nome do perfil.
+
 ### Equipe escondida na barra em telas baixas — grupo Gestão recolhível (branch `claude/sidebar-gestao-recolhivel`)
 
 Em produção, numa tela de ~700 px de altura, o menu (12 itens) ocupava quase
