@@ -50,19 +50,27 @@ function DraggableDrawer({ children, onClose }: { children: ReactNode; onClose: 
   );
 }
 
-const items = [
-  ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'],
-  ['Chamados', ClipboardList, '/?view=tickets', 'tickets'],
-  ['Histórico de chamados', Archive, '/?view=history', 'history'],
-  ['Mapa operacional', Map, '/mapa', 'map'],
-  ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
-  ['Central N1', Headphones, '/?view=central', 'central'],
-  ['WhatsApp', MessageCircle, '/?view=whatsapp', 'whatsapp'],
-  ['Equipe', Users, '/?view=technicians', 'technicians'],
-  ['Projetos e lojas', Building2, '/?view=projects', 'projects'],
-  ['Spares', PackageOpen, '/spares', 'spares'],
-  ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
-  ['Feedback', MessageSquarePlus, '/?view=feedback', 'feedback'],
+// Mesma ordem e mesmas rotas de antes, agora em grupos: o rótulo e o espaço
+// entre grupos mostram o que anda junto, sem linhas separadoras.
+const groups = [
+  ['Operação', [
+    ['Visão geral', LayoutDashboard, '/?view=overview', 'overview'],
+    ['Chamados', ClipboardList, '/?view=tickets', 'tickets'],
+    ['Histórico de chamados', Archive, '/?view=history', 'history'],
+    ['Mapa operacional', Map, '/mapa', 'map'],
+    ['Agenda', CalendarClock, '/?view=agenda', 'agenda'],
+    ['Central N1', Headphones, '/?view=central', 'central'],
+  ]],
+  ['Comunicação', [
+    ['WhatsApp', MessageCircle, '/?view=whatsapp', 'whatsapp'],
+  ]],
+  ['Gestão', [
+    ['Equipe', Users, '/?view=technicians', 'technicians'],
+    ['Projetos e lojas', Building2, '/?view=projects', 'projects'],
+    ['Spares', PackageOpen, '/spares', 'spares'],
+    ['Financeiro', CircleDollarSign, '/financeiro', 'finance'],
+    ['Feedback', MessageSquarePlus, '/?view=feedback', 'feedback'],
+  ]],
 ] as const;
 
 function subscribe(callback: () => void) {
@@ -149,17 +157,25 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
   }
   const content = <>
     <div className="app-sidebar-brand">
-      <Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-xl border border-border bg-black object-contain p-1" />
+      <Image src="/caju-tech-emblem.png" alt="" width={40} height={40} className="size-10 shrink-0 rounded-lg border border-border bg-black object-contain p-1" />
       <div className="app-nav-label min-w-0">
-        <p className="truncate text-[15px] font-semibold tracking-tight">Caju OS</p>
+        <p className="truncate text-sm font-semibold tracking-tight">Caju OS</p>
         <p className="truncate text-xs text-muted-foreground">{role ? roleLabels[role] : 'Operações'}</p>
       </div>
     </div>
-    <nav aria-label="Navegação principal" className="mt-6 min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden overscroll-contain">
-      <p className="app-nav-section">Menu</p>
-      {items.filter(([, , , key]) => canUseNavItem(role, key)).map(([label, Icon, href, key]) => <NavLink key={key} href={href} label={label} icon={Icon} current={active === key} collapsed={collapsed} onNavigate={navigate} />)}
+    <nav aria-label="Navegação principal" className="mt-6 min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+      {groups.map(([title, entries]) => {
+        const visible = entries.filter(([, , , key]) => canUseNavItem(role, key));
+        if (!visible.length) return null;
+        return <div key={title} className="app-nav-group">
+          <p className="app-nav-section">{title}</p>
+          <div className="space-y-0.5">
+            {visible.map(([label, Icon, href, key]) => <NavLink key={key} href={href} label={label} icon={Icon} current={active === key} collapsed={collapsed} onNavigate={navigate} />)}
+          </div>
+        </div>;
+      })}
     </nav>
-    <div className="mt-3 shrink-0 space-y-1 border-t border-sidebar-border pt-3">
+    <div className="mt-3 shrink-0 space-y-0.5 border-t border-sidebar-border pt-3">
       <NavLink href="/?view=settings" label="Configurações" icon={Settings} current={active === 'settings'} collapsed={collapsed} onNavigate={navigate} />
       {desktop && <button
         type="button"

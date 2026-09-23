@@ -93,7 +93,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   // continua escuro também no tema claro (a classe `dark` restaura os tokens
   // e a paleta originais só aqui dentro).
   return <section className="dark flex min-h-[360px] flex-1 flex-col text-foreground" aria-label="Conversas do WhatsApp">
-    <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100 shadow-2xl">
+    <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100">
       {/* Chat list */}
       <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-white/10 bg-[#111b21] md:w-[340px] lg:w-[380px]`}>
         {/* Uma aba por número: a conversa pertence a um deles, e a resposta

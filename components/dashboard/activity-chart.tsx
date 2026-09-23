@@ -69,7 +69,7 @@ function ChartTooltip({ active, payload }: Pick<TooltipContentProps<ValueType, N
     ['var(--chart-track)', 'Movimentados', day.moved],
   ] as const;
   return (
-    <div className="min-w-44 rounded-xl border border-border bg-card-elevated px-3 py-2.5 text-xs shadow-(--shadow-overlay)">
+    <div className="min-w-44 rounded-lg border border-border bg-popover px-3 py-2.5 text-xs shadow-(--shadow-popover)">
       <p className="mb-1.5 font-semibold capitalize">{new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' }).format(day.date)}</p>
       {rows.map(([color, label, value]) => (
         <p key={label} className="flex items-center justify-between gap-4 py-0.5">

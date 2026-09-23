@@ -1215,27 +1215,45 @@ export default function Home() {
           <div className="relative min-w-0 max-w-[380px] flex-1 md:ml-2">
             <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
+              enterKeyHint="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              aria-label="Buscar chamado, loja ou técnico"
-              placeholder="Buscar chamado, loja ou técnico..."
-              className="h-10 rounded-full border-transparent bg-card pl-10 shadow-(--shadow-card)"
+              aria-label="Buscar por FSA, cidade, loja, técnico ou resumo do chamado"
+              placeholder="Buscar FSA, cidade, loja ou defeito…"
+              title="Busca no número da FSA, cidade, loja, técnico e resumo do chamado (onde fica o defeito). Separe vários termos com vírgula."
+              className="h-10 bg-card pl-10 pr-9"
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Limpar busca"
+                className="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground max-sm:size-9"
+              >
+                <X aria-hidden="true" className="size-4" />
+              </button>
+            )}
           </div>
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <div
-              className={`hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold xl:flex ${jiraError ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
+            {/* Estado da integração: discreto quando está tudo bem, com cor
+                só quando pede atenção. */}
+            <output
+              className={`hidden items-center gap-2 rounded-md px-2.5 py-1 text-xs font-medium xl:flex ${jiraError ? "bg-warning-soft text-warning" : "text-muted-foreground"}`}
             >
-              <span
-                aria-hidden="true"
-                className={`size-1.5 rounded-full ${jiraError ? "bg-warning" : "bg-success"}`}
-              />
+              {jiraLoading ? (
+                <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 rounded-full ${jiraError ? "bg-warning" : "bg-success"}`}
+                />
+              )}
               {jiraLoading
-                ? "Sincronizando Jira..."
+                ? "Sincronizando Jira…"
                 : jiraError
                   ? "Jira indisponível"
                   : "Jira conectado"}
-            </div>
+            </output>
             <ThemeToggle />
             <NotificationBell
               count={removedTicketAlerts.length + newTicketAlerts.length + visibleOperationalAlerts.length}
@@ -1244,35 +1262,43 @@ export default function Home() {
             />
           </div>
           {notificationsOpen && (
-            <div className="surface-panel absolute right-4 top-[60px] z-50 max-h-[calc(100dvh-6rem)] overflow-y-auto w-[min(360px,calc(100vw-2rem))] rounded-2xl p-4 shadow-2xl">
-              <div className="flex items-center justify-between">
+            <div className="absolute right-4 top-[60px] z-50 max-h-[calc(100dvh-6rem)] w-[min(380px,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-border bg-popover p-3 shadow-(--shadow-popover) animate-in fade-in-0 slide-in-from-top-1 duration-150">
+              <div className="flex items-center justify-between px-1">
                 <h2 className="text-sm font-semibold">Central de alertas</h2>
-                <Badge variant="outline">
-                  {removedTicketAlerts.length + newTicketAlerts.length + visibleOperationalAlerts.length}
-                </Badge>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {removedTicketAlerts.length + newTicketAlerts.length + visibleOperationalAlerts.length} não lidos
+                </span>
               </div>
-              <div className="mt-3 space-y-2">
-                {removedTicketAlerts.map((message) => <div key={message} className="rounded-lg border border-blue-400/25 bg-blue-400/10 px-3 py-2 text-xs text-blue-100">{message}<button type="button" className="mt-1 block underline" onClick={() => setRemovedTicketAlerts((current) => current.filter((item) => item !== message))}>Marcar como lido</button></div>)}
-                {newTicketAlerts.map((message) => <div key={message} className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-primary">Novo chamado · {message}<button type="button" className="mt-1 block underline" onClick={() => setNewTicketAlerts((current) => current.filter((item) => item !== message))}>Marcar como lido</button></div>)}
-                {visibleOperationalAlerts.map((alert) => (
-                  <div
+              {/* Críticos primeiro; cada item tem ícone + texto, não só cor. */}
+              <ul className="mt-2 space-y-1">
+                {visibleOperationalAlerts
+                  .slice()
+                  .sort((a, b) => Number(b.level === "critical") - Number(a.level === "critical"))
+                  .map((alert) => (
+                  <li
                     key={`${alert.ticketKey}-${alert.message}`}
-                    className={`rounded-lg border p-2 text-xs ${alert.level === "critical" ? "border-red-400/30 bg-red-400/10 text-red-200" : "border-amber-400/30 bg-amber-400/10 text-amber-100"}`}
+                    className={`rounded-lg border-l-2 bg-card-elevated px-3 py-2 text-xs ${alert.level === "critical" ? "border-l-danger" : "border-l-warning"}`}
                   >
-                    <p><b>{alert.ticketKey}</b> · {alert.message}</p>
-                    <div className="mt-2 flex gap-3"><button type="button" className="underline" onClick={() => { const ticket = tickets.find((item) => item.id === alert.ticketKey); if (ticket) void openTicket(ticket); }}>Abrir chamado</button><button type="button" className="underline" onClick={() => markAlertRead(`${alert.ticketKey}|${alert.message}`)}>Marcar como lido</button></div>
-                  </div>
+                    <p className="flex items-center gap-1.5 font-medium">
+                      <span className={alert.level === "critical" ? "text-danger" : "text-warning"}>{alert.level === "critical" ? "Crítico" : "Atenção"}</span>
+                      <span className="font-mono text-foreground">{alert.ticketKey}</span>
+                    </p>
+                    <p className="mt-0.5 text-muted-foreground">{alert.message}</p>
+                    <div className="mt-1.5 flex gap-3 font-medium"><button type="button" className="text-primary hover:underline" onClick={() => { const ticket = tickets.find((item) => item.id === alert.ticketKey); if (ticket) void openTicket(ticket); }}>Abrir chamado</button><button type="button" className="text-muted-foreground hover:text-foreground" onClick={() => markAlertRead(`${alert.ticketKey}|${alert.message}`)}>Marcar como lido</button></div>
+                  </li>
                 ))}
-                {!visibleOperationalAlerts.length && (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum alerta operacional crítico.
-                  </p>
-                )}
-              </div>
+                {newTicketAlerts.map((message) => <li key={message} className="rounded-lg border-l-2 border-l-primary bg-card-elevated px-3 py-2 text-xs"><p><span className="font-medium text-primary">Novo chamado</span> · {message}</p><button type="button" className="mt-1.5 font-medium text-muted-foreground hover:text-foreground" onClick={() => setNewTicketAlerts((current) => current.filter((item) => item !== message))}>Marcar como lido</button></li>)}
+                {removedTicketAlerts.map((message) => <li key={message} className="rounded-lg border-l-2 border-l-border bg-card-elevated px-3 py-2 text-xs text-muted-foreground"><p className="text-foreground">{message}</p><button type="button" className="mt-1.5 font-medium hover:text-foreground" onClick={() => setRemovedTicketAlerts((current) => current.filter((item) => item !== message))}>Marcar como lido</button></li>)}
+              </ul>
+              {!visibleOperationalAlerts.length && (
+                <p className="px-1 py-3 text-sm text-muted-foreground">
+                  Nenhum alerta operacional crítico agora.
+                </p>
+              )}
               <a
                 href="/?view=tickets"
                 onClick={(event) => navigate(event, "/?view=tickets")}
-                className="mt-4 inline-flex text-sm font-semibold text-primary hover:underline"
+                className="mt-2 inline-flex min-h-9 items-center px-1 text-sm font-medium text-primary hover:underline"
               >
                 Ver chamados
               </a>
@@ -1282,21 +1308,22 @@ export default function Home() {
         <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-6 pb-44 sm:px-6 lg:px-8 lg:pt-8 xl:pb-36">
           {/* WhatsApp is full-screen: its title stays only for screen readers. */}
           <div className={activeView === "whatsapp" ? "sr-only" : "flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"}>
-            <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-primary">
+            <div className="min-w-0">
+              <p className="page-eyebrow">
                 {viewCopy[activeView][0]}
               </p>
-              <h1 className="text-2xl font-semibold tracking-[-.04em] sm:text-[2rem]">
+              <h1 className="page-title">
                 {viewCopy[activeView][1]}
               </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="page-subtitle">
                 {viewCopy[activeView][2]}
               </p>
             </div>
-            {activeView === "tickets" && (
+            {/* Ação principal da página: uma só, na cor primária. */}
+            {(activeView === "tickets" || activeView === "overview") && (
               <Button
-                size="lg"
-                className="h-11 px-4 font-bold shadow-[0_10px_28px_color-mix(in_oklab,var(--primary)_20%,transparent)]"
+                className="shrink-0 font-semibold"
+                nativeButton={false}
                 render={
                   <a
                     href={JIRA_CREATE_ISSUE_URL}
@@ -1306,6 +1333,7 @@ export default function Home() {
                 }
               >
                 <Plus /> Novo chamado no Jira
+                <ExternalLink aria-hidden="true" className="opacity-70" />
               </Button>
             )}
           </div>
@@ -1316,7 +1344,6 @@ export default function Home() {
               error={jiraError}
               operational={operational}
               role={role}
-              jiraCreateUrl={JIRA_CREATE_ISSUE_URL}
               onOpenTicket={(ticket) => void openTicket(ticket)}
               onNavigate={navigate}
             />
@@ -1324,9 +1351,13 @@ export default function Home() {
           {jiraError && (
             <div
               role="alert"
-              className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/8 p-4 text-sm text-amber-200"
+              className="mt-6 flex items-start gap-3 rounded-xl border border-warning/25 bg-warning-soft p-4 text-sm"
             >
-              {jiraError}
+              <Activity aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
+              <div className="min-w-0">
+                <p className="font-medium text-warning">Não foi possível sincronizar com o Jira</p>
+                <p className="mt-0.5 text-muted-foreground">{jiraError}</p>
+              </div>
             </div>
           )}
           {activeView === "tickets" && (
@@ -1341,13 +1372,13 @@ export default function Home() {
             activeView === "tickets" ||
             activeView === "central") && (
             <>
-              <div className="mt-6 flex flex-wrap items-center gap-2">
-                <div className="mr-auto">
-                  <h2 className="text-lg font-bold">Fluxo de chamados</h2>
-                  <p className="text-xs text-muted-foreground">
+              <div className="mt-8 flex flex-wrap items-center gap-2">
+                <div className="mr-auto min-w-0">
+                  <h2 className="section-title">Fluxo de chamados</h2>
+                  <p className="text-xs text-muted-foreground" aria-live="polite">
                     {jiraLoading
-                      ? "Carregando chamados reais..."
-                      : `${filtered.length} chamados exibidos${activeView === "tickets" && ticketDate ? ` em ${formatDay(ticketDate)}` : ""}`}
+                      ? "Carregando chamados reais…"
+                      : `${filtered.length} ${filtered.length === 1 ? "chamado exibido" : "chamados exibidos"}${query.trim() ? ` para “${query.trim()}”` : ""}${activeView === "tickets" && ticketDate ? ` em ${formatDay(ticketDate)}` : ""}`}
                   </p>
                 </div>
                 <Button
@@ -1396,11 +1427,11 @@ export default function Home() {
               )}
               {showFilters && (
                 <div
-                  className="surface-panel mt-3 space-y-3 rounded-xl p-3"
+                  className="surface-panel mt-3 space-y-4 rounded-xl p-4"
                   aria-label="Filtros de chamados"
                 >
                   <div>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    <p className="label-caps mb-2">
                       Filtros do Jira
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1426,7 +1457,7 @@ export default function Home() {
                     </div>
                   </div>
                   <div>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    <p className="label-caps mb-2">
                       Status
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1464,11 +1495,11 @@ export default function Home() {
                           type="button"
                           onClick={() => openMobileColumn(column)}
                           aria-pressed={active}
-                          className={`flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition ${active ? "border-primary/40 bg-primary/15 text-foreground" : "border-border bg-card text-muted-foreground"}`}
+                          className={`flex min-h-11 shrink-0 items-center gap-2 rounded-lg border px-3 text-xs font-medium transition ${active ? "border-primary/40 bg-primary-soft text-primary" : "border-border bg-card text-muted-foreground"}`}
                         >
                           <span className={`size-2 rounded-full ${dots[column]}`} aria-hidden="true" />
                           {shortColumn[column]}
-                          <span className={`rounded-md px-1.5 py-0.5 text-[10px] ${active ? "bg-primary/20" : "bg-foreground/[.035] dark:bg-black/20"}`}>
+                          <span className={`rounded-md px-1.5 py-0.5 text-[11px] tabular-nums ${active ? "bg-primary/15" : "bg-muted"}`}>
                             {count}
                           </span>
                         </button>
@@ -1487,14 +1518,16 @@ export default function Home() {
                       return (
                         <section
                           key={column}
-                          className={`surface-panel min-h-[280px] rounded-2xl p-2.5 ${column === activeMobileColumn ? "" : "hidden sm:block"}`}
+                          aria-label={`${column}: ${items.length} ${items.length === 1 ? "chamado" : "chamados"}`}
+                          className={`min-h-[280px] rounded-2xl border border-border bg-(--surface-inset) p-2 ${column === activeMobileColumn ? "" : "hidden sm:block"}`}
                         >
-                          <div className="mb-3 flex items-center justify-between px-1">
-                            <div className="flex items-center gap-2">
+                          <div className="mb-2 flex min-h-9 items-center justify-between px-1.5">
+                            <div className="flex min-w-0 items-center gap-2">
                               <span
-                                className={`size-2 rounded-full ${dots[column]}`}
+                                aria-hidden="true"
+                                className={`size-2 shrink-0 rounded-full ${dots[column]}`}
                               />
-                              <h3 className="truncate text-[11px] font-bold uppercase tracking-[.04em]">
+                              <h3 className="truncate text-xs font-semibold" title={column}>
                                 {column}
                               </h3>
                             </div>
@@ -1511,7 +1544,7 @@ export default function Home() {
                                   className="-my-3"
                                 />
                               )}
-                              <span className="rounded-lg border border-white/5 bg-foreground/[.035] dark:bg-black/15 px-2 py-1 text-[10px] font-bold text-muted-foreground">
+                              <span className="min-w-6 rounded-md bg-muted px-1.5 py-0.5 text-center text-xs font-medium tabular-nums text-muted-foreground">
                                 {items.length}
                               </span>
                             </div>
@@ -1559,8 +1592,8 @@ export default function Home() {
                               );
                             })}
                             {!items.length && (
-                              <div className="grid h-32 place-items-center rounded-xl border border-dashed border-border text-xs text-muted-foreground">
-                                Nenhum chamado encontrado
+                              <div className="grid h-28 place-items-center rounded-xl border border-dashed border-border px-3 text-center text-xs text-muted-foreground">
+                                {jiraLoading ? "Carregando…" : query.trim() || statusFilter !== "Todos" ? "Nada nesta coluna com os filtros atuais." : "Nenhum chamado nesta etapa."}
                               </div>
                             )}
                           </div>
@@ -1573,7 +1606,7 @@ export default function Home() {
               ) : (
                 <div className="surface-panel mt-4 overflow-hidden rounded-2xl">
                   {filtered.length > 0 && (
-                    <div className="flex items-center gap-1 border-b border-border bg-foreground/[.035] dark:bg-black/10 px-2 text-xs font-semibold text-muted-foreground">
+                    <div className="flex min-h-11 items-center gap-1 border-b border-border bg-(--surface-table-head) px-2 text-xs font-medium text-muted-foreground">
                       <SelectBox
                         checked={filtered.every((ticket) => selectedKeys.has(ticket.id))}
                         indeterminate={
@@ -1583,29 +1616,42 @@ export default function Home() {
                         onChange={() => toggleSelectedGroup(filtered.map((ticket) => ticket.id))}
                         label={`Selecionar os ${filtered.length} chamados exibidos`}
                       />
-                      Selecionar os {filtered.length} exibidos
+                      {/* No desktop o cabeçalho vira rótulo das colunas; no
+                          celular cada linha já traz os rótulos embutidos. */}
+                      <span className="lg:hidden">Selecionar os {filtered.length} exibidos</span>
+                      <span aria-hidden="true" className="hidden min-w-0 flex-1 gap-3 px-2 lg:grid lg:grid-cols-[112px_minmax(0,1fr)_160px_minmax(0,180px)]">
+                        <span>FSA</span><span>Resumo · loja · cidade</span><span>Status</span><span>Técnico</span>
+                      </span>
                     </div>
                   )}
                   {filtered.map((ticket) => (
                     <div
                       key={ticket.id}
-                      className={`flex items-center gap-1 border-b border-border p-2 last:border-0 ${selectedKeys.has(ticket.id) ? "bg-violet-400/[.06]" : ""}`}
+                      className={`flex items-center gap-1 border-b border-border px-2 py-1 last:border-0 ${selectedKeys.has(ticket.id) ? "bg-primary-soft" : ""}`}
                     >
                       <SelectBox
                         checked={selectedKeys.has(ticket.id)}
                         onChange={() => toggleSelected(ticket.id)}
                         label={`Selecionar ${ticket.id}`}
                       />
-                      <button type="button" onClick={() => void openTicket(ticket)} className="grid min-h-11 min-w-0 flex-1 gap-3 rounded-lg p-2 text-left transition hover:bg-white/[.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:grid-cols-[100px_minmax(0,1fr)_140px_120px] lg:items-center">
-                        <span className="font-mono text-xs font-bold text-primary">{ticket.id}</span>
-                        <div><p className="text-sm font-semibold">{ticket.title}</p><p className="text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div>
-                        <Badge variant="outline">{ticket.status}</Badge>
-                        <span className="text-xs text-muted-foreground">{ticket.technician || "Não atribuído"}</span>
+                      <button type="button" onClick={() => void openTicket(ticket)} className="grid min-h-11 min-w-0 flex-1 gap-1.5 rounded-lg p-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:grid-cols-[112px_minmax(0,1fr)_160px_minmax(0,180px)] lg:items-center lg:gap-3">
+                        <span className="font-mono text-xs font-semibold text-primary">{ticket.id}</span>
+                        <div className="min-w-0"><p className="truncate text-sm font-medium">{ticket.title}</p><p className="truncate text-xs text-muted-foreground">{ticket.store} · {ticket.city}</p></div>
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${dots[ticket.status]}`} /><span className="truncate">{ticket.status}</span></span>
+                        <span className={`truncate text-xs ${ticket.technician ? "" : "text-muted-foreground"}`}>{ticket.technician || "Não atribuído"}</span>
                       </button>
                     </div>
                   ))}
                   {!filtered.length && (
-                    <EmptyState label="Nenhum chamado encontrado" />
+                    <div className="grid min-h-48 place-items-center p-6 text-center">
+                      <div className="max-w-sm">
+                        <p className="text-sm font-medium">{jiraLoading ? "Carregando chamados…" : query.trim() ? `Nenhum chamado encontrado para “${query.trim()}”.` : "Nenhum chamado com os filtros atuais."}</p>
+                        {!jiraLoading && <p className="mt-1 text-xs text-muted-foreground">A busca olha FSA, cidade, loja, técnico e resumo do chamado.</p>}
+                        {!jiraLoading && (query.trim() || statusFilter !== "Todos") && (
+                          <Button variant="outline" size="sm" className="mt-3" onClick={() => { setQuery(""); setStatusFilter("Todos"); }}>Limpar busca e filtros</Button>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -1699,14 +1745,14 @@ export default function Home() {
               {dialogError && (
                 <div
                   role="alert"
-                  className="rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200"
+                  className="rounded-lg border border-danger/25 bg-danger-soft p-3 text-sm text-danger"
                 >
                   {dialogError}
                 </div>
               )}
               {detailsVisible && selected && (
                 <section className="rounded-xl border border-primary/25 bg-primary/5 p-4" aria-label="Resumo para atendimento">
-                  <p className="text-xs font-bold uppercase tracking-wide text-primary">Resumo para atendimento</p>
+                  <p className="label-caps">Resumo para atendimento</p>
                   <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                     <Detail label="Loja" value={`${selected.store || "Loja não informada"}${selected.city ? ` · ${selected.city}` : ""}`} />
                     <Detail label="Técnico" value={details?.technicianName || selected.technician || "Não atribuído"} />
@@ -1754,6 +1800,7 @@ export default function Home() {
                 <Button
                   variant="outline"
                   className="h-auto min-h-14 min-w-0 sm:min-h-16 justify-start gap-3 whitespace-normal p-3 text-left"
+                  nativeButton={false}
                   render={
                     <a
                       href={whatsappUrl || "#"}
@@ -1780,7 +1827,7 @@ export default function Home() {
                   disabled={!validationReady || validationSending}
                   aria-describedby="validation-requirements"
                 >
-                  <ShieldCheck className="size-5 shrink-0 text-emerald-300" />
+                  <ShieldCheck className="size-5 shrink-0 text-success" />
                   <span className="min-w-0 flex-1">
                     <span className="block break-words font-bold">Validar</span>
                     <span className="hidden break-words text-xs font-normal text-muted-foreground sm:block">
@@ -1831,7 +1878,7 @@ export default function Home() {
               </div>
               <p
                 id="validation-requirements"
-                className={`text-xs ${validationReady ? "text-emerald-200" : "text-muted-foreground"}`}
+                className={`text-xs ${validationReady ? "text-success" : "text-muted-foreground"}`}
                 role="status"
               >
                 {validationNotice ||
@@ -1856,7 +1903,7 @@ export default function Home() {
                 <section className="rounded-xl border border-primary/25 bg-primary/5 p-4" aria-label="Dados do spare vinculados à planilha">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-primary">Spare vinculado à planilha</p>
+                      <p className="label-caps">Spare vinculado à planilha</p>
                       <h3 className="mt-1 text-sm font-bold">{linkedSpare.equipment || 'Peça não informada'}</h3>
                     </div>
                     <Badge variant="outline">{linkedSpare.status || 'Sem status'}</Badge>
@@ -1920,7 +1967,7 @@ export default function Home() {
                 />
               )}
               {detailsVisible && (role === "analista" || role === "gerencia") && (
-                <section className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4">
+                <section className="rounded-xl border border-success/25 bg-success-soft p-4">
                   <div className="flex items-center gap-2">
                     <MessageCircle className="size-5 shrink-0 text-emerald-400" />
                     <div>
@@ -2037,7 +2084,7 @@ function TicketCard({
   onToggleSelect?: () => void;
 }) {
   return (
-    <article className={`relative rounded-xl border bg-card-elevated shadow-(--shadow-card) dark:bg-black/15 dark:shadow-[0_14px_32px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 ${selected ? "border-violet-300/60 bg-violet-400/[.06] ring-1 ring-violet-400/30" : "border-white/[.07] hover:border-primary/40"}`}>
+    <article className={`relative rounded-xl border bg-card transition-colors ${selected ? "border-primary/60 bg-primary-soft ring-1 ring-primary/30" : "border-border hover:border-primary/40"}`}>
       {onToggleSelect && (
         <SelectBox
           checked={selected}
@@ -2046,54 +2093,52 @@ function TicketCard({
           className="absolute left-1 top-1 z-10"
         />
       )}
-      <button type="button" onClick={onOpen} className="w-full rounded-xl p-3 text-left transition hover:bg-foreground/[.05] dark:hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-      <div className="flex justify-between gap-3">
-        <span className={`font-mono text-xs font-bold text-primary ${onToggleSelect ? "pl-8" : ""}`}>
+      <button type="button" onClick={onOpen} className="w-full rounded-xl p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+      <div className="flex items-center justify-between gap-3">
+        <span className={`min-w-0 truncate whitespace-nowrap font-mono text-xs font-semibold text-primary ${onToggleSelect ? "pl-8" : ""}`}>
           {ticket.id}
         </span>
-        <Badge
-          variant="outline"
-          className={
+        {/* Só a prioridade alta ganha cor: é a que pede atenção. */}
+        <span
+          className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
             ticket.priority === "Alta"
-              ? "border-red-400/30 bg-red-400/10 text-red-300"
+              ? "bg-danger-soft text-danger"
               : "text-muted-foreground"
-          }
+          }`}
         >
-          {ticket.priority}
-        </Badge>
+          <span className="sr-only">Prioridade </span>{ticket.priority}
+        </span>
       </div>
-      <h4 className="mt-2 text-sm font-semibold leading-snug">
+      <h4 className="mt-1.5 text-sm font-medium leading-snug">
         {ticket.title}
       </h4>
-      <div className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-        <p className="flex items-center gap-1.5">
-          <Building2 className="size-3.5 shrink-0" />
-          {ticket.store}
+      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+        <p className="flex min-w-0 items-center gap-1.5">
+          <Building2 aria-hidden="true" className="size-3.5 shrink-0" />
+          <span className="truncate">{ticket.store}</span>
         </p>
-        <p className="flex items-center gap-1.5">
-          <MapPin className="size-3.5 shrink-0" />
-          {ticket.city}
+        <p className="flex min-w-0 items-center gap-1.5">
+          <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+          <span className="truncate">{ticket.city}</span>
         </p>
         {ticket.schedule && (
-          <p className="flex items-center gap-1.5 text-blue-300">
-            <CalendarClock className="size-3.5 shrink-0" />
-            Agendamento: {ticket.schedule}
+          <p className="flex items-center gap-1.5 text-foreground">
+            <CalendarClock aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+            Agendado: {ticket.schedule}
           </p>
         )}
         {ticket.partnerTriggeredAt && (
-          <p className="flex items-center gap-1.5 text-amber-300">
-            <CalendarClock className="size-3.5 shrink-0" />
-            Acionamento: {ticket.partnerTriggeredAt}
+          <p className="flex items-center gap-1.5 text-foreground">
+            <CalendarClock aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
+            Acionado: {ticket.partnerTriggeredAt}
           </p>
         )}
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2">
-        <span className="truncate text-[11px] font-semibold uppercase tracking-[.06em] text-muted-foreground">
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2">
+        <span className="truncate text-[11px] text-muted-foreground">
           {ticket.rawStatus}
         </span>
-        {ticket.technician && (
-          <span className="truncate text-xs font-semibold">{ticket.technician}</span>
-        )}
+        <span className={`truncate text-xs ${ticket.technician ? "font-medium" : "text-muted-foreground"}`}>{ticket.technician || "Sem técnico"}</span>
       </div>
       </button>
     </article>
@@ -2158,7 +2203,7 @@ function TicketActivityCalendar({
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-auto rounded-2xl border-border bg-popover p-2 shadow-2xl"
+              className="w-auto rounded-2xl border-border bg-popover p-2"
             >
               <Calendar
                 mode="single"
@@ -2206,7 +2251,7 @@ function TicketActivityCalendar({
                   type="button"
                   key={`${activity.ticket.id}-${activity.label}-${index}`}
                   onClick={() => onOpen(activity.ticket)}
-                  className="flex min-h-16 w-full items-start gap-3 rounded-xl border border-border bg-foreground/[.035] dark:bg-black/10 p-3 text-left transition hover:border-primary/35 hover:bg-white/[.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex min-h-16 w-full items-start gap-3 rounded-xl border border-border bg-card-elevated p-3 text-left transition hover:border-primary/35 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <span
                     className={`mt-1.5 size-2.5 shrink-0 rounded-full ${tones[activity.tone]}`}
@@ -2260,10 +2305,10 @@ function AgendaView({
   );
   if (loading) return <LoadingPanel label="Carregando agenda..." />;
   if (!scheduled.length)
-    return <EmptyState label="Nenhum atendimento aguardando agenda." />;
+    return <EmptyState label="Nenhum atendimento aguardando agenda." hint="Chamados pendentes de agendamento ou já agendados aparecem aqui." />;
   return (
     <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
-      <div className="hidden border-b border-border bg-foreground/[.035] dark:bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_180px]">
+      <div className="hidden border-b border-border bg-(--surface-table-head) px-4 py-2.5 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_180px]">
         <span>Data</span>
         <span>Chamado</span>
         <span>Responsável</span>
@@ -2274,23 +2319,24 @@ function AgendaView({
           type="button"
           key={ticket.id}
           onClick={() => onOpen(ticket)}
-          className="grid w-full gap-2 border-b border-border px-4 py-4 text-left transition hover:bg-white/[.035] last:border-0 lg:grid-cols-[130px_minmax(0,1fr)_160px_180px] lg:items-center"
+          className="grid w-full gap-2 border-b border-border px-4 py-4 text-left transition hover:bg-muted/60 last:border-0 lg:grid-cols-[130px_minmax(0,1fr)_160px_180px] lg:items-center"
         >
-          <span className="text-sm font-semibold text-blue-200">
+          <span className={`text-sm tabular-nums ${ticket.schedule ? "font-medium" : "text-warning"}`}>
             {ticket.schedule || "A definir"}
           </span>
-          <span>
-            <strong className="block text-sm">
-              {ticket.id} · {ticket.store}
+          <span className="min-w-0">
+            <strong className="block truncate text-sm font-medium">
+              <span className="font-mono text-primary">{ticket.id}</span> · {ticket.store}
             </strong>
-            <small className="text-muted-foreground">{ticket.title}</small>
+            <small className="block truncate text-muted-foreground">{ticket.title}</small>
           </span>
-          <span className="text-sm text-muted-foreground">
+          <span className={`truncate text-sm ${ticket.technician ? "" : "text-muted-foreground"}`}>
             {ticket.technician || "Não atribuído"}
           </span>
-          <Badge variant="outline" className="w-fit">
+          <span className="flex items-center gap-1.5 text-xs">
+            <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${dots[ticket.status]}`} />
             {ticket.status}
-          </Badge>
+          </span>
         </button>
       ))}
     </div>
@@ -2417,14 +2463,14 @@ function TechniciansView({
       <div
         role="tablist"
         aria-label="Equipe"
-        className="inline-flex rounded-xl border border-border bg-card p-1"
+        className="inline-flex rounded-lg bg-muted p-0.5"
       >
         <button
           type="button"
           role="tab"
           aria-selected={tab === "n1"}
           onClick={() => setTab("n1")}
-          className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition ${tab === "n1" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          className={`min-h-9 rounded-md px-4 text-sm font-medium transition-colors ${tab === "n1" ? "bg-card-elevated text-foreground shadow-(--shadow-xs)" : "text-muted-foreground hover:text-foreground"}`}
         >
           Equipe interna
         </button>
@@ -2433,7 +2479,7 @@ function TechniciansView({
           role="tab"
           aria-selected={tab === "field"}
           onClick={() => setTab("field")}
-          className={`min-h-10 rounded-lg px-4 text-sm font-semibold transition ${tab === "field" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          className={`min-h-9 rounded-md px-4 text-sm font-medium transition-colors ${tab === "field" ? "bg-card-elevated text-foreground shadow-(--shadow-xs)" : "text-muted-foreground hover:text-foreground"}`}
         >
           Técnicos de campo
         </button>
@@ -2442,30 +2488,23 @@ function TechniciansView({
         loading ? (
           <LoadingPanel label="Carregando equipe..." />
         ) : users.length ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          // Uma lista num painel só, em vez de um card por pessoa.
+          <ul className="surface-panel max-w-4xl divide-y divide-border overflow-hidden rounded-2xl" aria-label={`${users.length} ${users.length === 1 ? "conta N1 ativa" : "contas N1 ativas"}`}>
             {users.map((member) => (
-              <article
-                key={member.email}
-                className="surface-panel rounded-2xl p-5"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="grid size-11 place-items-center rounded-xl border border-violet-300/20 bg-violet-300/10 text-sm font-bold text-violet-200">
-                    {member.email.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="truncate font-semibold">{member.email}</h2>
-                    <p className="text-xs text-muted-foreground">Analista N1</p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="ml-auto border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
-                  >
-                    Ativo
-                  </Badge>
-                </div>
-              </article>
+              <li key={member.email} className="flex items-center gap-3 px-4 py-3">
+                <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold">
+                  {member.email.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{member.email}</span>
+                  <span className="block text-xs text-muted-foreground">Analista N1</span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-medium text-success">
+                  <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />Conta ativa
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
           <EmptyState label="Nenhuma conta N1 ativa." />
         )
@@ -2478,13 +2517,13 @@ function TechniciansView({
               <div><h2 id="nearby-technicians-title" className="font-semibold">Buscar técnicos próximos</h2><p className="mt-1 text-sm text-muted-foreground">Distância aproximada em linha reta entre os centros das cidades.</p></div>
               <Button type="button" variant="outline" onClick={() => setExportOpen(true)} disabled={!fieldTechnicians.some((tech) => brazilPhone(tech.phone))}><Download aria-hidden="true" /> Exportar Google Contatos</Button>
             </div>
-            {exportFile && <p role="status" className="mt-3 text-sm text-emerald-200">CSV gerado. Se o download não iniciou, <a className="underline" href={exportFile.url} download={exportFile.name}>toque aqui para salvar {exportFile.name}</a>.</p>}
+            {exportFile && <p role="status" className="mt-3 text-sm text-success">CSV gerado. Se o download não iniciou, <a className="underline" href={exportFile.url} download={exportFile.name}>toque aqui para salvar {exportFile.name}</a>.</p>}
             <form onSubmit={(event) => void searchNearby(event)} className="mt-4 flex flex-wrap items-end gap-2">
               <div className="min-w-48 flex-1"><label htmlFor="near-city" className="mb-1 block text-sm font-medium">Cidade e UF</label><Input id="near-city" value={nearCity} onChange={(event) => setNearCity(event.target.value)} placeholder="Ex.: Salvador/BA" /></div>
               <div><label htmlFor="near-limit" className="mb-1 block text-sm font-medium">Mostrar</label><select id="near-limit" value={nearLimit} onChange={(event) => setNearLimit(Number(event.target.value))} className="h-11 rounded-md border border-input bg-background px-3 text-sm">{[2, 5, 10, 20].map((limit) => <option key={limit} value={limit}>{limit} técnicos</option>)}</select></div>
               <Button type="submit" disabled={nearLoading || nearCity.trim().length < 2}>{nearLoading ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Search aria-hidden="true" />}Buscar</Button>
             </form>
-            {nearError && <p role="alert" className="mt-3 text-sm text-rose-200">{nearError}</p>}
+            {nearError && <p role="alert" className="mt-3 text-sm text-danger">{nearError}</p>}
             {nearby && <div className="mt-4"><p className="mb-2 text-sm text-muted-foreground">{nearby.length ? `${nearby.length} técnico(s) mais próximo(s) de ${nearLabel}` : `Nenhum técnico com cidade mapeada perto de ${nearLabel}. Tente outra cidade/UF.`}</p><ol className="space-y-2">{nearby.map((tech) => <li key={tech.id}><button type="button" onClick={() => setSelected(tech)} className="flex min-h-14 w-full flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-background/40 px-3 py-2 text-left transition hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><span><b className="block text-sm">{tech.name}</b><span className="text-xs text-muted-foreground">{tech.phone || "Sem telefone"} · {tech.city}/{tech.state}</span></span><span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-xs font-bold tabular-nums text-primary">{tech.distanceKm} km</span></button></li>)}</ol></div>}
           </section>
           <div className="flex max-w-2xl flex-col gap-2 sm:flex-row">
@@ -2514,7 +2553,7 @@ function TechniciansView({
           {fieldError && (
             <div
               role="alert"
-              className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200"
+              className="rounded-xl border border-danger/25 bg-danger-soft p-3 text-sm text-danger"
             >
               {fieldError}
             </div>
@@ -2528,7 +2567,7 @@ function TechniciansView({
                   type="button"
                   key={tech.id}
                   onClick={() => setSelected(tech)}
-                  className="surface-panel rounded-2xl p-5 text-left transition hover:-translate-y-0.5 hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="surface-panel rounded-2xl p-5 text-left transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <div className="flex items-start gap-3">
                     <div className="grid size-11 shrink-0 place-items-center rounded-xl border border-primary/25 bg-primary/10 font-bold text-primary">
@@ -2959,21 +2998,21 @@ function ProjectsView({
     return <EmptyState label="Nenhuma loja encontrada nos chamados atuais." />;
   return (
     <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
-      <div className="grid border-b border-border bg-foreground/[.035] dark:bg-black/10 px-4 py-3 text-xs font-bold uppercase tracking-wider text-muted-foreground lg:grid-cols-[minmax(0,1fr)_220px_120px]">
+      <div className="hidden border-b border-border bg-(--surface-table-head) px-4 py-2.5 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[minmax(0,1fr)_220px_120px] sm:gap-3">
         <span>Loja</span>
         <span>Cidade</span>
-        <span>Chamados</span>
+        <span className="text-right">Chamados</span>
       </div>
       {stores.map((store) => (
         <div
           key={`${store.store}-${store.city}`}
-          className="grid gap-2 border-b border-border px-4 py-4 last:border-0 sm:grid-cols-[1fr_220px_120px] sm:items-center"
+          className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 border-b border-border px-4 py-3 transition-colors last:border-0 hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_220px_120px] sm:items-center"
         >
-          <strong className="text-sm">{store.store}</strong>
-          <span className="text-sm text-muted-foreground">{store.city}</span>
-          <Badge variant="outline" className="w-fit">
-            {store.tickets}
-          </Badge>
+          <strong className="truncate text-sm font-medium">{store.store}</strong>
+          <span className="col-start-1 row-start-2 truncate text-sm text-muted-foreground sm:col-start-auto sm:row-start-auto">{store.city}</span>
+          <span className="row-span-2 self-center text-right text-sm font-medium tabular-nums sm:row-span-1">
+            {store.tickets}<span className="text-muted-foreground sm:sr-only"> {store.tickets === 1 ? "chamado" : "chamados"}</span>
+          </span>
         </div>
       ))}
     </div>
@@ -3326,8 +3365,8 @@ function IntegrationHealthPanel({
           variant="outline"
           className={
             healthy
-              ? "border-emerald-400/30 text-emerald-200"
-              : "border-amber-400/30 text-amber-200"
+              ? "border-emerald-400/30 text-success"
+              : "border-amber-400/30 text-warning"
           }
         >
           {healthy ? "Operação saudável" : "Requer atenção"}
@@ -3362,6 +3401,7 @@ function IntegrationHealthPanel({
           type="button"
           variant="outline"
           className="min-h-11"
+          nativeButton={false}
           render={<a href="/downloads/Caju-OS-0.1.14-x64-setup.exe" download />}
         >
           <Download />
@@ -3446,9 +3486,7 @@ function OperationalSummary({
 }) {
   if (!data)
     return (
-      <section className="surface-panel mt-6 grid min-h-48 place-items-center rounded-2xl p-5">
-        <CajuLoading label="Carregando indicadores operacionais..." fullscreen={false} compact />
-      </section>
+      <LoadingPanel label="Carregando indicadores operacionais…" />
     );
   const ticketByKey = new Map(tickets.map((ticket) => [ticket.id, ticket]));
   const validationQueue = (data.validationQueue ?? []).flatMap((item) => {
@@ -3474,8 +3512,8 @@ function OperationalSummary({
           variant="outline"
           className={
             data.metrics.overdue
-              ? "border-red-400/30 text-red-200"
-              : "border-emerald-400/30 text-emerald-200"
+              ? "border-danger/30 bg-danger-soft text-danger"
+              : "border-success/30 bg-success-soft text-success"
           }
         >
           {data.metrics.overdue
@@ -3501,7 +3539,7 @@ function OperationalSummary({
       </div>
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          <h3 className="label-caps">
             Chamados em validação
           </h3>
           <div className="mt-2 space-y-2">
@@ -3510,11 +3548,11 @@ function OperationalSummary({
                 key={`${item.ticketKey}-${item.submittedAt}`}
                 type="button"
                 onClick={() => onOpenTicket(item.ticket)}
-                className="w-full rounded-lg border border-emerald-400/25 bg-emerald-400/8 px-3 py-2 text-left text-xs text-emerald-100 hover:border-emerald-300/50 hover:bg-emerald-400/12"
+                className="w-full rounded-lg border border-border bg-card-elevated px-3 py-2 text-left text-xs transition-colors hover:border-primary/40"
               >
                 <span className="flex flex-wrap items-center justify-between gap-2">
-                  <b className="text-emerald-200">{item.ticketKey}</b>
-                  <span className="rounded-full border border-emerald-300/25 px-2 py-0.5 font-semibold">
+                  <b className="font-mono text-primary">{item.ticketKey}</b>
+                  <span className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
                     {relativeAge(item.submittedAt)}
                   </span>
                 </span>
@@ -3532,21 +3570,21 @@ function OperationalSummary({
               </p>
             )}
             {!!data.validationQueue?.length && !validationQueue.length && (
-              <p className="rounded-lg border border-emerald-400/20 bg-emerald-400/8 p-3 text-xs text-emerald-100">
+              <p className="rounded-lg border border-border bg-card-elevated p-3 text-xs text-muted-foreground">
                 Os chamados enviados já saíram da fila atual do Jira.
               </p>
             )}
           </div>
         </div>
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          <h3 className="label-caps">
             Histórico recente
           </h3>
           <div className="mt-2 space-y-2">
             {data.recentAudit.slice(0, 4).map((item) => (
               <div
                 key={item.id}
-                className="rounded-lg border border-border bg-foreground/[.035] dark:bg-black/10 px-3 py-2 text-xs"
+                className="rounded-lg border border-border bg-card-elevated px-3 py-2 text-xs"
               >
                 <b className="text-primary">{item.ticketKey}</b> · {item.action}
                 <span className="mt-1 block text-muted-foreground">
@@ -3562,23 +3600,37 @@ function OperationalSummary({
           </div>
         </div>
       </div>
-      {!!data.collaborators?.length && <div className="mt-5"><h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Desempenho dos colaboradores</h3><div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{data.collaborators.slice(0, 6).map((item) => <div key={item.email} className="rounded-lg border border-border bg-foreground/[.035] dark:bg-black/10 px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><b className="truncate">{item.email}</b><span className="font-bold text-primary">{item.score}/100</span></div><p className="mt-1 text-muted-foreground">{item.changes} alterações · {item.tasksDone} tarefas · {Math.round(item.activeSeconds / 60)} min ativos</p></div>)}</div></div>}
+      {!!data.collaborators?.length && <div className="mt-5"><h3 className="label-caps">Desempenho dos colaboradores</h3><div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{data.collaborators.slice(0, 6).map((item) => <div key={item.email} className="rounded-lg border border-border bg-card-elevated px-3 py-2 text-xs"><div className="flex items-center justify-between gap-2"><b className="truncate">{item.email}</b><span className="font-bold text-primary">{item.score}/100</span></div><p className="mt-1 text-muted-foreground">{item.changes} alterações · {item.tasksDone} tarefas · {Math.round(item.activeSeconds / 60)} min ativos</p></div>)}</div></div>}
     </section>
   );
 }
 
-function EmptyState({ label }: { label: string }) {
+function EmptyState({ label, hint }: { label: string; hint?: string }) {
   return (
-    <div className="surface-panel mt-6 grid min-h-48 place-items-center rounded-2xl border-dashed p-6 text-center text-sm text-muted-foreground">
-      {label}
+    <div className="mt-6 grid min-h-48 place-items-center rounded-2xl border border-dashed border-border p-6 text-center">
+      <div className="max-w-sm">
+        <p className="text-sm font-medium">{label}</p>
+        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      </div>
     </div>
   );
 }
+// Esqueleto no formato de uma lista: a seção aparece no lugar certo enquanto
+// carrega, sem travar o resto da tela.
 function LoadingPanel({ label }: { label: string }) {
   return (
-    <div className="surface-panel mt-6 grid min-h-48 place-items-center rounded-2xl">
-      <CajuLoading label={label} fullscreen={false} compact />
-    </div>
+    <output className="surface-panel mt-6 block space-y-3 rounded-2xl p-4" aria-label={label}>
+      {Array.from({ length: 4 }, (_, index) => (
+        <div key={index} className="flex items-center gap-3">
+          <span aria-hidden="true" className="skeleton size-9 shrink-0 rounded-lg" />
+          <span className="min-w-0 flex-1 space-y-1.5">
+            <span aria-hidden="true" className="skeleton block h-3 w-2/5 rounded" />
+            <span aria-hidden="true" className="skeleton block h-2.5 w-3/5 rounded" />
+          </span>
+        </div>
+      ))}
+      <span className="sr-only">{label}</span>
+    </output>
   );
 }
 function initials(value: string) {

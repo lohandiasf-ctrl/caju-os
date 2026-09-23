@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { MetricStrip } from "@/components/metric-strip";
 import { Input } from "@/components/ui/input";
 import { auth } from "@/lib/firebase";
 declare global {
@@ -293,24 +294,21 @@ export default function Page() {
             <ArrowLeft className="size-4" />
             Operação
           </a>
-          <Badge
-            variant="outline"
-            className="ml-auto border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
-          >
+          <span className="ml-auto text-xs font-medium text-muted-foreground">
             Diretório operacional · {data.length} cidades
-          </Badge>
+          </span>
           <ThemeToggle className="ml-2" />
         </header>
         <div id="main-content" tabIndex={-1} className="app-main mx-auto max-w-[1600px] px-4 pt-4 pb-36 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-primary">
+            <div className="min-w-0">
+              <p className="page-eyebrow">
                 Distribuição nacional
               </p>
-              <h1 className="mt-1 text-3xl font-semibold">
+              <h1 className="page-title">
                 Mapa operacional de técnicos
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="page-subtitle">
                 Cobertura cruzada com cadastro e qualificação.
               </p>
             </div>
@@ -327,7 +325,7 @@ export default function Page() {
               </div>
               <select
                 aria-label="Filtrar por estado"
-                className="rounded-md border border-input bg-background px-3 text-sm"
+                className="field w-auto min-h-10 py-0"
                 value={uf}
                 onChange={(e) => setUf(e.target.value)}
               >
@@ -337,12 +335,18 @@ export default function Page() {
               </select>
             </div>
           </div>
-          <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <Card t="Cidades exibidas" v={show.length} i={MapPin} />
-            <Card t="Técnicos vinculados" v={total} i={Users} />
-            <Card t="Onboarding concluído" v={onboard} i={ShieldCheck} />
-            <Card t="Com veículo" v={vehicles} i={Car} />
-          </div>
+          {/* Técnicos é o número principal; onboarding e veículo são lidos
+              como fatia desse total. */}
+          <MetricStrip
+            className="mt-5"
+            label="Resumo do mapa"
+            items={[
+              { label: "Técnicos vinculados", value: total, note: `em ${show.length} ${show.length === 1 ? "cidade exibida" : "cidades exibidas"}`, icon: Users },
+              { label: "Onboarding concluído", value: onboard, note: total ? `${Math.round((onboard / total) * 100)}% dos técnicos` : "Sem técnicos no filtro", icon: ShieldCheck },
+              { label: "Com veículo", value: vehicles, note: total ? `${Math.round((vehicles / total) * 100)}% dos técnicos` : "Sem técnicos no filtro", icon: Car },
+              { label: "Cidades exibidas", value: show.length, note: `de ${data.length} no diretório`, icon: MapPin },
+            ]}
+          />
           {geoLoading && !origin && (
             <p className="surface-panel mt-5 rounded-2xl p-4 text-sm text-muted-foreground">Localizando “{q.trim()}”...</p>
           )}
@@ -350,11 +354,11 @@ export default function Page() {
             <section className="surface-panel mt-5 rounded-2xl p-5" aria-live="polite">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-primary">{nearby.length ? 'Cobertura em até 55 km' : 'Sem técnico na região'}</p>
-                  <h2 className="mt-1 text-xl font-extrabold">{originLabel}</h2>
+                  <p className="label-caps">{nearby.length ? 'Cobertura em até 55 km' : 'Sem técnico na região'}</p>
+                  <h2 className="mt-1 text-lg font-semibold">{originLabel}</h2>
                   {!targetCity && <p className="mt-0.5 text-xs text-muted-foreground">Cidade sem técnico cadastrado · localizada pelo mapa</p>}
                 </div>
-                <Badge variant="outline" className={nearby.length ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/25 bg-amber-400/10 text-amber-200'}>
+                <Badge variant="outline" className={nearby.length ? 'border-success/25 bg-success-soft text-success' : 'border-warning/25 bg-warning-soft text-warning'}>
                   {nearby.length ? `${nearby.length} técnico${nearby.length === 1 ? '' : 's'} em 55 km` : 'nenhum em 55 km'}
                 </Badge>
               </div>
@@ -385,7 +389,7 @@ export default function Page() {
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-12 shrink-0 place-items-center rounded-full border border-primary/25 bg-primary/10 text-sm font-bold text-primary">{initials(selected.name)}</span>
                   <div className="min-w-0">
-                    <h2 className="truncate text-lg font-extrabold">{selected.name}</h2>
+                    <h2 className="truncate text-lg font-semibold">{selected.name}</h2>
                     <p className="text-xs text-muted-foreground">
                       {selected.city}/{selected.uf}
                       {selected.distance >= 1 && ` · ${selected.distance.toFixed(1)} km de ${originLabel}`}
@@ -400,7 +404,7 @@ export default function Page() {
                 {(() => {
                   const link = whatsappLink(selectedDetail?.phone);
                   return link
-                    ? <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500/15 px-4 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/25"><MessageCircle className="size-4" />WhatsApp</a>
+                    ? <a href={link} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500/15 px-4 text-sm font-bold text-success transition hover:bg-emerald-500/25"><MessageCircle className="size-4" />WhatsApp</a>
                     : <span className="inline-flex min-h-10 items-center rounded-lg bg-muted/40 px-4 text-sm text-muted-foreground">Sem telefone cadastrado</span>;
                 })()}
                 {selectedDetail?.phone && <a href={`tel:${selectedDetail.phone.replace(/\D/g, '')}`} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-semibold transition hover:bg-muted"><Phone className="size-4" />{selectedDetail.phone}</a>}
@@ -425,11 +429,11 @@ export default function Page() {
             </section>
           )}
           {sel && (
-              <aside className="absolute bottom-4 left-4 right-4 rounded-xl border border-border bg-background/95 p-5 shadow-2xl md:left-auto md:top-4 md:w-80">
+              <aside className="absolute bottom-4 left-4 right-4 rounded-xl border border-border bg-popover p-5 shadow-(--shadow-popover) md:left-auto md:top-4 md:w-80">
                 <div className="flex justify-between">
                   <div>
-                    <p className="text-xs font-bold text-primary">{sel.uf}</p>
-                    <h2 className="text-xl font-extrabold">{sel.city}</h2>
+                    <p className="text-xs font-medium text-muted-foreground">{sel.uf}</p>
+                    <h2 className="text-lg font-semibold">{sel.city}</h2>
                   </div>
                   <Button
                     variant="ghost"
@@ -466,28 +470,17 @@ export default function Page() {
     </main>
   );
 }
-function Card({ t, v, i: I }: { t: string; v: number; i: typeof Users }) {
-  return (
-    <div className="cockpit-stat metric-glow rounded-2xl p-4">
-      <div className="flex justify-between text-sm text-muted-foreground">
-        {t}
-        <I className="size-4 text-primary" />
-      </div>
-      <p className="mt-3 text-2xl font-semibold">{v}</p>
-    </div>
-  );
-}
 function Mini({ t, v }: { t: string; v: number }) {
   return (
     <div className="cockpit-inset rounded-lg p-3">
       <p className="text-xs text-muted-foreground">{t}</p>
-      <p className="mt-1 text-lg font-black">{v}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums">{v}</p>
     </div>
   );
 }
 
 function TechnicianGroup({ title, technicians, empty, onSelect }: { title: string; technicians: Array<Technician & { distance: number }>; empty: string; onSelect: (technician: Technician & { distance: number }) => void }) {
-  return <div className="cockpit-inset min-w-0 rounded-xl p-4"><h3 className="text-xs font-bold text-muted-foreground">{title}</h3><div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">{technicians.map((technician) => <button type="button" key={`${technician.name}-${technician.city}-${technician.uf}`} onClick={() => onSelect(technician)} className="flex w-full items-center gap-3 rounded-lg border-b border-border px-1 py-1.5 text-left transition last:border-0 hover:bg-primary/10 focus-visible:bg-primary/10"><span className="grid size-9 shrink-0 place-items-center rounded-full border border-primary/20 bg-primary/10 text-[11px] font-bold text-primary">{initials(technician.name)}</span><span className="min-w-0"><b className="block truncate text-sm">{technician.name}</b><small className="text-xs text-muted-foreground">{technician.city}/{technician.uf}{technician.vehicle ? ' · Com veículo' : ''}</small></span><small className="ml-auto whitespace-nowrap text-xs font-semibold text-emerald-300">{technician.distance < 1 ? 'na cidade' : `${technician.distance.toFixed(1)} km`}</small></button>)}{!technicians.length && <p className="py-4 text-xs text-muted-foreground">{empty}</p>}</div></div>;
+  return <div className="cockpit-inset min-w-0 rounded-xl p-4"><h3 className="text-xs font-bold text-muted-foreground">{title}</h3><div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">{technicians.map((technician) => <button type="button" key={`${technician.name}-${technician.city}-${technician.uf}`} onClick={() => onSelect(technician)} className="flex w-full items-center gap-3 rounded-lg border-b border-border px-1 py-1.5 text-left transition last:border-0 hover:bg-primary/10 focus-visible:bg-primary/10"><span className="grid size-9 shrink-0 place-items-center rounded-full border border-primary/20 bg-primary/10 text-[11px] font-bold text-primary">{initials(technician.name)}</span><span className="min-w-0"><b className="block truncate text-sm">{technician.name}</b><small className="text-xs text-muted-foreground">{technician.city}/{technician.uf}{technician.vehicle ? ' · Com veículo' : ''}</small></span><small className="ml-auto whitespace-nowrap text-xs font-medium tabular-nums text-muted-foreground">{technician.distance < 1 ? 'na cidade' : `${technician.distance.toFixed(1)} km`}</small></button>)}{!technicians.length && <p className="py-4 text-xs text-muted-foreground">{empty}</p>}</div></div>;
 }
 
 // Telefones vêm do cadastro em formatos variados; o link do WhatsApp exige só

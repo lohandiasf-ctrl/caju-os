@@ -32,7 +32,7 @@ export function DesktopWindowControls() {
     await action(getCurrentWindow());
   }
 
-  return <div className="group/window-controls fixed right-3 top-2 z-[100] flex h-9 w-10 items-center overflow-hidden rounded-xl border border-white/10 bg-[#111218]/95 text-white shadow-2xl backdrop-blur-xl transition-[width] duration-200 hover:w-[200px] motion-reduce:transition-none">
+  return <div className="group/window-controls fixed right-3 top-2 z-[100] flex h-9 w-10 items-center overflow-hidden rounded-xl border border-white/10 bg-[#111218] text-white shadow-(--shadow-popover) transition-[width] duration-200 hover:w-[200px] motion-reduce:transition-none">
     <button type="button" aria-label="Mover janela" title="Arraste para mover" className="grid h-full w-10 shrink-0 cursor-move place-items-center text-white/45 hover:bg-white/5" onMouseDown={() => void withWindow((appWindow) => appWindow.startDragging())}><GripHorizontal className="size-4" /></button>
     <button type="button" aria-label="Minimizar" title="Minimizar" className="grid h-full w-10 shrink-0 place-items-center opacity-0 transition-opacity pointer-events-none group-hover/window-controls:pointer-events-auto group-hover/window-controls:opacity-100 hover:bg-white/10" onClick={() => void withWindow((appWindow) => appWindow.minimize())}><Minus className="size-4" /></button>
     <button type="button" aria-label="Maximizar ou restaurar" title="Maximizar ou restaurar" className="grid h-full w-10 shrink-0 place-items-center opacity-0 transition-opacity pointer-events-none group-hover/window-controls:pointer-events-auto group-hover/window-controls:opacity-100 hover:bg-white/10" onClick={() => void withWindow((appWindow) => appWindow.toggleMaximize())}><Maximize2 className="size-3.5" /></button>

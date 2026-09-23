@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type MouseEvent } from 'react';
 import { motion } from 'motion/react';
 import {
-  ArrowUpRight, CalendarClock, ChevronRight, ClipboardList, Gauge, Headphones, Inbox, Plus, type LucideIcon,
+  CalendarClock, ChevronRight, CircleCheck, Headphones, Inbox, Map as MapIcon, PackageOpen, TriangleAlert, type LucideIcon,
 } from 'lucide-react';
 import { ActivityChart } from '@/components/dashboard/activity-chart';
 import { AssistantCard } from '@/components/dashboard/assistant-card';
@@ -11,7 +11,7 @@ import { QueueSlider } from '@/components/dashboard/queue-slider';
 import { BentoCard, CardHeader, CountUp, DeltaBadge, EmptyCard, ErrorCard, Skeleton } from '@/components/dashboard/primitives';
 import {
   dailyActivity, daysAgo, deltaPercent, parseSnapshotStore, percent, rollSnapshot, slaOnTimePercent, statusCounts,
-  type DashboardTicket, type KpiSnapshotStore,
+  type DashboardTicket, type KpiSnapshotStore, type KpiValues,
 } from '@/lib/dashboard-metrics';
 import { canUseNavItem } from '@/lib/navigation';
 import type { UserRole } from '@/lib/permissions';
@@ -34,13 +34,13 @@ const SNAPSHOT_KEY = 'caju-dashboard-kpis';
 
 const grid = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.07, delayChildren: 0.08 } },
+  show: { transition: { staggerChildren: 0.04, delayChildren: 0 } },
 };
-// Dado já em cache: a cascata encurta (≤ 400 ms) para nunca atrasar o que
-// está pronto só por causa da animação.
+// Dado já em cache: a cascata encurta para nunca atrasar o que está pronto
+// só por causa da animação.
 const gridFast = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.035, delayChildren: 0 } },
+  show: { transition: { staggerChildren: 0.02, delayChildren: 0 } },
 };
 
 function todayKey(now: Date) {
@@ -58,13 +58,12 @@ function subscribeOnline(callback: () => void) {
  * ativos do Jira e o resumo de /api/operational-dashboard.
  * xl: 12 colunas (3·6·3 / 8·4 / 8·4). lg: 2 colunas. Celular: 1 coluna.
  */
-export function OverviewBento<T extends BentoTicket>({ tickets, loading, error, operational, role, jiraCreateUrl, onOpenTicket, onNavigate }: {
+export function OverviewBento<T extends BentoTicket>({ tickets, loading, error, operational, role, onOpenTicket, onNavigate }: {
   tickets: T[];
   loading: boolean;
   error: string;
   operational: Operational;
   role: UserRole | null;
-  jiraCreateUrl: string;
   onOpenTicket: (ticket: T) => void;
   onNavigate: Navigate;
 }) {
@@ -106,44 +105,44 @@ export function OverviewBento<T extends BentoTicket>({ tickets, loading, error, 
 
   return (
     <motion.div className="bento-grid mt-6" variants={cachedAtMount ? gridFast : grid} initial="hidden" animate="show">
-      <BentoCard tone="hero" label="Indicador principal" className="lg:order-1 xl:col-span-3">
-        <HeroCard operational={operational} ready={ready} jiraCreateUrl={jiraCreateUrl} onNavigate={onNavigate} />
-      </BentoCard>
-
-      <BentoCard label="Resumo operacional" className="lg:order-3 lg:col-span-2 xl:order-2 xl:col-span-6">
+      {/* Informação primária da página: a fila. Ocupa mais espaço e traz o
+          número grande; SLA e agenda são secundários ao lado. */}
+      <BentoCard label="Fila de chamados" className="lg:col-span-2 xl:col-span-6">
         <CardHeader
-          title="Resumo operacional"
-          description={previous ? 'Variação desde o último dia visto neste navegador.' : 'Chamados ativos na fila do Jira.'}
-          action={<FreshnessBadge updatedAt={updatedAt} online={online} now={now} />}
+          title="Fila de chamados"
+          description={previous ? 'Variação desde o último dia visto neste navegador.' : 'Chamados ativos no Jira.'}
+          action={<>
+            <FreshnessBadge updatedAt={updatedAt} online={online} now={now} />
+            <a href="/?view=tickets" onClick={(event) => onNavigate(event, '/?view=tickets')} className="inline-flex min-h-9 items-center gap-0.5 rounded-md px-2 text-sm font-medium text-primary hover:underline">Ver fila<ChevronRight aria-hidden="true" className="size-4" /></a>
+          </>}
         />
         {jiraError ? <ErrorCard text={jiraError} onRetry={() => window.location.reload()} /> : (
-          <div className="grid gap-3 sm:grid-cols-3">
-            <MiniKpi icon={ClipboardList} label="Em aberto" value={counts.open} delta={deltaPercent(counts.open, previous?.open)} upIsGood={false} ready={ready} />
-            <MiniKpi icon={Headphones} label="Em campo" value={counts.inField} delta={deltaPercent(counts.inField, previous?.inField)} ready={ready} />
-            <MiniKpi icon={CalendarClock} label="Agendados" value={counts.scheduled} delta={deltaPercent(counts.scheduled, previous?.scheduled)} ready={ready} />
-          </div>
+          <QueueOverview counts={counts} previous={previous} ready={ready} />
         )}
-        {!jiraError && <QueueDistribution counts={counts} ready={ready} />}
       </BentoCard>
 
-      <BentoCard label="Agenda da quinzena" className="lg:order-2 xl:order-3 xl:col-span-3">
-        <ScheduleSparkline tickets={tickets} now={now} ready={ready} coverage={percent(counts.withTechnician, counts.open)} />
+      <BentoCard label="Prazo (SLA)" className="xl:col-span-3">
+        <SlaCard operational={operational} ready={ready} onNavigate={onNavigate} />
       </BentoCard>
 
-      <BentoCard label="Movimento por dia" className="lg:order-4 lg:col-span-2 xl:col-span-8">
-        <ActivityCard tickets={tickets} now={now} ready={ready} error={jiraError} />
+      <BentoCard label="Agenda da quinzena" className="xl:col-span-3">
+        <ScheduleSparkline tickets={tickets} now={now} ready={ready} coverage={percent(counts.withTechnician, counts.open)} withTechnician={counts.withTechnician} />
       </BentoCard>
 
-      <BentoCard label="Assistente" className="lg:order-5 lg:col-span-2 xl:col-span-4">
-        <AssistantCard />
-      </BentoCard>
-
-      <BentoCard label="Atividades recentes" className="lg:order-6 lg:col-span-2 xl:col-span-8">
+      <BentoCard label="Atividades recentes" className="lg:col-span-2 xl:col-span-8">
         <RecentActivity tickets={tickets} now={now} ready={ready} criticalKeys={criticalKeys} onOpenTicket={onOpenTicket} onNavigate={onNavigate} />
       </BentoCard>
 
-      <BentoCard label="Ações rápidas" className="lg:order-7 lg:col-span-2 xl:col-span-4">
-        <QuickActions role={role} tickets={tickets} counts={counts} ready={ready} jiraCreateUrl={jiraCreateUrl} onNavigate={onNavigate} />
+      <BentoCard label="Ações rápidas" className="lg:col-span-2 xl:col-span-4">
+        <QuickActions role={role} tickets={tickets} counts={counts} ready={ready} onNavigate={onNavigate} />
+      </BentoCard>
+
+      <BentoCard label="Movimento por dia" className="lg:col-span-2 xl:col-span-8">
+        <ActivityCard tickets={tickets} now={now} ready={ready} error={jiraError} />
+      </BentoCard>
+
+      <BentoCard label="Assistente" className="lg:col-span-2 xl:col-span-4">
+        <AssistantCard />
       </BentoCard>
     </motion.div>
   );
@@ -157,9 +156,12 @@ function FreshnessBadge({ updatedAt, online, now }: { updatedAt: number | null; 
   return <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">{online ? `Atualizado ${age}` : `Offline · atualizado ${age}`}</span>;
 }
 
-function HeroCard({ operational, ready, jiraCreateUrl, onNavigate }: { operational: Operational; ready: boolean; jiraCreateUrl: string; onNavigate: Navigate }) {
-  // O resumo operacional chega por outra rota; se não vier em alguns
-  // segundos, o card assume que está indisponível em vez de girar para sempre.
+/**
+ * SLA (secundário). Card neutro; a cor só aparece quando há atraso, e vem
+ * com ícone + texto. O resumo chega por outra rota: se não vier em alguns
+ * segundos, o card assume que está indisponível em vez de girar para sempre.
+ */
+function SlaCard({ operational, ready, onNavigate }: { operational: Operational; ready: boolean; onNavigate: Navigate }) {
   const [gaveUp, setGaveUp] = useState(false);
   useEffect(() => {
     if (operational) return;
@@ -168,49 +170,45 @@ function HeroCard({ operational, ready, jiraCreateUrl, onNavigate }: { operation
   }, [operational]);
   const sla = slaOnTimePercent(operational?.metrics);
   const metrics = operational?.metrics;
+  const overdue = metrics?.overdue ?? 0;
   return (
-    <div className="relative flex h-full min-h-[228px] flex-col">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[13px] font-medium text-white/85">Chamados no prazo (SLA)</p>
-        <span className="grid size-8 place-items-center rounded-full bg-white/15"><Gauge aria-hidden="true" className="size-4" strokeWidth={1.75} /></span>
-      </div>
-      <div className="mt-3 min-h-11">
+    <div className="flex h-full min-h-[200px] flex-col">
+      <CardHeader title="No prazo (SLA)" description="Fluxos ativos sem atraso." />
+      <div className="min-h-10">
         {sla !== null ? (
-          <p className="text-4xl font-bold tracking-[-.03em]"><CountUp value={sla} suffix="%" /></p>
+          <p className="text-metric font-semibold tracking-[-.02em]"><CountUp value={sla} suffix="%" /></p>
         ) : !operational && !gaveUp ? (
-          <Skeleton className="h-10 w-28 !bg-white/20" />
+          <Skeleton className="h-9 w-24" />
         ) : (
-          <p className="text-4xl font-bold tracking-[-.03em]"><span aria-hidden="true">—</span><span className="sr-only">Sem dado</span></p>
+          <p className="text-metric font-semibold text-muted-foreground"><span aria-hidden="true">—</span><span className="sr-only">Sem dado</span></p>
         )}
       </div>
-      <p className="mt-2 text-xs leading-5 text-white/85">
+      <p className="mt-1 text-xs text-muted-foreground">
         {metrics && metrics.active > 0
-          ? `${metrics.overdue} ${metrics.overdue === 1 ? 'atrasado' : 'atrasados'} de ${metrics.active} fluxos ativos`
+          ? `${metrics.active} ${metrics.active === 1 ? 'fluxo ativo' : 'fluxos ativos'} medidos`
           : operational ? 'Nenhum fluxo ativo para medir agora.' : gaveUp && ready ? 'Indicador de SLA indisponível agora.' : 'Carregando indicador…'}
       </p>
-      <div className="mt-auto flex flex-wrap gap-2 pt-5">
-        <a href="/?view=tickets" onClick={(event) => onNavigate(event, '/?view=tickets')} className="hero-pill hero-pill--solid">Ver fila</a>
-        <a href={jiraCreateUrl} target="_blank" rel="noreferrer" className="hero-pill hero-pill--ghost"><Plus aria-hidden="true" className="size-4" />Novo chamado<ArrowUpRight aria-hidden="true" className="size-3.5 opacity-80" /></a>
-      </div>
+      {metrics && metrics.active > 0 && (
+        <div className="mt-auto pt-4">
+          {overdue > 0 ? (
+            <a href="/?view=tickets" onClick={(event) => onNavigate(event, '/?view=tickets')} className="flex min-h-10 items-center gap-2 rounded-lg bg-warning-soft px-3 text-sm font-medium text-warning hover:brightness-95">
+              <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1">{overdue} {overdue === 1 ? 'atrasado' : 'atrasados'}</span>
+              <ChevronRight aria-hidden="true" className="size-4 shrink-0" />
+            </a>
+          ) : (
+            <p className="flex min-h-10 items-center gap-2 rounded-lg bg-success-soft px-3 text-sm font-medium text-success">
+              <CircleCheck aria-hidden="true" className="size-4 shrink-0" />Nenhum atraso
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function MiniKpi({ icon: Icon, label, value, delta, upIsGood = true, ready }: {
-  icon: LucideIcon; label: string; value: number; delta: number | null; upIsGood?: boolean; ready: boolean;
-}) {
-  return (
-    <div className="rounded-2xl bg-muted/70 p-4 dark:bg-card-elevated">
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Icon aria-hidden="true" className="size-3.5" strokeWidth={1.75} />{label}</p>
-      <div className="mt-2 flex min-h-8 items-end justify-between gap-2">
-        {ready ? <p className="text-2xl font-semibold tracking-[-.02em]"><CountUp value={value} /></p> : <Skeleton className="h-8 w-14" />}
-        {ready && <DeltaBadge value={delta} upIsGood={upIsGood} />}
-      </div>
-    </div>
-  );
-}
-
-// Mesmas cores de ponto do kanban (status → cor), para a fila ler igual nas duas telas.
+// Mesmas cores de ponto do kanban (status → cor), para a fila ler igual nas
+// duas telas. É codificação de etapa, sempre acompanhada do nome.
 const queueSegments = [
   ['pendingSchedule', 'Pendente de agenda', 'bg-violet-400'],
   ['scheduled', 'Agendado', 'bg-blue-400'],
@@ -219,37 +217,69 @@ const queueSegments = [
   ['directed', 'Direcionado', 'bg-cyan-400'],
 ] as const;
 
-function QueueDistribution({ counts, ready }: { counts: ReturnType<typeof statusCounts>; ready: boolean }) {
+/**
+ * Número principal (em aberto) com a variação e o que ele significa; ao
+ * lado, as etapas da fila como lista alinhada — valor à direita, barra fina
+ * proporcional. Em campo e agendados levam a própria variação.
+ */
+function QueueOverview({ counts, previous, ready }: {
+  counts: ReturnType<typeof statusCounts>;
+  previous: KpiValues | undefined;
+  ready: boolean;
+}) {
   const values = { ...counts, directed: Math.max(0, counts.open - counts.pendingSchedule - counts.scheduled - counts.inField - counts.awaitingSpare) };
   const total = Math.max(1, counts.open);
+  const withoutTechnician = Math.max(0, counts.open - counts.withTechnician);
   return (
-    <div className="mt-5">
-      <p className="mb-2 text-xs font-medium text-muted-foreground">Distribuição da fila</p>
-      {ready ? (
-        <div role="img" aria-label={queueSegments.map(([key, label]) => `${label}: ${values[key]}`).join(', ')} className="flex h-2.5 gap-[3px] overflow-hidden rounded-full">
-          {queueSegments.filter(([key]) => values[key] > 0).map(([key, label, tone], index) => (
-            <motion.span
-              key={key}
-              title={`${label}: ${values[key]}`}
-              className={cn('block h-full origin-left rounded-full', tone)}
-              style={{ width: `${(values[key] / total) * 100}%` }}
-              initial={{ scaleX: 0 }}
-              animate={{ scaleX: 1 }}
-              transition={{ delay: 0.35 + index * 0.06, duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
-            />
-          ))}
+    <div className="grid gap-6 sm:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)]">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-muted-foreground">Em aberto</p>
+        <div className="mt-1 flex min-h-10 items-center gap-2">
+          {ready ? <p className="text-metric-lg font-semibold tracking-[-.03em]"><CountUp value={counts.open} /></p> : <Skeleton className="h-10 w-20" />}
+          {ready && <DeltaBadge value={deltaPercent(counts.open, previous?.open)} upIsGood={false} />}
         </div>
-      ) : <Skeleton className="h-2.5 w-full rounded-full" />}
-      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-        {queueSegments.map(([key, label, tone]) => (
-          <li key={key} className="flex items-center gap-1.5"><span aria-hidden="true" className={cn('size-2 rounded-full', tone)} />{label}<span className="font-semibold tabular-nums text-foreground">{ready ? values[key] : '–'}</span></li>
-        ))}
-      </ul>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {!ready ? 'Carregando a fila…' : counts.open === 0 ? 'Fila vazia agora.' : withoutTechnician > 0 ? `${withoutTechnician} ainda sem técnico` : 'Todos com técnico definido'}
+        </p>
+        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border pt-4">
+          <SecondaryStat label="Em campo" value={counts.inField} delta={deltaPercent(counts.inField, previous?.inField)} ready={ready} />
+          <SecondaryStat label="Agendados" value={counts.scheduled} delta={deltaPercent(counts.scheduled, previous?.scheduled)} ready={ready} />
+        </dl>
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-muted-foreground">Por etapa</p>
+        <ul className="mt-2 space-y-2" aria-label="Chamados por etapa">
+          {queueSegments.map(([key, label, tone]) => (
+            <li key={key} className="text-sm">
+              <div className="flex items-center gap-2">
+                <span aria-hidden="true" className={cn('size-2 shrink-0 rounded-full', tone)} />
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">{label}</span>
+                <span className="font-medium tabular-nums">{ready ? values[key] : '–'}</span>
+              </div>
+              <span aria-hidden="true" className="mt-1 block h-1 overflow-hidden rounded-full bg-muted">
+                {ready && <span className={cn('block h-full rounded-full transition-[width] duration-500', tone)} style={{ width: `${(values[key] / total) * 100}%` }} />}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
 
-function ScheduleSparkline({ tickets, now, ready, coverage }: { tickets: BentoTicket[]; now: Date; ready: boolean; coverage: number | null }) {
+function SecondaryStat({ label, value, delta, ready }: { label: string; value: number; delta: number | null; ready: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-1 flex items-center gap-2">
+        {ready ? <span className="text-xl font-semibold"><CountUp value={value} /></span> : <Skeleton className="h-7 w-10" />}
+        {ready && <DeltaBadge value={delta} />}
+      </dd>
+    </div>
+  );
+}
+
+function ScheduleSparkline({ tickets, now, ready, coverage, withTechnician }: { tickets: BentoTicket[]; now: Date; ready: boolean; coverage: number | null; withTechnician: number }) {
   // 7 dias para trás e 7 à frente: o que já foi (azul) e o que está previsto (trilho).
   const days = useMemo(() => dailyActivity(tickets, daysAgo(now, 6), 14, parseTicketDate), [now, tickets]);
   const max = Math.max(1, ...days.map((day) => day.scheduled));
@@ -257,18 +287,13 @@ function ScheduleSparkline({ tickets, now, ready, coverage }: { tickets: BentoTi
   const past = days.slice(0, todayIndex + 1).reduce((sum, day) => sum + day.scheduled, 0);
   const ahead = days.slice(todayIndex + 1).reduce((sum, day) => sum + day.scheduled, 0);
   return (
-    <div className="flex h-full min-h-[228px] flex-col">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold">Agenda da quinzena</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Atendimentos agendados por dia</p>
-        </div>
-        <div className="text-right">
-          {ready && coverage !== null ? <p className="text-2xl font-semibold leading-none text-primary"><CountUp value={coverage} suffix="%" /></p> : <Skeleton className="ml-auto h-7 w-12" />}
-          <p className="mt-1 text-[11px] text-muted-foreground">com técnico</p>
-        </div>
+    <div className="flex h-full min-h-[200px] flex-col">
+      <CardHeader title="Agenda da quinzena" description="Atendimentos agendados por dia." />
+      <div className="min-h-10">
+        {ready && coverage !== null ? <p className="text-metric font-semibold tracking-[-.02em]"><CountUp value={coverage} suffix="%" /></p> : ready ? <p className="text-metric font-semibold text-muted-foreground">—</p> : <Skeleton className="h-9 w-20" />}
       </div>
-      <div className="mt-auto pt-6">
+      <p className="mt-1 text-xs text-muted-foreground">{ready ? `com técnico · ${withTechnician} ${withTechnician === 1 ? 'chamado' : 'chamados'} · ${past} nos últimos 7 dias` : 'Carregando…'}</p>
+      <div className="mt-auto pt-4">
         <div role="img" aria-label={`${past} atendimentos nos últimos 7 dias e ${ahead} previstos para os próximos 7.`} className="flex h-20 items-end justify-between gap-1">
           {days.map((day, index) => {
             const height = ready ? Math.max(8, Math.round((day.scheduled / max) * 100)) : 20 + ((index * 23) % 50);
@@ -303,9 +328,9 @@ function ActivityCard({ tickets, now, ready, error }: { tickets: BentoTicket[]; 
       <CardHeader
         title="Movimento por dia"
         description="Agendamentos e acionamentos dos chamados da fila atual."
-        action={<div role="group" aria-label="Período" className="flex rounded-full bg-muted p-0.5">
+        action={<div role="group" aria-label="Período" className="flex rounded-lg bg-muted p-0.5">
           {([7, 14] as const).map((days) => (
-            <button key={days} type="button" aria-pressed={period === days} onClick={() => setPeriod(days)} className={cn('min-h-8 rounded-full px-3 text-xs font-medium max-sm:min-h-10', period === days ? 'bg-card-elevated text-foreground shadow-(--shadow-card)' : 'text-muted-foreground hover:text-foreground')}>
+            <button key={days} type="button" aria-pressed={period === days} onClick={() => setPeriod(days)} className={cn('min-h-8 rounded-md px-3 text-xs font-medium max-sm:min-h-10', period === days ? 'bg-card-elevated text-foreground shadow-(--shadow-xs)' : 'text-muted-foreground hover:text-foreground')}>
               {days} dias
             </button>
           ))}
@@ -364,7 +389,7 @@ function RecentActivity<T extends BentoTicket>({ tickets, now, ready, criticalKe
       <CardHeader
         title="Atividades recentes"
         description="Últimos movimentos dos chamados ativos."
-        action={<a href="/?view=tickets" onClick={(event) => onNavigate(event, '/?view=tickets')} className="inline-flex min-h-9 items-center gap-0.5 rounded-full px-2 text-[13px] font-semibold text-primary hover:underline">Ver tudo<ChevronRight aria-hidden="true" className="size-4" /></a>}
+        action={<a href="/?view=tickets" onClick={(event) => onNavigate(event, '/?view=tickets')} className="inline-flex min-h-9 items-center gap-0.5 rounded-md px-2 text-sm font-medium text-primary hover:underline">Ver tudo<ChevronRight aria-hidden="true" className="size-4" /></a>}
       />
       {!ready ? (
         <div className="space-y-3">{Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-11 w-full" />)}</div>
@@ -378,8 +403,8 @@ function RecentActivity<T extends BentoTicket>({ tickets, now, ready, criticalKe
             <thead>
               <tr className="text-xs text-muted-foreground">
                 <th scope="col" className="px-2 pb-2 font-medium">Chamado</th>
-                <th scope="col" className="px-2 pb-2 font-medium">Categoria</th>
-                <th scope="col" className="px-2 pb-2 font-medium">Data e hora</th>
+                <th scope="col" className="px-2 pb-2 font-medium">Movimento</th>
+                <th scope="col" className="px-2 pb-2 font-medium">Quando</th>
                 <th scope="col" className="px-2 pb-2 font-medium">Técnico</th>
                 <th scope="col" className="px-2 pb-2 font-medium">Status</th>
               </tr>
@@ -388,7 +413,7 @@ function RecentActivity<T extends BentoTicket>({ tickets, now, ready, criticalKe
               {rows.map((activity) => (
                 <tr key={`${activity.ticket.id}-${activity.label}-${activity.date.getTime()}`} onClick={() => onOpenTicket(activity.ticket)} className="recent-row h-14 cursor-pointer border-t border-border">
                   <td className="max-w-[16rem] px-2">
-                    <button type="button" onClick={(event) => { event.stopPropagation(); onOpenTicket(activity.ticket); }} className="block max-w-full truncate text-left font-semibold hover:text-primary">{activity.ticket.id}</button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); onOpenTicket(activity.ticket); }} className="block max-w-full truncate text-left font-mono text-xs font-semibold text-primary hover:underline">{activity.ticket.id}</button>
                     <span className="block truncate text-xs text-muted-foreground">{activity.ticket.store}</span>
                   </td>
                   <td className="px-2 text-muted-foreground">{activity.label}</td>
@@ -404,7 +429,7 @@ function RecentActivity<T extends BentoTicket>({ tickets, now, ready, criticalKe
         <ul className="space-y-2 md:hidden">
           {rows.map((activity) => (
             <li key={`${activity.ticket.id}-${activity.label}-${activity.date.getTime()}`}>
-              <button type="button" onClick={() => onOpenTicket(activity.ticket)} className="w-full rounded-2xl bg-muted/60 p-3 text-left hover:bg-muted">
+              <button type="button" onClick={() => onOpenTicket(activity.ticket)} className="w-full rounded-xl border border-border p-3 text-left transition-colors hover:bg-muted/60">
                 <span className="flex items-center justify-between gap-2"><b className="truncate text-sm">{activity.ticket.id}</b><StatusPill ticket={activity.ticket} critical={criticalKeys.has(activity.ticket.id)} /></span>
                 <span className="mt-1 block truncate text-xs text-muted-foreground">{activity.label} · {shortDate(activity.date)}, {timeFormat.format(activity.date)}{activity.ticket.technician ? ` · ${activity.ticket.technician}` : ''}</span>
               </button>
@@ -416,43 +441,37 @@ function RecentActivity<T extends BentoTicket>({ tickets, now, ready, criticalKe
   );
 }
 
-function QuickActions({ role, tickets, counts, ready, jiraCreateUrl, onNavigate }: {
-  role: UserRole | null; tickets: BentoTicket[]; counts: ReturnType<typeof statusCounts>; ready: boolean; jiraCreateUrl: string; onNavigate: Navigate;
+function QuickActions({ role, tickets, counts, ready, onNavigate }: {
+  role: UserRole | null; tickets: BentoTicket[]; counts: ReturnType<typeof statusCounts>; ready: boolean; onNavigate: Navigate;
 }) {
-  // Só atalhos para telas e ações que já existem, respeitando as permissões do menu.
-  const actions = [
-    { key: 'agenda', href: '/?view=agenda', label: 'Pendentes de agenda', hint: 'Agenda', count: counts.pendingSchedule, letter: 'A', tone: 'bg-violet-400/15 text-violet-300' },
-    { key: 'central', href: '/?view=central', label: 'Fila da Central N1', hint: 'Central N1', count: null, letter: 'N', tone: 'bg-sky-400/15 text-sky-300' },
-    { key: 'spares', href: '/spares', label: 'Aguardando spare', hint: 'Spares', count: counts.awaitingSpare, letter: 'S', tone: 'bg-amber-400/15 text-amber-300' },
-    { key: 'map', href: '/mapa', label: 'Técnicos no mapa', hint: 'Mapa operacional', count: null, letter: 'M', tone: 'bg-emerald-400/15 text-emerald-300' },
+  // Só atalhos para telas e ações que já existem, respeitando as permissões do
+  // menu. Ícone neutro identifica o destino; a contagem ganha cor de atenção
+  // só quando há algo esperando.
+  const actions: { key: string; href: string; label: string; hint: string; count: number | null; icon: LucideIcon }[] = [
+    { key: 'agenda', href: '/?view=agenda', label: 'Pendentes de agenda', hint: 'Agenda', count: counts.pendingSchedule, icon: CalendarClock },
+    { key: 'central', href: '/?view=central', label: 'Fila da Central N1', hint: 'Central N1', count: null, icon: Headphones },
+    { key: 'spares', href: '/spares', label: 'Aguardando spare', hint: 'Spares', count: counts.awaitingSpare, icon: PackageOpen },
+    { key: 'map', href: '/mapa', label: 'Técnicos no mapa', hint: 'Mapa operacional', count: null, icon: MapIcon },
   ].filter((action) => canUseNavItem(role, action.key));
   return (
     <div className="flex h-full flex-col">
       <CardHeader title="Ações rápidas" description="Atalhos para o que mais pede atenção." />
-      <ul className="space-y-1">
+      <ul className="-mx-2 space-y-0.5">
         {actions.map((action) => (
           <li key={action.key}>
             <a href={action.href} onClick={(event) => onNavigate(event, action.href)} className="quick-action">
-              <span aria-hidden="true" className={cn('grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold', action.tone)}>{action.letter}</span>
+              <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><action.icon className="size-4" strokeWidth={1.75} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{action.label}</span>
                 <span className="block truncate text-xs text-muted-foreground">{action.hint}</span>
               </span>
-              {action.count !== null && (ready ? <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold tabular-nums">{action.count}</span> : <Skeleton className="h-5 w-8" />)}
+              {action.count !== null && (ready
+                ? <span className={cn('rounded-md px-2 py-0.5 text-xs font-medium tabular-nums', action.count > 0 ? 'bg-warning-soft text-warning' : 'bg-muted text-muted-foreground')}>{action.count}<span className="sr-only"> {action.count === 1 ? 'chamado' : 'chamados'}</span></span>
+                : <Skeleton className="h-5 w-8" />)}
               <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
             </a>
           </li>
         ))}
-        <li>
-          <a href={jiraCreateUrl} target="_blank" rel="noreferrer" className="quick-action">
-            <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-primary"><Plus className="size-4" strokeWidth={2} /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">Novo chamado no Jira</span>
-              <span className="block truncate text-xs text-muted-foreground">Abre o Jira em outra aba</span>
-            </span>
-            <ArrowUpRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-          </a>
-        </li>
       </ul>
       {canUseNavItem(role, 'tickets') && <QueueFilterShortcut tickets={tickets} ready={ready} onNavigate={onNavigate} />}
     </div>
@@ -472,7 +491,7 @@ function QueueFilterShortcut({ tickets, ready, onNavigate }: { tickets: BentoTic
   }, [filters, tickets]);
   const href = queueFiltersHref(filters);
   return (
-    <div className="mt-4 rounded-2xl bg-muted/60 p-4 dark:bg-card-elevated">
+    <div className="mt-4 rounded-xl border border-border bg-card-elevated p-4">
       <p className="mb-1 text-xs font-medium text-muted-foreground">Filtrar a fila</p>
       <QueueSlider
         label="Parado há"
@@ -493,7 +512,7 @@ function QueueFilterShortcut({ tickets, ready, onNavigate }: { tickets: BentoTic
       <a
         href={href}
         onClick={(event) => onNavigate(event, href)}
-        className="mt-3 flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-brand px-4 text-sm font-semibold text-brand-foreground transition hover:brightness-110 max-sm:min-h-11"
+        className="mt-3 flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-brand px-4 text-sm font-medium text-brand-foreground transition-colors hover:bg-(--brand-strong) max-sm:min-h-11"
       >
         {ready ? `Ver ${count} ${count === 1 ? 'chamado' : 'chamados'} na fila` : 'Ver na fila'}
         <ChevronRight aria-hidden="true" className="size-4" />

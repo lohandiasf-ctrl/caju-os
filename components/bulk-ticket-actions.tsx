@@ -173,7 +173,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
   const successCount = results?.filter((item) => item.ok).length ?? 0;
   const queuedCount = results?.filter((item) => item.queued).length ?? 0;
   const accent = mode === 'in_service'
-    ? { icon: 'text-emerald-300', box: 'border-emerald-400/25 bg-emerald-400/8', label: 'text-emerald-200', chip: 'border-emerald-300/20 text-emerald-100' }
+    ? { icon: 'text-success', box: 'border-success/25 bg-success-soft', label: 'text-success', chip: 'border-emerald-300/20 text-success' }
     : { icon: 'text-violet-300', box: 'border-violet-400/25 bg-violet-400/8', label: 'text-violet-200', chip: 'border-violet-300/20 text-violet-100' };
   const criarGrupoDeRepasse = async () => {
     if (!user || !repasseTecnico) return;
@@ -211,11 +211,11 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
     {tickets.length > 0 && <>
       {/* Espaço para a barra fixa não cobrir os últimos cards. */}
       <div aria-hidden="true" className="h-20" />
-      <div role="toolbar" aria-label="Ações em lote" className="fixed bottom-4 left-2 right-2 z-(--z-float) sm:left-4 sm:right-20 flex flex-wrap items-center gap-2 rounded-2xl border border-violet-400/30 bg-card/95 p-2 shadow-2xl backdrop-blur-xl xl:left-1/2 xl:right-auto xl:-translate-x-1/2">
+      <div role="toolbar" aria-label="Ações em lote" className="fixed bottom-4 left-2 right-2 z-(--z-float) sm:left-4 sm:right-20 flex flex-wrap items-center gap-2 rounded-2xl border border-primary/30 bg-popover p-2 shadow-(--shadow-popover) xl:left-1/2 xl:right-auto xl:-translate-x-1/2">
         <span className="px-2 text-sm font-semibold"><b className="text-violet-200">{tickets.length}</b> {tickets.length === 1 ? 'selecionado' : 'selecionados'}</span>
         <DropdownMenu>
           <DropdownMenuTrigger className={buttonVariants({ variant: 'outline', className: 'h-9' })}>
-            {copyState === 'copying' ? <Loader2 className="animate-spin" /> : copyState === 'ok' ? <ClipboardCheck className="text-emerald-300" /> : <Clipboard />}
+            {copyState === 'copying' ? <Loader2 className="animate-spin" /> : copyState === 'ok' ? <ClipboardCheck className="text-success" /> : <Clipboard />}
             {copyState === 'copying' ? 'Copiando...' : copyState === 'ok' ? 'Copiado' : copyState === 'fail' ? 'Falhou' : 'Copiar'}
             <ChevronDown className="size-3.5 opacity-60" />
           </DropdownMenuTrigger>
@@ -248,18 +248,18 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
     <Dialog open={repasseOpen} onOpenChange={(next) => { if (!next && !repasseSaving) { setRepasseOpen(false); setRepasseOk(''); } }}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Layers3 className="size-5 text-emerald-300" />Agrupar {count(tickets.length, 'chamado', 'chamados')}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Layers3 className="size-5 text-success" />Agrupar {count(tickets.length, 'chamado', 'chamados')}</DialogTitle>
           <DialogDescription>
             Estes chamados viram um atendimento só: aparecem empilhados na fila, e a faixa de preço do
             técnico é calculada pelo grupo. Depois, o tipo de cada um é marcado abrindo o chamado.
           </DialogDescription>
         </DialogHeader>
-        {error && <p role="alert" className="rounded-lg border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
         {repasseOk
-          ? <p className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">{repasseOk}</p>
+          ? <p className="rounded-lg border border-success/25 bg-success-soft px-3 py-2 text-sm text-success">{repasseOk}</p>
           : <div className="mt-2 space-y-3">
             <div className="flex flex-wrap gap-2">
-              {tickets.map((ticket) => <span key={ticket.id} className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-100">{ticket.id}</span>)}
+              {tickets.map((ticket) => <span key={ticket.id} className="rounded-full border border-success/25 bg-success-soft px-2.5 py-1 text-xs font-bold text-success">{ticket.id}</span>)}
             </div>
             {/* O nome sai da cidade e da loja dos próprios chamados, igual ao que o
                 servidor grava; aqui só se mostra como vai ficar. */}
@@ -267,7 +267,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
               <p className="text-xs font-semibold text-muted-foreground">Nome do grupo</p>
               <p className="mt-0.5 text-sm font-bold">{nomeDoGrupo(tickets)}</p>
             </div>
-            {cidadesDiferentes && <p role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">{cidadesDiferentes} Desmarque os chamados da outra cidade e agrupe cada cidade separadamente.</p>}
+            {cidadesDiferentes && <p role="alert" className="rounded-lg border border-warning/25 bg-warning-soft px-3 py-2 text-sm text-warning">{cidadesDiferentes} Desmarque os chamados da outra cidade e agrupe cada cidade separadamente.</p>}
             <div>
               <label htmlFor="repasse-tecnico" className="mb-1 block text-sm font-semibold">Técnico que vai atender</label>
               <div className="relative">
@@ -277,7 +277,7 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
               {loadingTechnicians && <p className="mt-2 text-xs text-muted-foreground"><Loader2 className="mr-1 inline size-3 animate-spin" />Carregando técnicos...</p>}
               {!loadingTechnicians && technicianQuery.trim().length > 1 && <div className="mt-2 max-h-52 overflow-y-auto rounded-xl border border-border bg-background/60 p-1">
                 {matches.length ? matches.slice(0, 8).map((technician) => <button key={technician.id} type="button" onClick={() => { setRepasseTecnico(technician.id); setTechnicianQuery(technician.name); }} className={`flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-muted ${repasseTecnico === technician.id ? 'bg-emerald-400/10' : ''}`}>
-                  <UserRound className="mt-0.5 size-4 shrink-0 text-emerald-300" aria-hidden="true" />
+                  <UserRound className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
                   <span className="min-w-0"><b className="text-sm">{technician.name}</b><span className="ml-1 text-xs text-muted-foreground">{technician.city}/{technician.state}</span></span>
                 </button>) : <p className="px-2 py-2 text-xs text-muted-foreground">Nenhum técnico encontrado.</p>}
               </div>}
@@ -313,23 +313,23 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
           <div className="mt-2 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pr-1">
             {targets.map((ticket) => <span key={ticket.id} className={`rounded-md border bg-background/40 px-2 py-1 font-mono text-xs font-bold ${accent.chip}`} title={`${ticket.title} · ${ticket.store}`}>{ticket.id}</span>)}
           </div>
-          {skipped > 0 && mode && <p className="mt-2 text-xs text-amber-200">{count(skipped, 'selecionado ficou', 'selecionados ficaram')} de fora por não estar em “{SOURCE_LABEL[mode]}”.</p>}
+          {skipped > 0 && mode && <p className="mt-2 text-xs text-warning">{count(skipped, 'selecionado ficou', 'selecionados ficaram')} de fora por não estar em “{SOURCE_LABEL[mode]}”.</p>}
         </section>
 
         {mode === 'scheduled' && !results && <div className="space-y-4">
           <div className="relative">
             <label className="text-xs font-semibold text-muted-foreground" htmlFor="bulk-technician-search">Técnico responsável</label>
             <div className="relative mt-1.5"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="bulk-technician-search" type="search" value={technicianQuery} onChange={(event) => { setTechnicianQuery(event.target.value); setSelectedTechnicianId(null); }} placeholder={loadingTechnicians ? 'Carregando técnicos...' : 'Digite nome, cidade, CPF ou código'} className="min-h-11 pl-9" autoComplete="off" disabled={saving} /></div>
-            {matches.length > 0 && <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-2xl">{matches.map((technician) => <button key={technician.id} type="button" onClick={() => selectTechnician(technician)} className="block min-h-11 w-full rounded-lg px-3 py-2 text-left transition hover:bg-primary/10 focus-visible:bg-primary/10"><span className="flex items-center gap-2 text-sm font-semibold"><UserRound className="size-3.5 text-primary" />{technician.name}</span><span className="block pl-5 text-xs text-muted-foreground">{technician.city}/{technician.state}{technician.technicianCode ? ` · ${technician.technicianCode}` : ''}</span></button>)}</div>}
+            {matches.length > 0 && <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-(--shadow-popover)">{matches.map((technician) => <button key={technician.id} type="button" onClick={() => selectTechnician(technician)} className="block min-h-11 w-full rounded-lg px-3 py-2 text-left transition hover:bg-primary/10 focus-visible:bg-primary/10"><span className="flex items-center gap-2 text-sm font-semibold"><UserRound className="size-3.5 text-primary" />{technician.name}</span><span className="block pl-5 text-xs text-muted-foreground">{technician.city}/{technician.state}{technician.technicianCode ? ` · ${technician.technicianCode}` : ''}</span></button>)}</div>}
           </div>
           <label className="block text-xs font-semibold text-muted-foreground" htmlFor="bulk-technician-data">Dados que serão enviados ao Jira<textarea id="bulk-technician-data" rows={4} value={technicianData} onChange={(event) => setTechnicianData(event.target.value)} className="field mt-1.5 min-h-24 w-full text-foreground" disabled={saving} /><span className="mt-1 block text-[11px] font-normal text-muted-foreground">Nome, CPF, RG e telefone são aplicados igualmente em todos os chamados.</span></label>
           <label className="block text-xs font-semibold text-muted-foreground" htmlFor="bulk-scheduled-at">Data e hora do atendimento<input id="bulk-scheduled-at" type="datetime-local" value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} className="field mt-1.5 min-h-11 w-full text-foreground" disabled={saving} /></label>
         </div>}
 
-        {error && <p role="alert" className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-danger/25 bg-danger-soft p-3 text-sm text-danger">{error}</p>}
         {results && <section aria-live="polite" className="space-y-2">
           <p className="text-sm font-semibold">{successCount} de {count(results.length, 'chamado alterado', 'chamados alterados')}{queuedCount ? ` · ${queuedCount} guardado${queuedCount === 1 ? '' : 's'} para sincronizar` : ''}.</p>
-          {results.map((result) => <div key={result.key} className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${result.ok ? 'border-emerald-400/25 bg-emerald-400/8 text-emerald-100' : result.queued ? 'border-amber-400/25 bg-amber-400/8 text-amber-100' : 'border-red-400/25 bg-red-400/8 text-red-100'}`}>
+          {results.map((result) => <div key={result.key} className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${result.ok ? 'border-success/25 bg-success-soft text-success' : result.queued ? 'border-warning/25 bg-warning-soft text-warning' : 'border-danger/25 bg-danger-soft text-danger'}`}>
             {result.ok ? <CheckCircle2 className="mt-0.5 size-4 shrink-0" /> : result.queued ? <Clock3 className="mt-0.5 size-4 shrink-0" /> : <XCircle className="mt-0.5 size-4 shrink-0" />}
             <span><b className="font-mono">{result.key}</b>{result.ok ? ' · Atualizado no Jira.' : ` · ${result.error}`}</span>
           </div>)}

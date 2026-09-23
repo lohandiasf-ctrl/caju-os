@@ -12,10 +12,10 @@ type AuditRow = {
 };
 
 const STATUS: Record<string, { label: string; className: string; icon: typeof Check }> = {
-  applied: { label: 'Aplicada', className: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100', icon: Check },
+  applied: { label: 'Aplicada', className: 'border-success/25 bg-success-soft text-success', icon: Check },
   cancelled: { label: 'Recusada', className: 'border-border bg-muted/40 text-muted-foreground', icon: X },
-  failed: { label: 'Falhou', className: 'border-red-400/25 bg-red-400/10 text-red-100', icon: XCircle },
-  pending: { label: 'Pendente', className: 'border-amber-400/25 bg-amber-400/10 text-amber-100', icon: Clock3 },
+  failed: { label: 'Falhou', className: 'border-danger/25 bg-danger-soft text-danger', icon: XCircle },
+  pending: { label: 'Pendente', className: 'border-warning/25 bg-warning-soft text-warning', icon: Clock3 },
 };
 
 const RANGES: Array<[number, string]> = [[7, '7 dias'], [30, '30 dias'], [90, '90 dias']];
@@ -56,7 +56,7 @@ export function AssistantAudit({ user }: { user: User }) {
       </div>
     </div>
 
-    {error && <p role="alert" className="rounded-lg border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
+    {error && <p role="alert" className="rounded-lg border border-danger/25 bg-danger-soft p-3 text-sm text-danger">{error}</p>}
     {loading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Carregando...</p>}
     {!loading && !error && !rows.length && <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">Nenhuma ação assistida no período.</p>}
 

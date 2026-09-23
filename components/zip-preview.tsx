@@ -84,7 +84,7 @@ export function ZipPreview({ buffer, filename, onDownloadAll }: {
         <Button type="button" size="sm" variant="outline" onClick={onDownloadAll}><Download /> Baixar o ZIP</Button>
       </div>
 
-      {error && <p role="alert" className="mb-2 rounded-lg border border-red-400/25 bg-red-400/10 p-2 text-xs text-red-200">{error}</p>}
+      {error && <p role="alert" className="mb-2 rounded-lg border border-danger/25 bg-danger-soft p-2 text-xs text-danger">{error}</p>}
 
       {!entries.length ? (
         <div className="grid flex-1 place-items-center text-center">
