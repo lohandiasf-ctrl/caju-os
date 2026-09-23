@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-23
 
+### Interceptação robusta de chamadas de ferramentas (Tool Calls) e higienização
+
+Corrigido vazamento de marcações XML cruas (`<tool_call>detalhar_chamado...`) emitidas por modelos do Workers AI (especialmente GLM-4.7-Flash).
+- **Causa raiz:** O GLM-4.7-Flash emite chamadas de função com tags XML nativas (`<tool_call>nome<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>`) quando o envelope `message.tool_calls` da OpenAI não é gerado pelo Cloudflare Workers AI. O backend não realizava o parsing dessas tags no texto de resposta, assumia que não havia chamadas de ferramentas e retornava o XML cru diretamente para o usuário sem executar a ferramenta.
+- **Leitor universal (`readAssistantResponse`):** Parser puro em `lib/assistant.ts` capaz de extrair e normalizar chamadas vindas de `choices[0].message.tool_calls`, `payload.tool_calls` raiz (formato tradicional Cloudflare/Mistral), e tags textuais `<tool_call>` (formato GLM / ChatML).
+- **Execução concorrente e multi-turno:** Quando múltiplas ferramentas são requisitadas na mesma resposta (ex.: 5 chamados detalhados de uma vez), o backend agora executa todas em paralelo via `Promise.all`, anexa os resultados com `role: 'tool'` e avança para a próxima rodada da IA.
+- **Higienização estrita em múltiplas camadas:** Função `sanitizeFinalAnswer` remove completamente tags e resquícios de chamadas tanto no backend antes do envio quanto no componente de exibição (`Answer` em `components/assistant-panel.tsx`).
+- **Instrução de sistema reforçada:** Adicionada regra crítica em `systemInstruction` proibindo expressamente a IA de expor tags XML ou JSON técnico de ferramentas na resposta ao usuário final.
+
 ### Guia Completo e refinamento das diretrizes da IA (System Prompt)
 
 Incorporado o Guia Completo da IA do Sistema CAJU TECH + Jira (`docs/guia_completo_ia_cajutech.md`)
@@ -44,6 +53,21 @@ franquia gratuita diária).
 Chamados já filtrado pela URL (`/?view=tickets&parados=5&prioridade=alta`); na
 fila, os filtros aparecem como chips removíveis. Só filtram o que já está na
 tela (`lib/queue-filters.ts`, com testes), sem consulta ou regra nova.
+### Senha ao reabrir o site ou o app (branch `claude/senha-sessao`)
+
+A sessão do Firebase passou de persistência local (IndexedDB, sobrevivia ao
+fechamento) para **`browserSessionPersistence`** (`lib/firebase.ts`): recarregar
+a página mantém o login; fechar a aba, o navegador ou o app desktop (Tauri)
+encerra a sessão. Na volta, o login mostra o e-mail da última pessoa que entrou
+neste aparelho (`localStorage` `caju-last-email`, `lib/login-memory.ts`, com
+testes) e pede **só a senha**; "Usar outra conta" volta ao formulário completo.
+A senha nunca é guardada. "Sair" (menu do usuário e tela de acesso negado)
+passa por `signOutAndForget()`, que também esquece o e-mail. Na primeira carga,
+o token antigo gravado em disco (`firebase:authUser:*` e o IndexedDB
+`firebaseLocalStorageDb`) é apagado.
+**Efeito colateral:** cada aba nova começa sem sessão (o `sessionStorage` é por
+aba), então abrir um link do app numa aba nova (ex.: `?ticket=` compartilhado)
+pede a senha também. Nenhuma regra de servidor, papel ou rota mudou.
 
 ### Redesign "Dashboard Premium" (branch `claude/dashboard-premium`)
 

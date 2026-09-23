@@ -33,8 +33,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { signOutAndForget } from "@/lib/firebase";
 import { hasSafeDataUrlType } from "@/lib/safe-data-url";
 import { haptic } from "@/lib/haptics";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -3456,10 +3455,10 @@ export function UserMenu({ compact = false }: { compact?: boolean } = {}) {
         </div>
         <a href="/?view=settings" onClick={() => setOpen(false)} className="mt-3 flex min-h-11 items-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted">Editar perfil em Configurações</a>
         {feedback && <p role="status" className="mt-2 text-xs text-muted-foreground">{feedback}</p>}
-        <button type="button" onClick={() => void signOut(auth)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-destructive/20 text-sm text-destructive hover:bg-destructive/10"><LogOut aria-hidden="true" className="size-4" />Sair da conta</button>
+        <button type="button" onClick={() => void signOutAndForget()} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-destructive/20 text-sm text-destructive hover:bg-destructive/10"><LogOut aria-hidden="true" className="size-4" />Sair da conta</button>
       </PopoverContent>
     </Popover>
-    {!compact && <button type="button" onClick={() => void signOut(auth)} aria-label="Sair" title="Sair" className="app-nav-label grid size-10 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"><LogOut aria-hidden="true" className="size-[18px]" strokeWidth={1.75} /></button>}
+    {!compact && <button type="button" onClick={() => void signOutAndForget()} aria-label="Sair" title="Sair" className="app-nav-label grid size-10 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground"><LogOut aria-hidden="true" className="size-[18px]" strokeWidth={1.75} /></button>}
     </div>
   );
 }

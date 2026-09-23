@@ -1,9 +1,8 @@
 'use client';
 
 import { Home, LogOut, ShieldX } from 'lucide-react';
-import { signOut } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
-import { auth } from '@/lib/firebase';
+import { signOutAndForget } from '@/lib/firebase';
 import { useAuth } from '@/components/auth-provider';
 
 export default function AccessDeniedPage() {
@@ -17,7 +16,7 @@ export default function AccessDeniedPage() {
         <div className="cockpit-inset mt-5 rounded-xl p-3 text-xs text-muted-foreground"><p className="truncate">{user?.email}</p><p className="mt-1">Perfil: {role || 'não definido'}</p></div>
         <div className="mt-6 grid gap-2">
           {role && <Button className="w-full" onClick={() => window.location.assign('/?view=overview')}><Home />Voltar ao início</Button>}
-          <Button className="w-full" variant="outline" onClick={() => void signOut(auth)}><LogOut />Sair e usar outra conta</Button>
+          <Button className="w-full" variant="outline" onClick={() => void signOutAndForget()}><LogOut />Sair e usar outra conta</Button>
         </div>
       </section>
     </main>

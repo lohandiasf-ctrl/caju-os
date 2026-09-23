@@ -296,6 +296,210 @@ export function parseAnswer(raw: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+export type ToolCall = {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+};
+
+export function normalizeToolCall(call: unknown, index = 0): ToolCall | null {
+  if (!call || typeof call !== 'object') return null;
+  const obj = call as {
+    id?: unknown;
+    type?: unknown;
+    name?: unknown;
+    arguments?: unknown;
+    function?: { name?: unknown; arguments?: unknown };
+  };
+
+  const name = typeof obj.function?.name === 'string'
+    ? obj.function.name
+    : typeof obj.name === 'string'
+      ? obj.name
+      : '';
+  if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) return null;
+
+  let argsStr = '{}';
+  const rawArgs = obj.function?.arguments ?? obj.arguments;
+  if (typeof rawArgs === 'string') {
+    argsStr = rawArgs;
+  } else if (rawArgs && typeof rawArgs === 'object') {
+    argsStr = JSON.stringify(rawArgs);
+  }
+
+  const id = typeof obj.id === 'string' && obj.id.length > 0
+    ? obj.id
+    : `call_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 7)}`;
+
+  return {
+    id,
+    type: 'function',
+    function: { name, arguments: argsStr },
+  };
+}
+
+// Modelos do Workers AI (como o GLM-4.7-Flash ou Mistral) podem emitir tool calls
+// em tags XML (<tool_call>) ou sintaxe textual direta no corpo da resposta quando
+// não usam o envelope OpenAI choices[0].message.tool_calls. Esta função extrai
+// essas chamadas, normaliza os argumentos e limpa as tags do texto visível.
+export function extractToolCallsFromText(text: string): { cleanedText: string; calls: ToolCall[] } {
+  const calls: ToolCall[] = [];
+  if (!text) return { cleanedText: '', calls };
+
+  // 1. Tag format: <tool_call>...</tool_call> (ou não fechada no fim do texto)
+  const toolCallRegex = /<tool_call>([\s\S]*?)(?:<\/tool_call>|$)/gi;
+  let cleaned = text.replace(toolCallRegex, (_, body: string) => {
+    const raw = body.trim();
+    if (!raw) return '';
+
+    // Formato JSON puro dentro da tag: {"name": "...", "arguments": {...}}
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw) as { name?: string; arguments?: unknown };
+        if (typeof parsed.name === 'string') {
+          const call = normalizeToolCall(parsed, calls.length);
+          if (call) calls.push(call);
+          return '';
+        }
+      } catch {}
+    }
+
+    // Formato nome seguido de JSON: "detalhar_chamado\n{...}"
+    const jsonMatch = raw.match(/^([a-zA-Z0-9_-]+)\s*(\{[^]*\})$/);
+    if (jsonMatch) {
+      const call = normalizeToolCall({ name: jsonMatch[1], arguments: jsonMatch[2] }, calls.length);
+      if (call) calls.push(call);
+      return '';
+    }
+
+    // Formato GLM com tags filhas: detalhar_chamado<arg_key>chamado</arg_key><arg_value>FSA-123</arg_value>
+    const nameMatch = raw.match(/^([a-zA-Z0-9_-]+)/);
+    if (nameMatch) {
+      const name = nameMatch[1];
+      const args: Record<string, unknown> = {};
+      const argRegex = /<arg_key>([\s\S]*?)<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/gi;
+      let m: RegExpExecArray | null;
+      let hasArgs = false;
+      while ((m = argRegex.exec(raw)) !== null) {
+        hasArgs = true;
+        const key = m[1].trim();
+        const rawVal = m[2].trim();
+        try {
+          args[key] = JSON.parse(rawVal);
+        } catch {
+          args[key] = rawVal;
+        }
+      }
+      if (hasArgs || !raw.includes('<arg_key>')) {
+        const call = normalizeToolCall({ name, arguments: args }, calls.length);
+        if (call) calls.push(call);
+        return '';
+      }
+    }
+
+    return '';
+  });
+
+  // 2. Formato Mistral: [TOOL_CALLS] [...]
+  const mistralRegex = /\[TOOL_CALLS\]\s*(\[[^]*?\])/gi;
+  cleaned = cleaned.replace(mistralRegex, (_, jsonList: string) => {
+    try {
+      const list = JSON.parse(jsonList);
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          const call = normalizeToolCall(item, calls.length);
+          if (call) calls.push(call);
+        }
+      }
+    } catch {}
+    return '';
+  });
+
+  // 3. Remove resquícios de tags e seus conteúdos para garantir que o usuário nunca veja XML
+  cleaned = cleaned
+    .replace(/<arg_key>[\s\S]*?<\/arg_key>/gi, '')
+    .replace(/<arg_value>[\s\S]*?<\/arg_value>/gi, '')
+    .replace(/<\/?(?:tool_call|arg_key|arg_value|tool_response)>/gi, '')
+    .trim();
+
+  return { cleanedText: cleaned, calls };
+}
+
+// Higieniza qualquer resposta final para assegurar que tags internas de ferramentas
+// e seus parâmetros nunca vazem na tela do usuário.
+export function sanitizeFinalAnswer(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    .replace(/\[TOOL_CALLS\]\s*\[[^]*?\]/gi, '')
+    .replace(/<arg_key>[\s\S]*?<\/arg_key>/gi, '')
+    .replace(/<arg_value>[\s\S]*?<\/arg_value>/gi, '')
+    .replace(/<\/?(?:tool_call|arg_key|arg_value|tool_response)>/gi, '')
+    .trim();
+}
+
+// Lê de forma universal a resposta bruta de qualquer modelo do Workers AI,
+// suportando formato OpenAI (choices[0].message.tool_calls), formato nativo Cloudflare
+// (payload.tool_calls) e tags textuais (como as geradas pelo GLM-4.7-Flash).
+export function readAssistantResponse(raw: unknown): { text: string; rawText: string; calls: ToolCall[] } {
+  if (!raw || typeof raw !== 'object') return { text: '', rawText: '', calls: [] };
+  const payload = raw as {
+    choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }>;
+    response?: unknown;
+    result?: { response?: unknown; tool_calls?: unknown };
+    tool_calls?: unknown;
+  };
+
+  const message = payload.choices?.[0]?.message;
+  const initialText = typeof message?.content === 'string'
+    ? message.content.trim()
+    : typeof payload.response === 'string'
+      ? payload.response.trim()
+      : typeof payload.result?.response === 'string'
+        ? payload.result.response.trim()
+        : '';
+
+  const calls: ToolCall[] = [];
+
+  // Formato OpenAI: choices[0].message.tool_calls
+  if (Array.isArray(message?.tool_calls)) {
+    for (const item of message.tool_calls) {
+      const c = normalizeToolCall(item, calls.length);
+      if (c) calls.push(c);
+    }
+  }
+
+  // Formato raiz Cloudflare Workers AI: payload.tool_calls
+  if (Array.isArray(payload.tool_calls)) {
+    for (const item of payload.tool_calls) {
+      const c = normalizeToolCall(item, calls.length);
+      if (c) calls.push(c);
+    }
+  }
+
+  // Formato encapsulado: payload.result.tool_calls
+  if (Array.isArray(payload.result?.tool_calls)) {
+    for (const item of payload.result.tool_calls) {
+      const c = normalizeToolCall(item, calls.length);
+      if (c) calls.push(c);
+    }
+  }
+
+  // Formato textual embutido: <tool_call>...
+  const { cleanedText, calls: textCalls } = extractToolCallsFromText(initialText);
+  for (const c of textCalls) {
+    if (!calls.some((existing) => existing.function.name === c.function.name && existing.function.arguments === c.function.arguments)) {
+      calls.push(c);
+    }
+  }
+
+  return {
+    text: cleanedText,
+    rawText: initialText,
+    calls,
+  };
+}
+
 // FSAs citadas na resposta viram links para abrir o chamado. A separação fica
 // aqui, pura, para o componente só desenhar.
 export type AnswerPart = { text: string; ticketKey?: string };
