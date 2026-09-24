@@ -34,6 +34,17 @@ foto/vídeo/RAT; uma evidência enviada por engano ficava presa lá.
 **Pendente:** migration `drizzle/0042_ticket_evidence_jira_attachment.sql`
 precisa rodar (`npm run db:migrate:remote`).
 
+### Evidência do N1: clicar para abrir/ampliar (estava sem efeito)
+
+Foto de evidência era só uma miniatura fixa (sem clique) e "Abrir RAT" usava
+um link `data:` em nova aba — que o Chrome bloqueia em silêncio há alguns
+anos (clicava e não acontecia nada, sem erro nenhum na tela).
+
+- `components/n1-ticket-actions.tsx`: foto e vídeo agora abrem num visualizador
+  cheio ao clicar (`ImageZoom`, mesmo componente da aba "Anexos e evidências"
+  do chamado); "Abrir RAT" converte o `data:` para `blob:` antes de abrir a
+  aba — `blob:` não sofre o bloqueio.
+
 ### Agendar em lote: não exige mais técnico da lista
 
 No diálogo "Agendar" (ações em lote), bastava digitar os dados no campo
