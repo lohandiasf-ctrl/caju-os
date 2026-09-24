@@ -11,6 +11,27 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Aba "Anexos e evidências" do chamado ganha botão de remover
+
+O pedido original de "poder remover evidência" era sobre esta aba geral do
+chamado (`components/jira-ticket-details.tsx`), não só o Atendimento N1 — lá
+só dava para visualizar e baixar.
+
+- `lib/server/jira.ts` já tinha `deleteJiraAttachment` (criado para o N1);
+  reaproveitado aqui.
+- `app/api/jira/issues/[key]/attachments/[id]/route.ts`: novo `DELETE`, mesmos
+  papéis do upload (gerência/coordenador/N1/analista). Devolve o chamado
+  atualizado (igual o `POST` de upload já fazia), então a tela não precisa
+  recarregar a lista à parte.
+- `components/jira-ticket-details.tsx`: botão "Remover" (com confirmação) em
+  cada anexo. Como esta aba não tem cópia local do anexo (a lista vem direto
+  do Jira via `getJiraIssue`), remover do Jira já é remover "do sistema"
+  inteiro — não precisou de tabela nem migration.
+
+**Pendente:** usuário reportou que "Visualizar" abre o diálogo (título e
+tamanho do arquivo aparecem) mas o conteúdo (imagem) não é exibido — ainda
+não reproduzido/diagnosticado nesta sessão.
+
 ### Evidência do N1 pode ser removida (some do sistema e do Jira)
 
 No "Atendimento N1" (`components/n1-ticket-actions.tsx`) só dava para anexar
