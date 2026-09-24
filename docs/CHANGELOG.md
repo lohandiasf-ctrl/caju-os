@@ -11,6 +11,20 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Spares: datas de entrega e atendimento apareciam como números seriais do Excel (ex: 46290 e 46293)
+
+Na planilha compartilhada do SharePoint/Excel, datas como "25/09/2026" e "28/09/2026" são armazenadas pelo Excel como números seriais (dias corridos desde 01/01/1900, ex: 46290 e 46293). Ao sincronizar via Power Automate, a API recebia e gravava esses valores brutos no banco D1, e o painel de Spares exibia "PREVISÃO DE ENTREGA: 46290" e "ATENDIMENTO: 46293".
+
+- `lib/assistant.ts` e `lib/spares-pull.ts`: `formatarDataExcelOuIso()` ampliado para tratar seriais com ou sem decimais (`Math.floor`), intervalo de 30000 a 65000 (1982 a 2077) e datas no formato americano `M/D/YYYY` vindas de exportação CSV.
+- `app/api/spares/sync/route.ts` e `lib/spares-pull.ts`: `normalizeRow()` agora normaliza as colunas de data (`expectedDelivery` e `expectedService`) para `DD/MM/AAAA` antes de gravar no D1.
+- `app/api/spares/route.ts`: rotas `GET` e `POST` garantem formatação mesmo para registros legados gravados como seriais no D1.
+- `app/spares/page.tsx`:
+  - Carregamento de dados (banco e CSV fallback) e `openLinkedTicket` formatam as datas com `formatarDataExcelOuIso()`.
+  - Painel de detalhes exibe a data formatada e ajusta o rótulo de "Atendimento" para "Previsão de atendimento", alinhado à planilha e ao restante do sistema.
+  - Ordenação por data (`stamp`) passa a interpretar datas brasileiras `DD/MM/AAAA` via `onlyDate()` para evitar `Date.parse()` gerando `NaN`.
+- `app/page.tsx`: painel do spare vinculado ao chamado formata as datas de entrega e atendimento.
+- Testes unitários adicionados em `tests/assistant.test.ts` e `tests/spares-pull.test.ts` (352 testes passando).
+
 ### URGENTE: Jira desativou a API de busca antiga (CHANGE-2046) — produção quebrada
 
 Alerta em produção: "Não foi possível sincronizar com o Jira — A API

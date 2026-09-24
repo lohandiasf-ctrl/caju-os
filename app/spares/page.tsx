@@ -1,5 +1,6 @@
 'use client';
 import { carrierLabel, CLOSED_SPARE_STATUSES } from '@/lib/tracking';
+import { formatarDataExcelOuIso, onlyDate } from '@/lib/assistant';
 import { copyToClipboard } from '@/lib/clipboard';
 import { openExternalUrl } from '@/lib/open-external';
 import { AppNavigation } from '@/components/app-navigation';
@@ -184,9 +185,9 @@ export default function Page() {
             city: c(r[2]),
             equipment: c(r[3]),
             tracking: c(r[4]),
-            delivery: c(r[5]),
+            delivery: formatarDataExcelOuIso(c(r[5])) ?? '',
             technician: c(r[6]),
-            service: c(r[7]),
+            service: formatarDataExcelOuIso(c(r[7])) ?? '',
             note: c(r[8]),
             address: c(r[9]),
             supplier: c(r[10]),
@@ -224,9 +225,11 @@ export default function Page() {
               city: String(row.city ?? ''),
               equipment: String(row.equipment ?? ''),
               tracking: String(row.trackingCode ?? ''),
-              delivery: String(row.expectedDelivery ?? ''),
+              delivery:
+                formatarDataExcelOuIso(String(row.expectedDelivery ?? '')) ?? '',
               technician: String(row.technician ?? ''),
-              service: String(row.expectedService ?? ''),
+              service:
+                formatarDataExcelOuIso(String(row.expectedService ?? '')) ?? '',
               note: String(row.note ?? ''),
               address: String(row.address ?? ''),
               supplier: String(row.supplier ?? ''),
@@ -403,9 +406,9 @@ export default function Page() {
       city: spare.city,
       equipment: spare.equipment,
       tracking: spare.tracking,
-      delivery: spare.delivery,
+      delivery: formatarDataExcelOuIso(spare.delivery) ?? spare.delivery,
       technician: spare.technician,
-      service: spare.service,
+      service: formatarDataExcelOuIso(spare.service) ?? spare.service,
       note: spare.note,
       address: spare.address,
       supplier: spare.supplier,
@@ -430,7 +433,9 @@ export default function Page() {
     .sort((a, b) => {
       const stamp = (item: S) => {
         const value = item.updatedAt || item.service || item.delivery;
-        const parsed = value ? Date.parse(value) : Number.NaN;
+        if (!value) return item.sourceOrder ?? 0;
+        const iso = onlyDate(value);
+        const parsed = iso ? Date.parse(iso) : Date.parse(value);
         return Number.isFinite(parsed) ? parsed : item.sourceOrder ?? 0;
       };
       return sortOrder === 'newest' ? stamp(b) - stamp(a) : stamp(a) - stamp(b);
@@ -766,11 +771,17 @@ export default function Page() {
                         )}
                         <D
                           l="Previsão de entrega"
-                          v={selected.delivery || 'Sem previsão'}
+                          v={
+                            formatarDataExcelOuIso(selected.delivery) ||
+                            'Sem previsão'
+                          }
                         />
                         <D
-                          l="Atendimento"
-                          v={selected.service || 'Sem agendamento'}
+                          l="Previsão de atendimento"
+                          v={
+                            formatarDataExcelOuIso(selected.service) ||
+                            'Sem agendamento'
+                          }
                         />
                         {selected.syncStatus && (
                           <D

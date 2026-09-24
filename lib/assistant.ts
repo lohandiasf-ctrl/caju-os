@@ -203,12 +203,13 @@ export function formatarDataExcelOuIso(valor: string | number | null | undefined
   const str = String(valor).trim();
   if (!str) return null;
 
-  // 1. Se for número serial do Excel (ex: 46252 -> anos entre 2010 e 2050)
+  // 1. Se for número serial do Excel (ex: 46252, 46290 -> anos entre 1982 e 2077)
   const serial = Number(str);
-  if (!isNaN(serial) && serial >= 40000 && serial <= 55000) {
+  if (!isNaN(serial) && serial >= 30000 && serial <= 65000) {
     // 25569 é o offset entre 01/01/1900 (Excel) e 01/01/1970 (Unix Epoch)
     // + 12h (meio-dia UTC) evita que o fuso horário de Brasília (UTC-3) retroceda um dia
-    const milissegundos = (serial - 25569) * 86400 * 1000 + 12 * 3600 * 1000;
+    const dias = Math.floor(serial);
+    const milissegundos = (dias - 25569) * 86400 * 1000 + 12 * 3600 * 1000;
     const data = new Date(milissegundos);
     return data.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
   }
@@ -225,6 +226,17 @@ export function formatarDataExcelOuIso(valor: string | number | null | undefined
     }
   }
 
+  // 3. Se for data no formato americano M/D/YYYY ou MM/DD/YYYY onde dia > 12
+  const usMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (usMatch) {
+    const p1 = parseInt(usMatch[1], 10);
+    const p2 = parseInt(usMatch[2], 10);
+    const year = usMatch[3];
+    if (p1 <= 12 && p2 > 12) {
+      return `${String(p2).padStart(2, '0')}/${String(p1).padStart(2, '0')}/${year}`;
+    }
+  }
+
   return str;
 }
 
@@ -232,7 +244,7 @@ export function formatarDataExcelOuIso(valor: string | number | null | undefined
 // de texto podem vir em DD/MM/AAAA. Na fila só o dia interessa, sempre em
 // AAAA-MM-DD para o modelo comparar com "Hoje é".
 export function onlyDate(value: string | null | undefined): string | null {
-  if (value && /^\d{5}$/.test(value.trim())) {
+  if (value && /^\d{5}(\.\d+)?$/.test(value.trim())) {
     const formatted = formatarDataExcelOuIso(value);
     if (formatted) return onlyDate(formatted);
   }
