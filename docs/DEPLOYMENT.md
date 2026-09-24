@@ -116,7 +116,19 @@ npm run db:migrate:remote  # aplica no D1 remoto (pede confirmação y/n)
 
 `scripts/db-migrate-remote.mjs` lê a tabela `d1_migrations`, aplica **só** o que
 falta, e **aborta** se não conseguir ler o controle (nunca reexecuta
-`CREATE TABLE` sobre banco populado).
+`CREATE TABLE` sobre banco populado). Ele decide pelo **nome do arquivo** em
+`drizzle/`, não pelo `drizzle/meta/*` — por isso migrations 0026+ foram
+escritas à mão (arquivo `.sql` direto, sem `db:generate`) e o `meta/_journal.json`
+ficou parado no 0024.
+
+**Cuidado com `npm run db:generate`:** como o `meta/` está desatualizado desde
+o 0025, ele recalcula o diff a partir do snapshot velho e tenta recriar tabelas
+que já existem em produção (foi o que aconteceu ao gerar a migration do
+`pin_credentials`, 2026-09-24 — o arquivo gerado tentava recriar
+`assistant_actions`, `fsa_groups` etc. e foi descartado). Depois de gerar,
+**sempre leia o `.sql` resultante**; se ele mexer em tabela que não faz parte
+da sua mudança, descarte e escreva a migration à mão, seguindo o próximo
+número livre em `drizzle/` (não o que o `meta/` sugere).
 
 Cargas de dados pontuais têm scripts próprios (ex.: `scripts/seed-parts.mjs`
 gera `.wrangler-parts.sql`, aplicado com
@@ -148,6 +160,15 @@ hardcoded para o Railway em `lib/voice-chat.ts`).
 | `TRACKINGMORE_API_KEY` | rastreio automático de spares (TrackingMore, API v4) | opcional (sem ele: spare é cadastrado sem consulta) |
 | `WHATSAPP_GROUP_DEFAULT_PARTICIPANTS` | JSON `[{"name","phone"}]` das pessoas que entram em todo grupo de WhatsApp criado pelo sistema. Fica fora do Git porque o repositório é público. | necessário para os contatos fixos. Sem ele, o diálogo avisa e o grupo sai só com quem foi escolhido. |
 | `GOOGLE_MAPS_API_KEY` | **obsoleto** (mapa é Leaflet) | secret órfão; pode remover |
+| `FIREBASE_SERVICE_ACCOUNT_EMAIL` | login por PIN (`app/api/auth/pin/unlock`) assina o custom token do Firebase | opcional — sem ele, o PIN cadastra mas o desbloqueio responde 503 e cai para a senha |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | idem — `private_key` da conta de serviço, PEM completo (`-----BEGIN PRIVATE KEY-----...`) | opcional, mesmo par do de cima |
+
+`FIREBASE_SERVICE_ACCOUNT_EMAIL`/`_KEY` vêm de Firebase Console → ⚙️
+Configurações do projeto → Contas de serviço → **Gerar nova chave privada**
+(projeto `caju-websys`). O JSON baixado tem os campos `client_email` e
+`private_key` — cole cada um em um secret. Pode colar o PEM com quebras de
+linha reais ou com `\n` escapado; `lib/server/firebase-custom-token.ts` aceita
+os dois formatos.
 
 ### Bindings — definidos por `scripts/patch-wrangler.mjs`
 

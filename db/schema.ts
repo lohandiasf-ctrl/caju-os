@@ -28,6 +28,31 @@ export const appUsers = sqliteTable(
   ],
 );
 
+// PIN de 4 dígitos como atalho de login (ver app/api/auth/pin/*). Uma linha
+// por aparelho: deviceId identifica o par gerado em lib/pin-device.ts (guardado
+// só no navegador daquele aparelho); hash é PBKDF2(deviceSecret + ':' + pin,
+// salt) — sem o deviceSecret do aparelho certo, o PIN sozinho não abre nada.
+export const pinCredentials = sqliteTable(
+  'pin_credentials',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userEmail: text('user_email').notNull(),
+    deviceId: text('device_id').notNull(),
+    label: text('label'),
+    salt: text('salt').notNull(),
+    hash: text('hash').notNull(),
+    iterations: integer('iterations').notNull(),
+    failedAttempts: integer('failed_attempts').notNull().default(0),
+    lockedUntil: text('locked_until'),
+    createdAt: text('created_at').notNull(),
+    lastUsedAt: text('last_used_at'),
+  },
+  (table) => [
+    uniqueIndex('idx_pin_credentials_device').on(table.deviceId),
+    index('idx_pin_credentials_user_email').on(table.userEmail),
+  ],
+);
+
 export const projects = sqliteTable(
   'projects',
   {

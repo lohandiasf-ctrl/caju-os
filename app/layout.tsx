@@ -8,6 +8,7 @@ import { GlobalAssistant } from '@/components/global-assistant';
 import { MotionProvider } from '@/components/motion-provider';
 import { LoginTransitionOverlay } from '@/components/login-transition';
 import { ProfileSetupGate } from '@/components/profile-setup-gate';
+import { PinSetupOffer } from '@/components/pin-setup-offer';
 import { themeBootScript } from '@/lib/theme';
 import { sidebarBootScript } from '@/lib/sidebar-state';
 
@@ -55,6 +56,7 @@ export default function RootLayout({
             {children}
             <GlobalAssistant />
             <ProfileSetupGate />
+            <PinSetupOffer />
           </AuthProvider>
           <LoginTransitionOverlay />
         </MotionProvider>

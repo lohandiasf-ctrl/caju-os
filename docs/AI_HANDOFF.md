@@ -228,12 +228,14 @@ todos os perfis, exportação/backup administrativo.
   acabou pintando por cima dos diálogos. Só a chamada ativa e a moldura do
   desktop passam acima de um modal.
 
-1. **Remover evidência do N1 (2026-09-24, ver CHANGELOG) precisa da migration**
-   `drizzle/0042_ticket_evidence_jira_attachment.sql`
-   (`npm run db:migrate:remote`) — sem ela, `jiraAttachmentId` não existe na
-   tabela e a inserção de evidência nova quebra. Evidência anexada antes desta
-   migration não tem o id do anexo no Jira: remover essas só tira do Caju OS,
-   o anexo continua no Jira (aviso está no código, não na tela).
+1. **Login por PIN (2026-09-24, ver CHANGELOG) precisa de dois passos manuais
+   antes de funcionar de ponta a ponta:** gerar a chave de conta de serviço do
+   Firebase e colar em `FIREBASE_SERVICE_ACCOUNT_EMAIL`/`_KEY`
+   (`docs/DEPLOYMENT.md` tem o passo a passo), e rodar
+   `npm run db:migrate:remote` para aplicar `drizzle/0041_pin_credentials.sql`.
+   Sem o secret, o cadastro do PIN funciona mas o desbloqueio responde 503 e
+   cai para a senha — não quebra nada, só fica incompleto. Não testado em
+   navegador de verdade (sem ambiente para isso na sessão que implementou).
 2. **Testar salvar um chamado real com transição no Jira** no ambiente novo —
    único fluxo crítico ainda não exercitado em produção pós-migração.
 3. Cadastrar `GOOGLE_MAPS_API_KEY`? **Não** — obsoleto após Leaflet. Pode

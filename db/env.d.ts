@@ -40,5 +40,11 @@ declare namespace Cloudflare {
     // @cloudflare/workers-types: importar aqui transformaria este .d.ts em
     // modulo e quebraria a declaracao de namespace.
     AI: Ai;
+    // Conta de serviço do Firebase (Console → Configurações do projeto →
+    // Contas de serviço → Gerar nova chave privada), só para assinar o custom
+    // token do login por PIN (lib/server/firebase-custom-token.ts). Sem isso,
+    // /api/auth/pin/unlock responde 503 e o app continua funcionando por senha.
+    FIREBASE_SERVICE_ACCOUNT_EMAIL?: string;
+    FIREBASE_SERVICE_ACCOUNT_KEY?: string;
   }
 }

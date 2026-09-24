@@ -1,6 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { appUsers, employeePresence } from '@/db/schema';
+import { appUsers, employeePresence, pinCredentials } from '@/db/schema';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { logSecurityEvent } from '@/lib/server/security-log';
 
@@ -52,6 +52,9 @@ export async function PATCH(request: Request) {
 
     const now = new Date().toISOString();
     await db.update(appUsers).set({ active: body.active, updatedAt: now }).where(eq(appUsers.email, email));
+    // Retirado da equipe: o PIN de acesso rápido não serve para mais nada, e
+    // ficar parado no aparelho não tem por quê (ver app/api/auth/pin/unlock).
+    if (!body.active) await db.delete(pinCredentials).where(eq(pinCredentials.userEmail, email));
     logSecurityEvent({
       request,
       user: manager,

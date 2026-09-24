@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   Camera,
@@ -67,6 +67,7 @@ import {
 import { PresenceDot, PresenceLabel } from "@/components/presence-indicator";
 import { PROFILE_UPDATED_EVENT, setProfileDisplayName } from "@/lib/profile";
 import { profilePhotoDataUrl } from "@/lib/profile-photo";
+import { browserStorage, forgetPinDevice, isValidPin, markPinOffered, pinLoginAvailable, readPinDevice, registerPinDevice, removePinDevice, savePinDevice, type PinDevice } from "@/lib/pin-device";
 
 // A lista de status mora em lib/presence (junto com cor, forma e agrupamento);
 // os nomes exportados daqui continuam os mesmos.
@@ -3784,8 +3785,128 @@ export function ProfileSettings() {
           )}
         </div>
       </section>
+      <PinAccessSettings />
       <CommunicationSettings />
     </>
+  );
+}
+
+/**
+ * PIN de 4 dígitos como atalho de login neste aparelho (ver app/login/page.tsx
+ * e app/api/auth/pin/*). Quem cadastra passa a entrar só com o PIN aqui; quem
+ * remove volta a precisar da senha. Não afeta outros aparelhos da mesma conta.
+ */
+function PinAccessSettings() {
+  const { user } = useAuth();
+  const [device, setDevice] = useState<PinDevice | null>(null);
+  const [available, setAvailable] = useState(true);
+  const [pin, setPin] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    if (!user?.email) return;
+    setDevice(readPinDevice(browserStorage(), user.email));
+    void user.getIdToken().then((token) => pinLoginAvailable(token)).then(setAvailable);
+  }, [user]);
+
+  async function register(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    if (!isValidPin(pin)) { setMessage("Digite 4 números."); return; }
+    if (pin !== confirm) { setMessage("Os PINs digitados são diferentes."); return; }
+    if (!user?.email) return;
+    setSaving(true);
+    try {
+      const newDevice = await registerPinDevice(await user.getIdToken(), pin);
+      savePinDevice(browserStorage(), user.email, newDevice);
+      markPinOffered(browserStorage(), user.email);
+      setDevice(newDevice);
+      setPin("");
+      setConfirm("");
+      setMessage("PIN cadastrado neste aparelho.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível cadastrar o PIN.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove() {
+    if (!user?.email || !device) return;
+    setSaving(true);
+    setMessage("");
+    try {
+      await removePinDevice(await user.getIdToken(), device.deviceId);
+      forgetPinDevice(browserStorage(), user.email);
+      setDevice(null);
+      setMessage("PIN removido deste aparelho.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Não foi possível remover o PIN.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="surface-panel rounded-2xl p-5">
+      <h2 className="font-semibold">PIN de acesso rápido</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Substitui a senha ao reabrir o Caju OS, só neste aparelho.
+      </p>
+      {device ? (
+        <div className="mt-4 space-y-3">
+          <p className="text-sm text-success">Cadastrado neste aparelho.</p>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void remove()}
+            className="h-10 rounded-md border border-destructive/25 px-3 text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+          >
+            Remover PIN deste aparelho
+          </button>
+        </div>
+      ) : !available ? (
+        <p className="mt-4 text-sm text-muted-foreground">Ainda não disponível nesta operação.</p>
+      ) : (
+        <form onSubmit={(event) => void register(event)} className="mt-4 grid gap-3" noValidate>
+          <label className="text-xs font-semibold text-muted-foreground" htmlFor="pin-settings-pin">
+            PIN (4 números)
+            <input
+              id="pin-settings-pin"
+              className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-center text-sm tracking-[0.4em] text-foreground"
+              inputMode="numeric"
+              pattern="\d{4}"
+              maxLength={4}
+              autoComplete="off"
+              value={pin}
+              onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+          </label>
+          <label className="text-xs font-semibold text-muted-foreground" htmlFor="pin-settings-confirm">
+            Confirme o PIN
+            <input
+              id="pin-settings-confirm"
+              className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-center text-sm tracking-[0.4em] text-foreground"
+              inputMode="numeric"
+              pattern="\d{4}"
+              maxLength={4}
+              autoComplete="off"
+              value={confirm}
+              onChange={(event) => setConfirm(event.target.value.replace(/\D/g, "").slice(0, 4))}
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={saving}
+            className="h-10 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            {saving ? "Cadastrando..." : "Cadastrar PIN"}
+          </button>
+        </form>
+      )}
+      {message && <p role="status" className="mt-3 text-sm text-muted-foreground">{message}</p>}
+    </section>
   );
 }
 

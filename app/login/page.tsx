@@ -3,15 +3,16 @@
 import { FormEvent, useEffect, useRef, useState, type RefObject } from 'react';
 import Image from 'next/image';
 import { FirebaseError } from 'firebase/app';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithCustomToken, signInWithEmailAndPassword } from 'firebase/auth';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ClipboardCheck, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MapPinned, ShieldCheck } from 'lucide-react';
+import { ClipboardCheck, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, MapPinned, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { startLoginTransition } from '@/components/login-transition';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { auth } from '@/lib/firebase';
 import { emailInitials, forgetRememberedEmail, readRememberedEmail, rememberEmail } from '@/lib/login-memory';
+import { forgetPinDevice, readPinDevice } from '@/lib/pin-device';
 
 function localStore() {
   try { return window.localStorage; } catch { return null; }
@@ -31,21 +32,71 @@ export default function LoginPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
+  // PIN de acesso rápido deste aparelho (lib/pin-device.ts). Quando existe
+  // para o e-mail lembrado, a volta pede o PIN em vez da senha por padrão —
+  // "Usar a senha" sempre disponível como saída.
+  const pinDevice = remembered ? readPinDevice(localStore(), remembered) : null;
+  const [usePin, setUsePin] = useState(() => Boolean(pinDevice));
+  const [pin, setPin] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
   const desktopPanelRef = useRef<HTMLDivElement>(null);
   const mobilePanelRef = useRef<HTMLDivElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const pinRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (remembered) passwordRef.current?.focus();
-  }, [remembered]);
+    if (!remembered) return;
+    if (usePin) pinRef.current?.focus();
+    else passwordRef.current?.focus();
+  }, [remembered, usePin]);
 
   function switchAccount() {
     forgetRememberedEmail(localStore());
     setRemembered('');
     setEmail('');
     setPassword('');
+    setPin('');
+    setUsePin(false);
     setError('');
     setMessage('');
     window.requestAnimationFrame(() => emailRef.current?.focus());
+  }
+
+  function loginTransitionBox() {
+    // Mede o painel azul agora: depois do login o AuthProvider desmonta esta
+    // tela e o elemento deixa de existir.
+    const panel = [desktopPanelRef.current, mobilePanelRef.current].find((element) => element && element.offsetParent !== null);
+    return panel?.getBoundingClientRect();
+  }
+
+  async function handlePinSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!remembered || !pinDevice) return;
+    setPinLoading(true);
+    setError('');
+    const box = loginTransitionBox();
+    try {
+      const response = await fetch('/api/auth/pin/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: remembered, deviceId: pinDevice.deviceId, deviceSecret: pinDevice.deviceSecret, pin }),
+      });
+      const payload = await response.json().catch(() => ({})) as { customToken?: string; error?: string; revoked?: boolean };
+      if (!response.ok || !payload.customToken) {
+        if (payload.revoked) {
+          forgetPinDevice(localStore(), remembered);
+          setUsePin(false);
+        }
+        throw new Error(payload.error || 'PIN incorreto.');
+      }
+      await signInWithCustomToken(auth, payload.customToken);
+      rememberEmail(localStore(), remembered);
+      setLeaving(true);
+      startLoginTransition(box ? { top: box.top, left: box.left, width: box.width, height: box.height } : null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível entrar com o PIN.');
+      setPin('');
+      setPinLoading(false);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -53,10 +104,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     setMessage('');
-    // Mede o painel azul agora: depois do login o AuthProvider desmonta esta
-    // tela e o elemento deixa de existir.
-    const panel = [desktopPanelRef.current, mobilePanelRef.current].find((element) => element && element.offsetParent !== null);
-    const box = panel?.getBoundingClientRect();
+    const box = loginTransitionBox();
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
       rememberEmail(localStore(), email);
@@ -116,40 +164,57 @@ export default function LoginPage() {
                 <p className="truncate text-sm text-muted-foreground">{remembered}</p>
               </div>
             </div>
-            <p className="mt-4 text-sm text-muted-foreground">Por segurança, a sessão termina quando o app é fechado. Digite sua senha para continuar.</p>
+            <p className="mt-4 text-sm text-muted-foreground">{usePin && pinDevice ? 'Digite o PIN deste aparelho para continuar.' : 'Por segurança, a sessão termina quando o app é fechado. Digite sua senha para continuar.'}</p>
           </> : <>
             <h1 className="text-xl font-semibold tracking-[-.01em]">Que bom ter você de volta <span aria-hidden="true">👋</span></h1>
             <p className="mt-1.5 text-sm text-muted-foreground">Entre com suas credenciais para continuar.</p>
           </>}
 
-          <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
-            {remembered ? (
-              // Continua no formulário para o gerenciador de senhas saber de qual conta é a senha.
-              <input ref={emailRef} type="email" name="email" autoComplete="username" value={email} readOnly hidden />
-            ) : (
+          {remembered && usePin && pinDevice ? (
+            <form className="mt-7 space-y-4" onSubmit={(event) => void handlePinSubmit(event)}>
+              <input type="email" name="email" autoComplete="username" value={remembered} readOnly hidden />
               <div>
-                <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">E-mail</label>
+                <label htmlFor="login-pin" className="mb-1.5 block text-sm font-medium">PIN</label>
                 <span className="relative block">
-                  <Mail aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
-                  <Input ref={emailRef} id="login-email" name="email" className={loginInput} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@cajutech.net" required />
+                  <KeyRound aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                  <Input ref={pinRef} id="login-pin" name="pin" className={`${loginInput} text-center text-lg tracking-[0.5em]`} inputMode="numeric" pattern="\d{4}" maxLength={4} autoComplete="off" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" required />
                 </span>
               </div>
-            )}
-            <div>
-              <div className="mb-1.5 flex items-center justify-between gap-3">
-                <label htmlFor="login-password" className="text-sm font-medium">Senha</label>
-                <button type="button" disabled={loading || resetting} onClick={() => void resetPassword()} className="-my-2 min-h-9 rounded-md px-1 text-[13px] font-semibold text-primary hover:underline disabled:opacity-60">{resetting ? 'Enviando recuperação…' : 'Esqueci a senha'}</button>
+              {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-[13px] text-danger">{error}</p>}
+              <Button className="h-11 w-full rounded-xl text-[15px] font-semibold" type="submit" disabled={pinLoading || pin.length !== 4}>{pinLoading ? <><LoaderCircle className="animate-spin" aria-hidden="true" />Entrando…</> : 'Entrar'}</Button>
+              <button type="button" onClick={() => { setUsePin(false); setPin(''); setError(''); }} className="block w-full text-center text-[13px] font-semibold text-primary hover:underline">Usar a senha</button>
+            </form>
+          ) : (
+            <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
+              {remembered ? (
+                // Continua no formulário para o gerenciador de senhas saber de qual conta é a senha.
+                <input ref={emailRef} type="email" name="email" autoComplete="username" value={email} readOnly hidden />
+              ) : (
+                <div>
+                  <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium">E-mail</label>
+                  <span className="relative block">
+                    <Mail aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                    <Input ref={emailRef} id="login-email" name="email" className={loginInput} type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@cajutech.net" required />
+                  </span>
+                </div>
+              )}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-3">
+                  <label htmlFor="login-password" className="text-sm font-medium">Senha</label>
+                  <button type="button" disabled={loading || resetting} onClick={() => void resetPassword()} className="-my-2 min-h-9 rounded-md px-1 text-[13px] font-semibold text-primary hover:underline disabled:opacity-60">{resetting ? 'Enviando recuperação…' : 'Esqueci a senha'}</button>
+                </div>
+                <span className="relative block">
+                  <LockKeyhole aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
+                  <Input ref={passwordRef} id="login-password" name="password" className={`${loginInput} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" minLength={6} required />
+                  <button type="button" onClick={() => setShowPassword((current) => !current)} aria-pressed={showPassword} className="absolute right-0.5 top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-xl text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? <EyeOff className="size-[18px]" strokeWidth={1.75} /> : <Eye className="size-[18px]" strokeWidth={1.75} />}</button>
+                </span>
               </div>
-              <span className="relative block">
-                <LockKeyhole aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
-                <Input ref={passwordRef} id="login-password" name="password" className={`${loginInput} pr-12`} type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" minLength={6} required />
-                <button type="button" onClick={() => setShowPassword((current) => !current)} aria-pressed={showPassword} className="absolute right-0.5 top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-xl text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? <EyeOff className="size-[18px]" strokeWidth={1.75} /> : <Eye className="size-[18px]" strokeWidth={1.75} />}</button>
-              </span>
-            </div>
-            {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-[13px] text-danger">{error}</p>}
-            {message && <output className="block rounded-xl bg-success-soft p-3 text-[13px] text-success">{message}</output>}
-            <Button className="h-11 w-full rounded-xl text-[15px] font-semibold" type="submit" disabled={loading || resetting}>{loading ? <><LoaderCircle className="animate-spin" aria-hidden="true" />Entrando…</> : 'Entrar'}</Button>
-          </form>
+              {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-[13px] text-danger">{error}</p>}
+              {message && <output className="block rounded-xl bg-success-soft p-3 text-[13px] text-success">{message}</output>}
+              <Button className="h-11 w-full rounded-xl text-[15px] font-semibold" type="submit" disabled={loading || resetting}>{loading ? <><LoaderCircle className="animate-spin" aria-hidden="true" />Entrando…</> : 'Entrar'}</Button>
+              {remembered && pinDevice && <button type="button" onClick={() => { setUsePin(true); setError(''); }} className="block w-full text-center text-[13px] font-semibold text-primary hover:underline">Usar o PIN deste aparelho</button>}
+            </form>
+          )}
           {remembered ? (
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Não é {remembered.split('@')[0]}?{' '}
