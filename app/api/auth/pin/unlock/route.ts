@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { appUsers, pinCredentials } from '@/db/schema';
 import { createFirebaseCustomToken, firebaseServiceAccountConfigured } from '@/lib/server/firebase-custom-token';
@@ -42,12 +42,22 @@ export async function POST(request: Request) {
 
     const attemptHash = await derivePinHash(deviceSecret, pin, credential.salt, credential.iterations);
     if (!timingSafeEqualHex(attemptHash, credential.hash)) {
-      const failedAttempts = credential.failedAttempts + 1;
+      // Incremento atômico no banco: ler failedAttempts e gravar +1 em dois
+      // passos deixava duas tentativas erradas concorrentes lerem o mesmo
+      // valor e "perderem" um incremento, furando o bloqueio de 5 erros.
+      const updated = await db.update(pinCredentials)
+        .set({ failedAttempts: sql`${pinCredentials.failedAttempts} + 1` })
+        .where(eq(pinCredentials.deviceId, deviceId))
+        .returning({ failedAttempts: pinCredentials.failedAttempts })
+        .get();
+      const failedAttempts = updated?.failedAttempts ?? MAX_ATTEMPTS;
       const locked = failedAttempts >= MAX_ATTEMPTS;
-      await db.update(pinCredentials).set({
-        failedAttempts: locked ? 0 : failedAttempts,
-        lockedUntil: locked ? new Date(Date.now() + LOCK_MS).toISOString() : null,
-      }).where(eq(pinCredentials.deviceId, deviceId));
+      if (locked) {
+        await db.update(pinCredentials).set({
+          failedAttempts: 0,
+          lockedUntil: new Date(Date.now() + LOCK_MS).toISOString(),
+        }).where(eq(pinCredentials.deviceId, deviceId));
+      }
       logSecurityEvent({ request, action: 'pin_unlock_failed', outcome: 'denied', details: { email, failedAttempts } });
       return Response.json({ error: locked ? 'Muitas tentativas com PIN errado. Use sua senha ou tente de novo mais tarde.' : 'PIN incorreto.' }, { status: locked ? 429 : 401 });
     }
