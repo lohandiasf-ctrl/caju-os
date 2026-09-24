@@ -2,8 +2,13 @@
 // deviceSecret do aparelho + o PIN digitado. PBKDF2 é padrão da Web Crypto,
 // disponível tanto no Workers (produção) quanto no Node (testes) — mesmo
 // padrão de crypto.subtle já usado em lib/server/firebase-auth.ts.
-
-export const PIN_HASH_ITERATIONS = 120_000;
+//
+// 100.000 é o teto: o runtime do Workers (BoringSSL) rejeita PBKDF2 acima
+// disso com "NotSupportedError: iteration counts above 100000 are not
+// supported" — só apareceu em produção porque o Node (testes) não tem esse
+// limite. app/api/auth/pin/unlock/route.ts sempre confere com o `iterations`
+// gravado na linha, então não é preciso migration para credenciais futuras.
+export const PIN_HASH_ITERATIONS = 100_000;
 
 export function isValidPin(value: string): boolean {
   return /^\d{4}$/.test(value);
