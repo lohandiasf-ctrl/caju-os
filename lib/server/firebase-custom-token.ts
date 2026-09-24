@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { privateKeyBase64FromSecret, privateKeyDerFromSecret } from '@/lib/server/private-key-pem';
 
 // Assina um "custom token" do Firebase manualmente (RS256 com a chave da conta
 // de serviço), sem o Admin SDK — que não roda no Workers. Formato exigido pelo
@@ -34,23 +35,15 @@ export async function createFirebaseCustomToken(uid: string): Promise<string> {
   return `${unsigned}.${base64UrlEncodeBytes(new Uint8Array(signature))}`;
 }
 
-async function importPrivateKey(pem: string) {
-  // Em vez de tentar prever todo formato de colagem (aspas do JSON, vírgula
-  // final, \n escapado vs. quebra de linha real), fica só com os caracteres
-  // que o base64 realmente usa e descarta o resto. Isso sozinho não bastou em
-  // produção: um "=" de padding pode sobrar no MEIO da string (colagem
-  // duplicada/embaralhada) — cada caractere continua válido, mas o atob()
-  // exige que "=" só apareça no final, na quantidade certa, e recusa com o
-  // mesmo InvalidCharacterError. Por isso o padding é descartado e
-  // recalculado do zero a partir do comprimento já limpo.
-  const stripped = pem.replace(/-----(BEGIN|END) PRIVATE KEY-----/g, '').replace(/[^A-Za-z0-9+/=]/g, '').replace(/=/g, '');
-  const base64 = stripped + '='.repeat((4 - (stripped.length % 4)) % 4);
+async function importPrivateKey(secret: string) {
+  // Formatos de colagem (\n literal do JSON, aspas, JSON inteiro): ver
+  // lib/server/private-key-pem.ts.
   let der: Uint8Array<ArrayBuffer>;
   try {
-    der = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    der = privateKeyDerFromSecret(secret);
   } catch (cause) {
     // Diagnóstico seguro: só tamanho/formato, nunca o conteúdo da chave.
-    console.error(`importPrivateKey: atob falhou (comprimento bruto=${pem.length}, limpo=${base64.length})`, cause);
+    console.error(`importPrivateKey: atob falhou (comprimento bruto=${secret.length}, limpo=${privateKeyBase64FromSecret(secret).length})`, cause);
     throw cause;
   }
   return crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);

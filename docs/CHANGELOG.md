@@ -11,6 +11,30 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Desbloqueio por PIN: causa raiz era o `\n` literal da chave do Firebase
+
+O `InvalidCharacterError` do `atob()` no desbloqueio por PIN foi uma regressão
+de `cb57b1a`. A versão original de `importPrivateKey` removia o `\n` literal
+(barra + n, como a quebra de linha aparece no JSON da conta de serviço); a
+"correção" trocou isso por um filtro que só mantém caracteres de base64. A
+barra some, mas o **`n` é base64 válido e fica** — uma letra a mais por
+linha da chave. Conforme a conta de linhas, isso quebra o `atob()` (comprimento
+≡ 1 mod 4, o erro visto em produção) ou o `importKey`. Por isso as correções
+de caractere inválido e de padding não resolviam: nenhuma das duas tirava os
+`n` extras. Reproduzido localmente com uma chave RSA gerada na hora.
+
+Parsing movido para `lib/server/private-key-pem.ts` (testável sem o runtime do
+Workers): converte `\n`/`\r` literal antes de filtrar, pega só o trecho entre
+`BEGIN`/`END PRIVATE KEY` e aceita também o JSON inteiro da conta de serviço
+colado no secret. `tests/private-key-pem.test.ts` cobre PEM real, `\n`
+literal, aspas + vírgula, JSON inteiro e `\r\n`, conferindo com `importKey`
+de verdade.
+
+**Pendente:** testar o desbloqueio em produção depois do deploy. Não é preciso
+colar o secret de novo: o valor atual deve funcionar como está. Se ainda
+falhar, o erro será outro, já depois da chave (ex.: resposta do Identity
+Toolkit no `signInWithCustomToken`).
+
 ### Desbloqueio por PIN ainda quebrado: `=` de padding sobrando no meio da chave
 
 A correção anterior (filtrar para só caracteres válidos de base64) não bastou

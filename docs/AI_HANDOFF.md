@@ -228,8 +228,17 @@ todos os perfis, exportação/backup administrativo.
   acabou pintando por cima dos diálogos. Só a chamada ativa e a moldura do
   desktop passam acima de um modal.
 
-1. **Login por PIN (2026-09-24) — desbloqueio ainda quebrado em produção,
-   causa raiz não confirmada.** Migration `0041_pin_credentials.sql` já
+1. **Login por PIN (2026-09-24) — causa raiz encontrada e corrigida na
+   branch `claude/fix-pin-unlock-newline`; falta confirmar em produção.**
+   O filtro "só caracteres de base64" (`cb57b1a`) removia a barra do `\n`
+   literal da chave colada do JSON e mantinha o `n`, que é base64 válido:
+   uma letra a mais por linha. Nem o filtro nem o padding recalculado tiravam
+   esses `n`, por isso nada resolvia. Parsing agora em
+   `lib/server/private-key-pem.ts`, com teste que importa uma chave RSA de
+   verdade em cada formato de colagem. Depois do deploy, testar o desbloqueio;
+   não precisa trocar o secret. O histórico abaixo fica como registro.
+
+   *Histórico (antes da correção):* Migration `0041_pin_credentials.sql` já
    rodou, secrets `FIREBASE_SERVICE_ACCOUNT_EMAIL`/`_KEY` já configurados
    pelo usuário na Cloudflare, cadastro do PIN funciona. O desbloqueio
    (`app/api/auth/pin/unlock` → `lib/server/firebase-custom-token.ts`,
