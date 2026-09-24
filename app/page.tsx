@@ -37,6 +37,7 @@ import { OverviewBento } from "@/components/dashboard/overview-bento";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { canUseDashboardView, canUseWhatsapp, isDashboardView, type DashboardView } from "@/lib/navigation";
+import { formatarDataExcelOuIso } from "@/lib/assistant";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1918,8 +1919,20 @@ export default function Home() {
                     <Detail label="Técnico" value={linkedSpare.technician || 'Não informado'} />
                     <Detail label="Cidade" value={linkedSpare.city || 'Não informada'} />
                     <Detail label="Rastreio" value={linkedSpare.tracking || 'Não informado'} />
-                    <Detail label="Previsão de entrega" value={linkedSpare.delivery || 'Sem previsão'} />
-                    <Detail label="Previsão de atendimento" value={linkedSpare.service || 'Sem agendamento'} />
+                    <Detail
+                      label="Previsão de entrega"
+                      value={
+                        formatarDataExcelOuIso(linkedSpare.delivery) ||
+                        'Sem previsão'
+                      }
+                    />
+                    <Detail
+                      label="Previsão de atendimento"
+                      value={
+                        formatarDataExcelOuIso(linkedSpare.service) ||
+                        'Sem agendamento'
+                      }
+                    />
                     {linkedSpare.address && <Detail className="sm:col-span-2" label="Endereço de entrega" value={linkedSpare.address} />}
                     {linkedSpare.note && <Detail className="sm:col-span-2" label="Observação da planilha" value={linkedSpare.note} />}
                   </div>

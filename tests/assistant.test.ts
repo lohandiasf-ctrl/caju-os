@@ -474,8 +474,20 @@ test('formatarDataExcelOuIso converte serial numérico do Excel e datas ISO para
   assert.ok(data46252?.includes('2026'), 'ano 2026');
   assert.match(data46252 ?? '', /^\d{2}\/\d{2}\/2026$/);
 
+  // Casos reais de serial da planilha compartilhada (ex: linha 424 da planilha)
+  assert.equal(formatarDataExcelOuIso(46290), '25/09/2026');
+  assert.equal(formatarDataExcelOuIso('46290'), '25/09/2026');
+  assert.equal(formatarDataExcelOuIso(46293), '28/09/2026');
+  assert.equal(formatarDataExcelOuIso('46293'), '28/09/2026');
+  assert.equal(formatarDataExcelOuIso('46290.5'), '25/09/2026');
+
+  // Formato americano M/D/YYYY vindo de exportação CSV
+  assert.equal(formatarDataExcelOuIso('8/26/2026'), '26/08/2026');
+  assert.equal(formatarDataExcelOuIso('7/14/2026'), '14/07/2026');
+
   // Data ISO sem hora (YYYY-MM-DD)
   assert.equal(formatarDataExcelOuIso('2026-08-22'), '22/08/2026');
+  assert.equal(formatarDataExcelOuIso('2026-09-25'), '25/09/2026');
 
   // Data ISO com hora
   const dataIsoHora = formatarDataExcelOuIso('2026-08-22T14:00:00.000Z');
@@ -483,14 +495,18 @@ test('formatarDataExcelOuIso converte serial numérico do Excel e datas ISO para
 
   // Data já em texto BR
   assert.equal(formatarDataExcelOuIso('22/08/2026'), '22/08/2026');
+  assert.equal(formatarDataExcelOuIso('25/09/2026'), '25/09/2026');
 
   // Valores vazios
   assert.equal(formatarDataExcelOuIso(null), null);
   assert.equal(formatarDataExcelOuIso(''), null);
   assert.equal(formatarDataExcelOuIso(undefined), null);
 
-  // onlyDate com número serial do Excel
+  // onlyDate com número serial do Excel e formato BR
   assert.match(onlyDate('46252') ?? '', /^2026-\d{2}-\d{2}$/);
+  assert.equal(onlyDate('46290'), '2026-09-25');
+  assert.equal(onlyDate('46293'), '2026-09-28');
+  assert.equal(onlyDate('25/09/2026'), '2026-09-25');
 });
 
 
