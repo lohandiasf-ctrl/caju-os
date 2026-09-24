@@ -11,6 +11,22 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Desbloqueio por PIN quebrado em produção: `atob()` rejeitava a chave do Firebase colada
+
+Com o cadastro do PIN já corrigido (entrada abaixo), o desbloqueio passou a
+falhar com "Não foi possível entrar com o PIN." Log ao vivo do Worker
+mostrou a causa: `InvalidCharacterError: atob() called with invalid
+base64-encoded data`, em `lib/server/firebase-custom-token.ts`
+(`importPrivateKey`). O código só removia os marcadores
+`-----BEGIN/END PRIVATE KEY-----` e espaços/`\n` antes de decodificar —
+qualquer outro caractere que sobrasse da colagem do secret na Cloudflare
+(aspas do JSON, vírgula final, etc.) ia direto pro `atob()` e quebrava.
+
+Trocado para o caminho oposto: em vez de tentar prever cada formato de
+colagem, mantém só os caracteres que o base64 realmente usa
+(`[A-Za-z0-9+/=]`) e descarta tudo o mais. Não depende de como o secret foi
+colado na Cloudflare.
+
 ### Cadastro de PIN quebrado em produção: Workers rejeita PBKDF2 acima de 100.000 iterações
 
 Publicada a PR do PIN (abaixo) com `PIN_HASH_ITERATIONS = 120_000`; usuário
