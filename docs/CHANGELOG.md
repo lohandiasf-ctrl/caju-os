@@ -11,6 +11,25 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### URGENTE: Jira desativou a API de busca antiga (CHANGE-2046) — produção quebrada
+
+Alerta em produção: "Não foi possível sincronizar com o Jira — A API
+solicitada foi removida. Migre para a API /rest/api/3/search/jql." A
+Atlassian desativou de vez o `/rest/api/3/search` (sem `/jql`) hoje.
+
+`lib/server/jira.ts` (`jiraSearch`) já chamava `/rest/api/3/search/jql` como
+principal desde a migração anterior, mas tinha um fallback para o endpoint
+antigo em dois casos: erro na chamada nova, e "0 resultados" (proteção contra
+uma inconsistência antiga do endpoint novo). Fila vazia é situação normal
+(ex.: madrugada sem chamado pendente) — o fallback disparava toda hora que
+uma busca dava zero resultado, e agora que o Jira responde 410 pra essa API,
+esse fallback "inofensivo" virou erro visível pro usuário. Removido o
+fallback: só `/rest/api/3/search/jql` agora, sem tentar mais nada além disso.
+
+**Verificação:** `npm test` (350/350), `tsc --noEmit`, `npm run build` — sem
+tocar em nenhuma outra função Jira (`/rest/api/3/field/search`, usado só pra
+campos customizados, é outra API, não afetada).
+
 ### Agendar em lote: não exige mais técnico da lista
 
 No diálogo "Agendar" (ações em lote), bastava digitar os dados no campo
