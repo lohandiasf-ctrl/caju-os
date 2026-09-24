@@ -11,6 +11,24 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Desbloqueio por PIN ainda quebrado: `=` de padding sobrando no meio da chave
+
+A correção anterior (filtrar para só caracteres válidos de base64) não bastou
+— confirmado com um deploy novo de verdade (Version ID diferente na Cloudflare,
+build sem cache), o mesmo `InvalidCharacterError` continuou. Causa: filtrar
+caracteres inválidos não corrige a **posição** de um `=` de padding. O
+`atob()` só aceita `=` no final da string, na quantidade certa (0, 1 ou 2,
+conforme o comprimento); um `=` sobrando no meio — de uma colagem
+duplicada/embaralhada do secret — continua sendo um caractere "válido" (por
+isso o filtro anterior não pegava) mas na posição errada, e o `atob()`
+recusa com o mesmo erro.
+
+`lib/server/firebase-custom-token.ts` (`importPrivateKey`): agora descarta
+todo `=` da string filtrada e recalcula o padding do zero a partir do
+comprimento limpo. Também loga (só o comprimento, nunca o conteúdo da chave)
+se o `atob()` ainda falhar, para não continuar diagnosticando às cegas pelo
+log ao vivo do Worker.
+
 ### Desbloqueio por PIN quebrado em produção: `atob()` rejeitava a chave do Firebase colada
 
 Com o cadastro do PIN já corrigido (entrada abaixo), o desbloqueio passou a
