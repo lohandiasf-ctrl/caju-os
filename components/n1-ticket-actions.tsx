@@ -80,7 +80,10 @@ export function N1TicketActions({ ticketKey, user }: { ticketKey: string; user: 
           <div className="min-w-0 flex-1"><DialogTitle className="text-sm font-bold">{preview.kind === 'rat' ? 'RAT' : preview.kind === 'photo' ? 'Foto' : 'Vídeo'} · {preview.name}</DialogTitle></div>
           <Button type="button" variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Fechar visualização"><X /></Button>
         </header>
-        <div className="grid h-[76vh] min-h-0 flex-1 place-items-center overflow-hidden bg-black/40 p-3 [&>*]:h-full [&>*]:w-full">
+        {/* sem flex-1: o dialog tem altura intrínseca (auto), então flex-grow não
+            tem espaço definido para distribuir e o h-[76vh] explícito perdia
+            para o flex-basis:0% do flex-1, colapsando este bloco a ~24px */}
+        <div className="grid h-[76vh] min-h-0 place-items-center overflow-hidden bg-black/40 p-3 [&>*]:h-full [&>*]:w-full">
           {preview.kind === 'video' ? <video src={preview.data} controls autoPlay className="max-h-[76vh] max-w-full"><track kind="captions" /></video>
             : preview.kind === 'rat' && preview.mimeType === 'application/pdf' ? <iframe src={preview.data} title={preview.name} className="h-[76vh] w-full rounded-lg bg-white" />
             : <ImageZoom src={preview.data} alt={`Evidência: ${preview.name}`} className="h-[76vh] w-full" />}

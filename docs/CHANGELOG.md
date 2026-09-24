@@ -11,6 +11,27 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### "Visualizar" abria o diálogo mas mostrava só o cabeçalho (causa confirmada)
+
+Resolve o pendente da entrada anterior. Reproduzido ao vivo (build de produção
+local + Playwright, sem depender do app desktop): o diálogo de preview
+(`jira-ticket-details.tsx` e `n1-ticket-actions.tsx`) colapsava para ~91px de
+altura — só o cabeçalho com nome do arquivo e os botões — tanto no app quanto
+num navegador comum.
+
+Causa: a div de conteúdo tinha `h-[76vh]` (altura explícita) **e** `flex-1`
+(que define `flex-basis: 0%`) ao mesmo tempo. O `<DialogContent>` que a
+envolve não tem altura própria definida (`position: fixed`, altura ajustada
+ao conteúdo) — sem uma altura definida no container flex, não há espaço para
+o `flex-grow` distribuir, então o `flex-basis: 0%` do `flex-1` vencia e o
+`h-[76vh]` nunca chegava a valer. Medido: a div de conteúdo ficava com 24px de
+altura real em vez dos ~684px esperados (76% de uma viewport de 900px).
+
+Corrigido removendo `flex-1` das duas divs (mantido só `h-[76vh]`, que já é
+suficiente — não depende de crescimento flexível). Confirmado depois da
+correção: a mesma reprodução mostra a div de conteúdo com 684px e o diálogo
+completo com os controles do `ImageZoom` visíveis.
+
 ### Baixar anexo não fazia nada no app desktop (Tauri)
 
 Achado ao investigar o app instalado (Windows): "Baixar" em `jira-ticket-details.tsx`
@@ -31,13 +52,6 @@ Rust do Tauri (nenhum plugin cobre isso hoje, e mesmo cobrindo não serviria:
 nada no app desktop. RAT agora abre no mesmo diálogo inline usado para
 foto/vídeo (PDF via `<iframe>`, imagem via `ImageZoom`), sem depender de nova
 janela.
-
-**Pendente:** a queixa de "Visualizar" abrir o diálogo mas não mostrar a
-imagem, na aba geral de Anexos, segue sem causa confirmada — o preview ali já
-é só `<img>`/`<video>`/`<iframe>` inline (não usa `window.open` nem `<a>`), e
-a investigação não achou nada em CSP/config do Tauri que explique. Pode ser
-outra causa, a confirmar depois que o usuário testar de novo com a correção
-do "Baixar".
 
 ### Aba "Anexos e evidências" do chamado ganha botão de remover
 
