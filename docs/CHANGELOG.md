@@ -11,6 +11,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Cadastro de PIN quebrado em produção: Workers rejeita PBKDF2 acima de 100.000 iterações
+
+Publicada a PR do PIN (abaixo) com `PIN_HASH_ITERATIONS = 120_000`; usuário
+testou em produção e o cadastro sempre respondia "Não foi possível cadastrar
+o PIN." Log ao vivo do Worker (aba Observability) mostrou a causa real:
+`NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not
+supported (requested 120000)`. O runtime do Workers (BoringSSL) tem esse
+teto; `npm test` não pegou porque roda em Node, que não tem esse limite, e
+o teste de `pin-hash.test.ts` já usava uma contagem baixa própria para não
+pesar — nunca exercitou o valor real da constante.
+
+`lib/server/pin-hash.ts`: `PIN_HASH_ITERATIONS` baixado para `100_000` (o
+teto do runtime). `app/api/auth/pin/unlock/route.ts` sempre confere contra o
+`iterations` gravado em cada linha de `pin_credentials`, não a constante —
+não precisou de migration nem afeta credencial nenhuma (nenhum cadastro
+tinha ido adiante até aqui, todos falhavam antes de gravar).
+
 ### PIN de 4 dígitos como atalho de login
 
 Pedido do usuário: em vez de pedir a senha toda vez que o app reabre (decisão
