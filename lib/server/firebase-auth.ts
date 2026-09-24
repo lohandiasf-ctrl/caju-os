@@ -62,7 +62,21 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
     throw jsonError('Perfil sem permissão para esta ação.', 403);
   }
 
-  return { uid: record.uid, email: record.email, role: record.role };
+  // Grava o UID real quando o banco só tem o provisório da migração
+  // ("pending:<email>", scripts/dump-to-sql.mjs) ou um UID antigo de conta
+  // recriada com e-mail verificado. O login por senha nunca dependeu disso
+  // (casa pelo e-mail), mas o PIN assina o custom token com este UID
+  // (app/api/auth/pin/unlock): com o provisório, o Firebase cria um usuário
+  // novo, sem e-mail, e a sessão cai em "Confirme o e-mail da conta".
+  if (record.uid !== claims.sub && (record.uid.startsWith('pending:') || claims.email_verified === true)) {
+    try {
+      await db.update(appUsers).set({ firebaseUid: claims.sub, updatedAt: new Date().toISOString() }).where(eq(appUsers.email, record.email));
+    } catch (error) {
+      console.error('requireApiUser: não foi possível gravar o UID real do Firebase', error);
+    }
+  }
+
+  return { uid: claims.sub, email: record.email, role: record.role };
 }
 
 async function verifyFirebaseToken(token: string): Promise<FirebaseClaims> {

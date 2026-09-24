@@ -228,8 +228,13 @@ todos os perfis, exportação/backup administrativo.
   acabou pintando por cima dos diálogos. Só a chamada ativa e a moldura do
   desktop passam acima de um modal.
 
-1. **Login por PIN (2026-09-24) — causa raiz encontrada e corrigida na
-   branch `claude/fix-pin-unlock-newline`; falta confirmar em produção.**
+1. **Login por PIN (2026-09-24) — chave corrigida (#133, confirmado em
+   produção: o custom token passou a sair). Segundo bug na sequência:** a
+   sessão abria sem e-mail porque o token era assinado com o UID provisório
+   `pending:<email>` da migração. Corrigido em `claude/fix-pin-uid-provisorio`
+   (`requireApiUser` grava o UID real); quem já tinha PIN precisa entrar uma
+   vez com a senha. Falta confirmar o PIN de ponta a ponta. Registro da
+   primeira correção:
    O filtro "só caracteres de base64" (`cb57b1a`) removia a barra do `\n`
    literal da chave colada do JSON e mantinha o `n`, que é base64 válido:
    uma letra a mais por linha. Nem o filtro nem o padding recalculado tiravam
