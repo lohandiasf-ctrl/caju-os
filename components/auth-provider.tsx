@@ -1,9 +1,10 @@
 'use client';
 
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '@/lib/firebase';
+import { flagIdleExpired, isIdleExpired, markActivity, readLastActivity } from '@/lib/session-idle';
 import { CajuLoading } from '@/components/caju-loading';
 import { canAccess, isUserRole, type UserRole } from '@/lib/permissions';
 
@@ -111,6 +112,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  // 2 horas sem uso encerram a sessão (lib/session-idle.ts). Clique, tecla,
+  // toque ou voltar para a janela contam como uso. Confere antes de gravar:
+  // voltar depois de 3 h não pode renovar a sessão vencida. O e-mail continua
+  // lembrado, então o login já oferece o PIN.
+  useEffect(() => {
+    if (!user) return;
+    const local = browserStorage('localStorage');
+    // Login recém-feito vale como uso, mesmo com um registro antigo no aparelho.
+    const signedInAt = Date.parse(user.metadata.lastSignInTime ?? '') || 0;
+    let lastWrite = 0;
+    const expired = () => {
+      const last = Math.max(readLastActivity(local) ?? 0, signedInAt);
+      if (!isIdleExpired(last || null)) return false;
+      flagIdleExpired(browserStorage('sessionStorage'));
+      void signOut(auth);
+      return true;
+    };
+    const onActivity = () => {
+      if (expired()) return;
+      const now = Date.now();
+      if (now - lastWrite < 30_000) return;
+      lastWrite = now;
+      markActivity(local, now);
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') onActivity(); };
+    onActivity();
+    const timer = window.setInterval(expired, 60_000);
+    const options = { capture: true, passive: true } as const;
+    for (const type of ACTIVITY_EVENTS) window.addEventListener(type, onActivity, options);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      for (const type of ACTIVITY_EVENTS) window.removeEventListener(type, onActivity, options);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user]);
+
   useEffect(() => {
     if (loading) return;
     if (!user && pathname !== '/login') {
@@ -146,6 +184,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {canRender ? children : <AuthLoading />}
     </AuthContext.Provider>
   );
+}
+
+const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+
+function browserStorage(kind: 'localStorage' | 'sessionStorage') {
+  try { return window[kind]; } catch { return null; }
 }
 
 function readCachedRole(email: string | null) {

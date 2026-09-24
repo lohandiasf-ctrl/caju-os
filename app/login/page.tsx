@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { FirebaseError } from 'firebase/app';
 import { signInWithCustomToken, signInWithEmailAndPassword } from 'firebase/auth';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ClipboardCheck, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MapPinned, ShieldCheck } from 'lucide-react';
+import { ClipboardCheck, Clock, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MapPinned, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PinPad } from '@/components/pin-pad';
@@ -14,9 +14,14 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { auth } from '@/lib/firebase';
 import { emailInitials, forgetRememberedEmail, readRememberedEmail, rememberEmail } from '@/lib/login-memory';
 import { forgetPinDevice, readPinDevice } from '@/lib/pin-device';
+import { clearIdleExpiredFlag, wasIdleExpired } from '@/lib/session-idle';
 
 function localStore() {
   try { return window.localStorage; } catch { return null; }
+}
+
+function sessionStore() {
+  try { return window.sessionStorage; } catch { return null; }
 }
 
 export default function LoginPage() {
@@ -33,6 +38,10 @@ export default function LoginPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [leaving, setLeaving] = useState(false);
+  // A sessão anterior caiu por 2 h sem uso (lib/session-idle.ts): explica
+  // uma vez e apaga o aviso.
+  const [idleExpired] = useState(() => typeof window !== 'undefined' && wasIdleExpired(sessionStore()));
+  useEffect(() => { if (idleExpired) clearIdleExpiredFlag(sessionStore()); }, [idleExpired]);
   // PIN de acesso rápido deste aparelho (lib/pin-device.ts). Quando existe
   // para o e-mail lembrado, a volta pede o PIN em vez da senha por padrão —
   // "Usar a senha" sempre disponível como saída.
@@ -149,7 +158,14 @@ export default function LoginPage() {
                 <p className="truncate text-sm text-muted-foreground">{remembered}</p>
               </div>
             </div>
-            <p className="mt-4 text-sm text-muted-foreground">{usePin && pinDevice ? 'Digite o PIN deste aparelho para continuar.' : 'Por segurança, a sessão termina quando o app é fechado. Digite sua senha para continuar.'}</p>
+            {idleExpired ? (
+              <output className="mt-4 flex items-start gap-2 rounded-xl bg-muted p-3 text-[13px] text-muted-foreground">
+                <Clock aria-hidden="true" strokeWidth={1.75} className="mt-px size-4 shrink-0" />
+                Sua sessão terminou depois de 2 horas sem uso. Entre de novo para continuar.
+              </output>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">{usePin && pinDevice ? 'Digite o PIN deste aparelho para continuar.' : 'Por segurança, a sessão termina quando o app é fechado ou depois de 2 horas sem uso. Digite sua senha para continuar.'}</p>
+            )}
           </> : <>
             <h1 className="text-xl font-semibold tracking-[-.01em]">Que bom ter você de volta <span aria-hidden="true">👋</span></h1>
             <p className="mt-1.5 text-sm text-muted-foreground">Entre com suas credenciais para continuar.</p>

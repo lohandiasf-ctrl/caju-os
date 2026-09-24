@@ -11,6 +11,31 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Sessão termina depois de 2 horas sem uso
+
+Pedido do usuário: o login só volta a ser pedido quando o funcionário fica
+2 horas sem usar o sistema ou quando fecha e abre o app. Fechar já encerrava
+a sessão (`browserSessionPersistence`, `lib/firebase.ts`); faltava o limite
+de inatividade. Antes, com a janela aberta, a sessão não vencia nunca.
+
+- `lib/session-idle.ts` (novo): último uso no `localStorage`
+  (`caju-last-activity`), compartilhado entre abas; `isIdleExpired` com
+  limite de 2 h; aviso de "sessão vencida" no `sessionStorage`.
+- `components/auth-provider.tsx`: com usuário logado, clique, tecla, roda do
+  mouse, toque ou voltar para a janela contam como uso (gravação a cada 30 s
+  no máximo). Confere a cada minuto e **antes** de gravar cada uso, então
+  voltar depois de 3 h não renova a sessão vencida. Um login recém-feito
+  vale como uso (`user.metadata.lastSignInTime`), mesmo com registro antigo
+  no aparelho. Ao vencer: `signOut` sem esquecer o e-mail, então o login
+  oferece o PIN direto.
+- `app/login/page.tsx`: aviso "Sua sessão terminou depois de 2 horas sem
+  uso" uma vez, e o texto do login por senha cita as duas regras.
+- `tests/session-idle.test.ts`.
+
+**Atenção:** só a interação conta como uso. Ficar 2 h numa chamada de vídeo
+sem clicar nem digitar encerra a sessão. Se isso for um problema, dá para
+contar a chamada ativa como uso.
+
 ### Tela de PIN nova no login (desktop e celular)
 
 Implementa o conceito aprovado pelo usuário

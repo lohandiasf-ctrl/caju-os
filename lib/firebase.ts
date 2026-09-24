@@ -11,6 +11,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 // mantém o login; fechar a aba, o navegador ou o app desktop pede a senha de
 // novo. O e-mail fica lembrado (lib/login-memory.ts) para a volta pedir só a
 // senha. Antes a sessão ficava no IndexedDB e sobrevivia ao fechamento.
+// Com a janela aberta, 2 horas sem uso também encerram (lib/session-idle.ts).
 function createAuth(): Auth {
   try {
     return initializeAuth(app, { persistence: browserSessionPersistence });
