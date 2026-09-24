@@ -14,7 +14,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { auth } from '@/lib/firebase';
 import { emailInitials, forgetRememberedEmail, readRememberedEmail, rememberEmail } from '@/lib/login-memory';
 import { forgetPinDevice, readPinDevice } from '@/lib/pin-device';
-import { clearIdleExpiredFlag, wasIdleExpired } from '@/lib/session-idle';
+import { clearIdleExpiredFlag, markActivity, wasIdleExpired } from '@/lib/session-idle';
 
 function localStore() {
   try { return window.localStorage; } catch { return null; }
@@ -77,6 +77,7 @@ export default function LoginPage() {
   // transição do login por senha.
   async function handlePinToken(customToken: string) {
     const box = loginTransitionBox();
+    markActivity(localStore());
     try {
       await signInWithCustomToken(auth, customToken);
     } catch (cause) {
@@ -99,6 +100,9 @@ export default function LoginPage() {
     setError('');
     setMessage('');
     const box = loginTransitionBox();
+    // Entrar é uso: sem isto, um registro de uso antigo neste aparelho
+    // encerraria a sessão nova por inatividade (lib/session-idle.ts).
+    markActivity(localStore());
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
       rememberEmail(localStore(), email);

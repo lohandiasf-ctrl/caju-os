@@ -24,12 +24,12 @@ de inatividade. Antes, com a janela aberta, a sessão não vencia nunca.
 - `components/auth-provider.tsx`: com usuário logado, clique, tecla, roda do
   mouse, toque ou voltar para a janela contam como uso (gravação a cada 30 s
   no máximo). Confere a cada minuto e **antes** de gravar cada uso, então
-  voltar depois de 3 h não renova a sessão vencida. Um login recém-feito
-  vale como uso (`user.metadata.lastSignInTime`), mesmo com registro antigo
-  no aparelho. Ao vencer: `signOut` sem esquecer o e-mail, então o login
-  oferece o PIN direto.
-- `app/login/page.tsx`: aviso "Sua sessão terminou depois de 2 horas sem
-  uso" uma vez, e o texto do login por senha cita as duas regras.
+  voltar depois de 3 h não renova a sessão vencida. Ao vencer: `signOut` sem
+  esquecer o e-mail, então o login oferece o PIN direto.
+- `app/login/page.tsx`: entrar (senha ou PIN) grava o uso antes do login,
+  para um registro antigo no aparelho não derrubar a sessão nova; aviso "Sua
+  sessão terminou depois de 2 horas sem uso" uma vez; o texto do login por
+  senha cita as duas regras.
 - `tests/session-idle.test.ts`.
 
 **Atenção:** só a interação conta como uso. Ficar 2 h numa chamada de vídeo

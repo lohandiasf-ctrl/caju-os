@@ -119,12 +119,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user) return;
     const local = browserStorage('localStorage');
-    // Login recém-feito vale como uso, mesmo com um registro antigo no aparelho.
-    const signedInAt = Date.parse(user.metadata.lastSignInTime ?? '') || 0;
     let lastWrite = 0;
     const expired = () => {
-      const last = Math.max(readLastActivity(local) ?? 0, signedInAt);
-      if (!isIdleExpired(last || null)) return false;
+      // O login grava o uso antes de entrar (app/login/page.tsx), então um
+      // registro antigo no aparelho não derruba quem acabou de entrar.
+      if (!isIdleExpired(readLastActivity(local))) return false;
       flagIdleExpired(browserStorage('sessionStorage'));
       void signOut(auth);
       return true;
