@@ -228,14 +228,46 @@ todos os perfis, exportação/backup administrativo.
   acabou pintando por cima dos diálogos. Só a chamada ativa e a moldura do
   desktop passam acima de um modal.
 
-1. **Login por PIN (2026-09-24, ver CHANGELOG) precisa de dois passos manuais
-   antes de funcionar de ponta a ponta:** gerar a chave de conta de serviço do
-   Firebase e colar em `FIREBASE_SERVICE_ACCOUNT_EMAIL`/`_KEY`
-   (`docs/DEPLOYMENT.md` tem o passo a passo), e rodar
-   `npm run db:migrate:remote` para aplicar `drizzle/0041_pin_credentials.sql`.
-   Sem o secret, o cadastro do PIN funciona mas o desbloqueio responde 503 e
-   cai para a senha — não quebra nada, só fica incompleto. Não testado em
-   navegador de verdade (sem ambiente para isso na sessão que implementou).
+1. **Login por PIN (2026-09-24) — desbloqueio ainda quebrado em produção,
+   causa raiz não confirmada.** Migration `0041_pin_credentials.sql` já
+   rodou, secrets `FIREBASE_SERVICE_ACCOUNT_EMAIL`/`_KEY` já configurados
+   pelo usuário na Cloudflare, cadastro do PIN funciona. O desbloqueio
+   (`app/api/auth/pin/unlock` → `lib/server/firebase-custom-token.ts`,
+   `createFirebaseCustomToken`/`importPrivateKey`) falha sempre com o mesmo
+   erro, confirmado pelo log ao vivo do Worker (aba Observability):
+   `InvalidCharacterError: atob() called with invalid base64-encoded data.`
+
+   **O que já foi tentado, nesta ordem, sem resolver:**
+   - Filtrar a string colada para só os caracteres válidos de base64
+     (`[A-Za-z0-9+/=]`) antes do `atob()` — não resolveu.
+   - Suspeita de cache de build da Cloudflare servindo bundle antigo:
+     confirmada e descartada como causa raiz — um "Retry deployment"/"clear
+     cache" na lista de Builds gerou um Version ID genuinamente novo (build
+     limpo, sem cache), e o erro **persistiu idêntico** mesmo assim.
+   - Descartar todo `=` e recalcular o padding do zero a partir do
+     comprimento limpo (cobre `=` de padding deslocado pro meio da string)
+     — também não resolveu; mesmo erro, mesma mensagem, após deploy novo
+     confirmado (Version ID diferente de novo).
+   - Um erro de processo à parte (não a causa do bug): um commit ficou com
+     `let der: Uint8Array` sem o parâmetro de tipo, quebrando o `tsc` do
+     pipeline de build da Cloudflare — corrigido (`Uint8Array<ArrayBuffer>`,
+     PR #131). Isso bloqueava o deploy de qualquer coisa, mas não era a
+     causa do `atob()`.
+
+   **Conclusão desta sessão:** a causa não é (mais) formatação da string
+   colada — já foram cobertos caractere inválido e padding deslocado, com
+   cada correção confirmada rodando em produção (Version ID novo a cada
+   vez) antes de ainda falhar. Hipóteses não verificadas que sobraram: (a)
+   o valor do secret na Cloudflare está genuinamente corrompido/incompleto
+   de um jeito que essas correções não cobrem — vale gerar uma chave nova
+   no Firebase e colar de novo do zero, com cuidado redobrado; (b) o log de
+   diagnóstico adicionado em `importPrivateKey` (loga só o comprimento da
+   string, nunca o conteúdo) pode ajudar a confirmar isso no próximo teste;
+   (c) algo na própria API do Identity Toolkit ou no formato do JWT
+   montado — ainda não investigado, porque o erro sempre aconteceu antes
+   disso, na decodificação da chave. Usuário reportou nesta sessão que vai
+   pedir a outra IA para continuar — não repetir os três pontos acima sem
+   evidência nova.
 2. **Testar salvar um chamado real com transição no Jira** no ambiente novo —
    único fluxo crítico ainda não exercitado em produção pós-migração.
 3. Cadastrar `GOOGLE_MAPS_API_KEY`? **Não** — obsoleto após Leaflet. Pode
