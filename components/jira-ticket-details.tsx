@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validateEvidenceFiles } from '@/lib/image-validation';
+import { saveFile } from '@/lib/download-file';
 import { haptic } from '@/lib/haptics';
 import { TicketAssistant } from '@/components/assistant-panel';
 
@@ -258,11 +259,14 @@ export function JiraTicketDetails({ details, user, onUpdated, expanded = false }
       const response = await fetch(`/api/jira/issues/${details.key}/attachments/${attachment.id}${download ? '?download=1' : ''}`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
       if (!response.ok) { const payload = await response.json().catch(() => null) as { error?: string } | null; throw new Error(payload?.error || 'Não foi possível abrir o anexo.'); }
       const blob = await response.blob();
+      // saveFile anexa o link ao DOM antes de clicar: no WebView do app
+      // desktop, um <a download> clicado fora do DOM não baixa nada (achado
+      // do usuário — "Baixar" não fazia nada no app instalado).
+      if (download) { setMessage(saveFile(blob, attachment.filename)); return; }
       const url = URL.createObjectURL(blob);
-      if (download) { const link = document.createElement('a'); link.href = url; link.download = attachment.filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }
       // O ZIP precisa do conteúdo em memória para listar o que tem dentro; os
       // outros tipos o navegador abre pelo endereço temporário.
-      else if (isZip(attachment)) setPreview({ attachment, url, buffer: await blob.arrayBuffer() });
+      if (isZip(attachment)) setPreview({ attachment, url, buffer: await blob.arrayBuffer() });
       else setPreview({ attachment, url });
     } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Não foi possível abrir o anexo.'); }
   }

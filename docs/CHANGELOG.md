@@ -11,6 +11,34 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Baixar anexo não fazia nada no app desktop (Tauri)
+
+Achado ao investigar o app instalado (Windows): "Baixar" em `jira-ticket-details.tsx`
+criava o `<a download>` e chamava `.click()` sem nunca colocar o link no DOM.
+No Chrome normal isso costuma disparar o download mesmo assim; no WebView do
+app desktop (WebView2), não — clica e não acontece nada, sem erro nenhum.
+
+O helper `lib/download-file.ts` (`saveFile`) já existia com o padrão certo
+(`appendChild` antes do clique, `remove` depois, revogação da URL com atraso —
+o próprio comentário do arquivo já avisava do cuidado) e já era usado em
+outras telas; `jira-ticket-details.tsx` tinha reimplementado a lógica à mão,
+sem esse passo. Trocado para usar `saveFile`.
+
+De quebra: "Abrir RAT" no Atendimento N1 (`components/n1-ticket-actions.tsx`)
+usava `window.open()` num `blob:` — sem tratamento de "nova janela" do lado
+Rust do Tauri (nenhum plugin cobre isso hoje, e mesmo cobrindo não serviria:
+`blob:` não é acessível fora do WebView que o criou), então também não fazia
+nada no app desktop. RAT agora abre no mesmo diálogo inline usado para
+foto/vídeo (PDF via `<iframe>`, imagem via `ImageZoom`), sem depender de nova
+janela.
+
+**Pendente:** a queixa de "Visualizar" abrir o diálogo mas não mostrar a
+imagem, na aba geral de Anexos, segue sem causa confirmada — o preview ali já
+é só `<img>`/`<video>`/`<iframe>` inline (não usa `window.open` nem `<a>`), e
+a investigação não achou nada em CSP/config do Tauri que explique. Pode ser
+outra causa, a confirmar depois que o usuário testar de novo com a correção
+do "Baixar".
+
 ### Aba "Anexos e evidências" do chamado ganha botão de remover
 
 O pedido original de "poder remover evidência" era sobre esta aba geral do

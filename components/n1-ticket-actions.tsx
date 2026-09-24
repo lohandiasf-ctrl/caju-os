@@ -9,23 +9,6 @@ import { ImageZoom } from '@/components/image-zoom';
 import { validateImageFile } from '@/lib/image-validation';
 import { hasSafeDataUrlType } from '@/lib/safe-data-url';
 
-// Abrir um data: URL direto numa aba nova (`<a target="_blank">`) é bloqueado
-// em silêncio pelo Chrome havia alguns anos — clicava e não acontecia nada.
-// Convertendo para blob: antes de abrir, o navegador não bloqueia.
-function openDataUrlInNewTab(dataUrl: string) {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) { window.open(dataUrl, '_blank', 'noreferrer'); return; }
-  try {
-    const [, mime, base64] = match;
-    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
-    const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
-    window.open(url, '_blank', 'noreferrer');
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  } catch {
-    window.open(dataUrl, '_blank', 'noreferrer');
-  }
-}
-
 type Evidence = { id: number; kind: 'photo' | 'video' | 'rat'; name: string; mimeType: string; data: string; createdAt: string; uploadedBy: string };
 type Assignment = { n1Email: string; participantN1Email?: string | null; status: 'claimed' | 'validated'; claimedAt: string; validatedAt: string | null } | null;
 type Pending = { kind: 'photo' | 'video' | 'rat'; name: string; mimeType: string; data: string; warning?: string };
@@ -98,7 +81,9 @@ export function N1TicketActions({ ticketKey, user }: { ticketKey: string; user: 
           <Button type="button" variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Fechar visualização"><X /></Button>
         </header>
         <div className="grid h-[76vh] min-h-0 flex-1 place-items-center overflow-hidden bg-black/40 p-3 [&>*]:h-full [&>*]:w-full">
-          {preview.kind === 'photo' ? <ImageZoom src={preview.data} alt={`Evidência: ${preview.name}`} className="h-[76vh] w-full" /> : <video src={preview.data} controls autoPlay className="max-h-[76vh] max-w-full"><track kind="captions" /></video>}
+          {preview.kind === 'video' ? <video src={preview.data} controls autoPlay className="max-h-[76vh] max-w-full"><track kind="captions" /></video>
+            : preview.kind === 'rat' && preview.mimeType === 'application/pdf' ? <iframe src={preview.data} title={preview.name} className="h-[76vh] w-full rounded-lg bg-white" />
+            : <ImageZoom src={preview.data} alt={`Evidência: ${preview.name}`} className="h-[76vh] w-full" />}
         </div>
       </DialogContent>
     </Dialog>}
@@ -114,7 +99,7 @@ function EvidencePreview({ item, onRemove, removing, onOpen }: { item: Evidence;
     {!safe ? <p className="p-2 text-xs text-muted-foreground">Anexo antigo com formato não verificado.</p> : <>
       {item.kind === 'photo' && <button type="button" onClick={onOpen} aria-label={`Ampliar foto ${item.name}`} className="block w-full"><img src={item.data} alt={`Evidência: ${item.name}`} className="h-28 w-full object-cover" /></button>}
       {item.kind === 'video' && <button type="button" onClick={onOpen} aria-label={`Ampliar vídeo ${item.name}`} className="block w-full"><video src={item.data} preload="metadata" muted className="h-28 w-full bg-black object-cover"><track kind="captions" /></video></button>}
-      {item.kind === 'rat' && <button type="button" onClick={() => openDataUrlInNewTab(item.data)} className="m-2 inline-flex text-xs font-semibold text-primary hover:underline">Abrir RAT</button>}
+      {item.kind === 'rat' && <button type="button" onClick={onOpen} className="m-2 inline-flex text-xs font-semibold text-primary hover:underline">Abrir RAT</button>}
     </>}
   </article>;
 }
