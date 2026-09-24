@@ -1,9 +1,12 @@
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { getJiraAttachmentContent, JiraError } from '@/lib/server/jira';
+import { deleteJiraAttachment, getJiraAttachmentContent, getJiraIssue, JiraError } from '@/lib/server/jira';
+import { logSecurityEvent } from '@/lib/server/security-log';
+
+const ATTACHMENT_ROLES = ['gerencia', 'coordenador', 'n1', 'analista'] as const;
 
 export async function GET(request: Request, context: { params: Promise<{ key: string; id: string }> }) {
   try {
-    await requireApiUser(request, ['gerencia', 'coordenador', 'n1', 'analista']);
+    await requireApiUser(request, [...ATTACHMENT_ROLES]);
     const { key, id } = await context.params;
     const url = new URL(request.url);
     const thumbnail = url.searchParams.get('thumbnail') === '1';
@@ -20,5 +23,19 @@ export async function GET(request: Request, context: { params: Promise<{ key: st
     if (error instanceof Response) return error;
     if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
     return Response.json({ error: 'Não foi possível abrir o anexo.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, context: { params: Promise<{ key: string; id: string }> }) {
+  try {
+    const user = await requireApiUser(request, [...ATTACHMENT_ROLES]);
+    const { key, id } = await context.params;
+    await deleteJiraAttachment(id);
+    logSecurityEvent({ request, user, action: 'attachment_delete', outcome: 'allowed', details: { ticketKey: key, attachmentId: id } });
+    return Response.json(await getJiraIssue(key), { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) {
+    if (error instanceof Response) return error;
+    if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
+    return Response.json({ error: 'Não foi possível remover o anexo.' }, { status: 500 });
   }
 }

@@ -11,6 +11,99 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### "Visualizar" abria o diálogo mas mostrava só o cabeçalho (causa confirmada)
+
+Resolve o pendente da entrada anterior. Reproduzido ao vivo (build de produção
+local + Playwright, sem depender do app desktop): o diálogo de preview
+(`jira-ticket-details.tsx` e `n1-ticket-actions.tsx`) colapsava para ~91px de
+altura — só o cabeçalho com nome do arquivo e os botões — tanto no app quanto
+num navegador comum.
+
+Causa: a div de conteúdo tinha `h-[76vh]` (altura explícita) **e** `flex-1`
+(que define `flex-basis: 0%`) ao mesmo tempo. O `<DialogContent>` que a
+envolve não tem altura própria definida (`position: fixed`, altura ajustada
+ao conteúdo) — sem uma altura definida no container flex, não há espaço para
+o `flex-grow` distribuir, então o `flex-basis: 0%` do `flex-1` vencia e o
+`h-[76vh]` nunca chegava a valer. Medido: a div de conteúdo ficava com 24px de
+altura real em vez dos ~684px esperados (76% de uma viewport de 900px).
+
+Corrigido removendo `flex-1` das duas divs (mantido só `h-[76vh]`, que já é
+suficiente — não depende de crescimento flexível). Confirmado depois da
+correção: a mesma reprodução mostra a div de conteúdo com 684px e o diálogo
+completo com os controles do `ImageZoom` visíveis.
+
+### Baixar anexo não fazia nada no app desktop (Tauri)
+
+Achado ao investigar o app instalado (Windows): "Baixar" em `jira-ticket-details.tsx`
+criava o `<a download>` e chamava `.click()` sem nunca colocar o link no DOM.
+No Chrome normal isso costuma disparar o download mesmo assim; no WebView do
+app desktop (WebView2), não — clica e não acontece nada, sem erro nenhum.
+
+O helper `lib/download-file.ts` (`saveFile`) já existia com o padrão certo
+(`appendChild` antes do clique, `remove` depois, revogação da URL com atraso —
+o próprio comentário do arquivo já avisava do cuidado) e já era usado em
+outras telas; `jira-ticket-details.tsx` tinha reimplementado a lógica à mão,
+sem esse passo. Trocado para usar `saveFile`.
+
+De quebra: "Abrir RAT" no Atendimento N1 (`components/n1-ticket-actions.tsx`)
+usava `window.open()` num `blob:` — sem tratamento de "nova janela" do lado
+Rust do Tauri (nenhum plugin cobre isso hoje, e mesmo cobrindo não serviria:
+`blob:` não é acessível fora do WebView que o criou), então também não fazia
+nada no app desktop. RAT agora abre no mesmo diálogo inline usado para
+foto/vídeo (PDF via `<iframe>`, imagem via `ImageZoom`), sem depender de nova
+janela.
+
+### Aba "Anexos e evidências" do chamado ganha botão de remover
+
+O pedido original de "poder remover evidência" era sobre esta aba geral do
+chamado (`components/jira-ticket-details.tsx`), não só o Atendimento N1 — lá
+só dava para visualizar e baixar.
+
+- `lib/server/jira.ts` já tinha `deleteJiraAttachment` (criado para o N1);
+  reaproveitado aqui.
+- `app/api/jira/issues/[key]/attachments/[id]/route.ts`: novo `DELETE`, mesmos
+  papéis do upload (gerência/coordenador/N1/analista). Devolve o chamado
+  atualizado (igual o `POST` de upload já fazia), então a tela não precisa
+  recarregar a lista à parte.
+- `components/jira-ticket-details.tsx`: botão "Remover" (com confirmação) em
+  cada anexo. Como esta aba não tem cópia local do anexo (a lista vem direto
+  do Jira via `getJiraIssue`), remover do Jira já é remover "do sistema"
+  inteiro — não precisou de tabela nem migration.
+
+### Evidência do N1 pode ser removida (some do sistema e do Jira)
+
+No "Atendimento N1" (`components/n1-ticket-actions.tsx`) só dava para anexar
+foto/vídeo/RAT; uma evidência enviada por engano ficava presa lá.
+
+- `lib/server/jira.ts`: `addJiraInternalEvidence` agora devolve o id do anexo
+  criado no Jira (na mesma ordem dos arquivos); `deleteJiraAttachment` apaga um
+  anexo do Jira (404 — já não existe lá — não é erro).
+- `db/schema.ts` / `drizzle/0042_ticket_evidence_jira_attachment.sql`:
+  `ticket_evidence` ganha `jira_attachment_id`, guardado a partir de agora.
+  Evidência de antes desta coluna existir só sai daqui — sem o id, o Jira não
+  tem como ser localizado sozinho.
+- `app/api/n1-tickets/[key]/route.ts`: ação `removeEvidence` (PUT) apaga do
+  Jira antes de apagar daqui (se o Jira recusar, nada muda dos dois lados) e
+  grava na auditoria. Só quem está no atendimento (N1 principal/participante)
+  remove, e só antes do chamado ser validado — depois de validado a evidência
+  fica fixa, junto com o resto do histórico.
+- `components/n1-ticket-actions.tsx`: botão de remover (com confirmação) em
+  cada evidência já enviada.
+
+Migration `drizzle/0042_ticket_evidence_jira_attachment.sql` já aplicada em
+produção via `npm run db:migrate:remote`.
+
+### Evidência do N1: clicar para abrir/ampliar (estava sem efeito)
+
+Foto de evidência era só uma miniatura fixa (sem clique) e "Abrir RAT" usava
+um link `data:` em nova aba — que o Chrome bloqueia em silêncio há alguns
+anos (clicava e não acontecia nada, sem erro nenhum na tela).
+
+- `components/n1-ticket-actions.tsx`: foto e vídeo agora abrem num visualizador
+  cheio ao clicar (`ImageZoom`, mesmo componente da aba "Anexos e evidências"
+  do chamado); "Abrir RAT" converte o `data:` para `blob:` antes de abrir a
+  aba — `blob:` não sofre o bloqueio.
+
 ### Spares: datas de entrega e atendimento apareciam como números seriais do Excel (ex: 46290 e 46293)
 
 Na planilha compartilhada do SharePoint/Excel, datas como "25/09/2026" e "28/09/2026" são armazenadas pelo Excel como números seriais (dias corridos desde 01/01/1900, ex: 46290 e 46293). Ao sincronizar via Power Automate, a API recebia e gravava esses valores brutos no banco D1, e o painel de Spares exibia "PREVISÃO DE ENTREGA: 46290" e "ATENDIMENTO: 46293".

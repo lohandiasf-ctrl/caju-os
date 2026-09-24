@@ -1,7 +1,7 @@
 'use client';
 
 import { type ClipboardEvent as ReactClipboardEvent, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, CalendarClock, Check, CircleDollarSign, Download, Eye, FileText, Image, Loader2, Paperclip, RefreshCw, Save, Search, Upload, Video, Wrench, X } from 'lucide-react';
+import { Building2, CalendarClock, Check, CircleDollarSign, Download, Eye, FileText, Image, Loader2, Paperclip, RefreshCw, Save, Search, Trash2, Upload, Video, Wrench, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ImageZoom } from '@/components/image-zoom';
 import { ZipPreview } from '@/components/zip-preview';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { validateEvidenceFiles } from '@/lib/image-validation';
+import { saveFile } from '@/lib/download-file';
 import { haptic } from '@/lib/haptics';
 import { TicketAssistant } from '@/components/assistant-panel';
 
@@ -61,6 +62,7 @@ export function JiraTicketDetails({ details, user, onUpdated, expanded = false }
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ attachment: JiraAttachment; url: string; buffer?: ArrayBuffer } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [technicianQuery, setTechnicianQuery] = useState('');
   const [technicianSearchOpen, setTechnicianSearchOpen] = useState(false);
@@ -257,11 +259,14 @@ export function JiraTicketDetails({ details, user, onUpdated, expanded = false }
       const response = await fetch(`/api/jira/issues/${details.key}/attachments/${attachment.id}${download ? '?download=1' : ''}`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
       if (!response.ok) { const payload = await response.json().catch(() => null) as { error?: string } | null; throw new Error(payload?.error || 'Não foi possível abrir o anexo.'); }
       const blob = await response.blob();
+      // saveFile anexa o link ao DOM antes de clicar: no WebView do app
+      // desktop, um <a download> clicado fora do DOM não baixa nada (achado
+      // do usuário — "Baixar" não fazia nada no app instalado).
+      if (download) { setMessage(saveFile(blob, attachment.filename)); return; }
       const url = URL.createObjectURL(blob);
-      if (download) { const link = document.createElement('a'); link.href = url; link.download = attachment.filename; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 60_000); }
       // O ZIP precisa do conteúdo em memória para listar o que tem dentro; os
       // outros tipos o navegador abre pelo endereço temporário.
-      else if (isZip(attachment)) setPreview({ attachment, url, buffer: await blob.arrayBuffer() });
+      if (isZip(attachment)) setPreview({ attachment, url, buffer: await blob.arrayBuffer() });
       else setPreview({ attachment, url });
     } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Não foi possível abrir o anexo.'); }
   }
@@ -272,6 +277,19 @@ export function JiraTicketDetails({ details, user, onUpdated, expanded = false }
     setPreview(null);
     await fetchAttachment(attachment);
     setPreviewLoading(false);
+  }
+
+  async function removeAttachment(attachment: JiraAttachment) {
+    if (!user || !window.confirm(`Remover "${attachment.filename}" do Jira? Esta ação não pode ser desfeita.`)) return;
+    setRemovingId(attachment.id); setMessage(''); setFailed(false);
+    try {
+      const response = await fetch(`/api/jira/issues/${details.key}/attachments/${attachment.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      const payload = await response.json() as Details & { error?: string };
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível remover o anexo.');
+      if (preview?.attachment.id === attachment.id) { URL.revokeObjectURL(preview.url); setPreview(null); }
+      onUpdated(payload); setMessage('Anexo removido do Jira.');
+    } catch (error) { setFailed(true); setMessage(error instanceof Error ? error.message : 'Não foi possível remover o anexo.'); }
+    finally { setRemovingId(null); }
   }
 
   const saveButton = <Button type="button" className="min-h-11 w-full" onClick={() => void updateJira(dirty, 'all')} disabled={Boolean(savingKey) || !dirtyCount}>{savingKey === 'all' ? <Loader2 className="animate-spin" /> : <Save />} Salvar alterações no Jira</Button>;
@@ -383,11 +401,11 @@ ${chosen.name}` : chosen.name, equipmentTotal: String(Number((totalAtual + chose
       </TabsContent>
       <TabsContent value="anexos" className="space-y-4 pt-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="flex items-center gap-2 text-sm font-bold"><Paperclip className="size-4 text-primary" />Anexos e evidências</h3><p className="mt-1 text-xs text-muted-foreground">RAT, fotos, vídeos e documentos armazenados no chamado do Jira.</p></div><span className="rounded-lg border border-border px-2 py-1 text-xs text-muted-foreground">{details.attachments?.length ?? 0} arquivo(s)</span></div>
-        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">{details.attachments?.map((attachment) => <article key={attachment.id} className="min-w-0 overflow-hidden rounded-xl border border-border bg-background/55"><AttachmentThumbnail issueKey={details.key} attachment={attachment} user={user} onOpen={() => void showPreview(attachment)} /><div className="min-w-0 p-3"><p className="break-words text-sm font-semibold">{attachment.filename}</p><p className="mt-1 break-words text-xs text-muted-foreground">{formatBytes(attachment.size)}{attachment.author ? ` · ${attachment.author}` : ''}{attachment.createdAt ? ` · ${formatAttachmentDate(attachment.createdAt)}` : ''}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void showPreview(attachment)} disabled={previewLoading}><Eye /> Visualizar</Button><Button type="button" size="sm" variant="ghost" onClick={() => void fetchAttachment(attachment, true)} aria-label={`Baixar ${attachment.filename}`}><Download /> Baixar</Button></div></div></article>)}{!details.attachments?.length && <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground sm:col-span-2">Nenhum anexo encontrado neste chamado.</div>}</div>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">{details.attachments?.map((attachment) => <article key={attachment.id} className="min-w-0 overflow-hidden rounded-xl border border-border bg-background/55"><AttachmentThumbnail issueKey={details.key} attachment={attachment} user={user} onOpen={() => void showPreview(attachment)} /><div className="min-w-0 p-3"><p className="break-words text-sm font-semibold">{attachment.filename}</p><p className="mt-1 break-words text-xs text-muted-foreground">{formatBytes(attachment.size)}{attachment.author ? ` · ${attachment.author}` : ''}{attachment.createdAt ? ` · ${formatAttachmentDate(attachment.createdAt)}` : ''}</p><div className="mt-3 flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void showPreview(attachment)} disabled={previewLoading}><Eye /> Visualizar</Button><Button type="button" size="sm" variant="ghost" onClick={() => void fetchAttachment(attachment, true)} aria-label={`Baixar ${attachment.filename}`}><Download /> Baixar</Button><Button type="button" size="sm" variant="ghost" onClick={() => void removeAttachment(attachment)} disabled={removingId === attachment.id} aria-label={`Remover ${attachment.filename}`} className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive">{removingId === attachment.id ? <Loader2 className="animate-spin" /> : <Trash2 />} Remover</Button></div></div></article>)}{!details.attachments?.length && <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground sm:col-span-2">Nenhum anexo encontrado neste chamado.</div>}</div>
         <div className={`rounded-xl border border-dashed p-4 transition ${dragActive ? 'border-primary bg-primary/15 shadow-[0_0_0_1px_rgba(70,120,255,0.35)]' : 'border-primary/35 bg-primary/5'}`}><button type="button" onClick={() => evidenceFileInputRef.current?.click()} onPaste={handleEvidencePaste} onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }} onDragOver={(event) => { event.preventDefault(); setDragActive(true); }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }} onDrop={handleEvidenceDrop} aria-label="Selecionar ou colar evidências" className={`flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border px-4 py-5 text-center text-sm font-semibold text-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${dragActive ? 'border-primary bg-primary/15' : 'border-primary/30 bg-background/70 hover:bg-primary/10'}`}><span className="inline-flex items-center gap-2"><Upload className="size-4" />Selecionar novas evidências</span><span className="text-xs font-medium text-muted-foreground">Clique, arraste arquivos para cá ou cole com Ctrl+V.</span></button><input ref={evidenceFileInputRef} type="file" multiple className="sr-only" accept={evidenceAccept} aria-label="Selecionar evidências para anexar ao Jira" onChange={(event) => { queueEvidenceFiles(Array.from(event.target.files ?? []), 'selecionados'); event.currentTarget.value = ''; }} />{selectedFiles.length > 0 && <div className="mt-3 space-y-2">{fileWarnings.length > 0 && <div className="rounded-lg border border-warning/25 bg-warning-soft p-3 text-xs text-warning"><b>Validação das fotos:</b><ul className="mt-1 list-disc space-y-1 pl-5">{fileWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></div>}{selectedFiles.map((file, index) => <div key={`${file.name}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg bg-background/70 px-3 py-2 text-xs"><Paperclip className="size-3.5 text-primary" /><span className="min-w-0 flex-1 break-words">{file.name} · {formatBytes(file.size)}</span><button type="button" className="grid size-8 place-items-center rounded-md hover:bg-muted" aria-label={`Remover ${file.name}`} onClick={() => { setFileWarnings([]); setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index)); }}><X className="size-4" /></button></div>)}<Button type="button" className="min-h-11 w-full" onClick={() => void uploadFiles()} disabled={uploading}>{uploading ? <Loader2 className="animate-spin" /> : <Upload />} {uploading ? 'Enviando ao Jira...' : `Validar e enviar ${selectedFiles.length} arquivo(s) ao Jira`}</Button></div>}</div>
       </TabsContent>
     </Tabs>
-    {preview && <Dialog open onOpenChange={(open) => { if (!open) setPreview(null); }}><DialogContent showCloseButton={false} className="flex flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"><header className="flex items-center gap-3 border-b border-border p-3"><div className="min-w-0 flex-1"><DialogTitle className="text-sm font-bold">{preview.attachment.filename}</DialogTitle><p className="text-xs text-muted-foreground">{formatBytes(preview.attachment.size)}</p></div><Button type="button" variant="outline" size="sm" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar</Button><Button type="button" variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Fechar visualização"><X /></Button></header><div className="grid h-[76vh] min-h-0 flex-1 place-items-center overflow-hidden bg-black/40 p-3 [&>*]:h-full [&>*]:w-full">{preview.attachment.mimeType.startsWith('image/') ? <ImageZoom src={preview.url} alt={preview.attachment.filename} className="h-[76vh] w-full" /> : preview.attachment.mimeType.startsWith('video/') ? <video src={preview.url} controls autoPlay className="max-h-[76vh] max-w-full" /> : preview.attachment.mimeType === 'application/pdf' ? <iframe src={preview.url} title={preview.attachment.filename} className="h-[76vh] w-full rounded-lg bg-white" /> : preview.buffer ? <ZipPreview buffer={preview.buffer} filename={preview.attachment.filename} onDownloadAll={() => void fetchAttachment(preview.attachment, true)} /> : <div className="max-w-md text-center"><FileText className="mx-auto size-12 text-primary" /><p className="mt-3 text-sm">Este arquivo não possui visualização no navegador.</p><Button type="button" className="mt-4" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar arquivo</Button></div>}</div></DialogContent></Dialog>}
+    {preview && <Dialog open onOpenChange={(open) => { if (!open) setPreview(null); }}><DialogContent showCloseButton={false} className="flex flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl"><header className="flex items-center gap-3 border-b border-border p-3"><div className="min-w-0 flex-1"><DialogTitle className="text-sm font-bold">{preview.attachment.filename}</DialogTitle><p className="text-xs text-muted-foreground">{formatBytes(preview.attachment.size)}</p></div><Button type="button" variant="outline" size="sm" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar</Button><Button type="button" variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="Fechar visualização"><X /></Button></header><div className="grid h-[76vh] min-h-0 place-items-center overflow-hidden bg-black/40 p-3 [&>*]:h-full [&>*]:w-full">{preview.attachment.mimeType.startsWith('image/') ? <ImageZoom src={preview.url} alt={preview.attachment.filename} className="h-[76vh] w-full" /> : preview.attachment.mimeType.startsWith('video/') ? <video src={preview.url} controls autoPlay className="max-h-[76vh] max-w-full" /> : preview.attachment.mimeType === 'application/pdf' ? <iframe src={preview.url} title={preview.attachment.filename} className="h-[76vh] w-full rounded-lg bg-white" /> : preview.buffer ? <ZipPreview buffer={preview.buffer} filename={preview.attachment.filename} onDownloadAll={() => void fetchAttachment(preview.attachment, true)} /> : <div className="max-w-md text-center"><FileText className="mx-auto size-12 text-primary" /><p className="mt-3 text-sm">Este arquivo não possui visualização no navegador.</p><Button type="button" className="mt-4" onClick={() => void fetchAttachment(preview.attachment, true)}><Download /> Baixar arquivo</Button></div>}</div></DialogContent></Dialog>}
   </section>;
 }
 

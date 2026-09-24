@@ -592,6 +592,10 @@ export const ticketEvidence = sqliteTable(
     name: text('name').notNull(),
     mimeType: text('mime_type').notNull(),
     data: text('data').notNull(),
+    // Id do anexo no Jira (addJiraInternalEvidence, lib/server/jira.ts): sem
+    // ele (evidência de antes desta coluna existir), remover só tira daqui —
+    // o Jira não tem como ser localizado automaticamente.
+    jiraAttachmentId: text('jira_attachment_id'),
     uploadedBy: text('uploaded_by').notNull(),
     createdAt: text('created_at').notNull(),
   },
