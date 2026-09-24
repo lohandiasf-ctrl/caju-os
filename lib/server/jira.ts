@@ -169,29 +169,18 @@ let financialIssuesCache: { expiresAt: number; value: FinancialIssue[] } | null 
 // Short-lived edge cache keeps dashboards responsive while webhook sync is added.
 const CACHE_TTL_MS = 45_000;
 
+// `/rest/api/3/search` (o antigo, sem `/jql`) foi desativado pela Atlassian
+// (CHANGE-2046) — passou a responder 410 "A API solicitada foi removida" em
+// 2026-09-24, quebrando o fallback que existia aqui (usado tanto em erro
+// quanto em "0 resultados", para cobrir uma inconsistência antiga do
+// `/search/jql`). Um JQL sem resultado nenhum é situação normal (ex.: fila
+// vazia de madrugada) — não é motivo para tentar outra API, e muito menos
+// uma que não existe mais. `/rest/api/3/search/jql` é a única chamada agora.
 async function jiraSearch(body: { jql: string; fields: string[]; maxResults: number; nextPageToken?: string }) {
-  let enhanced: JiraSearchResponse | null = null;
-  try {
-    enhanced = await jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-  } catch (error) {
-    if (body.nextPageToken) throw error;
-    return jiraFetch<JiraSearchResponse>('/rest/api/3/search', {
-      method: 'POST',
-      body: JSON.stringify({ jql: body.jql, fields: body.fields, maxResults: body.maxResults, startAt: 0 }),
-    });
-  }
-  if ((enhanced.issues?.length ?? 0) > 0 || body.nextPageToken) return enhanced;
-  try {
-    return await jiraFetch<JiraSearchResponse>('/rest/api/3/search', {
-      method: 'POST',
-      body: JSON.stringify({ jql: body.jql, fields: body.fields, maxResults: body.maxResults, startAt: 0 }),
-    });
-  } catch {
-    return enhanced;
-  }
+  return jiraFetch<JiraSearchResponse>('/rest/api/3/search/jql', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 function jiraIssuePreset(preset: JiraIssuePreset, projectKey: string) {

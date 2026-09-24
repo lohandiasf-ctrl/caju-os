@@ -70,10 +70,6 @@ só dava para visualizar e baixar.
   do Jira via `getJiraIssue`), remover do Jira já é remover "do sistema"
   inteiro — não precisou de tabela nem migration.
 
-**Pendente:** usuário reportou que "Visualizar" abre o diálogo (título e
-tamanho do arquivo aparecem) mas o conteúdo (imagem) não é exibido — ainda
-não reproduzido/diagnosticado nesta sessão.
-
 ### Evidência do N1 pode ser removida (some do sistema e do Jira)
 
 No "Atendimento N1" (`components/n1-ticket-actions.tsx`) só dava para anexar
@@ -107,6 +103,25 @@ anos (clicava e não acontecia nada, sem erro nenhum na tela).
   cheio ao clicar (`ImageZoom`, mesmo componente da aba "Anexos e evidências"
   do chamado); "Abrir RAT" converte o `data:` para `blob:` antes de abrir a
   aba — `blob:` não sofre o bloqueio.
+
+### URGENTE: Jira desativou a API de busca antiga (CHANGE-2046) — produção quebrada
+
+Alerta em produção: "Não foi possível sincronizar com o Jira — A API
+solicitada foi removida. Migre para a API /rest/api/3/search/jql." A
+Atlassian desativou de vez o `/rest/api/3/search` (sem `/jql`) hoje.
+
+`lib/server/jira.ts` (`jiraSearch`) já chamava `/rest/api/3/search/jql` como
+principal desde a migração anterior, mas tinha um fallback para o endpoint
+antigo em dois casos: erro na chamada nova, e "0 resultados" (proteção contra
+uma inconsistência antiga do endpoint novo). Fila vazia é situação normal
+(ex.: madrugada sem chamado pendente) — o fallback disparava toda hora que
+uma busca dava zero resultado, e agora que o Jira responde 410 pra essa API,
+esse fallback "inofensivo" virou erro visível pro usuário. Removido o
+fallback: só `/rest/api/3/search/jql` agora, sem tentar mais nada além disso.
+
+**Verificação:** `npm test` (350/350), `tsc --noEmit`, `npm run build` — sem
+tocar em nenhuma outra função Jira (`/rest/api/3/field/search`, usado só pra
+campos customizados, é outra API, não afetada).
 
 ### Agendar em lote: não exige mais técnico da lista
 
