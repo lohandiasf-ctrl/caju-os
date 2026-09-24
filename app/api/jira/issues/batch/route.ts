@@ -28,24 +28,41 @@ export async function POST(request: Request) {
         .filter((value) => /^FSA-\d+$/.test(value)),
     ));
     const technicianData = typeof body.technicianData === 'string' ? body.technicianData.trim() : '';
-    const technicianId = Number(body.technicianId);
+    const rawTechnicianId = Number(body.technicianId);
     const scheduledDateTime = typeof body.scheduledDateTime === 'string' ? body.scheduledDateTime.trim() : '';
 
     if (!status) return Response.json({ error: 'Ação em lote inválida.' }, { status: 400 });
     if (!keys.length) return Response.json({ error: 'Selecione ao menos um chamado válido.' }, { status: 400 });
     if (keys.length > MAX_BULK_TICKETS) return Response.json({ error: `Altere no máximo ${MAX_BULK_TICKETS} chamados por vez.` }, { status: 400 });
     if (status === 'scheduled') {
-      if (!technicianData || !scheduledDateTime) return Response.json({ error: 'Informe o técnico e a data/hora do atendimento.' }, { status: 400 });
+      if (!technicianData || !scheduledDateTime) return Response.json({ error: 'Informe os dados do técnico e a data/hora do atendimento.' }, { status: 400 });
       if (Number.isNaN(Date.parse(scheduledDateTime))) return Response.json({ error: 'A data/hora informada é inválida.' }, { status: 400 });
     }
 
     const fields = status === 'scheduled' ? { technicianData, scheduledDateTime } : {};
     const label = BULK_STATUS_LABEL[status];
     const db = getDb();
+    // Não é obrigatório escolher um técnico da lista: se não veio id, tenta achar
+    // pelo CPF ou nome digitado no texto, igual à edição de um chamado só
+    // (app/api/jira/issues/[key]/route.ts). Sem casar, technicianId fica null —
+    // a coluna é opcional (db/schema.ts, operationalWorkflows.technicianId).
+    let technicianId: number | null = null;
     if (status === 'scheduled') {
-      if (!Number.isSafeInteger(technicianId) || technicianId < 1) return Response.json({ error: 'Selecione um técnico cadastrado.' }, { status: 400 });
-      const technician = await db.select({ id: technicians.id }).from(technicians).where(eq(technicians.id, technicianId)).get();
-      if (!technician) return Response.json({ error: 'Técnico cadastrado não encontrado.' }, { status: 400 });
+      if (Number.isSafeInteger(rawTechnicianId) && rawTechnicianId > 0) {
+        const technician = await db.select({ id: technicians.id }).from(technicians).where(eq(technicians.id, rawTechnicianId)).get();
+        if (!technician) return Response.json({ error: 'Técnico cadastrado não encontrado.' }, { status: 400 });
+        technicianId = technician.id;
+      } else {
+        const cpf = technicianData.match(/CPF:\s*([0-9.\-]+)/i)?.[1].replace(/\D/g, '') ?? '';
+        const name = technicianData.match(/(?:Nome completo|Nome):\s*([^\r\n]+)/i)?.[1].trim().toLocaleLowerCase('pt-BR') ?? '';
+        if (cpf || name) {
+          const candidates = await db.select({ id: technicians.id, name: technicians.name, cpf: technicians.cpf }).from(technicians).all();
+          const matches = candidates.filter((item) => cpf
+            ? String(item.cpf ?? '').replace(/\D/g, '') === cpf
+            : name && item.name.trim().toLocaleLowerCase('pt-BR') === name);
+          if (matches.length === 1) technicianId = matches[0].id;
+        }
+      }
     }
 
     const results = await mapWithConcurrency(keys, CONCURRENCY, async (key): Promise<BatchResult> => {
@@ -97,7 +114,7 @@ export async function POST(request: Request) {
           operationalStatus: workflow?.status ?? status,
           storeName: after.store ?? workflow?.storeName,
           city: after.city ?? workflow?.city,
-          snapshot: { jira: after, workflow: workflow ?? null, bulk: { status, keys, technicianId: Number.isSafeInteger(technicianId) ? technicianId : null } },
+          snapshot: { jira: after, workflow: workflow ?? null, bulk: { status, keys, technicianId } },
           actorEmail: user.email,
           reason: `Jira alterado em lote: ${label}`,
           capturedAt: now,
