@@ -11,6 +11,60 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### PIN de 4 dígitos como atalho de login
+
+Pedido do usuário: em vez de pedir a senha toda vez que o app reabre (decisão
+de 2026-09-23, `4433e84`), o funcionário pode cadastrar um PIN de 4 dígitos e
+usar ele nas próximas aberturas *neste aparelho*. Em outro aparelho, a senha
+continua sendo pedida — o PIN nunca é uma segunda senha global.
+
+Arquitetura (a pedido do usuário, opção "preso ao aparelho + servidor
+valida"): ao cadastrar, o navegador gera um par aleatório `{deviceId,
+deviceSecret}` (`lib/pin-device.ts`) guardado só no `localStorage` daquele
+aparelho. O servidor guarda apenas `PBKDF2(deviceSecret + PIN, salt)`
+(`lib/server/pin-hash.ts`, `pin_credentials` — migration `0041`). Sem o
+`deviceSecret` do aparelho certo, o PIN sozinho não autentica nada, mesmo sem
+limite de tentativas por IP — por isso o PIN pode ter só 4 dígitos sem virar
+brecha. Ainda assim há bloqueio de 15 min após 5 PINs errados por aparelho
+(`app/api/auth/pin/unlock`) e rate limit por IP nas duas rotas.
+
+Depois que o PIN bate, o servidor assina um *custom token* do Firebase
+(RS256, na mão — sem o Admin SDK, que não roda no Workers —
+`lib/server/firebase-custom-token.ts`) e o cliente troca por sessão de verdade
+com `signInWithCustomToken`. Isso exige a chave de conta de serviço do
+Firebase, que **não estava configurada** e é secret novo (ver
+`docs/DEPLOYMENT.md`, seção Secrets): sem ela, `/api/auth/pin/unlock` responde
+503 e cai para a senha — cadastrar o PIN funciona, mas o desbloqueio só depois
+do secret existir.
+
+- `app/login/page.tsx`: quem tem PIN cadastrado neste aparelho vê o campo de
+  PIN em vez de senha ao voltar, com "Usar a senha" sempre disponível.
+- `components/pin-setup-offer.tsx`: oferece o cadastro uma vez por
+  aparelho/conta, depois do `ProfileSetupGate` (perfil completo) — pode pular
+  ("Agora não") e cadastrar depois em Configurações.
+  `components/user-menu.tsx` (`PinAccessSettings`, dentro de `ProfileSettings`)
+  tem cadastro/remoção manual, e só aparece quando o secret está configurado.
+- `app/api/auth/pin/setup` (POST cadastra/substitui, GET diz se está
+  disponível, DELETE remove) e `app/api/auth/pin/unlock` (POST troca PIN por
+  custom token).
+- Retirar alguém da equipe (`app/api/users/team` PATCH `active:false`) apaga
+  os PINs cadastrados dela — não sobra credencial de quem perdeu acesso.
+- Testes novos: `tests/pin-device.test.ts`, `tests/pin-hash.test.ts`.
+
+**Pendente:**
+- Faltam os secrets `FIREBASE_SERVICE_ACCOUNT_EMAIL` e
+  `FIREBASE_SERVICE_ACCOUNT_KEY` na Cloudflare (`docs/DEPLOYMENT.md` explica
+  como gerar). Sem eles, o login por PIN fica "cadastra mas não desbloqueia".
+- Migration `drizzle/0041_pin_credentials.sql` precisa rodar
+  (`npm run db:migrate:remote`).
+- Não testado em navegador de verdade (sem ambiente para rodar o app aqui);
+  só `npm test`, `tsc --noEmit` e `npm run build`.
+- `npm run db:generate` está com o `meta/` desatualizado desde a migration
+  0025 (detalhe em `docs/DEPLOYMENT.md`, seção Migrations) — descartei o
+  arquivo que ele gerou (tentava recriar tabelas que já existem) e escrevi a
+  migration à mão. Vale considerar um dia rodar `drizzle-kit up`/resync do
+  `meta/` para não repetir a pegadinha.
+
 ### Agendar em lote: não exige mais técnico da lista
 
 No diálogo "Agendar" (ações em lote), bastava digitar os dados no campo

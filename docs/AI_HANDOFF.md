@@ -228,14 +228,22 @@ todos os perfis, exportação/backup administrativo.
   acabou pintando por cima dos diálogos. Só a chamada ativa e a moldura do
   desktop passam acima de um modal.
 
-1. **Testar salvar um chamado real com transição no Jira** no ambiente novo —
+1. **Login por PIN (2026-09-24, ver CHANGELOG) precisa de dois passos manuais
+   antes de funcionar de ponta a ponta:** gerar a chave de conta de serviço do
+   Firebase e colar em `FIREBASE_SERVICE_ACCOUNT_EMAIL`/`_KEY`
+   (`docs/DEPLOYMENT.md` tem o passo a passo), e rodar
+   `npm run db:migrate:remote` para aplicar `drizzle/0041_pin_credentials.sql`.
+   Sem o secret, o cadastro do PIN funciona mas o desbloqueio responde 503 e
+   cai para a senha — não quebra nada, só fica incompleto. Não testado em
+   navegador de verdade (sem ambiente para isso na sessão que implementou).
+2. **Testar salvar um chamado real com transição no Jira** no ambiente novo —
    único fluxo crítico ainda não exercitado em produção pós-migração.
-2. Cadastrar `GOOGLE_MAPS_API_KEY`? **Não** — obsoleto após Leaflet. Pode
+3. Cadastrar `GOOGLE_MAPS_API_KEY`? **Não** — obsoleto após Leaflet. Pode
    remover o secret órfão.
-3. Completar o catálogo de peças (a imagem de origem estava cortada).
-4. Navegação compartilhada usa `next/link`; páginas próprias têm fallback por
+4. Completar o catálogo de peças (a imagem de origem estava cortada).
+5. Navegação compartilhada usa `next/link`; páginas próprias têm fallback por
    `window.location.assign()` para evitar dead-end do roteador vinext/WebView.
-5. Desativar a produção antiga no OpenAI Sites — só depois de alguns dias de
+6. Desativar a produção antiga no OpenAI Sites — só depois de alguns dias de
    estabilidade.
 
 ## Últimas decisões de produto
