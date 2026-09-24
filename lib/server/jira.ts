@@ -580,14 +580,32 @@ export async function transitionJiraIssue(key: string, localStatus: string, inpu
   return { changed: true };
 }
 
+// Retorna o id do anexo criado no Jira para cada arquivo (na mesma ordem de
+// `files`, `null` quando o arquivo não pôde ser decodificado) — guardado em
+// ticket_evidence.jiraAttachmentId para dar para remover dos dois lados depois
+// (deleteJiraAttachment, app/api/n1-tickets/[key]/route.ts).
 export async function addJiraInternalEvidence(key: string, files: Array<{ name: string; mimeType: string; data: string }>, author: string) {
   const normalizedKey = validIssueKey(key);
+  const attachmentIds: (string | null)[] = [];
   for (const file of files) {
     const match = file.data.match(/^data:[^;]+;base64,(.+)$/);
-    if (!match) continue;
+    if (!match) { attachmentIds.push(null); continue; }
     const bytes = Uint8Array.from(atob(match[1]), (character) => character.charCodeAt(0));
     const form = new FormData(); form.append('file', new Blob([bytes], { type: file.mimeType }), file.name);
-    await jiraFetch<unknown>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
+    const uploaded = await jiraFetch<Array<{ id?: string }>>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/attachments`, { method: 'POST', headers: { 'X-Atlassian-Token': 'no-check' }, body: form });
+    attachmentIds.push(uploaded?.[0]?.id ?? null);
+  }
+  return attachmentIds;
+}
+
+/** Apaga um anexo do Jira. Já não existir lá (404) não é erro — o efeito desejado já está feito. */
+export async function deleteJiraAttachment(attachmentId: string) {
+  if (!/^\d+$/.test(attachmentId)) throw new JiraError('Anexo inválido.', 400);
+  try {
+    await jiraFetch<unknown>(`/rest/api/3/attachment/${encodeURIComponent(attachmentId)}`, { method: 'DELETE' });
+  } catch (error) {
+    if (error instanceof JiraError && error.status === 404) return;
+    throw error;
   }
 }
 

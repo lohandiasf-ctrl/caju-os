@@ -11,6 +11,29 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Evidência do N1 pode ser removida (some do sistema e do Jira)
+
+No "Atendimento N1" (`components/n1-ticket-actions.tsx`) só dava para anexar
+foto/vídeo/RAT; uma evidência enviada por engano ficava presa lá.
+
+- `lib/server/jira.ts`: `addJiraInternalEvidence` agora devolve o id do anexo
+  criado no Jira (na mesma ordem dos arquivos); `deleteJiraAttachment` apaga um
+  anexo do Jira (404 — já não existe lá — não é erro).
+- `db/schema.ts` / `drizzle/0042_ticket_evidence_jira_attachment.sql`:
+  `ticket_evidence` ganha `jira_attachment_id`, guardado a partir de agora.
+  Evidência de antes desta coluna existir só sai daqui — sem o id, o Jira não
+  tem como ser localizado sozinho.
+- `app/api/n1-tickets/[key]/route.ts`: ação `removeEvidence` (PUT) apaga do
+  Jira antes de apagar daqui (se o Jira recusar, nada muda dos dois lados) e
+  grava na auditoria. Só quem está no atendimento (N1 principal/participante)
+  remove, e só antes do chamado ser validado — depois de validado a evidência
+  fica fixa, junto com o resto do histórico.
+- `components/n1-ticket-actions.tsx`: botão de remover (com confirmação) em
+  cada evidência já enviada.
+
+**Pendente:** migration `drizzle/0042_ticket_evidence_jira_attachment.sql`
+precisa rodar (`npm run db:migrate:remote`).
+
 ### Agendar em lote: não exige mais técnico da lista
 
 No diálogo "Agendar" (ações em lote), bastava digitar os dados no campo
