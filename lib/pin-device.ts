@@ -65,6 +65,18 @@ function randomBase64Url(byteLength: number): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/** "14:59" até o fim do bloqueio do PIN; nunca negativo. */
+export function formatLockCountdown(msLeft: number): string {
+  const total = Math.max(0, Math.ceil(msLeft / 1000));
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** Mensagem do PIN errado; sem a contagem do servidor, fica só o aviso. */
+export function wrongPinMessage(attemptsLeft: number | undefined): string {
+  if (typeof attemptsLeft !== 'number' || attemptsLeft < 1) return 'PIN incorreto.';
+  return attemptsLeft === 1 ? 'PIN incorreto. Resta 1 tentativa.' : `PIN incorreto. Restam ${attemptsLeft} tentativas.`;
+}
+
 /** Confere se o servidor já tem a chave de serviço do Firebase para logar com PIN (ver GET /api/auth/pin/setup). */
 export async function pinLoginAvailable(idToken: string): Promise<boolean> {
   try {

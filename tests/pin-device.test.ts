@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { forgetPinDevice, generatePinDevice, isValidPin, markPinOffered, readPinDevice, savePinDevice, wasPinOffered } from '../lib/pin-device.ts';
+import { forgetPinDevice, formatLockCountdown, generatePinDevice, isValidPin, markPinOffered, readPinDevice, savePinDevice, wasPinOffered, wrongPinMessage } from '../lib/pin-device.ts';
+
+test('contagem do bloqueio em mm:ss, arredondando para cima e sem negativo', () => {
+  assert.equal(formatLockCountdown(15 * 60_000), '15:00');
+  assert.equal(formatLockCountdown(14 * 60_000 + 59_001), '15:00');
+  assert.equal(formatLockCountdown(61_000), '01:01');
+  assert.equal(formatLockCountdown(400), '00:01');
+  assert.equal(formatLockCountdown(-5_000), '00:00');
+});
+
+test('mensagem de PIN errado com as tentativas que sobram', () => {
+  assert.equal(wrongPinMessage(4), 'PIN incorreto. Restam 4 tentativas.');
+  assert.equal(wrongPinMessage(1), 'PIN incorreto. Resta 1 tentativa.');
+  assert.equal(wrongPinMessage(undefined), 'PIN incorreto.');
+  assert.equal(wrongPinMessage(0), 'PIN incorreto.');
+});
 
 function memoryStorage() {
   const data = new Map<string, string>();

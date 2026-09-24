@@ -11,6 +11,35 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### Tela de PIN nova no login (desktop e celular)
+
+Implementa o conceito aprovado pelo usuário
+(https://claude.ai/artifact/NLshYaFLEFS6xWWpcdA4Rg), mantendo os tokens e o
+painel azul do login.
+
+- `components/pin-pad.tsx` (novo): quatro casas em vez de um campo único. O
+  número aparece por um instante e vira ponto, a casa da vez tem cursor, o
+  PIN errado treme e fica vermelho, o certo fica verde em sequência. Envia
+  sozinho ao completar o 4º número. No celular (< `lg`) usa um teclado
+  numérico próprio (`inputMode="none"` no campo, sem abrir o do sistema); no
+  desktop vale o teclado físico, com a dica das teclas. Com 5 erros mostra
+  "PIN pausado neste aparelho", a contagem até o PIN voltar e "Entrar com a
+  senha".
+- `app/api/auth/pin/unlock/route.ts`: o 401 de PIN errado passa a trazer
+  `attemptsLeft` e o 429 traz `lockedUntil`, para a tela mostrar "Restam N
+  tentativas" e a contagem. O limite (5 erros, 15 min) não mudou.
+- `app/login/page.tsx`: usa o `PinPad`; a troca do token por sessão e a
+  transição continuam na página. No celular, o card virou coluna flex para o
+  teclado ficar no pé.
+- `lib/pin-device.ts`: `formatLockCountdown` e `wrongPinMessage`, com teste.
+- `app/globals.css`: animações `.pin-*`, desligadas com movimento reduzido.
+
+**Não verificado em navegador:** o `npm run dev` local ficou parado em
+"Establishing remote connection" (bindings remotos da Cloudflare). Testes,
+tsc, oxlint dos arquivos alterados e build passaram. Conferir em produção:
+PIN certo, PIN errado (contagem de tentativas), bloqueio e o teclado no
+celular.
+
 ### PIN caía em "Confirme o e-mail da conta": UID provisório da migração
 
 Com a chave corrigida, o PIN passou a gerar o custom token, mas a sessão
