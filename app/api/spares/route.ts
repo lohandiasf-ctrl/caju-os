@@ -8,6 +8,7 @@ import {
   spareSyncConfiguration,
   type SpareSyncRecord,
 } from '@/lib/server/spares-sync';
+import { formatarDataExcelOuIso } from '@/lib/assistant';
 import { recordSpareTracking } from '@/lib/server/spare-tracking';
 
 const WRITE_ROLES = ['gerencia'] as const;
@@ -40,6 +41,8 @@ export async function GET(request: Request) {
         : undefined;
       return {
         ...item,
+        expectedDelivery: formatarDataExcelOuIso(item.expectedDelivery),
+        expectedService: formatarDataExcelOuIso(item.expectedService),
         tracking: row
           ? {
               status: row.status,
@@ -75,9 +78,11 @@ export async function POST(request: Request) {
       city: clean(body.city, 120).toUpperCase(),
       equipment: clean(body.equipment, 180).toUpperCase(),
       trackingCode: clean(body.trackingCode, 120).toUpperCase() || null,
-      expectedDelivery: clean(body.expectedDelivery, 30) || null,
+      expectedDelivery:
+        formatarDataExcelOuIso(clean(body.expectedDelivery, 30)) || null,
       technician: clean(body.technician, 160).toUpperCase() || null,
-      expectedService: clean(body.expectedService, 30) || null,
+      expectedService:
+        formatarDataExcelOuIso(clean(body.expectedService, 30)) || null,
       note: clean(body.note, 1000) || null,
       address: clean(body.address, 300) || null,
       supplier: clean(body.supplier, 100).toUpperCase(),

@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { getDb } from '@/db';
 import { spares } from '@/db/schema';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { MAX_PULL_ROWS } from '@/lib/spares-pull';
+import { MAX_PULL_ROWS, normalizeRow } from '@/lib/spares-pull';
 import {
   pullSparesFromSpreadsheet,
   pushSpareToSpreadsheet,
@@ -12,83 +12,6 @@ import {
 } from '@/lib/server/spares-sync';
 
 const WRITE_ROLES = ['gerencia'] as const;
-
-function text(row: Record<string, unknown>, ...keys: string[]) {
-  for (const key of keys) {
-    const value = row[key];
-    if (value !== undefined && value !== null && String(value).trim())
-      return String(value).trim();
-  }
-  return '';
-}
-
-function normalizedTicket(value: string) {
-  const compact = value.toUpperCase().replace(/\s+/g, '');
-  return compact.startsWith('FSA-')
-    ? compact
-    : `FSA-${compact.replace(/^FSA-?/, '')}`;
-}
-
-async function externalKey(
-  row: Record<string, unknown>,
-  record: Omit<SpareSyncRecord, 'externalKey'>,
-) {
-  const supplied = text(row, 'externalKey', 'external_key', 'ID', 'Id', 'id');
-  if (supplied) return supplied.slice(0, 160);
-  const bytes = new TextEncoder().encode(
-    [
-      record.ticketKey,
-      record.equipment,
-      record.trackingCode,
-      record.supplier,
-    ].join('|'),
-  );
-  const hash = await crypto.subtle.digest('SHA-256', bytes);
-  return `sheet-${Array.from(new Uint8Array(hash))
-    .slice(0, 12)
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')}`;
-}
-
-async function normalizeRow(value: unknown): Promise<SpareSyncRecord | null> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  const fsa = text(row, 'ticketKey', 'FSA', 'fsa');
-  const equipment = text(row, 'equipment', 'EQUIPAMENTO', 'Equipamento');
-  if (!fsa || !equipment) return null;
-  const record = {
-    status: text(row, 'status', 'STATUS', 'Status').toUpperCase() || 'PENDENTE',
-    ticketKey: normalizedTicket(fsa),
-    city: text(row, 'city', 'CIDADE', 'Cidade').toUpperCase(),
-    equipment: equipment.toUpperCase(),
-    trackingCode:
-      text(row, 'trackingCode', 'CÓDIGO DE RASTREIO', 'CODIGO DE RASTREIO') ||
-      null,
-    expectedDelivery:
-      text(
-        row,
-        'expectedDelivery',
-        'PREVISÃO DE ENTREGA',
-        'PREVISAO DE ENTREGA',
-      ) || null,
-    technician:
-      text(row, 'technician', 'TÉCNICO RESPONSÁVEL', 'TECNICO RESPONSAVEL') ||
-      null,
-    expectedService:
-      text(
-        row,
-        'expectedService',
-        'PREVISÃO DE ATENDIMENTO',
-        'PREVISAO DE ATENDIMENTO',
-      ) || null,
-    note: text(row, 'note', 'OBSERVAÇÃO', 'OBSERVACAO') || null,
-    address: text(row, 'address', 'ENDEREÇO', 'ENDERECO') || null,
-    supplier:
-      text(row, 'supplier', 'FORNECEDOR', 'Fornecedor').toUpperCase() ||
-      'NÃO INFORMADO',
-  };
-  return { externalKey: await externalKey(row, record), ...record };
-}
 
 export async function POST(request: Request) {
   try {

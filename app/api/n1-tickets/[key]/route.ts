@@ -1,8 +1,8 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { n1TicketAssignments, operationalAudit, operationalWorkflows, ticketEvidence } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { addJiraInternalEvidence, getJiraIssue, transitionJiraIssue } from '@/lib/server/jira';
+import { addJiraInternalEvidence, deleteJiraAttachment, getJiraIssue, transitionJiraIssue } from '@/lib/server/jira';
 import { isSafeDataUrl } from '@/lib/safe-data-url';
 import { captureTicketArchive } from '@/lib/server/ticket-archive';
 
@@ -30,7 +30,7 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
     const user = await requireApiUser(request, ['n1']);
     const ticketKey = safeKey((await context.params).key);
     if (!ticketKey) return bad('Chamado inválido.');
-    const body = await request.json() as { action?: unknown; evidence?: unknown };
+    const body = await request.json() as { action?: unknown; evidence?: unknown; evidenceId?: unknown };
     const action = body.action;
     const db = getDb();
     const now = new Date().toISOString();
@@ -54,8 +54,8 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
       const attachments = parseEvidence(body.evidence);
       if (!attachments) return bad('Evidência inválida, incompatível com o tipo declarado ou muito grande.');
       if (attachments.length) {
-        await addJiraInternalEvidence(ticketKey, attachments, user.email);
-        await db.insert(ticketEvidence).values(attachments.map((item) => ({ ticketKey, ...item, uploadedBy: user.email, createdAt: now })));
+        const jiraAttachmentIds = await addJiraInternalEvidence(ticketKey, attachments, user.email);
+        await db.insert(ticketEvidence).values(attachments.map((item, index) => ({ ticketKey, ...item, jiraAttachmentId: jiraAttachmentIds[index] ?? null, uploadedBy: user.email, createdAt: now })));
         await db.insert(operationalAudit).values({ ticketKey, action: `${attachments.length} evidência(s) anexada(s)`, actorEmail: user.email, details: JSON.stringify(attachments.map((item) => ({ kind: item.kind, name: item.name }))), createdAt: now });
       }
       const evidence = await db.select({ kind: ticketEvidence.kind }).from(ticketEvidence).where(eq(ticketEvidence.ticketKey, ticketKey)).all();
@@ -80,6 +80,18 @@ export async function PUT(request: Request, context: { params: Promise<{ key: st
         reason: 'Chamado validado com evidências e RAT',
         capturedAt: now,
       }).catch(() => undefined);
+    } else if (action === 'removeEvidence') {
+      if (!current || ![current.n1Email, current.participantN1Email].some((email) => email?.toLowerCase() === user.email.toLowerCase())) return Response.json({ error: 'Assuma o chamado antes de remover evidência.' }, { status: 403 });
+      if (current.status === 'validated') return Response.json({ error: 'Chamado já validado: a evidência não pode mais ser removida.' }, { status: 409 });
+      const evidenceId = Number(body.evidenceId);
+      if (!Number.isSafeInteger(evidenceId) || evidenceId < 1) return bad('Evidência inválida.');
+      const item = await db.select().from(ticketEvidence).where(and(eq(ticketEvidence.id, evidenceId), eq(ticketEvidence.ticketKey, ticketKey))).get();
+      if (!item) return Response.json({ error: 'Evidência não encontrada.' }, { status: 404 });
+      // Apaga do Jira antes de apagar daqui: se o Jira recusar, a evidência
+      // continua íntegra nos dois lados em vez de sumir só de um.
+      if (item.jiraAttachmentId) await deleteJiraAttachment(item.jiraAttachmentId);
+      await db.delete(ticketEvidence).where(eq(ticketEvidence.id, evidenceId));
+      await db.insert(operationalAudit).values({ ticketKey, action: `Evidência removida (${item.kind}: ${item.name})`, actorEmail: user.email, details: JSON.stringify({ evidenceId, kind: item.kind, name: item.name, removidoDoJira: Boolean(item.jiraAttachmentId) }), createdAt: now });
     } else return bad('Ação inválida.');
     const [assignment, evidence] = await Promise.all([
       db.select().from(n1TicketAssignments).where(eq(n1TicketAssignments.ticketKey, ticketKey)).get(),
