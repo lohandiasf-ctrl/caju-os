@@ -1,20 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { looksTruncated } from '@/lib/spares-pull';
+import { looksTruncated, type SpareSyncRecord } from '@/lib/spares-pull';
 
-export type SpareSyncRecord = {
-  externalKey: string;
-  status: string;
-  ticketKey: string;
-  city: string;
-  equipment: string;
-  trackingCode: string | null;
-  expectedDelivery: string | null;
-  technician: string | null;
-  expectedService: string | null;
-  note: string | null;
-  address: string | null;
-  supplier: string;
-};
+export type { SpareSyncRecord };
 
 type SyncEnv = {
   SPARES_SYNC_PUSH_URL?: string;
