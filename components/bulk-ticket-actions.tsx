@@ -142,8 +142,8 @@ export function BulkTicketActions({ tickets, role, user, onClear, onApplied, sch
 
   async function submit() {
     if (!user || !mode || saving) return;
-    if (mode === 'scheduled' && (!selectedTechnicianId || !technicianData.trim() || !scheduledAt)) {
-      setError('Selecione um técnico cadastrado na lista e informe a data/hora que será aplicada a todos os chamados.');
+    if (mode === 'scheduled' && (!technicianData.trim() || !scheduledAt)) {
+      setError('Informe os dados do técnico e a data/hora que serão aplicados a todos os chamados.');
       return;
     }
     setSaving(true); setError(''); setResults(null);

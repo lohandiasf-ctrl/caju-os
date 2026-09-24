@@ -9,6 +9,23 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-24
+
+### Agendar em lote: não exige mais técnico da lista
+
+No diálogo "Agendar" (ações em lote), bastava digitar os dados no campo
+"Dados que serão enviados ao Jira" e a data/hora — mas o botão só habilitava
+se o técnico tivesse sido escolhido na busca da lista. Mesma barreira que já
+tinha sido tirada do "Agrupar" em 2026-09-23.
+
+- `components/bulk-ticket-actions.tsx`: `submit()` não exige mais
+  `selectedTechnicianId`, só `technicianData` (texto) e `scheduledAt`.
+- `app/api/jira/issues/batch/route.ts`: quando não vem `technicianId` (ou é
+  inválido), tenta achar o técnico pelo CPF ou nome digitado no texto, igual
+  já fazia a edição de um chamado só (`app/api/jira/issues/[key]/route.ts`).
+  Sem casar, `technicianId` fica `null` — a coluna já era opcional em
+  `operationalWorkflows` (`db/schema.ts`), não precisou de migration.
+
 ## 2026-09-23
 
 ### Agrupar: técnico pode ser só o nome digitado
