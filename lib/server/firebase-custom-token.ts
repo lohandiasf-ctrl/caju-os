@@ -45,7 +45,7 @@ async function importPrivateKey(pem: string) {
   // recalculado do zero a partir do comprimento já limpo.
   const stripped = pem.replace(/-----(BEGIN|END) PRIVATE KEY-----/g, '').replace(/[^A-Za-z0-9+/=]/g, '').replace(/=/g, '');
   const base64 = stripped + '='.repeat((4 - (stripped.length % 4)) % 4);
-  let der: Uint8Array;
+  let der: Uint8Array<ArrayBuffer>;
   try {
     der = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
   } catch (cause) {
