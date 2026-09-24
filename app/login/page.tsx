@@ -5,9 +5,10 @@ import Image from 'next/image';
 import { FirebaseError } from 'firebase/app';
 import { signInWithCustomToken, signInWithEmailAndPassword } from 'firebase/auth';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ClipboardCheck, Eye, EyeOff, KeyRound, LoaderCircle, LockKeyhole, Mail, MapPinned, ShieldCheck } from 'lucide-react';
+import { ClipboardCheck, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MapPinned, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PinPad } from '@/components/pin-pad';
 import { startLoginTransition } from '@/components/login-transition';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { auth } from '@/lib/firebase';
@@ -37,16 +38,12 @@ export default function LoginPage() {
   // "Usar a senha" sempre disponível como saída.
   const pinDevice = remembered ? readPinDevice(localStore(), remembered) : null;
   const [usePin, setUsePin] = useState(() => Boolean(pinDevice));
-  const [pin, setPin] = useState('');
-  const [pinLoading, setPinLoading] = useState(false);
   const desktopPanelRef = useRef<HTMLDivElement>(null);
   const mobilePanelRef = useRef<HTMLDivElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
-  const pinRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (!remembered) return;
-    if (usePin) pinRef.current?.focus();
-    else passwordRef.current?.focus();
+    // O PinPad foca o próprio campo ao montar.
+    if (remembered && !usePin) passwordRef.current?.focus();
   }, [remembered, usePin]);
 
   function switchAccount() {
@@ -54,7 +51,6 @@ export default function LoginPage() {
     setRemembered('');
     setEmail('');
     setPassword('');
-    setPin('');
     setUsePin(false);
     setError('');
     setMessage('');
@@ -68,35 +64,24 @@ export default function LoginPage() {
     return panel?.getBoundingClientRect();
   }
 
-  async function handlePinSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!remembered || !pinDevice) return;
-    setPinLoading(true);
-    setError('');
+  // O PinPad confere o PIN no servidor; aqui só vira sessão e segue a mesma
+  // transição do login por senha.
+  async function handlePinToken(customToken: string) {
     const box = loginTransitionBox();
     try {
-      const response = await fetch('/api/auth/pin/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: remembered, deviceId: pinDevice.deviceId, deviceSecret: pinDevice.deviceSecret, pin }),
-      });
-      const payload = await response.json().catch(() => ({})) as { customToken?: string; error?: string; revoked?: boolean };
-      if (!response.ok || !payload.customToken) {
-        if (payload.revoked) {
-          forgetPinDevice(localStore(), remembered);
-          setUsePin(false);
-        }
-        throw new Error(payload.error || 'PIN incorreto.');
-      }
-      await signInWithCustomToken(auth, payload.customToken);
-      rememberEmail(localStore(), remembered);
-      setLeaving(true);
-      startLoginTransition(box ? { top: box.top, left: box.left, width: box.width, height: box.height } : null);
+      await signInWithCustomToken(auth, customToken);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível entrar com o PIN.');
-      setPin('');
-      setPinLoading(false);
+      throw new Error(authErrorMessage(cause));
     }
+    rememberEmail(localStore(), remembered);
+    setLeaving(true);
+    startLoginTransition(box ? { top: box.top, left: box.left, width: box.width, height: box.height } : null);
+  }
+
+  function handlePinRevoked(message: string) {
+    forgetPinDevice(localStore(), remembered);
+    setUsePin(false);
+    setError(message);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -154,7 +139,7 @@ export default function LoginPage() {
         <motion.div
           animate={leaving ? { opacity: 0, scale: 0.98 } : { opacity: 1, scale: 1 }}
           transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-          className="relative z-[1] -mt-6 w-full flex-1 rounded-t-[24px] bg-card-elevated px-5 pb-10 pt-7 shadow-(--shadow-card) sm:px-8 lg:mt-0 lg:max-w-[400px] lg:flex-none lg:rounded-[20px] lg:border lg:border-border lg:p-8"
+          className="relative z-[1] -mt-6 flex w-full flex-1 flex-col rounded-t-[24px] bg-card-elevated px-5 pb-10 pt-7 shadow-(--shadow-card) sm:px-8 lg:mt-0 lg:block lg:max-w-[400px] lg:flex-none lg:rounded-[20px] lg:border lg:border-border lg:p-8"
         >
           {remembered ? <>
             <div className="flex items-center gap-3">
@@ -171,19 +156,13 @@ export default function LoginPage() {
           </>}
 
           {remembered && usePin && pinDevice ? (
-            <form className="mt-7 space-y-4" onSubmit={(event) => void handlePinSubmit(event)}>
-              <input type="email" name="email" autoComplete="username" value={remembered} readOnly hidden />
-              <div>
-                <label htmlFor="login-pin" className="mb-1.5 block text-sm font-medium">PIN</label>
-                <span className="relative block">
-                  <KeyRound aria-hidden="true" strokeWidth={1.75} className="pointer-events-none absolute left-3.5 top-1/2 z-10 size-[18px] -translate-y-1/2 text-muted-foreground" />
-                  <Input ref={pinRef} id="login-pin" name="pin" className={`${loginInput} text-center text-lg tracking-[0.5em]`} inputMode="numeric" pattern="\d{4}" maxLength={4} autoComplete="off" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" required />
-                </span>
-              </div>
-              {error && <p role="alert" className="rounded-xl bg-danger-soft p-3 text-[13px] text-danger">{error}</p>}
-              <Button className="h-11 w-full rounded-xl text-[15px] font-semibold" type="submit" disabled={pinLoading || pin.length !== 4}>{pinLoading ? <><LoaderCircle className="animate-spin" aria-hidden="true" />Entrando…</> : 'Entrar'}</Button>
-              <button type="button" onClick={() => { setUsePin(false); setPin(''); setError(''); }} className="block w-full text-center text-[13px] font-semibold text-primary hover:underline">Usar a senha</button>
-            </form>
+            <PinPad
+              email={remembered}
+              device={pinDevice}
+              onToken={handlePinToken}
+              onRevoked={handlePinRevoked}
+              onUsePassword={() => { setUsePin(false); setError(''); }}
+            />
           ) : (
             <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
               {remembered ? (

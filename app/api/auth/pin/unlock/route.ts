@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       return Response.json({ error: 'PIN incorreto.' }, { status: 401 });
     }
     if (credential.lockedUntil && Date.parse(credential.lockedUntil) > Date.now()) {
-      return Response.json({ error: 'Muitas tentativas com PIN errado. Use sua senha ou tente de novo mais tarde.' }, { status: 429 });
+      return Response.json({ error: 'Muitas tentativas com PIN errado. Use sua senha ou tente de novo mais tarde.', lockedUntil: credential.lockedUntil }, { status: 429 });
     }
 
     const attemptHash = await derivePinHash(deviceSecret, pin, credential.salt, credential.iterations);
@@ -52,14 +52,17 @@ export async function POST(request: Request) {
         .get();
       const failedAttempts = updated?.failedAttempts ?? MAX_ATTEMPTS;
       const locked = failedAttempts >= MAX_ATTEMPTS;
+      const lockedUntil = locked ? new Date(Date.now() + LOCK_MS).toISOString() : null;
       if (locked) {
-        await db.update(pinCredentials).set({
-          failedAttempts: 0,
-          lockedUntil: new Date(Date.now() + LOCK_MS).toISOString(),
-        }).where(eq(pinCredentials.deviceId, deviceId));
+        await db.update(pinCredentials).set({ failedAttempts: 0, lockedUntil }).where(eq(pinCredentials.deviceId, deviceId));
       }
       logSecurityEvent({ request, action: 'pin_unlock_failed', outcome: 'denied', details: { email, failedAttempts } });
-      return Response.json({ error: locked ? 'Muitas tentativas com PIN errado. Use sua senha ou tente de novo mais tarde.' : 'PIN incorreto.' }, { status: locked ? 429 : 401 });
+      // attemptsLeft/lockedUntil alimentam o aviso e a contagem da tela de PIN.
+      // Só chega aqui quem já tem o deviceId e o e-mail deste aparelho; o
+      // limite de 5 erros continua valendo igual, a contagem só fica visível.
+      return locked
+        ? Response.json({ error: 'Muitas tentativas com PIN errado. Use sua senha ou tente de novo mais tarde.', lockedUntil }, { status: 429 })
+        : Response.json({ error: 'PIN incorreto.', attemptsLeft: MAX_ATTEMPTS - failedAttempts }, { status: 401 });
     }
 
     const account = await db.select({ uid: appUsers.firebaseUid, active: appUsers.active }).from(appUsers).where(eq(appUsers.email, email)).get();
