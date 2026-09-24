@@ -11,6 +11,35 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-24
 
+### PIN caía em "Confirme o e-mail da conta": UID provisório da migração
+
+Com a chave corrigida, o PIN passou a gerar o custom token, mas a sessão
+abria em "Acesso não autorizado — Confirme o e-mail da conta antes de
+entrar." Causa: os usuários migrados para o ambiente novo entraram em
+`app_users` com `firebase_uid = "pending:<email>"` (`scripts/dump-to-sql.mjs`),
+cujo comentário prometia que "o UID real é pego no primeiro login". Isso nunca
+foi implementado. O login por senha não sentia falta porque `requireApiUser`
+casa pelo e-mail, mas o unlock assina o token com `app_users.firebase_uid`.
+O Firebase não acha esse UID, cria um usuário novo **sem e-mail**, e o
+`requireApiUser` recusa.
+
+- `lib/server/firebase-auth.ts`: `requireApiUser` grava o UID real
+  (`claims.sub`) quando o banco tem o provisório `pending:` ou um UID antigo
+  com e-mail verificado; falha na gravação só loga. Passa a devolver o UID do
+  token (usado só em campos `updatedBy`).
+- `app/api/auth/pin/unlock/route.ts`: com UID ainda `pending:`, responde 409
+  "Entre com a senha uma vez para ativar o PIN neste aparelho." em vez de
+  criar um usuário vazio no Firebase.
+
+Causa confirmada pelo código; não consultei o banco de produção (sem
+permissão na sessão).
+
+**Pendente:** depois do deploy, quem já tem o PIN precisa clicar em "Sair e
+usar outra conta" e entrar **uma vez com a senha** (isso grava o UID real);
+aí o PIN funciona. As tentativas anteriores deixaram usuários vazios no
+Firebase Authentication com UID `pending:<email>`. Não atrapalham, mas podem
+ser apagados no console do Firebase.
+
 ### Desbloqueio por PIN: causa raiz era o `\n` literal da chave do Firebase
 
 O `InvalidCharacterError` do `atob()` no desbloqueio por PIN foi uma regressão

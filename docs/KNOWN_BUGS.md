@@ -138,7 +138,8 @@ montagem nova, não como bug ativo numa instalação que ainda não existe.
 
 | Item | Estado | Nota |
 |---|---|---|
-| Desbloqueio por PIN falhava com `atob() called with invalid base64-encoded data` | **Corrigido, falta confirmar em produção** | `\n` literal da chave do Firebase virava um `n` extra por linha depois do filtro de base64; parsing em `lib/server/private-key-pem.ts` com teste |
+| Desbloqueio por PIN falhava com `atob() called with invalid base64-encoded data` | **Resolvido** | `\n` literal da chave do Firebase virava um `n` extra por linha depois do filtro de base64; parsing em `lib/server/private-key-pem.ts` com teste |
+| PIN abria sessão sem e-mail ("Confirme o e-mail da conta") | **Corrigido, falta confirmar em produção** | custom token assinado com o UID provisório `pending:<email>` da migração; `requireApiUser` agora grava o UID real. Quem já tinha PIN entra uma vez com a senha |
 | `/api/technicians` devolvia CPF/PIX/endereço de 1.501 pessoas a qualquer logado (inclusive `tecnico`) | **Resolvido** | esses 3 campos agora só para papéis que tratam pagamento/cadastro |
 | `CRON_SECRET` apareceu no terminal durante setup | **Resolvido** | rotacionado |
 

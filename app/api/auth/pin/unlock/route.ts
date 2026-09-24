@@ -70,6 +70,13 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Sem acesso ao sistema. Use sua senha.', revoked: true }, { status: 403 });
     }
 
+    if (account.uid.startsWith('pending:')) {
+      // UID provisório da migração: um custom token com ele criaria um usuário
+      // novo e vazio no Firebase. Um login por senha grava o UID real
+      // (requireApiUser) e o PIN passa a funcionar.
+      return Response.json({ error: 'Entre com a senha uma vez para ativar o PIN neste aparelho.' }, { status: 409 });
+    }
+
     if (!firebaseServiceAccountConfigured()) {
       return Response.json({ error: 'Login por PIN indisponível no momento. Use sua senha.' }, { status: 503 });
     }
