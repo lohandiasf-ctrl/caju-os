@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       title: await senderName(current.email),
       body: messageBody || `Anexo: ${attachment?.name ?? 'arquivo'}`,
       data: { kind: 'message', from: current.email.toLowerCase() },
-    });
+    }, 'message');
     return Response.json({ message: inserted }, { status: 201 });
   } catch (error) {
     if (error instanceof Response) return error;

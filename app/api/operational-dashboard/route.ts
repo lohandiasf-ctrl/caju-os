@@ -2,9 +2,7 @@ import { desc } from 'drizzle-orm';
 import { employeeActivity, employeePresence, n1TicketAssignments, operationalAudit, operationalTasks, operationalVisits, operationalWorkflows, shipmentTracking } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-
-const closed = new Set(['archived', 'resolved', 'cancelled', 'validated']);
-const slaHours: Record<string, number> = { triage: 2, scheduling: 4, operational_preparation: 4, in_service: 12, technical_pending: 24, awaiting_approval: 24, awaiting_spare: 24, awaiting_payment: 24 };
+import { CLOSED_WORKFLOW_STATUSES as closed, SLA_HOURS as slaHours } from '@/lib/operational-sla';
 
 export async function GET(request: Request) {
   try {

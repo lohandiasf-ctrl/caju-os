@@ -1,7 +1,8 @@
 import { env } from 'cloudflare:workers';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { communicationPreferences, employeePresence, pushDevices } from '@/db/schema';
+import { communicationPreferences, employeePresence, pushDevices, pushPreferences } from '@/db/schema';
+import { parsePrefs, type AlertKind } from '@/lib/push-alerts';
 import { buildMessages, chunk, deadTokens, EXPO_PUSH_URL, inQuietHours, type ExpoTicket, type PushNote } from '@/lib/push-message';
 
 /**
@@ -10,11 +11,18 @@ import { buildMessages, chunk, deadTokens, EXPO_PUSH_URL, inQuietHours, type Exp
  * agendada) não pode falhar por causa dela. Aguardado com limite de tempo —
  * as rotas do vinext não têm waitUntil.
  */
-export async function sendPushToEmails(emails: string[], note: PushNote) {
+export async function sendPushToEmails(emails: string[], note: PushNote, kind?: AlertKind) {
   try {
-    const wanted = [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
+    let wanted = [...new Set(emails.map((email) => email.trim().toLowerCase()).filter(Boolean))];
     if (!wanted.length) return;
     const db = getDb();
+    // Quem desligou esse tipo de aviso no app fica de fora.
+    if (kind) {
+      const prefs = await db.select().from(pushPreferences).where(inArray(pushPreferences.email, wanted)).all();
+      const off = new Set(prefs.filter((p) => !parsePrefs(p.kinds)[kind]).map((p) => p.email.toLowerCase()));
+      wanted = wanted.filter((email) => !off.has(email));
+      if (!wanted.length) return;
+    }
     const devices = await db.select({ email: pushDevices.userEmail, token: pushDevices.token }).from(pushDevices)
       .where(and(inArray(pushDevices.userEmail, wanted), isNull(pushDevices.disabledAt))).all();
     if (!devices.length) return;

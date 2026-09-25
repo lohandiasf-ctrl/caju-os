@@ -14,6 +14,12 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
+- **Avisos push escolhíveis (2026-09-25, branch `claude/push-avisos`).**
+  Migration nova `drizzle/0044_push_preferences_alerts.sql`: rode
+  `npm run db:migrate:remote` antes de mesclar. A rotina agendada passa a
+  chamar também `/api/push/alerts` (`scripts/worker-entry.js`). Detalhes no
+  `docs/CHANGELOG.md`.
+
 - **Push para o app do celular (2026-09-25, branch `claude/push-notificacoes`).**
   Migration nova `drizzle/0043_push_devices.sql`: rode
   `npm run db:migrate:remote` antes de mesclar na `main`, senão
