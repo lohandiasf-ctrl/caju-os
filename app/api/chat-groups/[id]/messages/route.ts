@@ -57,7 +57,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       title: group?.name || 'Grupo',
       body: `${who}: ${text || (ticketId ? `chamado ${ticketId}` : `anexo ${attachment?.name ?? ''}`.trim())}`,
       data: { kind: 'group', groupId: String(groupId) },
-    });
+    }, 'group');
     return Response.json({ message }, { status: 201 });
   } catch (error) { if (error instanceof Response) return error; return Response.json({ error: 'Não foi possível enviar a mensagem.' }, { status: 500 }); }
 }

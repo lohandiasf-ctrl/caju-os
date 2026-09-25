@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     if (messages.length) await db.insert(employeeMessages).values(messages);
     // Os mesmos avisos como push no celular: uma notificação por aviso.
     for (const message of messages) {
-      await sendPushToEmails([message.recipientEmail], { title: 'Caju OS · aviso da operação', body: message.body, data: { kind: 'alert' } });
+      await sendPushToEmails([message.recipientEmail], { title: 'Caju OS · aviso da operação', body: message.body, data: { kind: 'task' } }, 'task');
     }
     if (audits.length) await db.insert(operationalAudit).values(audits);
 

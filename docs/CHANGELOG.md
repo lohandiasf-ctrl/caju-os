@@ -11,6 +11,36 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-25
 
+### Avisos push escolhíveis (SLA, agendamento, chamado novo)
+
+Cada pessoa escolhe no app do celular quais avisos recebe. Branch
+`claude/push-avisos`.
+
+- `lib/push-alerts.ts` (regras puras, `tests/push-alerts.test.ts`): tipos
+  `message`, `group`, `task` (já existiam) e, da fila, `sla_overdue`,
+  `scheduling_overdue` (pendente de agendamento há mais de 2 h),
+  `schedule_missed` (Agendado, 30 min depois do horário e sem virar
+  TEC-CAMPO) e `new_ticket` (desligado por padrão). Dispara quando o chamado
+  **cruza** o limite, numa janela de 30 min, para a primeira rodada não
+  mandar todo o atraso acumulado; mais de 3 do mesmo tipo viram um aviso só.
+- `lib/operational-sla.ts`: horas de SLA por etapa, antes dentro de
+  `app/api/operational-dashboard`, agora usadas pelo painel e pelos avisos.
+- `app/api/push/alerts` (rotina agendada, `x-cron-secret`, chamada em
+  `scripts/worker-entry.js`): busca a fila do Jira e os
+  `operational_workflows`, grava em `push_alerts_sent` o que vai avisar
+  **antes** de enviar (um aviso por chamado e situação) e manda para os
+  perfis gerência, coordenação, N1 e analista com o app instalado. Guarda 30
+  dias. Não consulta o Jira se ninguém tiver o app.
+- `app/api/push/preferences` (GET/PUT) + `push_preferences`: escolhas por
+  e-mail; `sendPushToEmails` passa a respeitá-las nas mensagens e tarefas.
+- Migration `drizzle/0044_push_preferences_alerts.sql`, escrita à mão.
+
+**Pendente:** `npm run db:migrate:remote` antes de mesclar. "Sem agendamento
+há 2 h" conta desde a abertura do chamado (o Jira não informa desde quando
+está na etapa): chamado que volta para agendamento depois não gera o aviso.
+Se a rotina ficar parada mais de 30 min, os limites cruzados nesse intervalo
+não são avisados.
+
 ### Notificações push para o app do celular (caju-os-mobile)
 
 O app Caju OS no celular (Expo, repositório `caju-os-mobile`) passa a receber

@@ -72,6 +72,25 @@ export const pushDevices = sqliteTable(
   ],
 );
 
+// Quais avisos push cada pessoa quer (lib/push-alerts.ts: ALERT_KINDS).
+export const pushPreferences = sqliteTable('push_preferences', {
+  email: text('email').primaryKey(),
+  kinds: text('kinds').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// Avisos da fila já enviados: um por chamado e situação (dedupe).
+export const pushAlertsSent = sqliteTable(
+  'push_alerts_sent',
+  {
+    dedupe: text('dedupe').primaryKey(),
+    kind: text('kind').notNull(),
+    ticketKey: text('ticket_key').notNull(),
+    sentAt: text('sent_at').notNull(),
+  },
+  (table) => [index('idx_push_alerts_sent_at').on(table.sentAt)],
+);
+
 export const projects = sqliteTable(
   'projects',
   {
