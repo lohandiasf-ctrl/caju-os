@@ -3,6 +3,7 @@ import { chatGroupMembers, chatGroupMessages, chatGroupReads, chatGroups } from 
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { isSafeDataUrl } from '@/lib/safe-data-url';
+import { senderName, sendPushToEmails } from '@/lib/server/push';
 
 async function membership(groupId: number, email: string) { return getDb().select().from(chatGroupMembers).where(and(eq(chatGroupMembers.groupId, groupId), eq(chatGroupMembers.email, email))).get(); }
 
@@ -46,6 +47,17 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (attachment && !isSafeDataUrl(attachment.data, attachment.type, 1_000_000)) return Response.json({ error: 'Anexo inválido, incompatível com o tipo declarado ou muito grande. Use imagem, áudio ou PDF de até 750 KB.' }, { status: 400 });
     const now = new Date().toISOString(); const message = await getDb().insert(chatGroupMessages).values({ groupId, senderEmail: current.email, body: text, ticketId, ...(attachment ? { attachmentName: attachment.name, attachmentType: attachment.type, attachmentData: attachment.data } : {}), createdAt: now }).returning().get();
     await getDb().update(chatGroups).set({ updatedAt: now }).where(eq(chatGroups.id, groupId)).run();
+    // Push para os outros membros do grupo, com o nome do grupo no título.
+    const [group, members] = await Promise.all([
+      getDb().select({ name: chatGroups.name }).from(chatGroups).where(eq(chatGroups.id, groupId)).get(),
+      getDb().select({ email: chatGroupMembers.email }).from(chatGroupMembers).where(eq(chatGroupMembers.groupId, groupId)).all(),
+    ]);
+    const who = await senderName(current.email);
+    await sendPushToEmails(members.map((m) => m.email).filter((email) => email !== current.email), {
+      title: group?.name || 'Grupo',
+      body: `${who}: ${text || (ticketId ? `chamado ${ticketId}` : `anexo ${attachment?.name ?? ''}`.trim())}`,
+      data: { kind: 'group', groupId: String(groupId) },
+    });
     return Response.json({ message }, { status: 201 });
   } catch (error) { if (error instanceof Response) return error; return Response.json({ error: 'Não foi possível enviar a mensagem.' }, { status: 500 }); }
 }

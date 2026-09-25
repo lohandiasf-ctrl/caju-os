@@ -53,6 +53,25 @@ export const pinCredentials = sqliteTable(
   ],
 );
 
+// Aparelhos do app do celular que recebem push (lib/server/push.ts).
+export const pushDevices = sqliteTable(
+  'push_devices',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userEmail: text('user_email').notNull(),
+    token: text('token').notNull(),
+    platform: text('platform').notNull(),
+    deviceName: text('device_name'),
+    createdAt: text('created_at').notNull(),
+    lastSeenAt: text('last_seen_at').notNull(),
+    disabledAt: text('disabled_at'),
+  },
+  (table) => [
+    uniqueIndex('idx_push_devices_token').on(table.token),
+    index('idx_push_devices_user_email').on(table.userEmail),
+  ],
+);
+
 export const projects = sqliteTable(
   'projects',
   {

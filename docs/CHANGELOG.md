@@ -9,6 +9,38 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-25
+
+### Notificações push para o app do celular (caju-os-mobile)
+
+O app Caju OS no celular (Expo, repositório `caju-os-mobile`) passa a receber
+notificação com o app fechado, pelo serviço de push do Expo (FCM no Android,
+APNs no iPhone). Branch `claude/push-notificacoes`.
+
+- `drizzle/0043_push_devices.sql` + `db/schema.ts` (`pushDevices`): um token
+  por aparelho, e-mail dono, plataforma, `disabled_at` para aparelho que não
+  existe mais. Escrita à mão, como as 0026+ (ver `docs/DEPLOYMENT.md`).
+- `app/api/push/devices` (POST/DELETE): o app registra o aparelho depois do
+  login e remove ao sair ou ao desligar "Avisos no celular". O mesmo aparelho
+  que troca de conta passa a apontar para o e-mail atual.
+- `lib/push-message.ts` (regras puras, testadas em
+  `tests/push-message.test.ts`) e `lib/server/push.ts` (`sendPushToEmails`):
+  lotes de 100, horário de silêncio de `communication_preferences` respeitado
+  (no silêncio a notificação chega sem som), token `DeviceNotRegistered`
+  desativado. Nunca lança: a mensagem é gravada mesmo se o push falhar.
+  Aguardado com limite de 4 s, porque as rotas do vinext não têm `waitUntil`.
+- Onde dispara: mensagem direta (`/api/messages`), mensagem de grupo
+  (`/api/chat-groups/[id]/messages`, para os outros membros) e os avisos da
+  varredura agendada (`/api/tasks/sweep`: tarefa vencida, pedido de
+  andamento), que já viravam mensagem do "sistema".
+
+**Pendente:** rodar `npm run db:migrate:remote` **antes** de publicar (o
+código consulta `push_devices`). Opcional: secret `EXPO_ACCESS_TOKEN` no
+Worker se o projeto no Expo ligar "Enhanced Security for Push". Ainda sem
+push: alertas de SLA do painel operacional (calculados na leitura, sem rotina
+que os grave), mural e WhatsApp (desligado desde 2026-09-19). iPhone depende
+de conta Apple Developer.
+
 ## 2026-09-24
 
 ### Tela de PIN nova no login (desktop e celular)

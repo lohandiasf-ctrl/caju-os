@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { and, eq, inArray } from 'drizzle-orm';
 import { getDb } from '@/db';
 import { appUsers, employeeMessages, operationalAudit, operationalTasks } from '@/db/schema';
+import { sendPushToEmails } from '@/lib/server/push';
 
 // Swept by the Worker's scheduled handler. Delegated-task follow-ups used to be
 // labels computed when someone happened to open the ticket, so nobody was ever
@@ -78,6 +79,10 @@ export async function POST(request: Request) {
     }
 
     if (messages.length) await db.insert(employeeMessages).values(messages);
+    // Os mesmos avisos como push no celular: uma notificação por aviso.
+    for (const message of messages) {
+      await sendPushToEmails([message.recipientEmail], { title: 'Caju OS · aviso da operação', body: message.body, data: { kind: 'alert' } });
+    }
     if (audits.length) await db.insert(operationalAudit).values(audits);
 
     return Response.json({ verificadas: tasks.length, followUps, escalations, at: nowIso });

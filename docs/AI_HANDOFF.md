@@ -14,6 +14,13 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
+- **Push para o app do celular (2026-09-25, branch `claude/push-notificacoes`).**
+  Migration nova `drizzle/0043_push_devices.sql`: rode
+  `npm run db:migrate:remote` antes de mesclar na `main`, senão
+  `/api/messages`, grupos e a varredura consultam uma tabela que não existe
+  (o push falha em silêncio, a mensagem continua gravando). Detalhes no
+  `docs/CHANGELOG.md`. O app do celular é o repositório `caju-os-mobile`.
+
 - **WhatsApp removido por inteiro em 2026-09-19 (Claude → Codex).** O usuário
   decidiu reconfigurar do zero depois de um dia inteiro sem fechar a causa de
   conversa 1:1 não funcionar. O que você precisa saber para remontar:
