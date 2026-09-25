@@ -3,6 +3,7 @@ import { appUsers, employeeMessages } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { isSafeDataUrl } from '@/lib/safe-data-url';
+import { senderName, sendPushToEmails } from '@/lib/server/push';
 
 export async function GET(request: Request) {
   try {
@@ -84,6 +85,12 @@ export async function POST(request: Request) {
       ? { senderEmail: current.email, recipientEmail: to, body: messageBody, attachmentName: attachment.name, attachmentType: attachment.type, attachmentData: attachment.data, createdAt: now }
       : { senderEmail: current.email, recipientEmail: to, body: messageBody, createdAt: now };
     const inserted = await getDb().insert(employeeMessages).values(values).returning().get();
+    // Push para o app do celular de quem recebeu (não falha a mensagem se o push falhar).
+    await sendPushToEmails([to], {
+      title: await senderName(current.email),
+      body: messageBody || `Anexo: ${attachment?.name ?? 'arquivo'}`,
+      data: { kind: 'message', from: current.email.toLowerCase() },
+    });
     return Response.json({ message: inserted }, { status: 201 });
   } catch (error) {
     if (error instanceof Response) return error;
