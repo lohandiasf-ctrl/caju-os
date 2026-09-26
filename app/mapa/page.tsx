@@ -45,11 +45,15 @@ type C = {
 type ApiTechnician = {
   id: number; name: string; phone: string | null; email: string | null;
   city: string | null; state: string | null; status: string | null;
+  approved: boolean;
+  onboardingCompleted: string | null;
   hasVehicle: string | null; vehicleType: string | null;
-  specialties: string | null; availableTools: string | null;
+  specialties: string | null; specialtiesCount: string | null;
+  availableTools: string | null; toolsCount: string | null;
   technicianCode: string | null; reviewAvg?: number | null; reviewCount?: number | null;
 };
 type Technician = {
+  id?: number;
   name: string;
   city: string;
   uf: string;
@@ -75,6 +79,7 @@ export default function Page() {
     [geo, setGeo] = useState<{ lat: number; lng: number; label: string } | null>(null),
     [geoLoading, setGeoLoading] = useState(false),
     [roster, setRoster] = useState<ApiTechnician[]>([]),
+    [rosterReady, setRosterReady] = useState(false),
     [selected, setSelected] = useState<(Technician & { distance: number }) | null>(null);
   useEffect(() => {
     if (window.matchMedia('(min-width: 768px)').matches) setMapEnabled(true);
@@ -113,16 +118,40 @@ export default function Page() {
     }
     return () => existing?.removeEventListener('load', load);
   }, []);
+  const liveData = useMemo(() => {
+    if (!rosterReady) return data;
+    const coordinates = new globalThis.Map(data.map((place) => [`${normalize(place.city)}|${place.uf.toUpperCase()}`, place]));
+    const groups = new globalThis.Map<string, ApiTechnician[]>();
+    for (const technician of roster) {
+      if (!technician.city || !technician.state) continue;
+      const key = `${normalize(technician.city)}|${technician.state.toUpperCase()}`;
+      groups.set(key, [...(groups.get(key) ?? []), technician]);
+    }
+    return [...groups].flatMap(([key, technicians]) => {
+      const place = coordinates.get(key);
+      if (!place) return [];
+      const toolCounts = technicians.map((item) => Number(item.toolsCount)).filter(Number.isFinite);
+      const specialtyCounts = technicians.map((item) => Number(item.specialtiesCount)).filter(Number.isFinite);
+      return [{
+        ...place,
+        technicians: technicians.length,
+        onboarded: technicians.filter((item) => item.approved || positive(item.onboardingCompleted)).length,
+        vehicles: technicians.filter((item) => positive(item.hasVehicle)).length,
+        avgTools: toolCounts.length ? toolCounts.reduce((sum, value) => sum + value, 0) / toolCounts.length : 0,
+        avgSpecialties: specialtyCounts.length ? specialtyCounts.reduce((sum, value) => sum + value, 0) / specialtyCounts.length : 0,
+      }];
+    });
+  }, [data, roster, rosterReady]);
   const ufs = useMemo(
     () => [
       "Todos",
-      ...Array.from(new Set(data.map((x) => x.uf).filter(Boolean))).sort(),
+      ...Array.from(new Set((rosterReady ? roster.map((item) => item.state ?? '') : liveData.map((x) => x.uf)).filter(Boolean))).sort(),
     ],
-    [data],
+    [liveData, roster, rosterReady],
   );
   const show = useMemo(
     () =>
-      data.filter(
+      liveData.filter(
         (x) =>
           (uf === "Todos" || x.uf === uf) &&
           (!q ||
@@ -130,14 +159,14 @@ export default function Page() {
               v.toLowerCase().includes(q.toLowerCase()),
             )),
       ),
-    [data, q, uf],
+    [liveData, q, uf],
   );
   const targetCity = useMemo(() => {
     const needle = normalize(q);
     if (needle.length < 2) return null;
-    const candidates = data.filter((city) => normalize(city.city).includes(needle) && (uf === 'Todos' || city.uf === uf));
+    const candidates = liveData.filter((city) => normalize(city.city).includes(needle) && (uf === 'Todos' || city.uf === uf));
     return candidates.find((city) => normalize(city.city) === needle) ?? candidates[0] ?? null;
-  }, [data, q, uf]);
+  }, [liveData, q, uf]);
   // A cidade buscada pode não estar em technician-map.json, que só lista as 425
   // com técnico. Sem isso, procurar por uma cidade descoberta não devolvia nada
   // — nem sequer os técnicos vizinhos. Aqui ela é geocodificada sob demanda.
@@ -180,17 +209,43 @@ export default function Page() {
         const response = await fetch('/api/technicians', { headers: { Authorization: `Bearer ${token}` } });
         if (!response.ok) return;
         const payload = await response.json() as { technicians?: ApiTechnician[] };
-        if (active) setRoster(payload.technicians ?? []);
+        if (active) {
+          setRoster(payload.technicians ?? []);
+          setRosterReady(true);
+        }
       } catch { /* detalhe é opcional: a lista continua funcionando sem ele */ }
     })();
     return () => { active = false; };
   }, []);
+  useEffect(() => {
+    if (!rosterReady) return;
+    const coordinates = new globalThis.Map(data.map((place) => [`${normalize(place.city)}|${place.uf.toUpperCase()}`, place]));
+    setDirectory(roster.flatMap((technician) => {
+      if (!technician.city || !technician.state) return [];
+      const place = coordinates.get(`${normalize(technician.city)}|${technician.state.toUpperCase()}`);
+      if (!place) return [];
+      return [{
+        id: technician.id,
+        name: technician.name,
+        city: technician.city,
+        uf: technician.state.toUpperCase(),
+        lat: place.lat,
+        lng: place.lng,
+        onboarded: technician.approved || positive(technician.onboardingCompleted),
+        vehicle: positive(technician.hasVehicle),
+      }];
+    }));
+  }, [data, roster, rosterReady]);
   const rosterIndex = useMemo(() => {
     const index = new globalThis.Map<string, ApiTechnician>();
     for (const item of roster) index.set(`${normalize(item.name)}|${normalize(item.city ?? '')}`, item);
     return index;
   }, [roster]);
-  const selectedDetail = selected ? rosterIndex.get(`${normalize(selected.name)}|${normalize(selected.city)}`) ?? null : null;
+  const selectedDetail = selected
+    ? (selected.id ? roster.find((item) => item.id === selected.id) : undefined)
+      ?? rosterIndex.get(`${normalize(selected.name)}|${normalize(selected.city)}`)
+      ?? null
+    : null;
 
   const origin = targetCity ?? geo;
   const originLabel = targetCity ? `${targetCity.city}/${targetCity.uf}` : geo?.label ?? '';
@@ -270,9 +325,27 @@ export default function Page() {
     })().catch(() => setError("Falha ao iniciar o mapa"));
     return () => { cancelled = true; };
   }, [ready, mapEnabled, show, origin, originLabel, fallbackTechnicians]);
-  const total = show.reduce((s, x) => s + x.technicians, 0),
-    onboard = show.reduce((s, x) => s + x.onboarded, 0),
-    vehicles = show.reduce((s, x) => s + x.vehicles, 0);
+  const filteredRoster = rosterReady
+    ? roster.filter((technician) => {
+        const matchesState = uf === 'Todos' || technician.state?.toUpperCase() === uf;
+        const needle = normalize(q);
+        const matchesQuery = !needle || [technician.city, technician.state].some((value) => normalize(value ?? '').includes(needle));
+        return matchesState && matchesQuery;
+      })
+    : [];
+  const total = rosterReady ? filteredRoster.length : show.reduce((sum, city) => sum + city.technicians, 0);
+  const onboard = rosterReady
+    ? filteredRoster.filter((technician) => technician.approved || positive(technician.onboardingCompleted)).length
+    : show.reduce((sum, city) => sum + city.onboarded, 0);
+  const vehicles = rosterReady
+    ? filteredRoster.filter((technician) => positive(technician.hasVehicle)).length
+    : show.reduce((sum, city) => sum + city.vehicles, 0);
+  const displayedCities = rosterReady
+    ? new Set(filteredRoster.filter((item) => item.city && item.state).map((item) => `${normalize(item.city ?? '')}|${item.state}`)).size
+    : show.length;
+  const directoryCities = rosterReady
+    ? new Set(roster.filter((item) => item.city && item.state).map((item) => `${normalize(item.city ?? '')}|${item.state}`)).size
+    : liveData.length;
   return (
     <main className="min-h-screen text-foreground">
       <AppNavigation active="map" open={menu} onOpenChange={setMenu} />
@@ -344,10 +417,10 @@ export default function Page() {
             className="mt-5"
             label="Resumo do mapa"
             items={[
-              { label: "Técnicos vinculados", value: total, note: `em ${show.length} ${show.length === 1 ? "cidade exibida" : "cidades exibidas"}`, icon: Users },
+              { label: "Técnicos vinculados", value: total, note: `em ${displayedCities} ${displayedCities === 1 ? "cidade exibida" : "cidades exibidas"}`, icon: Users },
               { label: "Onboarding concluído", value: onboard, note: total ? `${Math.round((onboard / total) * 100)}% dos técnicos` : "Sem técnicos no filtro", icon: ShieldCheck },
               { label: "Com veículo", value: vehicles, note: total ? `${Math.round((vehicles / total) * 100)}% dos técnicos` : "Sem técnicos no filtro", icon: Car },
-              { label: "Cidades exibidas", value: show.length, note: `de ${data.length} no diretório`, icon: MapPin },
+              { label: "Cidades exibidas", value: displayedCities, note: `de ${directoryCities} no banco`, icon: MapPin },
             ]}
           />
           {geoLoading && !origin && (
@@ -500,6 +573,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 function normalize(value: string) { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+function positive(value: string | null | undefined) { return /sim|yes|true|ativo|concluido|carro|moto/i.test(value ?? ''); }
 function initials(value: string) { return value.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase(); }
 function distanceKm(origin: Pick<C, 'lat' | 'lng'>, target: Pick<Technician, 'lat' | 'lng'>) {
   const radians = Math.PI / 180;
