@@ -89,6 +89,7 @@ import {
 } from "@/lib/ticket-activities";
 import { validationRequirements as getValidationRequirements } from "@/lib/operational-rules";
 import { brazilPhone, googleContactsCsv } from "@/lib/google-contacts";
+import { parseTechnicianCsv } from "@/lib/technician-import";
 import {
   hasQueueFilters,
   matchesQueueFilters,
@@ -461,12 +462,20 @@ export default function Home() {
   useEffect(() => {
     const syncView = () => {
       const requested = dashboardViewFromLocation();
+      if (!role) {
+        if (isDashboardView(requested)) setActiveView(requested);
+        return;
+      }
       const next = canUseDashboardView(role, requested)
         ? requested
         : defaultDashboardView(role);
       setActiveView(next);
       setQueueFilters(parseQueueFilters(window.location.search));
-      if (requested !== next) window.history.replaceState(null, "", `/?view=${next}`);
+      if (requested !== next) {
+        const params = new URLSearchParams(window.location.search);
+        params.set("view", next);
+        window.history.replaceState(null, "", `/?${params.toString()}`);
+      }
     };
     syncView();
     window.addEventListener("popstate", syncView);
@@ -2371,7 +2380,8 @@ function TechniciansView({
   tickets: Ticket[];
 }) {
   const { user, role } = useAuth();
-  const [tab, setTab] = useState<"n1" | "field">("n1");
+  const requestedTech = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tech')?.trim() : null;
+  const [tab, setTab] = useState<"n1" | "field">(requestedTech ? "field" : "n1");
   const [fieldTechnicians, setFieldTechnicians] = useState<FieldTechnician[]>(
     [],
   );
@@ -2390,6 +2400,25 @@ function TechniciansView({
   const [lastTcpNumber, setLastTcpNumber] = useState("");
   const [exportFile, setExportFile] = useState<{ url: string; name: string } | null>(null);
   useEffect(() => () => { if (exportFile) URL.revokeObjectURL(exportFile.url); }, [exportFile]);
+
+  useEffect(() => {
+    if (requestedTech) setTab("field");
+  }, [requestedTech]);
+
+  useEffect(() => {
+    if (!requestedTech || !fieldTechnicians.length) return;
+    const found = fieldTechnicians.find(
+      (t) =>
+        String(t.id) === requestedTech ||
+        t.name.toLowerCase() === requestedTech.toLowerCase() ||
+        ('technicianCode' in t && (t as unknown as { technicianCode?: string }).technicianCode === requestedTech)
+    );
+    if (found) {
+      setSelected(found);
+      setTab("field");
+    }
+  }, [requestedTech, fieldTechnicians]);
+
   useEffect(() => {
     if (tab !== "field" || !user || fieldTechnicians.length) return;
     let active = true;
@@ -2412,7 +2441,14 @@ function TechniciansView({
           throw new Error(
             payload.error || "Não foi possível carregar os técnicos.",
           );
-        if (active) setFieldTechnicians(payload.technicians ?? []);
+        if (active) {
+          const list = payload.technicians ?? [];
+          setFieldTechnicians(list);
+          if (requestedTech) {
+            const found = list.find((t) => String(t.id) === requestedTech || t.name.toLowerCase() === requestedTech.toLowerCase() || ('technicianCode' in t && (t as unknown as { technicianCode?: string }).technicianCode === requestedTech));
+            if (found) setSelected(found);
+          }
+        }
       })
       .catch((error) => {
         if (active)
@@ -3167,41 +3203,7 @@ function SettingsView({
     setImportMessage("");
     try {
       const text = await readCsvText(file);
-      const lines = text.split(/\r?\n/).filter(Boolean);
-      const headers = splitCsv(lines.shift() ?? ";").map(normalizeHeader);
-      const rows = lines
-        .map((line) => {
-          const values = splitCsv(line);
-          const row = Object.fromEntries(
-            headers.map((header, i) => [header, values[i] ?? ""]),
-          );
-          return {
-            technicianExternalId: row.idtecnico,
-            technicianCode: row.codigotec,
-            name: row.nome ?? row.nomecompleto ?? row.tecnico,
-            cpf: row.cpf,
-            phone: row.whatsapptelefone ?? row.telefone,
-            email: row.email,
-            pixKey: row.chavepix,
-            age: row.idade,
-            city: row.cidade,
-            state: normalizeState(row.uf ?? row.estado),
-            fullAddress: row.enderecocompleto,
-            sourceStatus: row.status,
-            onboardingCompleted: row.onboardingconcluido,
-            approved: /sim|yes|true|ativo/i.test(row.onboardingconcluido ?? ""),
-            hasVehicle: row.possuiveiculo,
-            vehicleType: row.tipodeveiculo,
-            alternativeTransport: row.transportealternativo,
-            servesOtherCities: row.atendeoutrascidades,
-            extraCities: row.cidadesatendidasextras,
-            toolsCount: row.qtdferramentas,
-            availableTools: row.ferramentasdisponiveis,
-            specialtiesCount: row.qtdespecialidades,
-            specialties: row.especialidadesareasdedominio,
-          };
-        })
-        .filter((row) => row.name && row.city && row.state);
+      const rows = parseTechnicianCsv(text);
       const response = await fetch("/api/technicians/import", {
         method: "POST",
         headers: {
@@ -3216,8 +3218,9 @@ function SettingsView({
       };
       if (!response.ok) throw new Error(payload.error);
       setImportMessage(
-        `${payload.imported ?? 0} técnicos importados com sucesso.`,
+        `${payload.imported ?? 0} técnicos importados com sucesso. O mapa e a lista usarão o banco atualizado.`,
       );
+      window.dispatchEvent(new Event("technicians-imported"));
     } catch (error) {
       setImportMessage(
         error instanceof Error ? error.message : "Falha ao importar planilha.",
@@ -3436,20 +3439,6 @@ function IntegrationHealthPanel({
   );
 }
 
-function splitCsv(line: string) {
-  const result: string[] = [];
-  let value = "";
-  let quoted = false;
-  for (const char of line) {
-    if (char === '"') quoted = !quoted;
-    else if (char === ";" && !quoted) {
-      result.push(value.trim());
-      value = "";
-    } else value += char;
-  }
-  result.push(value.trim());
-  return result;
-}
 async function readCsvText(file: File) {
   const data = await file.arrayBuffer();
   try {
@@ -3460,33 +3449,6 @@ async function readCsvText(file: File) {
     return new TextDecoder("windows-1252").decode(data).replace(/^\uFEFF/, "");
   }
 }
-function normalizeHeader(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
-function normalizeState(value: string) {
-  const states: Record<string, string> = {
-    pernambuco: "PE",
-    paraiba: "PB",
-    bahia: "BA",
-    alagoas: "AL",
-    ceara: "CE",
-    piaui: "PI",
-    sergipe: "SE",
-    maranhao: "MA",
-    minasgerais: "MG",
-    saopaulo: "SP",
-    riodejaneiro: "RJ",
-  };
-  const clean = normalizeHeader(value);
-  return clean.length === 2
-    ? clean.toUpperCase()
-    : (states[clean] ?? value.trim().slice(0, 2).toUpperCase());
-}
-
 function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div className="cockpit-inset rounded-xl p-3">
