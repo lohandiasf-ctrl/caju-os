@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { and, eq, inArray, isNull, lt } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, lt } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { appUsers, operationalWorkflows, pushAlertsSent, pushDevices, pushPreferences } from '@/db/schema';
+import { appUsers, operationalAudit, operationalWorkflows, pushAlertsSent, pushDevices, pushPreferences } from '@/db/schema';
 import { CLOSED_WORKFLOW_STATUSES, slaHoursOf, WORKFLOW_STATUS_LABEL } from '@/lib/operational-sla';
 import { chunk } from '@/lib/push-message';
-import { detectAlerts, notesFor, OPS_ROLES, parsePrefs, type QueueIssue } from '@/lib/push-alerts';
-import { searchJiraIssues } from '@/lib/server/jira';
+import { ALERT_WINDOW_MS, commentAlerts, detectAlerts, notesFor, OPS_ROLES, parsePrefs, type AuditRow, type QueueIssue, type TicketComment } from '@/lib/push-alerts';
+import { recentJiraComments, searchJiraIssues } from '@/lib/server/jira';
 import { sendPushToEmails } from '@/lib/server/push';
 
 // Chamado pela rotina agendada (scripts/worker-entry.js, a cada 10 min).
@@ -14,6 +14,10 @@ import { sendPushToEmails } from '@/lib/server/push';
 // ligou aquele tipo de aviso no app do celular.
 
 const KEEP_DAYS = 30;
+/** "Chamado que você movimentou": ação sua gravada na auditoria nestes últimos dias. */
+const WATCH_DAYS = 14;
+/** Teto de chamados consultados por rodada para comentários novos (cada um é uma chamada ao Jira). */
+const MAX_COMMENT_LOOKUPS = 25;
 /** D1 aceita até 100 parâmetros por consulta. */
 const IN_BATCH = 90;
 
@@ -27,6 +31,34 @@ async function loadQueue(): Promise<QueueIssue[]> {
     cursor = r.nextPageToken;
   }
   return issues;
+}
+
+/**
+ * Comentário novo nos chamados que alguém movimentou (auditoria dos últimos
+ * 14 dias). Só consulta os comentários dos chamados abertos que o Jira diz
+ * terem mudado nesta janela, para não chamar o Jira por chamado a cada rodada.
+ */
+async function detectComments(db: ReturnType<typeof getDb>, issues: QueueIssue[], recipients: Set<string>, now: Date) {
+  const since = new Date(now.getTime() - WATCH_DAYS * 86_400_000).toISOString();
+  const audit: AuditRow[] = await db.select({ ticketKey: operationalAudit.ticketKey, actorEmail: operationalAudit.actorEmail, action: operationalAudit.action, createdAt: operationalAudit.createdAt })
+    .from(operationalAudit).where(gt(operationalAudit.createdAt, since)).all();
+  const watched = new Set(audit.filter((r) => recipients.has(r.actorEmail.toLowerCase())).map((r) => r.ticketKey));
+  if (!watched.size) return [];
+  const changedSince = now.getTime() - ALERT_WINDOW_MS;
+  const candidates = issues
+    .filter((i) => watched.has(i.key) && Date.parse((i as QueueIssue & { updatedAt?: string }).updatedAt ?? '') > changedSince)
+    .slice(0, MAX_COMMENT_LOOKUPS);
+  const comments: TicketComment[] = [];
+  for (const issue of candidates) {
+    comments.push(...await recentJiraComments(issue.key, 5).catch(() => []));
+  }
+  const byKey = new Map(issues.map((i) => [i.key, i]));
+  const place = (key: string) => {
+    const i = byKey.get(key);
+    const store = i?.store ? (/^[A-Z]?\d+$/i.test(i.store) ? `Loja ${i.store}` : i.store) : '';
+    return [store, i?.city].filter(Boolean).join(' · ');
+  };
+  return commentAlerts(comments, audit, recipients, now.getTime(), ALERT_WINDOW_MS, place);
 }
 
 export async function POST(request: Request) {
@@ -52,6 +84,7 @@ export async function POST(request: Request) {
         .from(operationalWorkflows).all(),
     ]);
     const alerts = detectAlerts(issues, workflows, { closed: CLOSED_WORKFLOW_STATUSES, hoursOf: slaHoursOf, label: WORKFLOW_STATUS_LABEL }, now.getTime());
+    alerts.push(...await detectComments(db, issues, new Set(recipients), now));
 
     // Tira o que já foi avisado e grava o novo ANTES de enviar: se o envio
     // demorar, a próxima rodada não repete.
@@ -74,7 +107,7 @@ export async function POST(request: Request) {
       const prefRows = await db.select().from(pushPreferences).where(inArray(pushPreferences.email, recipients)).all();
       const prefs = new Map(prefRows.map((p) => [p.email.toLowerCase(), parsePrefs(p.kinds)]));
       for (const email of recipients) {
-        for (const note of notesFor(fresh, prefs.get(email) ?? parsePrefs(null))) {
+        for (const note of notesFor(fresh, prefs.get(email) ?? parsePrefs(null), email)) {
           await sendPushToEmails([email], note);
           notes += 1;
         }

@@ -14,6 +14,12 @@ trabalho sem depender da memória de uma conversa. Leia este arquivo primeiro.
 
 ## Estado atual do sistema
 
+- **Avisos push: janela de entrega e comentário novo (2026-09-26, branch
+  `claude/avisos-horario-e-comentarios`).** Migration nova
+  `drizzle/0045_push_delivery_window.sql` (coluna `push_preferences.schedule`):
+  rode `npm run db:migrate:remote` antes de mesclar, senão as rotas de push
+  leem uma coluna que não existe. Detalhes no `docs/CHANGELOG.md`.
+
 - **Avisos push escolhíveis (2026-09-25, branch `claude/push-avisos`).**
   Migration nova `drizzle/0044_push_preferences_alerts.sql`: rode
   `npm run db:migrate:remote` antes de mesclar. A rotina agendada passa a

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ALERT_KIND_LIST, detectAlerts, notesFor, parsePrefs, prefsWithDefaults, type QueueIssue } from '../lib/push-alerts.ts';
+import { ALERT_KIND_LIST, commentAlerts, DEFAULT_WINDOW, detectAlerts, inDeliveryWindow, notesFor, parsePrefs, parseWindow, prefsWithDefaults, UPDATE_AUDIT_ACTION, windowWithDefaults, type QueueIssue } from '../lib/push-alerts.ts';
 import { CLOSED_WORKFLOW_STATUSES, SLA_HOURS, slaHoursOf, WORKFLOW_STATUS_LABEL } from '../lib/operational-sla.ts';
 
 const sla = { closed: CLOSED_WORKFLOW_STATUSES, hoursOf: slaHoursOf, label: WORKFLOW_STATUS_LABEL };
@@ -78,4 +78,40 @@ test('avisos por pessoa: respeita o que ela desligou e resume quando são muitos
   const single = notes.find((n) => n.data.kind === 'new_ticket');
   assert.equal(single?.data.url, '/ticket/FSA-99');
   assert.equal(notesFor(alerts, prefsWithDefaults({ schedule_missed: false })).length, 0); // new_ticket vem desligado por padrão
+});
+
+test('janela de entrega: desligada deixa passar; ligada respeita dia e horário de Brasília', () => {
+  const sexta12h = new Date('2026-09-25T15:00:00Z'); // sexta, 12:00 em Brasília
+  const sabado12h = new Date('2026-09-26T15:00:00Z');
+  const sexta19h = new Date('2026-09-25T22:00:00Z');
+  const trabalho = { enabled: true, days: [1, 2, 3, 4, 5], start: '08:00', end: '18:00' };
+  assert.equal(inDeliveryWindow(sabado12h, DEFAULT_WINDOW), true);
+  assert.equal(inDeliveryWindow(sexta12h, trabalho), true);
+  assert.equal(inDeliveryWindow(sabado12h, trabalho), false);
+  assert.equal(inDeliveryWindow(sexta19h, trabalho), false);
+});
+
+test('janela que vira a noite conta o dia do início', () => {
+  const plantao = { enabled: true, days: [5], start: '22:00', end: '06:00' }; // sexta 22h → sábado 6h
+  assert.equal(inDeliveryWindow(new Date('2026-09-26T04:00:00Z'), plantao), true); // sábado 01:00
+  assert.equal(inDeliveryWindow(new Date('2026-09-27T04:00:00Z'), plantao), false); // domingo 01:00
+});
+
+test('janela salva inválida volta ao padrão sem quebrar', () => {
+  assert.deepEqual(parseWindow('{lixo'), DEFAULT_WINDOW);
+  assert.deepEqual(windowWithDefaults({ enabled: true, days: [9, 1, 1], start: '25:00', end: '17:30' }), { enabled: true, days: [1], start: '08:00', end: '17:30' });
+});
+
+test('comentário novo vai só para quem movimentou o chamado, e não para o próprio autor', () => {
+  const recipients = new Set(['ana@caju.net', 'beto@caju.net', 'caio@caju.net']);
+  const audit = [
+    { ticketKey: 'FSA-9', actorEmail: 'ana@caju.net', action: 'Jira alterado para Agendado', createdAt: iso(2 * H) },
+    { ticketKey: 'FSA-9', actorEmail: 'Beto@caju.net', action: UPDATE_AUDIT_ACTION, createdAt: iso(4 * MIN) },
+  ];
+  const [alert] = commentAlerts([{ id: '77', ticketKey: 'FSA-9', author: 'Caju OS', createdAt: iso(4 * MIN), body: 'UP - técnico a caminho' }], audit, recipients, NOW);
+  assert.equal(alert.kind, 'new_comment');
+  assert.deepEqual(alert.to, ['ana@caju.net']);
+  assert.equal(notesFor([alert], parsePrefs(null), 'ana@caju.net').length, 1);
+  assert.equal(notesFor([alert], parsePrefs(null), 'caio@caju.net').length, 0);
+  assert.deepEqual(commentAlerts([{ id: '1', ticketKey: 'FSA-9', author: null, createdAt: iso(3 * H), body: 'antigo' }], audit, recipients, NOW), []);
 });

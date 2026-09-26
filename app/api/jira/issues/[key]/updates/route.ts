@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { employeePresence } from '@/db/schema';
+import { employeePresence, operationalAudit } from '@/db/schema';
+import { UPDATE_AUDIT_ACTION } from '@/lib/push-alerts';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { addJiraTicketUpdate } from '@/lib/server/jira';
 import { authorFullName, ticketUpdateComment, ticketUpdateError } from '@/lib/ticket-update';
@@ -28,7 +29,12 @@ export async function POST(request: Request, context: { params: Promise<{ key: s
     }
 
     await addJiraTicketUpdate(key, ticketUpdateComment(text, author));
-    return Response.json({ ok: true, author, createdAt: new Date().toISOString() });
+    const createdAt = new Date().toISOString();
+    // Marca quem movimentou o chamado: vale para o aviso de comentário novo e
+    // evita avisar a pessoa do próprio comentário. Falhar aqui não desfaz o comentário.
+    await getDb().insert(operationalAudit).values({ ticketKey: key, action: UPDATE_AUDIT_ACTION, actorEmail: user.email, details: null, createdAt })
+      .run().catch((error: unknown) => console.error('auditoria da atualização', error));
+    return Response.json({ ok: true, author, createdAt });
   } catch (error) {
     if (error instanceof Response) return error;
     console.error('Falha ao registrar atualização do chamado', error);

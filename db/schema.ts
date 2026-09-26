@@ -76,6 +76,8 @@ export const pushDevices = sqliteTable(
 export const pushPreferences = sqliteTable('push_preferences', {
   email: text('email').primaryKey(),
   kinds: text('kinds').notNull(),
+  // Janela de entrega (dias e horário em que os avisos podem chegar), JSON; ver lib/push-alerts.ts.
+  schedule: text('schedule'),
   updatedAt: text('updated_at').notNull(),
 });
 
