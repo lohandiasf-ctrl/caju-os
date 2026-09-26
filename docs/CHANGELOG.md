@@ -727,6 +727,20 @@ ao `systemInstruction` em `lib/assistant-tools.ts`. O assistente passa a operar 
 - Modos de saída adaptativos: texto explicativo em markdown, relatórios em tabelas markdown, listas simples e JSON estrito quando solicitado.
 - Capacidades de diagnóstico técnico em TI de varejo e estruturação para ações no Jira (summary, description padronizada, priorização e labels).
 
+### Prompt de redesign UI/UX (dashboard premium)
+
+Novo `docs/prompts/UI_UX_DASHBOARD_REDESIGN.md`: prompt detalhado para uma IA ou
+designer levar ao Caju OS a linguagem visual de um vídeo de referência (login em
+tela dividida azul, dashboard em bento grid, gráfico de barras com trilho, orb
+do assistente, entrada dos cards em cascata, alternância claro/escuro). Cobre
+tokens, telas, animações, estados, acessibilidade e um plano em 8 passos.
+Só documentação, sem mudança de código.
+
+Os passos 1–7 do plano já foram implementados na `main` (ver "Redesign
+"Dashboard Premium"" em 2026-09-22). A revisão de UI/UX acima substituiu parte
+da direção visual (glow, gradiente, orb), então o prompt ganhou um aviso de
+documento histórico no topo.
+
 ## 2026-09-22
 
 ### Ditado por voz no assistente e sliders de filtro da fila (branch `claude/microfone-sliders`)
@@ -894,6 +908,8 @@ Cada chamada usa `store: false`, para não armazenar o conteúdo operacional
 enviado ao modelo. A franquia gratuita diária é da Cloudflare; quando ela for
 atingida, a API responde claramente para tentar no dia seguinte, sem trocar
 para um modelo pago.
+
+---
 
 ## 2026-09-21
 
