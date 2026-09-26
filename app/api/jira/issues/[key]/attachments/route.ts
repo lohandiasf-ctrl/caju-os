@@ -1,3 +1,5 @@
+import { getDb } from '@/db';
+import { operationalAudit } from '@/db/schema';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 import { JiraError, uploadJiraAttachments } from '@/lib/server/jira';
 import { isAllowedUploadMime, isSafeUpload } from '@/lib/safe-data-url';
@@ -23,7 +25,11 @@ export async function POST(request: Request, context: { params: Promise<{ key: s
       return Response.json({ error: 'Arquivo inválido ou incompatível com o tipo informado.' }, { status: 400 });
     }
     logSecurityEvent({ request, user, action: 'attachment_upload', outcome: 'allowed', details: { ticketKey: key, count: files.length, totalBytes: files.reduce((total, file) => total + file.size, 0) } });
-    return Response.json(await uploadJiraAttachments(key, files, user.email), { headers: { 'Cache-Control': 'private, no-store' } });
+    const result = await uploadJiraAttachments(key, files, user.email);
+    // Quem anexou passa a acompanhar o chamado (aviso de comentário novo).
+    await getDb().insert(operationalAudit).values({ ticketKey: key.toUpperCase(), action: `Evidência anexada (${files.length})`, actorEmail: user.email, details: null, createdAt: new Date().toISOString() })
+      .run().catch((error: unknown) => console.error('auditoria do anexo', error));
+    return Response.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });

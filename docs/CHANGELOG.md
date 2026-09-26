@@ -9,6 +9,31 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-26
+
+### Avisos push: janela de entrega e comentário novo
+
+Pedido do usuário: o app é de trabalho, então cada pessoa escolhe em que
+dias e horário os avisos podem chegar, e ganha o aviso de comentário novo.
+Branch `claude/avisos-horario-e-comentarios`.
+
+- `push_preferences.schedule` (migration `0045_push_delivery_window.sql`):
+  JSON `{enabled, days[0-6], start, end}`, hora de Brasília. Fora da janela o
+  aviso **não é enviado** (diferente do horário de silêncio, que só tira o
+  som). Vale para mensagens, grupos, tarefas e avisos da fila
+  (`lib/server/push.ts`). Janela que vira a noite conta o dia do início.
+- Tipo `new_comment` (ligado por padrão): comentário novo, interno ou
+  público, num chamado que a pessoa movimentou nos últimos 14 dias
+  (`operational_audit`). A varredura só consulta os comentários dos chamados
+  vigiados que o Jira diz terem mudado na janela (até 25 por rodada), e não
+  avisa a pessoa do próprio comentário.
+- `operational_audit` passa a registrar também "Atualizar chamado" e anexos
+  enviados, para quem só comenta ou anexa contar como quem movimentou.
+- `/api/push/preferences` devolve e aceita `window`; o PUT sem `window` (app
+  antigo) mantém a janela salva.
+
+**Pendente:** aviso fora da janela é descartado, não guardado para depois.
+
 ## 2026-09-25
 
 ### Avisos push escolhíveis (SLA, agendamento, chamado novo)

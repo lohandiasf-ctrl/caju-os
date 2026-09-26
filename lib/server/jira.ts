@@ -609,6 +609,18 @@ export async function addJiraInternalComment(key: string, body: string, author: 
   });
 }
 
+// Últimos comentários (internos e públicos) de um chamado, do mais novo ao mais
+// antigo. Usado pelo aviso push de comentário novo; leve de propósito (sem *all).
+export async function recentJiraComments(key: string, max = 10) {
+  const normalizedKey = validIssueKey(key);
+  const payload = await jiraFetch<{ comments?: Array<{ id?: string; body?: unknown; created?: string; author?: { displayName?: string } }> }>(
+    `/rest/api/3/issue/${encodeURIComponent(normalizedKey)}/comment?orderBy=-created&maxResults=${Math.min(Math.max(max, 1), 50)}`,
+  );
+  return (payload.comments ?? []).flatMap((c) => (c.id && c.created
+    ? [{ id: String(c.id), ticketKey: normalizedKey, author: c.author?.displayName ?? null, createdAt: c.created, body: adfToText(c.body) }]
+    : []));
+}
+
 // "Atualizar chamado" (tela do chamado): nota de quem acompanha o atendimento,
 // assinada só com nome e sobrenome — sem o e-mail e sem o "confirmado por"
 // das ações do assistente. Também é comentário interno (não vai ao cliente).
