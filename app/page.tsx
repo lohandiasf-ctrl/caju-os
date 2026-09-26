@@ -461,12 +461,20 @@ export default function Home() {
   useEffect(() => {
     const syncView = () => {
       const requested = dashboardViewFromLocation();
+      if (!role) {
+        if (isDashboardView(requested)) setActiveView(requested);
+        return;
+      }
       const next = canUseDashboardView(role, requested)
         ? requested
         : defaultDashboardView(role);
       setActiveView(next);
       setQueueFilters(parseQueueFilters(window.location.search));
-      if (requested !== next) window.history.replaceState(null, "", `/?view=${next}`);
+      if (requested !== next) {
+        const params = new URLSearchParams(window.location.search);
+        params.set("view", next);
+        window.history.replaceState(null, "", `/?${params.toString()}`);
+      }
     };
     syncView();
     window.addEventListener("popstate", syncView);
@@ -2391,6 +2399,25 @@ function TechniciansView({
   const [lastTcpNumber, setLastTcpNumber] = useState("");
   const [exportFile, setExportFile] = useState<{ url: string; name: string } | null>(null);
   useEffect(() => () => { if (exportFile) URL.revokeObjectURL(exportFile.url); }, [exportFile]);
+
+  useEffect(() => {
+    if (requestedTech) setTab("field");
+  }, [requestedTech]);
+
+  useEffect(() => {
+    if (!requestedTech || !fieldTechnicians.length) return;
+    const found = fieldTechnicians.find(
+      (t) =>
+        String(t.id) === requestedTech ||
+        t.name.toLowerCase() === requestedTech.toLowerCase() ||
+        ('technicianCode' in t && (t as unknown as { technicianCode?: string }).technicianCode === requestedTech)
+    );
+    if (found) {
+      setSelected(found);
+      setTab("field");
+    }
+  }, [requestedTech, fieldTechnicians]);
+
   useEffect(() => {
     if (tab !== "field" || !user || fieldTechnicians.length) return;
     let active = true;
