@@ -2371,7 +2371,8 @@ function TechniciansView({
   tickets: Ticket[];
 }) {
   const { user, role } = useAuth();
-  const [tab, setTab] = useState<"n1" | "field">("n1");
+  const requestedTech = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tech')?.trim() : null;
+  const [tab, setTab] = useState<"n1" | "field">(requestedTech ? "field" : "n1");
   const [fieldTechnicians, setFieldTechnicians] = useState<FieldTechnician[]>(
     [],
   );
@@ -2412,7 +2413,14 @@ function TechniciansView({
           throw new Error(
             payload.error || "Não foi possível carregar os técnicos.",
           );
-        if (active) setFieldTechnicians(payload.technicians ?? []);
+        if (active) {
+          const list = payload.technicians ?? [];
+          setFieldTechnicians(list);
+          if (requestedTech) {
+            const found = list.find((t) => String(t.id) === requestedTech || t.name.toLowerCase() === requestedTech.toLowerCase() || ('technicianCode' in t && (t as unknown as { technicianCode?: string }).technicianCode === requestedTech));
+            if (found) setSelected(found);
+          }
+        }
       })
       .catch((error) => {
         if (active)
