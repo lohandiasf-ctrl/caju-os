@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading) return;
     if (!user && pathname !== '/login') {
       const search = window.location.search;
-      router.replace(search ? \`/login?redirect=\${encodeURIComponent(pathname + search)}\` : '/login');
+      router.replace(search ? `/login?redirect=${encodeURIComponent(pathname + search)}` : '/login');
       return;
     }
     if (user && pathname === '/login') {
