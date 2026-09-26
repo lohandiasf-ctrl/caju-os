@@ -151,11 +151,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!user && pathname !== '/login') {
-      router.replace('/login');
+      const search = window.location.search;
+      router.replace(search ? \`/login?redirect=\${encodeURIComponent(pathname + search)}\` : '/login');
       return;
     }
     if (user && pathname === '/login') {
-      router.replace('/');
+      const search = window.location.search;
+      const redirectParams = new URLSearchParams(search);
+      const redirect = redirectParams.get('redirect');
+      router.replace(redirect && redirect.startsWith('/') ? redirect : '/');
       return;
     }
     // Já resolveu um papel válido enquanto estava preso em /acesso-negado?
