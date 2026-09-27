@@ -191,7 +191,7 @@ export function detectAlerts(issues: QueueIssue[], workflows: WorkflowRow[], sla
 
   // SLA: a mesma regra do painel operacional (horas por etapa desde a última mudança).
   for (const w of workflows) {
-    if (sla.closed.has(w.status) || w.status === 'scheduled') continue;
+    if (sla.closed.has(w.status) || w.status === 'scheduled' || w.status === 'awaiting_spare') continue;
     const opened = time(w.updatedAt) ?? time(w.createdAt);
     if (opened === null) continue;
     const hours = sla.hoursOf(w.status);

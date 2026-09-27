@@ -5,6 +5,13 @@
 
 export const CLOSED_WORKFLOW_STATUSES = new Set(['archived', 'resolved', 'cancelled', 'validated']);
 
+// Etapas que não entram no SLA: esperando peça (o prazo é da transportadora,
+// não da operação) e agendado (o prazo é a data marcada, não o tempo parado).
+export const SLA_EXEMPT_STATUSES = new Set(['awaiting_spare', 'scheduled']);
+
+/** O fluxo conta no "No prazo (SLA)": ativo e numa etapa com prazo da operação. */
+export const measuresSla = (status: string) => !CLOSED_WORKFLOW_STATUSES.has(status) && !SLA_EXEMPT_STATUSES.has(status);
+
 export const SLA_HOURS: Record<string, number> = {
   triage: 2, scheduling: 4, operational_preparation: 4, in_service: 12, technical_pending: 24,
   awaiting_approval: 24, awaiting_spare: 24, awaiting_payment: 24,

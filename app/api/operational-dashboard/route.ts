@@ -2,7 +2,7 @@ import { desc } from 'drizzle-orm';
 import { employeeActivity, employeePresence, n1TicketAssignments, operationalAudit, operationalTasks, operationalVisits, operationalWorkflows, shipmentTracking } from '@/db/schema';
 import { getDb } from '@/db';
 import { requireApiUser } from '@/lib/server/firebase-auth';
-import { CLOSED_WORKFLOW_STATUSES as closed, SLA_HOURS as slaHours } from '@/lib/operational-sla';
+import { CLOSED_WORKFLOW_STATUSES as closed, measuresSla, SLA_HOURS as slaHours } from '@/lib/operational-sla';
 
 export async function GET(request: Request) {
   try {
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       if (closed.has(workflow.status)) return [];
       const opened = Date.parse(workflow.updatedAt || workflow.createdAt);
       const limit = slaHours[workflow.status] ?? 24;
-      const overdueMinutes = Number.isFinite(opened) ? Math.max(0, Math.floor((now - opened - limit * 3_600_000) / 60_000)) : 0;
+      const overdueMinutes = measuresSla(workflow.status) && Number.isFinite(opened) ? Math.max(0, Math.floor((now - opened - limit * 3_600_000) / 60_000)) : 0;
       const dueSchedule = workflow.status === 'scheduled' && workflow.scheduledAt ? Date.parse(workflow.scheduledAt) - now : null;
       if (overdueMinutes > 0) return [{ ticketKey: workflow.ticketKey, level: overdueMinutes > 120 ? 'critical' : 'warning', message: `SLA excedido em ${workflow.status}: ${Math.ceil(overdueMinutes / 60)}h` }];
       if (dueSchedule !== null && dueSchedule >= 0 && dueSchedule <= 2 * 3_600_000) return [{ ticketKey: workflow.ticketKey, level: 'warning', message: 'Atendimento agendado nas próximas 2 horas' }];
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     const collaborators = [...collaboratorMap.values()].map((item) => ({ ...item, score: Math.min(100, Math.round(item.activeSeconds / 3600 * 4 + item.changes * 2 + item.tasksDone * 8)) })).sort((a, b) => b.score - a.score);
     return Response.json({
       alerts: alerts.slice(0, 12),
-      metrics: { active: active.length, overdue: alerts.filter((item) => item.message.startsWith('SLA')).length, scheduled: active.filter((item) => item.status === 'scheduled').length, visits: visits.length, revenueCents: clientCents, costCents, marginCents: clientCents - costCents },
+      metrics: { active: active.filter((item) => measuresSla(item.status)).length, overdue: alerts.filter((item) => item.message.startsWith('SLA')).length, scheduled: active.filter((item) => item.status === 'scheduled').length, visits: visits.length, revenueCents: clientCents, costCents, marginCents: clientCents - costCents },
       n1: n1ByEmail.sort((a, b) => b.count - a.count),
       validationQueue: [...validationByTicket.values()],
       collaborators,
