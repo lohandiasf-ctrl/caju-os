@@ -31,8 +31,16 @@ export async function DELETE(request: Request, context: { params: Promise<{ key:
     const user = await requireApiUser(request, [...ATTACHMENT_ROLES]);
     const { key, id } = await context.params;
     await deleteJiraAttachment(id);
+    // O Jira responde 404 também quando a conta não pode apagar o anexo, e
+    // `deleteJiraAttachment` trata 404 como "já não existe". Confere: se o
+    // anexo continua no chamado, não houve remoção e a tela precisa saber.
+    const issue = await getJiraIssue(key);
+    if (issue.attachments.some((attachment) => attachment.id === id)) {
+      logSecurityEvent({ request, user, action: 'attachment_delete', outcome: 'denied', details: { ticketKey: key, attachmentId: id, reason: 'still_present' } });
+      return Response.json({ error: 'O Jira não apagou o anexo: a conta de integração do Caju OS não tem permissão para apagar anexos neste projeto.' }, { status: 409 });
+    }
     logSecurityEvent({ request, user, action: 'attachment_delete', outcome: 'allowed', details: { ticketKey: key, attachmentId: id } });
-    return Response.json(await getJiraIssue(key), { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json(issue, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     if (error instanceof JiraError) return Response.json({ error: error.message }, { status: error.status });
