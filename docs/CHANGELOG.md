@@ -9,6 +9,17 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-27
+
+### SLA: spare e agendado fora do "No prazo (SLA)"
+
+"Aguardando spare" (prazo é da transportadora) e "Agendado" (prazo é a data
+marcada) contavam como atrasados depois de 24 h parados. `lib/operational-sla.ts`
+ganha `SLA_EXEMPT_STATUSES`/`measuresSla`, usado em
+`app/api/operational-dashboard` (atrasados e fluxos medidos) e
+`lib/push-alerts.ts` (aviso de SLA estourado). App mobile: `toTicket` não marca
+spare como atrasado. Teste: `tests/operational-sla.test.ts`.
+
 ## 2026-09-26
 
 ### Avisos push: janela de entrega e comentário novo
