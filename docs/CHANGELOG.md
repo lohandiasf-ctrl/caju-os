@@ -9,6 +9,27 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ---
 
+## 2026-09-28
+
+### Distribuição de chamados por WhatsApp — E1 (simulação)
+
+Chamado novo vira oferta no WhatsApp oficial para os técnicos da cidade; o
+primeiro aceite leva todos os FSAs da loja. Este passo grava as ofertas em
+`dry_run` (nenhuma mensagem sai) para conferir antes de ligar o envio. Ver
+`docs/DISPATCH_WHATSAPP.md`. Branch `claude/distribuicao-whatsapp`.
+
+- `lib/dispatch.ts` (regras puras e templates versionados), `lib/server/dispatch.ts`,
+  rotas `/api/dispatch/run` (cron), `/api/dispatch/offers`, `/api/dispatch/templates`.
+- Migration `0046_dispatch_offers.sql` (4 tabelas, índice único parcial por FSA ativo).
+- Webhook oficial: o `ON CONFLICT(contact_phone)` não batia com a chave
+  `(account, contact_phone)` da 0036 e derrubaria o lote na primeira mensagem;
+  agora grava na conta `despacho`.
+- Envio das caixas Suporte/Caju: sem bridge, não cai mais na Cloud API — o
+  número oficial é o da distribuição.
+
+**Pendente:** `npm run db:migrate:remote` (0046) antes de ligar `DISPATCH_MODE`;
+templates aprovados, painel visual, aceite pelo webhook (E2/E3).
+
 ## 2026-09-27
 
 ### Assistente: Direcionado com data não conta como agendado

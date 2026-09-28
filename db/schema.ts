@@ -1136,3 +1136,65 @@ export const fsaClassifications = sqliteTable(
     index('idx_fsa_classifications_ticket').on(table.ticketKey),
   ],
 );
+
+// Distribuição de chamados por WhatsApp (lib/dispatch.ts). Migration 0046.
+export const dispatchOffers = sqliteTable(
+  'dispatch_offers',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    storeKey: text('store_key').notNull(),
+    storeName: text('store_name'),
+    city: text('city'),
+    status: text('status', { enum: ['held', 'open', 'assigned', 'expired', 'cancelled'] }).notNull().default('open'),
+    holdReasons: text('hold_reasons'),
+    mode: text('mode').notNull(),
+    assignedTechnicianId: integer('assigned_technician_id').references(() => technicians.id),
+    assignedAt: text('assigned_at'),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [index('idx_dispatch_offers_status').on(table.status, table.expiresAt)],
+);
+
+export const dispatchOfferTickets = sqliteTable(
+  'dispatch_offer_tickets',
+  {
+    offerId: integer('offer_id').notNull().references(() => dispatchOffers.id),
+    ticketKey: text('ticket_key').notNull(),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    equipment: text('equipment'),
+    allegedDefect: text('alleged_defect'),
+  },
+  // O índice único parcial (ticket_key WHERE active = 1) está na migration 0046.
+  (table) => [primaryKey({ columns: [table.offerId, table.ticketKey] })],
+);
+
+export const dispatchRecipients = sqliteTable(
+  'dispatch_recipients',
+  {
+    offerId: integer('offer_id').notNull().references(() => dispatchOffers.id),
+    technicianId: integer('technician_id').notNull().references(() => technicians.id),
+    phone: text('phone').notNull(),
+    wamid: text('wamid'),
+    status: text('status').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.offerId, table.technicianId] }),
+    index('idx_dispatch_recipients_wamid').on(table.wamid),
+  ],
+);
+
+export const dispatchEvents = sqliteTable(
+  'dispatch_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    offerId: integer('offer_id').notNull().references(() => dispatchOffers.id),
+    technicianId: integer('technician_id'),
+    kind: text('kind').notNull(),
+    details: text('details'),
+    createdAt: text('created_at').notNull(),
+  },
+  (table) => [index('idx_dispatch_events_offer').on(table.offerId, table.createdAt)],
+);

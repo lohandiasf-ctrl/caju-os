@@ -1,4 +1,3 @@
-import { env } from 'cloudflare:workers';
 import { bridgeConfigured, bridgeFetch, recordOutgoing, requireWhatsappUser, senderLabelFor } from '@/lib/server/whatsapp-bridge';
 import { signWhatsappText } from '@/lib/whatsapp-sender';
 import { toWhatsappAccount } from '@/lib/whatsapp-accounts';
@@ -9,9 +8,11 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
     // A resposta sai pelo número que recebeu a conversa; mandar pelo outro
     // chegaria como mensagem de um desconhecido.
     const account = toWhatsappAccount(new URL(request.url).searchParams.get('account'));
-    const useBridge = bridgeConfigured(account);
-    if (!useBridge && (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID)) {
-      return Response.json({ error: 'Envio pelo WhatsApp ainda não está configurado: falta o token de acesso da Meta e o Phone Number ID (ou o bridge não-oficial).' }, { status: 503 });
+    // O número da API oficial (WHATSAPP_PHONE_NUMBER_ID) é o da distribuição de
+    // chamados. Sem o bridge, responder por ele mandaria a mensagem do Suporte ou
+    // da Caju de um número que o contato não conhece.
+    if (!bridgeConfigured(account)) {
+      return Response.json({ error: 'O WhatsApp desta caixa não está conectado. Configure o bridge dela para responder.' }, { status: 503 });
     }
     const { phone } = await context.params;
     const contactPhone = decodeURIComponent(phone);
@@ -21,35 +22,17 @@ export async function POST(request: Request, context: { params: Promise<{ phone:
     // The contact sees who on the team is answering, as a bold first line.
     const signedText = signWhatsappText(await senderLabelFor(current), text);
 
-    let wamid: string;
-    let phoneNumberId: string;
-    if (useBridge) {
-      const response = await bridgeFetch('/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: contactPhone, text: signedText }),
-      }, account);
-      const payload = await response.json().catch(() => null) as { wamid?: string; error?: string } | null;
-      if (!response.ok || !payload?.wamid) {
-        return Response.json({ error: payload?.error || 'O bridge do WhatsApp recusou o envio. Confira se ele está rodando e conectado.' }, { status: 502 });
-      }
-      wamid = payload.wamid;
-      phoneNumberId = 'bridge';
-    } else {
-      const response = await fetch(`https://graph.facebook.com/v21.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messaging_product: 'whatsapp', to: contactPhone, type: 'text', text: { body: signedText } }),
-      });
-      const payload = await response.json() as { messages?: Array<{ id: string }>; error?: { message?: string } };
-      if (!response.ok || !payload.messages?.[0]?.id) {
-        // The 24h session-window rule is the most common failure: outside it,
-        // only a pre-approved template message is allowed, not free text.
-        return Response.json({ error: payload.error?.message || 'O WhatsApp recusou o envio. Fora da janela de 24h, só é possível responder com uma mensagem de modelo aprovada.' }, { status: 502 });
-      }
-      wamid = payload.messages[0].id;
-      phoneNumberId = env.WHATSAPP_PHONE_NUMBER_ID!;
+    const response = await bridgeFetch('/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: contactPhone, text: signedText }),
+    }, account);
+    const payload = await response.json().catch(() => null) as { wamid?: string; error?: string } | null;
+    if (!response.ok || !payload?.wamid) {
+      return Response.json({ error: payload?.error || 'O bridge do WhatsApp recusou o envio. Confira se ele está rodando e conectado.' }, { status: 502 });
     }
+    const wamid = payload.wamid;
+    const phoneNumberId = 'bridge';
 
     await recordOutgoing({ account, wamid, phoneNumberId, contactPhone, messageType: 'text', body: text, mediaId: null, senderEmail: current.email });
     return Response.json({ ok: true }, { status: 201 });

@@ -43,7 +43,16 @@ export default {
       env,
       ctx,
     );
-    const run = Promise.all([sweep, spareSync, spareTracking, pushAlerts]);
+    // Distribuição de chamados por WhatsApp: não faz nada sem DISPATCH_MODE.
+    const dispatch = handler.fetch(
+      new Request('https://cron.internal/api/dispatch/run', {
+        method: 'POST',
+        headers: { 'x-cron-secret': env.CRON_SECRET ?? '' },
+      }),
+      env,
+      ctx,
+    );
+    const run = Promise.all([sweep, spareSync, spareTracking, pushAlerts, dispatch]);
     ctx.waitUntil(run);
     await run;
   },
