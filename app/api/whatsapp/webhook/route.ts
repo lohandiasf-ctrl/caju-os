@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       if (!wamid) continue;
       const content = object(item[type]);
       const occurredAt = timestamp(item.timestamp);
-      statements.push(insertMessage(wamid, phoneNumberId, contactPhone || null, contactName, 'incoming', type, messageBody(type, content), string(content.id) || null, null, occurredAt, now));
+      statements.push(insertMessage(wamid, phoneNumberId, contactPhone || null, contactName, 'incoming', type, messageBody(type, content) ?? (type === 'button' ? string(content.payload) || null : null), string(content.id) || null, null, occurredAt, now));
       if (contactPhone) statements.push(upsertConversation(contactPhone, contactName, occurredAt, now));
     }
     for (const status of array(value.statuses)) {
@@ -59,11 +59,16 @@ export async function POST(request: Request) {
 
 // Read state and the linked ticket are owned by whichever agent set them
 // last; an incoming message only ever touches the name/last-message-time.
+// O único número na API oficial é o da distribuição de chamados. As conversas
+// dele ficam numa conta própria, fora das caixas Suporte/Caju (que são bridge).
+// A chave da tabela é (account, contact_phone) desde a migration 0036.
+const CLOUD_ACCOUNT = 'despacho';
+
 function upsertConversation(contactPhone: string, contactName: string | null, lastMessageAt: string, now: string) {
   return env.DB.prepare(`
-    INSERT INTO whatsapp_conversations (contact_phone, contact_name, last_message_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(contact_phone) DO UPDATE SET
+    INSERT INTO whatsapp_conversations (account, contact_phone, contact_name, last_message_at, created_at, updated_at)
+    VALUES ('${CLOUD_ACCOUNT}', ?, ?, ?, ?, ?)
+    ON CONFLICT(account, contact_phone) DO UPDATE SET
       contact_name = COALESCE(excluded.contact_name, whatsapp_conversations.contact_name),
       last_message_at = excluded.last_message_at,
       updated_at = excluded.updated_at
@@ -71,7 +76,7 @@ function upsertConversation(contactPhone: string, contactName: string | null, la
 }
 
 function insertMessage(wamid: string, phoneNumberId: string, contactPhone: string | null, contactName: string | null, direction: 'incoming' | 'status', messageType: string, body: string | null, mediaId: string | null, deliveryStatus: string | null, occurredAt: string, createdAt: string) {
-  return env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (wamid, phone_number_id, contact_phone, contact_name, direction, message_type, body, media_id, delivery_status, occurred_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+  return env.DB.prepare(`INSERT OR IGNORE INTO whatsapp_messages (account, wamid, phone_number_id, contact_phone, contact_name, direction, message_type, body, media_id, delivery_status, occurred_at, created_at) VALUES ('${CLOUD_ACCOUNT}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(wamid, phoneNumberId, contactPhone, contactName, direction, messageType, body, mediaId, deliveryStatus, occurredAt, createdAt);
 }
 
