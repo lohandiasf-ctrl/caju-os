@@ -36,6 +36,7 @@ pós-migração Cloudflare.
 | Sincronização Jira falha por rede transitória | **Resolvido** | outbox `jira_sync_jobs`, reprocessável em `/api/admin/jira-sync` |
 | Salvar chamado com transição no Jira no ambiente novo | **Validar em produção** | **prioridade 1** — único fluxo crítico não exercitado pós-migração |
 | Chave errada de API do Jira devolve 200 com 0 chamados | **Resolvido** | detectado; exige token da conta com acesso ao projeto FSA |
+| `operational_workflows.status` não acompanha a etapa do Jira | **Pendente** | `PATCH /api/jira/issues/[key]` e o lote só gravam agenda/técnico, não a etapa; fluxo mudado ou fechado no Jira fica na etapa antiga para sempre. O card "No prazo (SLA)" e o selo do painel já medem pela fila do Jira (2026-09-27); o aviso push "SLA estourado" (`lib/push-alerts.ts`) e as métricas de `/api/operational-dashboard` ainda leem a tabela |
 
 ## Anexos / evidências
 

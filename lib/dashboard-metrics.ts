@@ -17,6 +17,8 @@ export type DashboardTicket = {
   updatedAt?: string;
   scheduledAt?: string;
   partnerTriggeredAtRaw?: string;
+  /** Prazo do Jira (duedate), "2026-09-25". */
+  dueDate?: string | null;
 };
 
 export type StatusCounts = {
@@ -38,6 +40,33 @@ export function statusCounts(tickets: DashboardTicket[]): StatusCounts {
     awaitingSpare: count('Aguardando spare'),
     withTechnician: tickets.filter((ticket) => ticket.technician?.trim()).length,
   };
+}
+
+/** "2026-09-25" do Jira é uma data local, não UTC. */
+function dueDay(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : startOfDay(date);
+}
+
+/**
+ * SLA pela fila do Jira, com a mesma regra do app mobile: atrasado é o chamado
+ * ativo cujo prazo (duedate) já passou; vencer hoje ainda está no prazo.
+ * Aguardando spare não entra (o prazo é da transportadora) e chamado sem prazo
+ * não tem o que medir.
+ */
+export function jiraSla(tickets: DashboardTicket[], now: Date): { active: number; overdue: number } {
+  const today = startOfDay(now).getTime();
+  let active = 0;
+  let overdue = 0;
+  for (const ticket of tickets) {
+    if (ticket.status === 'Aguardando spare' || !ticket.dueDate) continue;
+    const due = dueDay(ticket.dueDate);
+    if (!due) continue;
+    active += 1;
+    if (due.getTime() < today) overdue += 1;
+  }
+  return { active, overdue };
 }
 
 /** % dos fluxos ativos sem SLA atrasado. `null` sem fluxo ativo (nada a medir). */

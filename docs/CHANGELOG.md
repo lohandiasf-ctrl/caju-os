@@ -11,6 +11,21 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-27
 
+### SLA: "No prazo" passa a medir pelo prazo do Jira
+
+O card "No prazo (SLA)" mostrava 66 de 78 atrasados mesmo depois de tirar
+spare e agendado da conta: ele lia `operational_workflows`, que não recebe a
+mudança de etapa feita no Jira (a rota de edição só grava agenda/técnico), então
+chamados agendados ou já fechados continuavam "parados" na etapa antiga. Pedido
+do usuário: medir pelo prazo do Jira, como o app mobile. `jiraSla` em
+`lib/dashboard-metrics.ts` (atrasado = duedate já passou; vence hoje está no
+prazo; spare e chamado sem prazo ficam de fora), usado no card do bento e no
+selo "SLA atrasado(s)" do painel de inteligência. Branch `claude/sla-pelo-jira`.
+Teste: `tests/dashboard-metrics.test.ts`.
+
+**Pendente:** o aviso push "SLA estourado" e `/api/operational-dashboard`
+ainda leem a tabela de fluxos (ver `docs/KNOWN_BUGS.md`, seção Jira).
+
 ### SLA: spare e agendado fora do "No prazo (SLA)"
 
 "Aguardando spare" (prazo é da transportadora) e "Agendado" (prazo é a data

@@ -10,7 +10,7 @@ import { AssistantCard } from '@/components/dashboard/assistant-card';
 import { QueueSlider } from '@/components/dashboard/queue-slider';
 import { BentoCard, CardHeader, CountUp, DeltaBadge, EmptyCard, ErrorCard, Skeleton } from '@/components/dashboard/primitives';
 import {
-  dailyActivity, daysAgo, deltaPercent, parseSnapshotStore, percent, rollSnapshot, slaOnTimePercent, statusCounts,
+  dailyActivity, daysAgo, deltaPercent, jiraSla, parseSnapshotStore, percent, rollSnapshot, slaOnTimePercent, statusCounts,
   type DashboardTicket, type KpiSnapshotStore, type KpiValues,
 } from '@/lib/dashboard-metrics';
 import { canUseNavItem } from '@/lib/navigation';
@@ -122,7 +122,7 @@ export function OverviewBento<T extends BentoTicket>({ tickets, loading, error, 
       </BentoCard>
 
       <BentoCard label="Prazo (SLA)" className="xl:col-span-3">
-        <SlaCard operational={operational} ready={ready} onNavigate={onNavigate} />
+        <SlaCard tickets={tickets} now={now} ready={ready} error={jiraError} onNavigate={onNavigate} />
       </BentoCard>
 
       <BentoCard label="Agenda da quinzena" className="xl:col-span-3">
@@ -158,26 +158,21 @@ function FreshnessBadge({ updatedAt, online, now }: { updatedAt: number | null; 
 
 /**
  * SLA (secundário). Card neutro; a cor só aparece quando há atraso, e vem
- * com ícone + texto. O resumo chega por outra rota: se não vier em alguns
- * segundos, o card assume que está indisponível em vez de girar para sempre.
+ * com ícone + texto. Mede pela fila do Jira (prazo de cada chamado), a mesma
+ * regra do app mobile — não pela tabela de fluxos, que não acompanha as
+ * mudanças de etapa feitas no Jira.
  */
-function SlaCard({ operational, ready, onNavigate }: { operational: Operational; ready: boolean; onNavigate: Navigate }) {
-  const [gaveUp, setGaveUp] = useState(false);
-  useEffect(() => {
-    if (operational) return;
-    const timer = window.setTimeout(() => setGaveUp(true), 8000);
-    return () => window.clearTimeout(timer);
-  }, [operational]);
-  const sla = slaOnTimePercent(operational?.metrics);
-  const metrics = operational?.metrics;
+function SlaCard({ tickets, now, ready, error, onNavigate }: { tickets: DashboardTicket[]; now: Date; ready: boolean; error: string; onNavigate: Navigate }) {
+  const metrics = useMemo(() => (tickets.length ? jiraSla(tickets, now) : null), [tickets, now]);
+  const sla = slaOnTimePercent(metrics);
   const overdue = metrics?.overdue ?? 0;
   return (
     <div className="flex h-full min-h-[200px] flex-col">
-      <CardHeader title="No prazo (SLA)" description="Fluxos ativos sem atraso." />
+      <CardHeader title="No prazo (SLA)" description="Chamados ativos dentro do prazo do Jira." />
       <div className="min-h-10">
         {sla !== null ? (
           <p className="text-metric font-semibold tracking-[-.02em]"><CountUp value={sla} suffix="%" /></p>
-        ) : !operational && !gaveUp ? (
+        ) : !ready ? (
           <Skeleton className="h-9 w-24" />
         ) : (
           <p className="text-metric font-semibold text-muted-foreground"><span aria-hidden="true">—</span><span className="sr-only">Sem dado</span></p>
@@ -185,8 +180,8 @@ function SlaCard({ operational, ready, onNavigate }: { operational: Operational;
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
         {metrics && metrics.active > 0
-          ? `${metrics.active} ${metrics.active === 1 ? 'fluxo ativo' : 'fluxos ativos'} medidos`
-          : operational ? 'Nenhum fluxo ativo para medir agora.' : gaveUp && ready ? 'Indicador de SLA indisponível agora.' : 'Carregando indicador…'}
+          ? `${metrics.active} ${metrics.active === 1 ? 'chamado com prazo' : 'chamados com prazo'} · spare fica de fora`
+          : error ? 'Indicador de SLA indisponível agora.' : ready ? 'Nenhum chamado com prazo para medir agora.' : 'Carregando indicador…'}
       </p>
       {metrics && metrics.active > 0 && (
         <div className="mt-auto pt-4">
