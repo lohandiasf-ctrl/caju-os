@@ -110,7 +110,7 @@ export function ticketContext(issue: AssistantIssue, maxComments = 6, today = ne
   text += line('Cidade', issue.city);
   text += line('Aberto em', issue.createdAt);
   text += line('Parceiro acionado em', issue.partnerTriggeredAt);
-  text += line('Agendado para', issue.scheduledAt);
+  text += line('Agendado para', realSchedule(issue));
   text += line('Técnico', issue.technicianName);
   if (issue.attachmentTypes) text += line('Anexos (evidências)', describeAttachments(issue.attachmentTypes));
   text += line('Categoria do problema', issue.problemCategory);
@@ -303,7 +303,7 @@ function dayCounts(tickets: AssistantTicket[], day: string, label: string): stri
   return [
     count('Acionados', (ticket) => ticket.partnerTriggeredAt),
     count('Abertos no Jira', (ticket) => ticket.createdAt),
-    count('Agendados para', (ticket) => ticket.scheduledAt),
+    count('Agendados para', realSchedule),
   ];
 }
 
@@ -322,6 +322,12 @@ const STATUS_LABELS: Array<[RegExp, string]> = [
 export function statusLabel(status: string): string {
   const normalized = status.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   return STATUS_LABELS.find(([pattern]) => pattern.test(normalized))?.[1] ?? status.trim();
+}
+
+// Direcionado pode ter data no campo de agendamento sem estar agendado; nada
+// que o assistente chame de "agendado" pode vir de um chamado Direcionado.
+export function realSchedule(ticket: { status: string; scheduledAt: string | null }): string | null {
+  return statusLabel(ticket.status) === 'Direcionado' ? null : ticket.scheduledAt;
 }
 
 // FSAs citadas na pergunta. O servidor busca essas no Jira, porque podem estar
@@ -407,7 +413,7 @@ export function queueContext(tickets: AssistantTicket[], limit = 60, today = new
     // diferentes, e a operação pergunta por todas.
     dateAndTime(ticket.createdAt) ?? '-',
     dateAndTime(ticket.partnerTriggeredAt) ?? 'não acionado',
-    dateAndTime(ticket.scheduledAt) ?? 'sem agendamento',
+    dateAndTime(realSchedule(ticket)) ?? 'sem agendamento',
     ticket.attachmentTypes ? describeAttachments(ticket.attachmentTypes) : '-',
     redact(ticket.summary),
   ].join(' | '));

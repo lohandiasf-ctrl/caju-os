@@ -11,6 +11,16 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-27
 
+### Assistente: Direcionado com data não conta como agendado
+
+Requisito 10 da especificação de distribuição por WhatsApp: resumos de
+agendados só podem trazer chamados realmente agendados. O assistente contava
+"Agendados para hoje/ontem" pelo campo de data, então um Direcionado com data
+entrava na conta e aparecia com agendamento na tabela da fila. `realSchedule`
+em `lib/assistant.ts` ignora a data quando o status é Direcionado (contagem,
+tabela e contexto do chamado). A agenda do app mobile já escondia Direcionado.
+Teste em `tests/assistant.test.ts`. Branch `claude/agendados-sem-direcionado`.
+
 ### SLA: "No prazo" passa a medir pelo prazo do Jira
 
 O card "No prazo (SLA)" mostrava 66 de 78 atrasados mesmo depois de tirar
