@@ -108,6 +108,15 @@ test('a fila traz as contagens de hoje prontas, com as FSAs', () => {
   assert.match(text, /- Agendados para hoje \(2026-09-17\): 1 — FSA-3/);
 });
 
+test('Direcionado com data não conta como agendado', () => {
+  const text = queueContext([
+    ticket({ key: 'FSA-7', status: 'Agendado', scheduledAt: '2026-09-17 10:00' }),
+    ticket({ key: 'FSA-8', status: 'DIRECIONADO', scheduledAt: '2026-09-17 11:00' }),
+  ], 60, TODAY);
+  assert.match(text, /- Agendados para hoje \(2026-09-17\): 1 — FSA-7$/m);
+  assert.match(text, /^FSA-8 \| Direcionado \|.*\| sem agendamento \|/m);
+});
+
 // "Quantos chamados caíram ontem?" foi respondido pela data de abertura: só
 // "hoje" vinha contado, e para ontem o modelo escolheu a coluna errada.
 test('a fila também traz as contagens de ontem prontas', () => {
