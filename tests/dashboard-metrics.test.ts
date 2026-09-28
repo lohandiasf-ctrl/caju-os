@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  dailyActivity, deltaPercent, parseSnapshotStore, percent, rollSnapshot, slaOnTimePercent, statusCounts,
+  dailyActivity, deltaPercent, jiraSla, parseSnapshotStore, percent, rollSnapshot, slaOnTimePercent, statusCounts,
 } from '../lib/dashboard-metrics.ts';
 import { parseTicketDate } from '../lib/ticket-activities.ts';
 
@@ -23,6 +23,21 @@ test('SLA no prazo só existe com fluxo ativo', () => {
   assert.equal(slaOnTimePercent({ active: 0, overdue: 0 }), null);
   assert.equal(slaOnTimePercent(null), null);
   assert.equal(slaOnTimePercent({ active: 2, overdue: 5 }), 0);
+});
+
+test('SLA pelo prazo do Jira: vencido conta, hoje não, spare e sem prazo ficam de fora', () => {
+  const now = new Date(2026, 8, 27, 15, 0);
+  const queue = [
+    { id: 'A', status: 'Pendente de agendamento', dueDate: '2026-09-26' },
+    { id: 'B', status: 'Técnico em campo', dueDate: '2026-09-27' },
+    { id: 'C', status: 'Agendado', dueDate: '2026-09-30' },
+    { id: 'D', status: 'Aguardando spare', dueDate: '2026-09-01' },
+    { id: 'E', status: 'Técnico em campo', dueDate: null },
+    { id: 'F', status: 'Agendado', dueDate: '2026-09-20' },
+  ];
+  assert.deepEqual(jiraSla(queue, now), { active: 4, overdue: 2 });
+  assert.equal(slaOnTimePercent(jiraSla(queue, now)), 50);
+  assert.deepEqual(jiraSla([], now), { active: 0, overdue: 0 });
 });
 
 test('atividade diária conta chamados distintos por dia e ignora datas fora da janela', () => {

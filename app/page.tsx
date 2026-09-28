@@ -34,6 +34,7 @@ import { TeamManagementPanel } from "@/components/team-management";
 import { TicketUpdateNote } from "@/components/ticket-update-note";
 import { AppGreeting } from "@/components/app-greeting";
 import { OverviewBento } from "@/components/dashboard/overview-bento";
+import { jiraSla } from "@/lib/dashboard-metrics";
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { canUseDashboardView, canUseWhatsapp, isDashboardView, type DashboardView } from "@/lib/navigation";
@@ -143,6 +144,7 @@ type Ticket = {
   updatedAt?: string;
   scheduledAt?: string;
   partnerTriggeredAtRaw?: string;
+  dueDate?: string | null;
 };
 type TicketActivity = DatedTicketActivity<Ticket>;
 type JiraTicket = {
@@ -158,6 +160,7 @@ type JiraTicket = {
   city: string | null;
   scheduledAt: string | null;
   partnerTriggeredAt: string | null;
+  dueDate?: string | null;
 };
 type JiraDetails = JiraTicket & {
   description: string;
@@ -3471,6 +3474,8 @@ function OperationalSummary({
       <LoadingPanel label="Carregando indicadores operacionais…" />
     );
   const ticketByKey = new Map(tickets.map((ticket) => [ticket.id, ticket]));
+  // Atraso pelo prazo do Jira, como o card "No prazo (SLA)" e o app mobile.
+  const overdue = jiraSla(tickets, new Date()).overdue;
   const validationQueue = (data.validationQueue ?? []).flatMap((item) => {
     const ticket = ticketByKey.get(item.ticketKey);
     return ticket ? [{ ...item, ticket }] : [];
@@ -3493,13 +3498,13 @@ function OperationalSummary({
         <Badge
           variant="outline"
           className={
-            data.metrics.overdue
+            overdue
               ? "border-danger/30 bg-danger-soft text-danger"
               : "border-success/30 bg-success-soft text-success"
           }
         >
-          {data.metrics.overdue
-            ? `${data.metrics.overdue} SLA atrasado(s)`
+          {overdue
+            ? `${overdue} ${overdue === 1 ? "chamado atrasado" : "chamados atrasados"}`
             : "SLA em dia"}
         </Badge>
       </div>
@@ -3715,6 +3720,7 @@ function toTicket(issue: JiraTicket): Ticket {
     updatedAt: issue.updatedAt,
     scheduledAt: issue.scheduledAt ?? undefined,
     partnerTriggeredAtRaw: issue.partnerTriggeredAt ?? undefined,
+    dueDate: issue.dueDate ?? null,
   };
 }
 
