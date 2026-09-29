@@ -206,14 +206,22 @@ Para ficar com todos estes atendimentos, toque em Aceitar. Se não puder, toque 
   },
 } satisfies Record<string, OfferVersion>;
 
+export type OfferVersionKey = keyof typeof OFFER_VERSIONS;
 /**
- * Versão que sai nas ofertas. "r70" enquanto a Meta não aprova "aviso" como
- * Utilidade (2026-09-29): em Marketing a entrega é limitada e custa mais.
+ * Preferida: "aviso", assim que a Meta aprovar os dois modelos dela como
+ * Utilidade (em Marketing a entrega é limitada por pessoa e custa mais). Até
+ * lá sai a reserva, "r70". Quem escolhe é offerVersionInUse, no servidor.
  */
-export const ACTIVE_OFFER_VERSION: keyof typeof OFFER_VERSIONS = 'r70';
+export const PREFERRED_OFFER_VERSION: OfferVersionKey = 'aviso';
+export const ACTIVE_OFFER_VERSION: OfferVersionKey = 'r70';
+
+/** Versão a usar, dado o status dos modelos na Meta (nome → status e categoria). */
+export function pickOfferVersion(templates: { name: string; status: string; category?: string }[]): OfferVersionKey {
+  const v = OFFER_VERSIONS[PREFERRED_OFFER_VERSION];
+  const ok = (name: string) => templates.some((t) => t.name === name && t.status === 'APPROVED' && t.category === 'UTILITY');
+  return ok(v.single) && ok(v.group) ? PREFERRED_OFFER_VERSION : ACTIVE_OFFER_VERSION;
+}
 const ACTIVE = OFFER_VERSIONS[ACTIVE_OFFER_VERSION];
-export const TEMPLATE_SINGLE = ACTIVE.single;
-export const TEMPLATE_GROUP = ACTIVE.group;
 export const ACCEPT_PAYLOAD_PREFIX = 'aceitar:';
 export const DECLINE_PAYLOAD_PREFIX = 'recusar:';
 
@@ -223,20 +231,21 @@ export type TemplateMessage = { name: string; body: string[]; payload: string; d
  * Parâmetros do template para uma oferta. Um FSA: os dados dele. Vários FSAs
  * da mesma loja: quantidade, loja e equipamentos, aceitos juntos.
  */
-export function offerMessage(offerId: number, tickets: DispatchTicket[]): TemplateMessage {
+export function offerMessage(offerId: number, tickets: DispatchTicket[], version: OfferVersionKey = ACTIVE_OFFER_VERSION): TemplateMessage {
+  const v = OFFER_VERSIONS[version];
   const payload = `${ACCEPT_PAYLOAD_PREFIX}${offerId}`;
   const declinePayload = `${DECLINE_PAYLOAD_PREFIX}${offerId}`;
   if (tickets.length === 1) {
     const t = tickets[0];
     return {
-      name: TEMPLATE_SINGLE,
+      name: v.single,
       body: [t.key, storeLine(t), equipmentLine(t), t.allegedDefect ?? ''].map((v) => templateParam(v)),
       payload, declinePayload,
     };
   }
   const equipments = [...new Set(tickets.map((t) => t.equipment?.trim()).filter(Boolean))].join(', ') || 'Equipamento não informado';
   return {
-    name: TEMPLATE_GROUP,
+    name: v.group,
     body: [String(tickets.length), storeLine(tickets[0]), templateParam(equipments, 120)],
     payload, declinePayload,
   };

@@ -30,6 +30,19 @@ async function send(body: Record<string, unknown>): Promise<string> {
   return wamid;
 }
 
+/** Status e categoria dos modelos da conta da distribuição (WHATSAPP_BUSINESS_ACCOUNT_ID). */
+export async function listTemplateStatuses(): Promise<{ name: string; status: string; category?: string }[]> {
+  const { token } = config();
+  const waba = (env as unknown as Record<string, string | undefined>).WHATSAPP_BUSINESS_ACCOUNT_ID?.trim();
+  if (!waba) throw new CloudApiError('Falta WHATSAPP_BUSINESS_ACCOUNT_ID.');
+  const response = await fetch(`${GRAPH}/${waba}/message_templates?fields=name,status,category&limit=200`, {
+    headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000),
+  });
+  const payload = await response.json().catch(() => null) as { data?: { name: string; status: string; category?: string }[]; error?: { message?: string } } | null;
+  if (!response.ok) throw new CloudApiError(payload?.error?.message ?? `HTTP ${response.status}`);
+  return payload?.data ?? [];
+}
+
 /** Mensagem de modelo aprovado (única forma de iniciar conversa). */
 export const sendTemplateMessage = (payload: Record<string, unknown>) => send(payload);
 

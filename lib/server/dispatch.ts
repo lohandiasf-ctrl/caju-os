@@ -7,12 +7,12 @@ import {
   DECLINE_REPLY, DECLINE_REPLY_ALREADY_WON, declinePayloadOffer, dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, isTestOffer, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
   parseAllowlist, samePhone, splitCity, storeKeyOf, technicianDataBlock, templateSendPayload, TEST_MODE, testNotice, testOfferTicket,
   unansweredNotice, whatsappPhone,
-  type DispatchMode, type DispatchTicket, type OfferGroup,
+  ACTIVE_OFFER_VERSION, pickOfferVersion, type DispatchMode, type DispatchTicket, type OfferGroup, type OfferVersionKey,
 } from '@/lib/dispatch';
 import { getJiraIssue, searchJiraIssues, type JiraIssueSummary } from '@/lib/server/jira';
 import { enqueueJiraSync, processJiraSyncJobs } from '@/lib/server/jira-sync';
 import { sendPushToEmails } from '@/lib/server/push';
-import { sendTemplateMessage, sendTextMessage } from '@/lib/server/whatsapp-cloud';
+import { listTemplateStatuses, sendTemplateMessage, sendTextMessage } from '@/lib/server/whatsapp-cloud';
 
 // Lado do servidor da distribuição (lib/dispatch.ts): acha os chamados novos,
 // agrupa por loja, grava as ofertas e resolve a disputa pelo aceite.
@@ -135,7 +135,7 @@ async function offerTicketKeys(ids: number[]) {
 async function sendOffer(offerId: number, tickets: DispatchTicket[], mode: DispatchMode, allowlist: string[]) {
   const db = env.DB;
   const recipients = (await db.prepare(`SELECT technician_id, phone FROM dispatch_recipients WHERE offer_id = ?1`).bind(offerId).all<{ technician_id: number; phone: string }>()).results;
-  const message = offerMessage(offerId, tickets);
+  const message = offerMessage(offerId, tickets, await offerVersionInUse());
   for (const r of recipients) {
     const at = new Date().toISOString();
     if (!allowedToReceive(mode, allowlist, r.phone)) {
@@ -152,6 +152,23 @@ async function sendOffer(offerId: number, tickets: DispatchTicket[], mode: Dispa
           .bind(offerId, r.technician_id, JSON.stringify({ error: error instanceof Error ? error.message.slice(0, 300) : 'erro' }), at),
       ]);
     }
+  }
+}
+
+let versionCache: { at: number; version: OfferVersionKey } | null = null;
+/**
+ * Versão do modelo da oferta que sai agora: a preferida assim que a Meta a
+ * aprovar como Utilidade, senão a reserva (lib/dispatch.ts). Consulta a Meta
+ * no máximo a cada 10 min; se a consulta falhar, fica com a última escolha.
+ */
+export async function offerVersionInUse(): Promise<OfferVersionKey> {
+  if (versionCache && Date.now() - versionCache.at < 600_000) return versionCache.version;
+  try {
+    const version = pickOfferVersion(await listTemplateStatuses());
+    versionCache = { at: Date.now(), version };
+    return version;
+  } catch {
+    return versionCache?.version ?? ACTIVE_OFFER_VERSION;
   }
 }
 
