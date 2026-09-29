@@ -66,7 +66,7 @@ test('telefone no formato do WhatsApp e comparação sem o nono dígito', () => 
 
 test('mensagem individual: resumo vem só do Defeito alegado, sem quebra de linha nas variáveis', () => {
   const m = offerMessage(42, [ticket({ key: 'FSA-132506', allegedDefect: 'PC deu\n\npau   de   novo' })]);
-  assert.equal(m.name, 'oferta_atendimento');
+  assert.equal(m.name, 'oferta_chamado');
   assert.deepEqual(m.body, ['FSA-132506', 'L330 - Patos de Minas/MG', 'CPU - PDV 308', 'PC deu pau de novo']);
   assert.equal(m.payload, 'aceitar:42');
   assert.equal(m.declinePayload, 'recusar:42');
@@ -76,7 +76,7 @@ test('mensagem individual: resumo vem só do Defeito alegado, sem quebra de linh
 
 test('mensagem agrupada: um botão para todos os FSAs da loja', () => {
   const m = offerMessage(7, [ticket({ key: 'FSA-1', equipment: 'CPU' }), ticket({ key: 'FSA-2', equipment: 'Teclado' }), ticket({ key: 'FSA-3', equipment: 'CPU' })]);
-  assert.equal(m.name, 'oferta_atendimento_grupo');
+  assert.equal(m.name, 'oferta_chamado_grupo');
   assert.deepEqual(m.body, ['3', 'L330 - Patos de Minas/MG', 'CPU, Teclado']);
   const send = templateSendPayload('5534999990000', m);
   assert.equal(send.template.components[1].parameters[0].payload, 'aceitar:7');
@@ -105,7 +105,7 @@ test('templates: Aceitar e Recusar, sem link (índices usados no envio)', () => 
     assert.deepEqual(buttons.buttons.map((b) => [b.type, b.text]), [['QUICK_REPLY', 'Aceitar'], ['QUICK_REPLY', 'Recusar']]);
     const body = t.components.find((c) => c.type === 'BODY');
     assert.ok(body && 'text' in body && !/^\{\{|\}\}$/.test(body.text.trim()), 'a Meta recusa corpo que começa ou termina com variável');
-    assert.ok(body.text.includes('a partir de R$ 70,00'), 'toda oferta mostra o valor');
+    assert.ok(body.text.includes('Valor: a combinar') && !body.text.includes('R$'), 'valor a combinar, sem preço');
   }
 });
 
@@ -177,7 +177,7 @@ test('oferta de teste: chamado fictício, mensagem válida e avisos marcados', a
   const t = testOfferTicket(9, 'Vitória da Conquista/BA');
   assert.equal(t.key, 'TESTE-9');
   const m = offerMessage(9, [t]);
-  assert.equal(m.name, 'oferta_atendimento');
+  assert.equal(m.name, 'oferta_chamado');
   assert.equal(m.payload, 'aceitar:9');
   assert.deepEqual(m.body, ['TESTE-9', 'L999 - Vitória da Conquista/BA', 'CPU - PDV 1', 'Teste da distribuição, não é um chamado real']);
   assert.ok(isTestOffer('test') && !isTestOffer('live') && !isTestOffer(null));

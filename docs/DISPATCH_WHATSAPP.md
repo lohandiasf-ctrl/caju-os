@@ -85,8 +85,8 @@ não vincula chamado nem mexe no Jira. Se ninguém aceitar, expira sem aviso.
 
 ## A mensagem (2026-09-29)
 
-Modelos `oferta_atendimento` e `oferta_atendimento_grupo`: linhas com emoji
-(chamado, loja, equipamento, problema, ganho), "Agora é com você!", rodapé
+Modelos `oferta_chamado` e `oferta_chamado_grupo` (valor "a combinar" desde 2026-09-29; os `oferta_atendimento*` tinham "a partir de R$ 70,00"): linhas com emoji
+(chamado, loja, equipamento, problema, valor), "Agora é com você!", rodapé
 "Responde aí pra gente:" e dois botões, **Aceitar** (`aceitar:<oferta>`) e
 **Recusar** (`recusar:<oferta>`). Sem link: o técnico não tem login no Caju OS.
 Recusar só registra no painel e agradece; a oferta segue para os outros. A
