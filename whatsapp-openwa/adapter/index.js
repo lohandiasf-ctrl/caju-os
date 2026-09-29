@@ -263,7 +263,10 @@ http.createServer(async (request, response) => {
         if (!digits) return json(response, 422, { error: 'Não foi possível descobrir o número deste contato, e o WhatsApp só entrega para o número. A mensagem não foi enviada.' });
         return json(response, 200, { wamid: idOf(await openwa(session('/messages/send-text'), { method: 'POST', json: { chatId: `${digits}@c.us`, text } })) });
       }
-      return json(response, 200, { wamid: idOf(await openwa(session('/messages/send-text'), { method: 'POST', json: { chatId: to, text } })) });
+      const started = Date.now();
+      const sent = await openwa(session('/messages/send-text'), { method: 'POST', json: { chatId: to, text, linkPreview: false } });
+      console.log(`envio de texto: ${Date.now() - started} ms no OpenWA`);
+      return json(response, 200, { wamid: idOf(sent) });
     }
 
     if (request.method === 'POST' && url.pathname === '/send-media') {
