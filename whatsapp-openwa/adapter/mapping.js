@@ -56,8 +56,11 @@ export function bridgeMessage(event, data, { groupSubject } = {}) {
   const type = messageTypeOf(data.type);
   if (!type) return null;
   const wamid = String(data.id?._serialized ?? data.id ?? '').trim();
-  const chat = String(data.chatId ?? (outgoing ? data.to : data.from) ?? '').trim();
+  let chat = String(data.chatId ?? (outgoing ? data.to : data.from) ?? '').trim();
   if (!wamid || !chat) return null;
+  // Quem o WhatsApp só endereça por "@lid": usa o telefone quando o OpenWA o resolve.
+  const resolved = String(data.senderPhone ?? '').replace(/\D/g, '');
+  if (chat.endsWith('@lid') && resolved.length >= 10) chat = `${resolved}@c.us`;
   const group = isGroup(chat);
   const pushName = data.contact?.pushName || data.contact?.name || data.notifyName || null;
   const sender = group ? (data.author || data.senderId || data.participant || null) : (outgoing ? null : chat);

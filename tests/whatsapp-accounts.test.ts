@@ -4,7 +4,7 @@ import { DEFAULT_ACCOUNT, isWhatsappAccount, toWhatsappAccount, WHATSAPP_ACCOUNT
 
 test('as duas contas existem, e a principal é a que já havia', () => {
   assert.deepEqual(WHATSAPP_ACCOUNTS.map((account) => account.id), ['principal', 'caju']);
-  assert.equal(DEFAULT_ACCOUNT, 'principal');
+  assert.equal(DEFAULT_ACCOUNT, 'caju');
   assert.equal(whatsappAccountLabel('caju'), 'WhatsApp Caju');
 });
 

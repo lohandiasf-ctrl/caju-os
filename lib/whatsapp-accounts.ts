@@ -15,9 +15,10 @@ export const WHATSAPP_ACCOUNTS = [
 
 export type WhatsappAccountId = (typeof WHATSAPP_ACCOUNTS)[number]['id'];
 
-// A conta de tudo que existia antes de haver duas. As linhas antigas do banco
-// ficam com ela na migration, então nada muda de dono.
-export const DEFAULT_ACCOUNT: WhatsappAccountId = 'principal';
+// A conta usada quando a tela ou a rota não diz qual número é: a Caju, o
+// número que a operação usa hoje. As linhas antigas do banco ficam com
+// `principal` (é o padrão da coluna), então nada muda de dono.
+export const DEFAULT_ACCOUNT: WhatsappAccountId = 'caju';
 
 export function isWhatsappAccount(value: unknown): value is WhatsappAccountId {
   return WHATSAPP_ACCOUNTS.some((account) => account.id === value);

@@ -44,6 +44,13 @@ test('mensagem em grupo leva o nome do grupo e quem escreveu', () => {
   assert.equal(m.senderJid, '5581991738635@c.us');
 });
 
+test('quem chega só por lid usa o telefone resolvido pelo OpenWA', () => {
+  const m = bridgeMessage('message.received', { id: 'L1', from: '209479127822392@lid', body: 'oi', type: 'text', senderPhone: '5581991738635' });
+  assert.equal(m.contactPhone, '5581991738635');
+  const sem = bridgeMessage('message.received', { id: 'L2', from: '209479127822392@lid', body: 'oi', type: 'text' });
+  assert.equal(sem.contactPhone, '209479127822392@lid');
+});
+
 test('eco do que o Caju OS enviou volta como saída', () => {
   const m = bridgeMessage('message.sent', { id: 'S1', from: '5581000@c.us', to: '5581991738635@c.us', body: 'ok', type: 'text', fromMe: true });
   assert.equal(m.direction, 'outgoing');
