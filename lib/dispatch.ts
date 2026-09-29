@@ -154,16 +154,17 @@ export function holdReasons(group: OfferGroup, eligibleCount: number): HoldReaso
 }
 
 /**
- * Valor para o técnico, igual em toda oferta (decisão da gerência em
- * 2026-09-28). Texto fixo do template: mudar exige nova aprovação da Meta.
+ * Valor para o técnico: combinado depois do aceite (decisão da gerência em
+ * 2026-09-29; antes era "a partir de R$ 70,00"). Texto fixo do template:
+ * mudar exige nova aprovação da Meta.
  */
-export const VALUE_LINE = '💰 Ganho: a partir de R$ 70,00. Quanto mais atendimentos, maior o valor.';
+export const VALUE_LINE = '💰 Valor: a combinar';
 
-// Nomes novos a cada mudança de botões: a Meta não deixa trocar os botões de
-// um modelo aprovado. Os antigos (atendimento_disponivel*, com "Ver chamado")
-// ficam sem uso; o clique neles continua valendo pelo mesmo payload.
-export const TEMPLATE_SINGLE = 'oferta_atendimento';
-export const TEMPLATE_GROUP = 'oferta_atendimento_grupo';
+// Nome novo a cada mudança de texto ou botões (a aprovação da Meta é por
+// modelo). Sem uso, mas o clique neles continua valendo pelo mesmo payload:
+// atendimento_disponivel* ("Ver chamado") e oferta_atendimento* ("R$ 70,00").
+export const TEMPLATE_SINGLE = 'oferta_chamado';
+export const TEMPLATE_GROUP = 'oferta_chamado_grupo';
 export const ACCEPT_PAYLOAD_PREFIX = 'aceitar:';
 export const DECLINE_PAYLOAD_PREFIX = 'recusar:';
 
