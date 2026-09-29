@@ -1,23 +1,19 @@
 // As contas de WhatsApp da operação.
 //
-// O sistema nasceu com um número só: as conversas nem guardavam de qual
-// número vieram. Com um segundo número ("Whatsapp Caju"), cada conversa
-// precisa saber a quem pertence — senão a resposta sai pelo número errado, e
-// quem está do outro lado recebe de um desconhecido.
-//
-// `principal` é o número que já existe. O nome vem daqui para a tela e para o
-// banco não dependerem de texto solto.
+// Hoje é uma só: o número Caju, ligado pelo OpenWA. O sistema já guarda de qual
+// número vem cada conversa (coluna `account`), então um segundo número
+// voltaria a ser só uma linha aqui e as variáveis WHATSAPP_BRIDGE_URL_<CONTA> e
+// WHATSAPP_BRIDGE_SECRET_<CONTA>. O antigo "WhatsApp Suporte" (`principal`) foi
+// desligado em 2026-09-29; as conversas da API oficial ficam em `despacho`, fora
+// desta lista.
 
 export const WHATSAPP_ACCOUNTS = [
-  { id: 'principal', label: 'WhatsApp Suporte' },
   { id: 'caju', label: 'WhatsApp Caju' },
 ] as const;
 
 export type WhatsappAccountId = (typeof WHATSAPP_ACCOUNTS)[number]['id'];
 
-// A conta usada quando a tela ou a rota não diz qual número é: a Caju, o
-// número que a operação usa hoje. As linhas antigas do banco ficam com
-// `principal` (é o padrão da coluna), então nada muda de dono.
+// A conta usada quando a tela ou a rota não diz qual número é.
 export const DEFAULT_ACCOUNT: WhatsappAccountId = 'caju';
 
 export function isWhatsappAccount(value: unknown): value is WhatsappAccountId {
