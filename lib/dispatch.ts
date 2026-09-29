@@ -199,17 +199,21 @@ export const OFFER_VERSIONS = {
 
 export type OfferVersionKey = keyof typeof OFFER_VERSIONS;
 /**
- * Ordem de preferência: a primeira com os dois modelos aprovados como
- * Utilidade (em Marketing a entrega é limitada por pessoa e custa mais). Sem
- * nenhuma, sai a reserva "r70". Quem escolhe é offerVersionInUse, no servidor.
+ * Ordem de preferência. Primeiro, a que tiver os dois modelos aprovados como
+ * Utilidade (em Marketing a entrega é limitada por pessoa e custa mais). Se
+ * nenhuma passar como Utilidade (a Meta tem classificado oferta de trabalho
+ * como Marketing, 2026-09-29), a primeira aprovada em qualquer categoria: a
+ * com valor, que deixa o funcionário mudar o valor. Sem nenhuma, a reserva
+ * "r70". Quem escolhe é offerVersionInUse, no servidor.
  */
 export const PREFERRED_OFFER_VERSIONS: OfferVersionKey[] = ['valor', 'aviso'];
 export const ACTIVE_OFFER_VERSION: OfferVersionKey = 'r70';
 
 /** Versão a usar, dado o status dos modelos na Meta (nome → status e categoria). */
 export function pickOfferVersion(templates: { name: string; status: string; category?: string }[]): OfferVersionKey {
-  const ok = (name: string) => templates.some((t) => t.name === name && t.status === 'APPROVED' && t.category === 'UTILITY');
-  return PREFERRED_OFFER_VERSIONS.find((k) => ok(OFFER_VERSIONS[k].single) && ok(OFFER_VERSIONS[k].group)) ?? ACTIVE_OFFER_VERSION;
+  const approved = (name: string, utility: boolean) => templates.some((t) => t.name === name && t.status === 'APPROVED' && (!utility || t.category === 'UTILITY'));
+  const both = (k: OfferVersionKey, utility: boolean) => approved(OFFER_VERSIONS[k].single, utility) && approved(OFFER_VERSIONS[k].group, utility);
+  return PREFERRED_OFFER_VERSIONS.find((k) => both(k, true)) ?? PREFERRED_OFFER_VERSIONS.find((k) => both(k, false)) ?? ACTIVE_OFFER_VERSION;
 }
 export const versionHasValue = (version: OfferVersionKey) => !!(OFFER_VERSIONS[version] as OfferVersion).valued;
 
