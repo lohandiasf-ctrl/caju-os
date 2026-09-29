@@ -47,6 +47,8 @@ export default function DistribuicaoPage() {
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testNotice, setTestNotice] = useState('');
   const [open, setOpen] = useState<number | null>(null);
   const gerencia = role === 'gerencia';
 
@@ -84,6 +86,24 @@ export default function DistribuicaoPage() {
     }
   }
 
+  // Oferta fictícia só para os números de teste: confere o caminho inteiro
+  // (mensagem, botão, aceite, avisos) sem esperar um chamado novo.
+  async function sendTest() {
+    if (!user || testing) return;
+    setTesting(true);
+    setTestNotice('');
+    try {
+      const response = await fetch('/api/dispatch/test', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      const body = await response.json().catch(() => ({})) as { sent?: number; failed?: number; reason?: string; error?: string };
+      if (!response.ok) setTestNotice(body.error ?? 'Não foi possível enviar o teste.');
+      else if (!body.sent) setTestNotice(`A Meta recusou o envio${body.reason ? `: ${body.reason}` : '.'}`);
+      else setTestNotice(`Teste enviado para ${body.sent} ${body.sent === 1 ? 'número' : 'números'}. Toque em "Aceitar atendimento" no WhatsApp.`);
+      await load();
+    } finally {
+      setTesting(false);
+    }
+  }
+
   const missing = templates === null ? [] : expected.filter((name) => !templates.some((t) => t.name === name));
   const missingTemplates = missing.length > 0;
 
@@ -105,11 +125,13 @@ export default function DistribuicaoPage() {
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className={mode === 'live' ? 'border-success/30 text-success' : undefined}>{MODE_LABEL[mode] ?? mode}</Badge>
+            {gerencia && <Button size="sm" variant="outline" onClick={() => void sendTest()} disabled={testing}>{testing ? <Loader2 className="animate-spin" /> : <Send />}Enviar oferta de teste</Button>}
             <Button size="sm" variant="outline" onClick={() => void load()}><RefreshCw />Atualizar</Button>
           </div>
         </div>
 
-        {error && <div role="alert" className="mt-6 rounded-xl border border-danger/25 bg-danger-soft p-4 text-sm text-danger">{error}</div>}
+        {testNotice && <p aria-live="polite" className="mt-4 rounded-xl border border-border p-3 text-sm">{testNotice}</p>}
+        {error &&<div role="alert" className="mt-6 rounded-xl border border-danger/25 bg-danger-soft p-4 text-sm text-danger">{error}</div>}
 
         {gerencia && (
           <article className="surface-panel mt-6 rounded-2xl p-5">
@@ -160,7 +182,7 @@ export default function DistribuicaoPage() {
                     <Badge variant="outline" className={tone}>{label}</Badge>
                     <span className="font-semibold">{o.storeKey}{o.city ? ` · ${o.city}` : ''}</span>
                     <span className="font-mono text-xs text-primary">{o.tickets.join(', ')}</span>
-                    <span className="ml-auto text-xs text-muted-foreground">{when(o.createdAt)}{o.mode === 'dry_run' ? ' · simulação' : ''}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">{when(o.createdAt)}{o.mode === 'dry_run' ? ' · simulação' : o.mode === 'test' ? ' · teste' : ''}</span>
                   </button>
                   {!!o.holdReasons.length && <p className="mt-2 text-xs text-warning">{o.holdReasons.join(' · ')}</p>}
                   {o.assignedTo && <p className="mt-2 text-xs text-success">Aceita por {o.assignedTo}{o.assignedAt ? ` em ${when(o.assignedAt)}` : ''}</p>}

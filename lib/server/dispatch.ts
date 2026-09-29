@@ -4,8 +4,9 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { appUsers, chatGroupMembers, chatGroupMessages, chatGroups, technicians } from '@/db/schema';
 import {
   ACCEPT_OFFER_SQL, ACCEPT_REPLY_EXPIRED, ACCEPT_REPLY_TAKEN, ACCEPT_REPLY_WON, acceptedNotice, acceptPayloadOffer, allowedToReceive,
-  dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
-  parseAllowlist, samePhone, splitCity, storeKeyOf, technicianDataBlock, templateSendPayload, unansweredNotice, whatsappPhone,
+  dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, isTestOffer, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
+  parseAllowlist, samePhone, splitCity, storeKeyOf, technicianDataBlock, templateSendPayload, TEST_MODE, testNotice, testOfferTicket,
+  unansweredNotice, whatsappPhone,
   type DispatchMode, type DispatchTicket, type OfferGroup,
 } from '@/lib/dispatch';
 import { getJiraIssue, searchJiraIssues, type JiraIssueSummary } from '@/lib/server/jira';
@@ -87,7 +88,7 @@ export async function runDispatch(now = new Date()): Promise<Summary> {
       ...ids.map((id) => db.prepare(`INSERT INTO dispatch_events (offer_id, kind, created_at) VALUES (?1, 'expired', ?2)`).bind(id, iso)),
     ]);
     // Simulação não avisa ninguém: a oferta nem saiu.
-    for (const offer of expired.results.filter((o) => o.mode !== 'dry_run')) {
+    for (const offer of expired.results.filter((o) => o.mode !== 'dry_run' && !isTestOffer(o.mode))) {
       await notifyTeam(unansweredNotice(keysByOffer.get(offer.id) ?? [], offer.store_key), offer.id);
     }
   }
@@ -222,11 +223,15 @@ export async function handleOfferClick(payload: string | null, fromPhone: string
   const result = await acceptOffer(offerId, me.technician_id);
   if (result !== 'won') return result === 'taken' ? ACCEPT_REPLY_TAKEN : ACCEPT_REPLY_EXPIRED;
 
-  const offer = await db.prepare(`SELECT store_key FROM dispatch_offers WHERE id = ?1`).bind(offerId).first<{ store_key: string }>();
+  const offer = await db.prepare(`SELECT store_key, mode FROM dispatch_offers WHERE id = ?1`).bind(offerId).first<{ store_key: string; mode: string }>();
   const keys = (await offerTicketKeys([offerId])).get(offerId) ?? [];
   // Reenvio do mesmo clique: já ganhou antes, não repete vínculo nem aviso.
   const already = await db.prepare(`SELECT 1 AS ok FROM dispatch_events WHERE offer_id = ?1 AND kind = 'linked'`).bind(offerId).first();
-  if (!already) {
+  if (!already && isTestOffer(offer?.mode)) {
+    // Teste: o chamado é fictício. Só marca o aceite e avisa a equipe.
+    await db.prepare(`INSERT INTO dispatch_events (offer_id, technician_id, kind, created_at) VALUES (?1, ?2, 'linked', ?3)`).bind(offerId, me.technician_id, new Date().toISOString()).run();
+    await notifyTeam(testNotice(acceptedNotice(keys, offer?.store_key ?? '', me.name)), offerId);
+  } else if (!already) {
     const now = new Date().toISOString();
     await db.batch([
       ...keys.map((key) => db.prepare(`INSERT INTO operational_workflows (ticket_key, status, technician_id, created_by, created_at, updated_at)
@@ -241,6 +246,48 @@ export async function handleOfferClick(payload: string | null, fromPhone: string
     await notifyTeam(acceptedNotice(keys, offer?.store_key ?? '', me.name), offerId);
   }
   return ACCEPT_REPLY_WON;
+}
+
+/**
+ * Oferta de teste (botão no painel, gerência): loja e chamado fictícios,
+ * enviada só aos técnicos cujo telefone está em DISPATCH_ALLOWLIST, com o
+ * template aprovado de verdade. Serve para conferir o caminho inteiro sem
+ * esperar um chamado novo.
+ */
+export async function sendTestOffer(now = new Date()): Promise<{ id: number; sent: number; failed: number; reason?: string } | { error: string }> {
+  const allowlist = parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ALLOWLIST);
+  if (!allowlist.length) return { error: 'Cadastre ao menos um número em DISPATCH_ALLOWLIST para enviar o teste.' };
+  const techs = (await getDb().select({ id: technicians.id, phone: technicians.phone, baseCity: technicians.baseCity, baseState: technicians.baseState })
+    .from(technicians).all()).filter((t) => allowlist.some((p) => samePhone(p, t.phone)));
+  // O mesmo número pode estar em mais de um cadastro: a mensagem sai uma vez só.
+  const byPhone = new Map(techs.map((t) => [whatsappPhone(t.phone), t]));
+  byPhone.delete(null);
+  if (!byPhone.size) return { error: 'Nenhum técnico cadastrado com os números da lista de teste.' };
+
+  const db = env.DB;
+  const iso = now.toISOString();
+  const first = [...byPhone.values()][0];
+  const city = `${first.baseCity}/${first.baseState}`;
+  const expires = new Date(now.getTime() + OFFER_HOURS * 3_600_000).toISOString();
+  const offer = await db.prepare(`INSERT INTO dispatch_offers (store_key, store_name, city, status, mode, expires_at, created_at, updated_at)
+    VALUES ('L999', 'Loja de teste', ?1, 'open', ?2, ?3, ?4, ?4) RETURNING id`).bind(city, TEST_MODE, expires, iso).first<{ id: number }>();
+  if (!offer) return { error: 'Não foi possível criar a oferta de teste.' };
+  const ticket = testOfferTicket(offer.id, city);
+  await db.batch([
+    db.prepare(`INSERT INTO dispatch_offer_tickets (offer_id, ticket_key, active, equipment, alleged_defect) VALUES (?1, ?2, 1, ?3, ?4)`)
+      .bind(offer.id, ticket.key, equipmentLine(ticket), ticket.allegedDefect),
+    ...[...byPhone].map(([phone, t]) => db.prepare(`INSERT INTO dispatch_recipients (offer_id, technician_id, phone, status, updated_at) VALUES (?1, ?2, ?3, 'pending', ?4)`)
+      .bind(offer.id, t.id, phone, iso)),
+    db.prepare(`INSERT INTO dispatch_events (offer_id, kind, details, created_at) VALUES (?1, 'created', ?2, ?3)`)
+      .bind(offer.id, JSON.stringify({ test: true, tickets: [ticket.key], recipients: byPhone.size }), iso),
+  ]);
+  await sendOffer(offer.id, [ticket], 'allowlist', allowlist);
+  const statuses = (await db.prepare(`SELECT status FROM dispatch_recipients WHERE offer_id = ?1`).bind(offer.id).all<{ status: string }>()).results;
+  const failure = await db.prepare(`SELECT details FROM dispatch_events WHERE offer_id = ?1 AND kind = 'send_failed' ORDER BY id DESC LIMIT 1`).bind(offer.id).first<{ details: string }>();
+  return {
+    id: offer.id, sent: statuses.filter((s) => s.status === 'sent').length, failed: statuses.filter((s) => s.status === 'failed').length,
+    reason: failure ? (JSON.parse(failure.details) as { error?: string }).error : undefined,
+  };
 }
 
 /** Resposta ao técnico logo depois do clique (a janela de 24 h está aberta). */

@@ -313,6 +313,27 @@ export function acceptedNotice(tickets: string[], storeKey: string, technician: 
   };
 }
 
+// ─── Oferta de teste ───────────────────────────────────
+/**
+ * Modo gravado na oferta de teste (botão no painel). Loja e chamado são
+ * fictícios: o aceite roda a disputa e os avisos, mas não vincula chamado nem
+ * mexe no Jira.
+ */
+export const TEST_MODE = 'test';
+export const isTestOffer = (mode: string | null | undefined) => mode === TEST_MODE;
+
+export function testOfferTicket(offerId: number, city: string): DispatchTicket {
+  return {
+    key: `TESTE-${offerId}`, storeCode: 'L999', storeName: 'Loja de teste', city,
+    equipment: 'CPU', pdv: '1', allegedDefect: 'Teste da distribuição, não é um chamado real',
+  };
+}
+
+/** Aviso de teste: igual ao de verdade, marcado para ninguém agir nele. */
+export function testNotice(notice: { title: string; body: string; chat: string }) {
+  return { title: `Teste · ${notice.title}`, body: notice.body, chat: `[Teste] ${notice.chat}` };
+}
+
 export function unansweredNotice(tickets: string[], storeKey: string) {
   return {
     title: `Ninguém aceitou · ${tickets.join(', ')}`,

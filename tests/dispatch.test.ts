@@ -171,3 +171,17 @@ test('depois do aceite: bloco do técnico no formato do Jira e avisos', async ()
     assert.equal(t.category, 'UTILITY');
   }
 });
+
+test('oferta de teste: chamado fictício, mensagem válida e avisos marcados', async () => {
+  const { testOfferTicket, testNotice, isTestOffer, acceptedNotice } = await import('../lib/dispatch.ts');
+  const t = testOfferTicket(9, 'Vitória da Conquista/BA');
+  assert.equal(t.key, 'TESTE-9');
+  const m = offerMessage(9, [t]);
+  assert.equal(m.name, 'atendimento_disponivel');
+  assert.equal(m.payload, 'aceitar:9');
+  assert.deepEqual(m.body, ['TESTE-9', 'L999 - Vitória da Conquista/BA', 'CPU - PDV 1', 'Teste da distribuição, não é um chamado real']);
+  assert.ok(isTestOffer('test') && !isTestOffer('live') && !isTestOffer(null));
+  const n = testNotice(acceptedNotice(['TESTE-9'], 'L999', 'Fulano'));
+  assert.match(n.title, /^Teste · Atendimento aceito/);
+  assert.match(n.chat, /^\[Teste\] /);
+});

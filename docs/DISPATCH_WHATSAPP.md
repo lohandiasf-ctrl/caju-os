@@ -52,6 +52,15 @@ número exclusivo de distribuição.
 | `allowlist` | envia só para os técnicos cujo telefone está em `DISPATCH_ALLOWLIST` (vírgula) |
 | `live` | envia para todos os técnicos elegíveis |
 
+## Oferta de teste
+
+No painel **Distribuição**, a gerência tem o botão **Enviar oferta de teste**
+(`POST /api/dispatch/test`): cria uma oferta com loja `L999` e chamado
+`TESTE-<id>` fictícios e manda o template aprovado só para os técnicos cujo
+telefone está em `DISPATCH_ALLOWLIST` (vale em qualquer modo). O aceite roda a
+disputa, responde no WhatsApp e avisa a equipe com "Teste ·" no título, mas
+não vincula chamado nem mexe no Jira. Se ninguém aceitar, expira sem aviso.
+
 ## Configuração na Meta (feita em 2026-09-28)
 
 - App **Caju Envio** (caso de uso WhatsApp, portfólio Caju Tech).
