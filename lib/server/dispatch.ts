@@ -98,7 +98,7 @@ export async function runDispatch(now = new Date()): Promise<Summary> {
     ]);
     // Simulação não avisa ninguém: a oferta nem saiu.
     for (const offer of expired.results.filter((o) => o.mode !== 'dry_run' && !isTestOffer(o.mode))) {
-      await notifyTeam(unansweredNotice(keysByOffer.get(offer.id) ?? [], offer.store_key), offer.id);
+      await notifyTeam(unansweredNotice(keysByOffer.get(offer.id) ?? [], offer.store_key), offer.id, keysByOffer.get(offer.id)?.[0]);
     }
   }
   summary.expired = expired.results.length;
@@ -229,14 +229,17 @@ async function dispatchChatGroup(emails: string[]) {
  * e mensagem no grupo "Distribuição" do chat. Nunca lança: o aceite já está
  * gravado, e o aviso é um extra.
  */
-async function notifyTeam(notice: { title: string; body: string; chat: string }, offerId: number) {
+/** `ticket`: chamado que o toque no aviso abre (sem ele, abre o grupo do chat). */
+async function notifyTeam(notice: { title: string; body: string; chat: string }, offerId: number, ticket?: string) {
   try {
     const emails = await teamEmails();
     const groupId = await dispatchChatGroup(emails);
     const now = new Date().toISOString();
     await getDb().insert(chatGroupMessages).values({ groupId, senderEmail: SYSTEM_SENDER, body: notice.chat, createdAt: now });
     await getDb().update(chatGroups).set({ updatedAt: now }).where(eq(chatGroups.id, groupId));
-    await sendPushToEmails(emails, { title: notice.title, body: notice.body, data: { kind: 'group', groupId: String(groupId), offerId: String(offerId) } }, 'dispatch');
+    await sendPushToEmails(emails, { title: notice.title, body: notice.body, data: ticket
+      ? { kind: 'dispatch', url: `/ticket/${ticket}`, offerId: String(offerId) }
+      : { kind: 'group', groupId: String(groupId), offerId: String(offerId) } }, 'dispatch');
   } catch (error) {
     console.error('dispatch: aviso à equipe falhou', error instanceof Error ? error.message : 'erro');
   }
@@ -284,7 +287,7 @@ export async function handleOfferClick(payload: string | null, fromPhone: string
       await enqueueJiraSync(key, 'update', { technicianData: technicianDataBlock(me.name, me.cpf) }, SYSTEM_SENDER, `dispatch:${offerId}:${key}`).catch(() => undefined);
     }
     await processJiraSyncJobs(Math.max(1, keys.length)).catch(() => []);
-    await notifyTeam(acceptedNotice(keys, offer?.store_key ?? '', me.name), offerId);
+    await notifyTeam(acceptedNotice(keys, offer?.store_key ?? '', me.name), offerId, keys[0]);
   }
   return ACCEPT_REPLY_WON;
 }
