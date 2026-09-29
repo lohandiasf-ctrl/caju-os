@@ -105,6 +105,7 @@ test('templates: botão Aceitar primeiro, link depois (índices usados no envio)
     assert.equal(buttons.buttons[1].type, 'URL');
     const body = t.components.find((c) => c.type === 'BODY');
     assert.ok(body && 'text' in body && !/^\{\{|\}\}$/.test(body.text.trim()), 'a Meta recusa corpo que começa ou termina com variável');
+    assert.ok(body.text.includes('a partir de R$ 70,00'), 'toda oferta mostra o valor');
   }
 });
 
