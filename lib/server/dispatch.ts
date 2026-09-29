@@ -4,7 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { appUsers, chatGroupMembers, chatGroupMessages, chatGroups, technicians } from '@/db/schema';
 import {
   ACCEPT_OFFER_SQL, ACCEPT_REPLY_EXPIRED, ACCEPT_REPLY_TAKEN, ACCEPT_REPLY_WON, acceptedNotice, acceptPayloadOffer, allowedToReceive,
-  dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, isTestOffer, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
+  DECLINE_REPLY, DECLINE_REPLY_ALREADY_WON, declinePayloadOffer, dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, isTestOffer, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
   parseAllowlist, samePhone, splitCity, storeKeyOf, technicianDataBlock, templateSendPayload, TEST_MODE, testNotice, testOfferTicket,
   unansweredNotice, whatsappPhone,
   type DispatchMode, type DispatchTicket, type OfferGroup,
@@ -158,7 +158,7 @@ async function sendOffer(offerId: number, tickets: DispatchTicket[], mode: Dispa
 /** Status de entrega que a Meta devolve pelo webhook (delivered, read, failed). */
 export async function recordDeliveryStatus(wamid: string, status: string) {
   if (!['delivered', 'read', 'failed'].includes(status)) return;
-  await env.DB.prepare(`UPDATE dispatch_recipients SET status = ?2, updated_at = ?3 WHERE wamid = ?1 AND status <> 'clicked'`).bind(wamid, status, new Date().toISOString()).run();
+  await env.DB.prepare(`UPDATE dispatch_recipients SET status = ?2, updated_at = ?3 WHERE wamid = ?1 AND status NOT IN ('clicked', 'declined')`).bind(wamid, status, new Date().toISOString()).run();
 }
 
 // ─── Avisos para a equipe ──────────────────────────────
@@ -212,6 +212,8 @@ async function notifyTeam(notice: { title: string; body: string; chat: string },
  * à equipe.
  */
 export async function handleOfferClick(payload: string | null, fromPhone: string): Promise<string | null> {
+  const declined = declinePayloadOffer(payload);
+  if (declined) return handleDecline(declined, fromPhone);
   const offerId = acceptPayloadOffer(payload);
   if (!offerId) return null;
   const db = env.DB;
@@ -246,6 +248,25 @@ export async function handleOfferClick(payload: string | null, fromPhone: string
     await notifyTeam(acceptedNotice(keys, offer?.store_key ?? '', me.name), offerId);
   }
   return ACCEPT_REPLY_WON;
+}
+
+/**
+ * "Recusar": só registra no painel e agradece. A oferta continua aberta para
+ * os outros técnicos; quem recusou continua recebendo as próximas.
+ */
+async function handleDecline(offerId: number, fromPhone: string): Promise<string> {
+  const db = env.DB;
+  const recipients = (await db.prepare(`SELECT technician_id, phone FROM dispatch_recipients WHERE offer_id = ?1`).bind(offerId).all<{ technician_id: number; phone: string }>()).results;
+  const me = recipients.find((r) => samePhone(r.phone, fromPhone));
+  if (!me) return 'Não encontramos esta oferta para o seu número. Fale com a coordenação da Caju Tech.';
+  const offer = await db.prepare(`SELECT assigned_technician_id FROM dispatch_offers WHERE id = ?1`).bind(offerId).first<{ assigned_technician_id: number | null }>();
+  if (offer?.assigned_technician_id === me.technician_id) return DECLINE_REPLY_ALREADY_WON;
+  const now = new Date().toISOString();
+  await db.batch([
+    db.prepare(`UPDATE dispatch_recipients SET status = 'declined', updated_at = ?3 WHERE offer_id = ?1 AND technician_id = ?2`).bind(offerId, me.technician_id, now),
+    db.prepare(`INSERT INTO dispatch_events (offer_id, technician_id, kind, created_at) VALUES (?1, ?2, 'declined', ?3)`).bind(offerId, me.technician_id, now),
+  ]);
+  return DECLINE_REPLY;
 }
 
 /**

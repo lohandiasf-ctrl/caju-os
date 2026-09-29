@@ -83,6 +83,17 @@ não vincula chamado nem mexe no Jira. Se ninguém aceitar, expira sem aviso.
    respostas "confirmado" / "já aceito".
 5. **E4** — técnicos reais, página `/despacho/{id}` da oferta agrupada.
 
+## A mensagem (2026-09-29)
+
+Modelos `oferta_atendimento` e `oferta_atendimento_grupo`: linhas com emoji
+(chamado, loja, equipamento, problema, ganho), "Agora é com você!", rodapé
+"Responde aí pra gente:" e dois botões, **Aceitar** (`aceitar:<oferta>`) e
+**Recusar** (`recusar:<oferta>`). Sem link: o técnico não tem login no Caju OS.
+Recusar só registra no painel e agradece; a oferta segue para os outros. A
+confirmação do aceite diz que a equipe vai entrar em contato para combinar o
+atendimento. Os modelos antigos (`atendimento_disponivel*`, com "Ver chamado")
+ficam sem uso.
+
 ## Depois do aceite (E3a)
 
 O clique chega pelo webhook `/api/whatsapp/webhook` (`button.payload =

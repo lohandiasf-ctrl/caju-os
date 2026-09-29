@@ -32,6 +32,11 @@ const STATUS: Record<Offer['status'], [string, string]> = {
   expired: ['Expirou', 'text-muted-foreground'],
   cancelled: ['Cancelada', 'text-muted-foreground'],
 };
+// O que aconteceu com a mensagem de cada técnico (status da Meta pelo webhook).
+const DELIVERY: Record<string, string> = {
+  pending: 'aguardando envio', sent: 'enviada', delivered: 'entregue', read: 'lida', failed: 'falhou',
+  skipped: 'fora da lista de teste', simulated: 'simulado', clicked: 'aceitou', declined: 'recusou',
+};
 const TEMPLATE_STATUS: Record<string, string> = { APPROVED: 'Aprovado', PENDING: 'Em análise', REJECTED: 'Recusado', PAUSED: 'Pausado', DISABLED: 'Desativado' };
 
 const when = (iso: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(iso));
@@ -196,7 +201,7 @@ export default function DistribuicaoPage() {
                         <p className="mb-1 text-xs font-semibold text-muted-foreground">{o.recipients.length ? `Destinatários (${o.recipients.length})` : 'Destinatários'}</p>
                         {o.recipients.length ? (
                           <ul className="rounded-xl border border-border text-sm">
-                            {o.recipients.map((r) => <li key={r.name} className="flex justify-between gap-2 border-b border-border px-3 py-2 last:border-0"><span>{r.name}</span><span className="text-xs text-muted-foreground">{r.status === 'simulated' ? 'simulado' : r.status}</span></li>)}
+                            {o.recipients.map((r) => <li key={r.name} className="flex justify-between gap-2 border-b border-border px-3 py-2 last:border-0"><span>{r.name}</span><span className="text-xs text-muted-foreground">{DELIVERY[r.status] ?? r.status}</span></li>)}
                           </ul>
                         ) : <p className="text-sm text-muted-foreground">Ninguém: a oferta está retida.</p>}
                       </div>

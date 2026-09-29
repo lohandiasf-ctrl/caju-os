@@ -157,53 +157,64 @@ export function holdReasons(group: OfferGroup, eligibleCount: number): HoldReaso
  * Valor para o técnico, igual em toda oferta (decisão da gerência em
  * 2026-09-28). Texto fixo do template: mudar exige nova aprovação da Meta.
  */
-export const VALUE_LINE = 'Seu ganho: a partir de R$ 70,00. Quanto mais atendimentos, maior o valor.';
+export const VALUE_LINE = '💰 Ganho: a partir de R$ 70,00. Quanto mais atendimentos, maior o valor.';
 
-export const TEMPLATE_SINGLE = 'atendimento_disponivel';
-export const TEMPLATE_GROUP = 'atendimento_disponivel_grupo';
+// Nomes novos a cada mudança de botões: a Meta não deixa trocar os botões de
+// um modelo aprovado. Os antigos (atendimento_disponivel*, com "Ver chamado")
+// ficam sem uso; o clique neles continua valendo pelo mesmo payload.
+export const TEMPLATE_SINGLE = 'oferta_atendimento';
+export const TEMPLATE_GROUP = 'oferta_atendimento_grupo';
 export const ACCEPT_PAYLOAD_PREFIX = 'aceitar:';
+export const DECLINE_PAYLOAD_PREFIX = 'recusar:';
 
-export type TemplateMessage = { name: string; body: string[]; urlSuffix: string; payload: string };
+export type TemplateMessage = { name: string; body: string[]; payload: string; declinePayload: string };
 
 /**
  * Parâmetros do template para uma oferta. Um FSA: os dados dele. Vários FSAs
- * da mesma loja: quantidade, loja e equipamentos; o detalhe fica no link.
+ * da mesma loja: quantidade, loja e equipamentos, aceitos juntos.
  */
 export function offerMessage(offerId: number, tickets: DispatchTicket[]): TemplateMessage {
   const payload = `${ACCEPT_PAYLOAD_PREFIX}${offerId}`;
+  const declinePayload = `${DECLINE_PAYLOAD_PREFIX}${offerId}`;
   if (tickets.length === 1) {
     const t = tickets[0];
     return {
       name: TEMPLATE_SINGLE,
       body: [t.key, storeLine(t), equipmentLine(t), t.allegedDefect ?? ''].map((v) => templateParam(v)),
-      urlSuffix: t.key,
-      payload,
+      payload, declinePayload,
     };
   }
-  const equipments = [...new Set(tickets.map((t) => t.equipment?.trim()).filter(Boolean))].join(', ') || 'ver no link';
+  const equipments = [...new Set(tickets.map((t) => t.equipment?.trim()).filter(Boolean))].join(', ') || 'Equipamento não informado';
   return {
     name: TEMPLATE_GROUP,
     body: [String(tickets.length), storeLine(tickets[0]), templateParam(equipments, 120)],
-    urlSuffix: String(offerId),
-    payload,
+    payload, declinePayload,
   };
 }
 
-/** Texto como o técnico vai ler, para o painel de simulação. */
+const SINGLE_BODY = (a: string, b: string, c: string, d: string) =>
+  `🔧 Chamado: ${a}\n📍 Loja: ${b}\n🖥️ Equipamento: ${c}\n⚠️ Problema: ${d}\n${VALUE_LINE}\n\nAgora é com você!`;
+const GROUP_BODY = (a: string, b: string, c: string) =>
+  `🔧 Chamados: ${a} na mesma loja\n📍 Loja: ${b}\n🖥️ Equipamentos: ${c}\n${VALUE_LINE}\n\nAceitando, você fica com todos eles. Agora é com você!`;
+const OFFER_HEADER = 'Atendimento disponível';
+const OFFER_FOOTER = 'Responde aí pra gente:';
+
+/** Texto como o técnico vai ler, para o painel. */
 export function previewText(message: TemplateMessage): string {
   const [a, b, c, d] = message.body;
-  const link = message.name === TEMPLATE_SINGLE
-    ? `https://operacoes.cajutech.net/?ticket=${message.urlSuffix}`
-    : `https://operacoes.cajutech.net/despacho/${message.urlSuffix}`;
-  const body = message.name === TEMPLATE_SINGLE
-    ? `Chamado ${a}\n\nLoja: ${b}\n\nEquipamento: ${c}\n\nResumo do problema: "${d}"\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com este atendimento.`
-    : `Há ${a} chamados na loja ${b}.\n\nEquipamentos: ${c}\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com todos eles de uma vez. Os detalhes estão no link.`;
-  return `Atendimento disponível\n\n${body}\n\n[Aceitar atendimento] [${message.name === TEMPLATE_SINGLE ? 'Ver chamado' : 'Ver chamados'}: ${link}]`;
+  const body = message.name === TEMPLATE_SINGLE ? SINGLE_BODY(a, b, c, d) : GROUP_BODY(a, b, c);
+  return `${OFFER_HEADER}\n\n${body}\n\n${OFFER_FOOTER}\n[Aceitar] [Recusar]`;
 }
 
 /** Id da oferta num clique de botão ("aceitar:42"), ou null se não for aceite. */
 export function acceptPayloadOffer(payload: string | null | undefined): number | null {
   const m = (payload ?? '').trim().match(/^aceitar:(\d+)$/);
+  return m ? Number(m[1]) : null;
+}
+
+/** Id da oferta num clique em "Recusar" ("recusar:42"), ou null. */
+export function declinePayloadOffer(payload: string | null | undefined): number | null {
+  const m = (payload ?? '').trim().match(/^recusar:(\d+)$/);
   return m ? Number(m[1]) : null;
 }
 
@@ -217,31 +228,29 @@ SET status = 'assigned', assigned_technician_id = ?1, assigned_at = ?2, updated_
 WHERE id = ?3 AND status = 'open' AND expires_at > ?2
   AND EXISTS (SELECT 1 FROM dispatch_recipients r WHERE r.offer_id = ?3 AND r.technician_id = ?1)`;
 
-export const ACCEPT_REPLY_WON = 'Atendimento confirmado. Os chamados foram atribuídos a você e já estão disponíveis no Caju OS.';
+export const ACCEPT_REPLY_WON = 'Atendimento confirmado! ✅ Nossa equipe vai entrar em contato com você para combinar o atendimento.';
 export const ACCEPT_REPLY_TAKEN = 'Este atendimento já foi aceito por outro técnico e não está mais disponível.';
 export const ACCEPT_REPLY_EXPIRED = 'Esta oferta expirou e não está mais disponível.';
+export const DECLINE_REPLY = 'Tudo bem, obrigado por avisar! Você continua recebendo as próximas ofertas.';
+export const DECLINE_REPLY_ALREADY_WON = 'Você já aceitou este atendimento. Se não puder mais ir, fale com a coordenação da Caju Tech.';
 
 // ─── Templates (enviados à Meta por /api/dispatch/templates) ─────────
+const OFFER_BUTTONS = { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'Aceitar' }, { type: 'QUICK_REPLY', text: 'Recusar' }] } as const;
+
 export const DISPATCH_TEMPLATES = [
   {
     name: TEMPLATE_SINGLE,
     language: 'pt_BR',
     category: 'UTILITY',
     components: [
-      { type: 'HEADER', format: 'TEXT', text: 'Atendimento disponível' },
+      { type: 'HEADER', format: 'TEXT', text: OFFER_HEADER },
       {
         type: 'BODY',
-        text: `Chamado {{1}}\n\nLoja: {{2}}\n\nEquipamento: {{3}}\n\nResumo do problema: "{{4}}"\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com este atendimento.`,
+        text: SINGLE_BODY('{{1}}', '{{2}}', '{{3}}', '{{4}}'),
         example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG', 'CPU - PDV 308', 'PC não liga']] },
       },
-      { type: 'FOOTER', text: 'Caju Tech' },
-      {
-        type: 'BUTTONS',
-        buttons: [
-          { type: 'QUICK_REPLY', text: 'Aceitar atendimento' },
-          { type: 'URL', text: 'Ver chamado', url: 'https://operacoes.cajutech.net/?ticket={{1}}', example: ['https://operacoes.cajutech.net/?ticket=FSA-132506'] },
-        ],
-      },
+      { type: 'FOOTER', text: OFFER_FOOTER },
+      OFFER_BUTTONS,
     ],
   },
   {
@@ -249,20 +258,14 @@ export const DISPATCH_TEMPLATES = [
     language: 'pt_BR',
     category: 'UTILITY',
     components: [
-      { type: 'HEADER', format: 'TEXT', text: 'Atendimento disponível' },
+      { type: 'HEADER', format: 'TEXT', text: OFFER_HEADER },
       {
         type: 'BODY',
-        text: `Há {{1}} chamados na loja {{2}}.\n\nEquipamentos: {{3}}\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com todos eles de uma vez. Os detalhes estão no link.`,
+        text: GROUP_BODY('{{1}}', '{{2}}', '{{3}}'),
         example: { body_text: [['3', 'L497 - Candeias/BA', 'CPU, teclado e monitor']] },
       },
-      { type: 'FOOTER', text: 'Caju Tech' },
-      {
-        type: 'BUTTONS',
-        buttons: [
-          { type: 'QUICK_REPLY', text: 'Aceitar atendimento' },
-          { type: 'URL', text: 'Ver chamados', url: 'https://operacoes.cajutech.net/despacho/{{1}}', example: ['https://operacoes.cajutech.net/despacho/123'] },
-        ],
-      },
+      { type: 'FOOTER', text: OFFER_FOOTER },
+      OFFER_BUTTONS,
     ],
   },
 ] as const;
@@ -279,7 +282,7 @@ export function templateSendPayload(to: string, message: TemplateMessage) {
       components: [
         { type: 'body', parameters: message.body.map((text) => ({ type: 'text', text })) },
         { type: 'button', sub_type: 'quick_reply', index: '0', parameters: [{ type: 'payload', payload: message.payload }] },
-        { type: 'button', sub_type: 'url', index: '1', parameters: [{ type: 'text', text: message.urlSuffix }] },
+        { type: 'button', sub_type: 'quick_reply', index: '1', parameters: [{ type: 'payload', payload: message.declinePayload }] },
       ],
     },
   };
