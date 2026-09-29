@@ -1,2 +1,6 @@
+User-agent: facebookexternalhit
+Allow: /privacidade
+Disallow: /
+
 User-agent: *
 Disallow: /
