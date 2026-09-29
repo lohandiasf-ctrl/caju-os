@@ -274,6 +274,14 @@ export const whatsappMessages = sqliteTable('whatsapp_messages', {
 // One row per WhatsApp contact. Read state and the linked ticket live here
 // instead of on every message row, since both apply to the conversation as
 // a whole, not to any single message.
+// Conversas fixadas no topo da caixa do WhatsApp, por funcionário.
+export const whatsappConversationPins = sqliteTable('whatsapp_conversation_pins', {
+  email: text('email').notNull(),
+  account: text('account').notNull(),
+  contactPhone: text('contact_phone').notNull(),
+  pinnedAt: text('pinned_at').notNull(),
+}, (table) => [primaryKey({ columns: [table.email, table.account, table.contactPhone] })]);
+
 export const whatsappConversations = sqliteTable('whatsapp_conversations', {
   contactPhone: text('contact_phone').notNull(),
   // A conversa pertence a um dos números da operação; a resposta sai por ele.
