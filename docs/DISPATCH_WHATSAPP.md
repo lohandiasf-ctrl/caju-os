@@ -94,6 +94,16 @@ confirmação do aceite diz que a equipe vai entrar em contato para combinar o
 atendimento. Os modelos antigos (`atendimento_disponivel*`, com "Ver chamado")
 ficam sem uso.
 
+## Versões do modelo (2026-09-29)
+
+A Meta passou `oferta_chamado*` ("Valor: a combinar", com emoji e "Agora é
+com você!") para **Marketing**: entrega limitada por pessoa e custo maior.
+Voltou a sair `oferta_atendimento*` ("a partir de R$ 70,00", Utilidade) e foi
+enviada a versão `chamado_disponivel` / `chamados_disponiveis`, em tom de aviso
+e sem emoji, para tentar Utilidade com "a combinar". A troca é
+`ACTIVE_OFFER_VERSION` em `lib/dispatch.ts`; o painel mostra a categoria de
+cada modelo.
+
 ## Depois do aceite (E3a)
 
 O clique chega pelo webhook `/api/whatsapp/webhook` (`button.payload =

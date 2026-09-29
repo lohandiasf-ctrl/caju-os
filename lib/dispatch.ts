@@ -153,18 +153,67 @@ export function holdReasons(group: OfferGroup, eligibleCount: number): HoldReaso
   return [...reasons];
 }
 
-/**
- * Valor para o técnico: combinado depois do aceite (decisão da gerência em
- * 2026-09-29; antes era "a partir de R$ 70,00"). Texto fixo do template:
- * mudar exige nova aprovação da Meta.
- */
-export const VALUE_LINE = '💰 Valor: a combinar';
+// ─── Modelos da oferta ─────────────────────────────────
+// Cada versão é um par de modelos na Meta (um chamado / vários da mesma loja),
+// com os mesmos parâmetros e os mesmos botões Aceitar e Recusar. Texto de
+// modelo aprovado não muda: versão nova = nomes novos. O clique em qualquer
+// versão antiga continua valendo, porque o payload é o mesmo.
+//   atendimento_disponivel*  "Ver chamado" (sem uso)
+//   oferta_atendimento*      "a partir de R$ 70,00", Utilidade (em uso)
+//   oferta_chamado*          "Valor: a combinar", a Meta passou para Marketing (sem uso)
+//   chamado_disponivel*      "a combinar" em tom de aviso, tentando Utilidade
+type OfferVersion = {
+  single: string; group: string; header: string; groupHeader: string; footer: string;
+  singleBody: (a: string, b: string, c: string, d: string) => string;
+  groupBody: (a: string, b: string, c: string) => string;
+};
 
-// Nome novo a cada mudança de texto ou botões (a aprovação da Meta é por
-// modelo). Sem uso, mas o clique neles continua valendo pelo mesmo payload:
-// atendimento_disponivel* ("Ver chamado") e oferta_atendimento* ("R$ 70,00").
-export const TEMPLATE_SINGLE = 'oferta_chamado';
-export const TEMPLATE_GROUP = 'oferta_chamado_grupo';
+const R70_VALUE = '💰 Ganho: a partir de R$ 70,00. Quanto mais atendimentos, maior o valor.';
+export const OFFER_VERSIONS = {
+  r70: {
+    single: 'oferta_atendimento', group: 'oferta_atendimento_grupo',
+    header: 'Atendimento disponível', groupHeader: 'Atendimento disponível', footer: 'Responde aí pra gente:',
+    singleBody: (a, b, c, d) => `🔧 Chamado: ${a}
+📍 Loja: ${b}
+🖥️ Equipamento: ${c}
+⚠️ Problema: ${d}
+${R70_VALUE}
+
+Agora é com você!`,
+    groupBody: (a, b, c) => `🔧 Chamados: ${a} na mesma loja
+📍 Loja: ${b}
+🖥️ Equipamentos: ${c}
+${R70_VALUE}
+
+Aceitando, você fica com todos eles. Agora é com você!`,
+  },
+  aviso: {
+    single: 'chamado_disponivel', group: 'chamados_disponiveis',
+    header: 'Novo chamado na sua região', groupHeader: 'Novos chamados na sua região', footer: 'Caju Tech',
+    singleBody: (a, b, c, d) => `Chamado: ${a}
+Loja: ${b}
+Equipamento: ${c}
+Problema: ${d}
+Valor: a combinar com a equipe
+
+Para ficar com este atendimento, toque em Aceitar. Se não puder, toque em Recusar.`,
+    groupBody: (a, b, c) => `Chamados: ${a} na mesma loja
+Loja: ${b}
+Equipamentos: ${c}
+Valor: a combinar com a equipe
+
+Para ficar com todos estes atendimentos, toque em Aceitar. Se não puder, toque em Recusar.`,
+  },
+} satisfies Record<string, OfferVersion>;
+
+/**
+ * Versão que sai nas ofertas. "r70" enquanto a Meta não aprova "aviso" como
+ * Utilidade (2026-09-29): em Marketing a entrega é limitada e custa mais.
+ */
+export const ACTIVE_OFFER_VERSION: keyof typeof OFFER_VERSIONS = 'r70';
+const ACTIVE = OFFER_VERSIONS[ACTIVE_OFFER_VERSION];
+export const TEMPLATE_SINGLE = ACTIVE.single;
+export const TEMPLATE_GROUP = ACTIVE.group;
 export const ACCEPT_PAYLOAD_PREFIX = 'aceitar:';
 export const DECLINE_PAYLOAD_PREFIX = 'recusar:';
 
@@ -193,18 +242,17 @@ export function offerMessage(offerId: number, tickets: DispatchTicket[]): Templa
   };
 }
 
-const SINGLE_BODY = (a: string, b: string, c: string, d: string) =>
-  `🔧 Chamado: ${a}\n📍 Loja: ${b}\n🖥️ Equipamento: ${c}\n⚠️ Problema: ${d}\n${VALUE_LINE}\n\nAgora é com você!`;
-const GROUP_BODY = (a: string, b: string, c: string) =>
-  `🔧 Chamados: ${a} na mesma loja\n📍 Loja: ${b}\n🖥️ Equipamentos: ${c}\n${VALUE_LINE}\n\nAceitando, você fica com todos eles. Agora é com você!`;
-const OFFER_HEADER = 'Atendimento disponível';
-const OFFER_FOOTER = 'Responde aí pra gente:';
-
 /** Texto como o técnico vai ler, para o painel. */
 export function previewText(message: TemplateMessage): string {
   const [a, b, c, d] = message.body;
-  const body = message.name === TEMPLATE_SINGLE ? SINGLE_BODY(a, b, c, d) : GROUP_BODY(a, b, c);
-  return `${OFFER_HEADER}\n\n${body}\n\n${OFFER_FOOTER}\n[Aceitar] [Recusar]`;
+  const v: OfferVersion = Object.values(OFFER_VERSIONS).find((x) => x.single === message.name || x.group === message.name) ?? ACTIVE;
+  const single = message.name === v.single;
+  return `${single ? v.header : v.groupHeader}
+
+${single ? v.singleBody(a, b, c, d) : v.groupBody(a, b, c)}
+
+${v.footer}
+[Aceitar] [Recusar]`;
 }
 
 /** Id da oferta num clique de botão ("aceitar:42"), ou null se não for aceite. */
@@ -238,38 +286,29 @@ export const DECLINE_REPLY_ALREADY_WON = 'Você já aceitou este atendimento. Se
 // ─── Templates (enviados à Meta por /api/dispatch/templates) ─────────
 const OFFER_BUTTONS = { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: 'Aceitar' }, { type: 'QUICK_REPLY', text: 'Recusar' }] } as const;
 
-export const DISPATCH_TEMPLATES = [
+const offerTemplates = (v: OfferVersion) => [
   {
-    name: TEMPLATE_SINGLE,
-    language: 'pt_BR',
-    category: 'UTILITY',
+    name: v.single, language: 'pt_BR', category: 'UTILITY',
     components: [
-      { type: 'HEADER', format: 'TEXT', text: OFFER_HEADER },
-      {
-        type: 'BODY',
-        text: SINGLE_BODY('{{1}}', '{{2}}', '{{3}}', '{{4}}'),
-        example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG', 'CPU - PDV 308', 'PC não liga']] },
-      },
-      { type: 'FOOTER', text: OFFER_FOOTER },
+      { type: 'HEADER', format: 'TEXT', text: v.header },
+      { type: 'BODY', text: v.singleBody('{{1}}', '{{2}}', '{{3}}', '{{4}}'), example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG', 'CPU - PDV 308', 'PC não liga']] } },
+      { type: 'FOOTER', text: v.footer },
       OFFER_BUTTONS,
     ],
   },
   {
-    name: TEMPLATE_GROUP,
-    language: 'pt_BR',
-    category: 'UTILITY',
+    name: v.group, language: 'pt_BR', category: 'UTILITY',
     components: [
-      { type: 'HEADER', format: 'TEXT', text: OFFER_HEADER },
-      {
-        type: 'BODY',
-        text: GROUP_BODY('{{1}}', '{{2}}', '{{3}}'),
-        example: { body_text: [['3', 'L497 - Candeias/BA', 'CPU, teclado e monitor']] },
-      },
-      { type: 'FOOTER', text: OFFER_FOOTER },
+      { type: 'HEADER', format: 'TEXT', text: v.groupHeader },
+      { type: 'BODY', text: v.groupBody('{{1}}', '{{2}}', '{{3}}'), example: { body_text: [['3', 'L497 - Candeias/BA', 'CPU, teclado e monitor']] } },
+      { type: 'FOOTER', text: v.footer },
       OFFER_BUTTONS,
     ],
   },
-] as const;
+];
+
+/** A versão em uso e a candidata: o painel mostra o status das duas e envia a que faltar. */
+export const DISPATCH_TEMPLATES = [...offerTemplates(OFFER_VERSIONS.r70), ...offerTemplates(OFFER_VERSIONS.aviso)];
 
 /** Corpo do POST /{phone-number-id}/messages para uma oferta. */
 export function templateSendPayload(to: string, message: TemplateMessage) {
