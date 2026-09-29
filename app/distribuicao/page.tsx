@@ -55,6 +55,7 @@ export default function DistribuicaoPage() {
   const [testing, setTesting] = useState(false);
   const [testNotice, setTestNotice] = useState('');
   const [open, setOpen] = useState<number | null>(null);
+  const [resending, setResending] = useState<number | null>(null);
   const gerencia = role === 'gerencia';
 
   const load = useCallback(async () => {
@@ -102,10 +103,31 @@ export default function DistribuicaoPage() {
       const body = await response.json().catch(() => ({})) as { sent?: number; failed?: number; reason?: string; error?: string };
       if (!response.ok) setTestNotice(body.error ?? 'Não foi possível enviar o teste.');
       else if (!body.sent) setTestNotice(`A Meta recusou o envio${body.reason ? `: ${body.reason}` : '.'}`);
-      else setTestNotice(`Teste enviado para ${body.sent} ${body.sent === 1 ? 'número' : 'números'}. Toque em "Aceitar atendimento" no WhatsApp.`);
+      else setTestNotice(`Teste enviado para ${body.sent} ${body.sent === 1 ? 'número' : 'números'}. Toque em "Aceitar" no WhatsApp.`);
       await load();
     } finally {
       setTesting(false);
+    }
+  }
+
+  // Reenviar: cancela a oferta que ninguém aceitou e manda uma nova para os
+  // mesmos chamados, com prazo novo.
+  async function resend(offer: Offer) {
+    if (!user || resending !== null) return;
+    if (!window.confirm(`Reenviar ${offer.tickets.join(', ')}? A oferta atual é cancelada e sai uma nova para os técnicos.`)) return;
+    setResending(offer.id);
+    setTestNotice('');
+    try {
+      const response = await fetch(`/api/dispatch/offers/${offer.id}/resend`, { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      const body = await response.json().catch(() => ({})) as { status?: string; sent?: number; reason?: string; error?: string };
+      if (!response.ok) setTestNotice(body.error ?? 'Não foi possível reenviar.');
+      else if (body.status === 'held') setTestNotice('Nova oferta criada, mas retida: veja o motivo na lista.');
+      else if (mode === 'dry_run') setTestNotice('Nova oferta criada como simulação (nada foi enviado).');
+      else if (!body.sent) setTestNotice(`Nova oferta criada, mas nenhuma mensagem saiu${body.reason ? `: ${body.reason}` : ' (ninguém da lista de teste nesta cidade).'}`);
+      else setTestNotice(`Reenviado para ${body.sent} ${body.sent === 1 ? 'técnico' : 'técnicos'}.`);
+      await load();
+    } finally {
+      setResending(null);
     }
   }
 
@@ -191,6 +213,13 @@ export default function DistribuicaoPage() {
                   </button>
                   {!!o.holdReasons.length && <p className="mt-2 text-xs text-warning">{o.holdReasons.join(' · ')}</p>}
                   {o.assignedTo && <p className="mt-2 text-xs text-success">Aceita por {o.assignedTo}{o.assignedAt ? ` em ${when(o.assignedAt)}` : ''}</p>}
+                  {o.status !== 'assigned' && o.status !== 'cancelled' && (
+                    <div className="mt-3">
+                      <Button size="sm" variant="outline" onClick={() => void resend(o)} disabled={resending !== null}>
+                        {resending === o.id ? <Loader2 className="animate-spin" /> : <RefreshCw />}Reenviar
+                      </Button>
+                    </div>
+                  )}
                   {expanded && (
                     <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
                       <div>
