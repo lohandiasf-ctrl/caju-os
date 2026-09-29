@@ -33,12 +33,12 @@ if (!OPENWA_KEY || !BRIDGE_SECRET || !CAJU_WEBHOOK_URL || !HOOK_SECRET) {
 await mkdir(MEDIA_DIR, { recursive: true });
 
 // ─── Chamadas ao OpenWA ────────────────────────────────
-async function openwa(path, { method = 'GET', json, raw } = {}) {
+async function openwa(path, { method = 'GET', json, raw, timeout = 30_000 } = {}) {
   const response = await fetch(`${OPENWA_URL}/api/${path}`, {
     method,
     headers: { 'X-API-Key': OPENWA_KEY, ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: json !== undefined ? JSON.stringify(json) : undefined,
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(timeout),
   });
   if (raw) return response;
   const payload = await response.json().catch(() => null);
@@ -66,12 +66,25 @@ function setState(status) {
 // Agenda (contatos + grupos): o OpenWA leva alguns segundos para listar, então
 // fica em cache e se renova por trás; a busca no Caju OS responde na hora.
 let book = { at: 0, contacts: [], groups: [], loading: null };
+
+// O OpenWA entrega no máximo 500 grupos ou 1000 contatos por chamada: pagina até acabar.
+async function listAll(path, page = 500) {
+  const all = [];
+  for (let offset = 0; offset < 10_000; offset += page) {
+    const items = itemsOf(await openwa(`${path}${path.includes('?') ? '&' : '?'}limit=${page}&offset=${offset}`, { timeout: 90_000 }));
+    all.push(...items);
+    if (items.length < page) break;
+  }
+  return all;
+}
 function refreshBook() {
   if (book.loading || !sessionId) return book.loading;
   book.loading = Promise.all([
-    openwa(session('/contacts?limit=1000')).then(itemsOf).catch(() => null),
-    openwa(session('/groups?limit=500')).then(itemsOf).catch(() => null),
+    listAll(session('/contacts'), 500).catch(() => null),
+    listAll(session('/groups'), 500).catch(() => null),
   ]).then(([contacts, groups]) => {
+    // Se as duas listas falharam, não vale como "atualizada": tenta de novo na próxima busca.
+    if (contacts === null && groups === null) return;
     book = { at: Date.now(), contacts: contacts ?? book.contacts, groups: groups ?? book.groups, loading: null };
   }).finally(() => { book.loading = null; });
   return book.loading;
@@ -97,8 +110,7 @@ async function syncGroups() {
   if (!sessionId || Date.now() - groupsSyncedAt < 30_000) return;
   groupsSyncedAt = Date.now();
   try {
-    const list = await openwa(session('/groups?limit=500'));
-    const payload = bridgeGroups(list);
+    const payload = bridgeGroups(await listAll(session('/groups'), 500));
     for (const g of payload.groups) if (g.subject) groupNames.set(g.jid, g.subject);
     if (payload.groups.length) await forward(payload);
   } catch (error) { console.error('Não consegui listar os grupos:', error?.message ?? error); }
@@ -154,7 +166,14 @@ async function onOpenwaEvent(body) {
   }
   if (event !== 'message.received' && event !== 'message.sent') return;
   const chat = String(data?.chatId ?? (event === 'message.sent' ? data?.to : data?.from) ?? '');
-  if (isGroup(chat) && !groupNames.has(chat)) await syncGroups();
+  if (isGroup(chat) && !groupNames.has(chat)) {
+    await syncGroups();
+    // Grupo novo que a lista ainda não trouxe: pergunta o nome direto.
+    if (!groupNames.has(chat)) {
+      const info = await openwa(session(`/groups/${encodeURIComponent(chat)}`)).catch(() => null);
+      if (info?.name) groupNames.set(chat, info.name);
+    }
+  }
   const message = bridgeMessage(event, data, { groupSubject: groupNames.get(chat) });
   if (!message) return;
   if (data.hasMedia || data.media) message.mediaId = await storeIncomingMedia(data, chat, message.wamid);

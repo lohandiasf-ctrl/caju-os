@@ -24,6 +24,8 @@ primary_region = 'gru'
   SERVE_DASHBOARD = 'false'
   # Atendimento feito por pessoas: sem o "digitando..." e a espera de até 5 s antes de cada texto.
   SIMULATE_TYPING = 'false'
+  # Quem o WhatsApp só identifica por "@lid" chega com o telefone quando o OpenWA consegue resolver.
+  RESOLVE_LID_TO_PHONE = 'true'
   # Só o endereço privado da camada de tradução pode receber os eventos.
   SSRF_ALLOWED_HOSTS = 'caju-openwa-adapter.internal'
   REDIS_ENABLED = 'false'

@@ -1,11 +1,11 @@
 import { env } from 'cloudflare:workers';
-import { fetchBridgeHealth, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
-import { toWhatsappAccount } from '@/lib/whatsapp-accounts';
+import { bridgeConfigured, fetchBridgeHealth, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
+import { toWhatsappAccount, WHATSAPP_ACCOUNTS } from '@/lib/whatsapp-accounts';
 
 type Row = {
   contact_phone: string; contact_name: string | null; ticket_key: string | null; assigned_to: string | null;
   last_message_at: string; last_read_at: string | null; last_read_by: string | null; created_at: string; updated_at: string;
-  last_body: string | null; last_direction: string | null; last_occurred_at: string | null; last_message_type: string | null; unread: number; pinned: number;
+  last_body: string | null; last_direction: string | null; last_occurred_at: string | null; last_message_type: string | null; unread: number; pinned: number; agenda_name: string | null;
 };
 
 // Last message and unread count come from correlated subqueries instead of
@@ -16,6 +16,7 @@ type Row = {
 // ?1 conta, ?2 e-mail de quem está vendo (para o "fixar").
 const listSql = (scope: 'recent' | 'groups') => `
   SELECT c.*,
+    ag.name AS agenda_name,
     EXISTS (SELECT 1 FROM whatsapp_conversation_pins p WHERE p.email = ?2 AND p.account = c.account AND p.contact_phone = c.contact_phone) AS pinned,
     lm.body AS last_body, lm.direction AS last_direction, lm.occurred_at AS last_occurred_at, lm.message_type AS last_message_type,
     (SELECT COUNT(*) FROM whatsapp_messages u
@@ -26,6 +27,9 @@ const listSql = (scope: 'recent' | 'groups') => `
     : `SELECT * FROM whatsapp_conversations WHERE account = ?1 AND (
          contact_phone IN (SELECT contact_phone FROM whatsapp_conversations WHERE account = ?1 ORDER BY last_message_at DESC LIMIT 200)
          OR contact_phone IN (SELECT contact_phone FROM whatsapp_conversation_pins WHERE email = ?2 AND account = ?1))`}) c
+  LEFT JOIN whatsapp_contact_names ag ON ag.phone_key = CASE
+    WHEN c.contact_phone NOT LIKE '%@%' AND c.contact_phone LIKE '55%' AND length(c.contact_phone) >= 12 THEN substr(c.contact_phone, 3, 2) || substr(c.contact_phone, -8)
+    WHEN c.contact_phone LIKE '%@c.us' OR c.contact_phone LIKE '%@s.whatsapp.net' THEN substr(c.contact_phone, 3, 2) || substr(substr(c.contact_phone, 1, instr(c.contact_phone, '@') - 1), -8) END
   LEFT JOIN whatsapp_messages lm ON lm.id = (
     SELECT m.id FROM whatsapp_messages m
     WHERE m.account = c.account AND m.contact_phone = c.contact_phone AND m.direction IN ('incoming', 'outgoing')
@@ -41,18 +45,24 @@ export async function GET(request: Request) {
     const account = toWhatsappAccount(params.get('account'));
     const scope = params.get('scope') === 'groups' ? 'groups' : 'recent';
     // Bridge health rides on the list poll instead of costing its own request.
-    const [{ results }, bridge] = await Promise.all([
+    const [{ results }, bridge, counts] = await Promise.all([
       env.DB.prepare(listSql(scope)).bind(account, current.email.toLowerCase()).all<Row>(),
       fetchBridgeHealth(account),
+      env.DB.prepare(`SELECT account, COUNT(*) AS n FROM whatsapp_conversations GROUP BY account`).all<{ account: string; n: number }>(),
     ]);
+    // Só mostra a aba de um número que tem bridge e alguma conversa (ou o que está aberto):
+    // um número que nunca foi conectado só ocuparia espaço.
+    const used = new Map(counts.results.map((row) => [row.account, Number(row.n)]));
+    const accounts = WHATSAPP_ACCOUNTS.filter((item) => item.id === account || (bridgeConfigured(item.id) && (used.get(item.id) ?? 0) > 0)).map((item) => item.id);
     const conversations = results.map((row) => ({
-      contactPhone: row.contact_phone, contactName: row.contact_name, ticketKey: row.ticket_key, assignedTo: row.assigned_to,
+      // O nome da agenda da operação vale mais que o do perfil do WhatsApp.
+      contactPhone: row.contact_phone, contactName: row.agenda_name ?? row.contact_name, ticketKey: row.ticket_key, assignedTo: row.assigned_to,
       lastMessageAt: row.last_message_at, lastReadAt: row.last_read_at, lastReadBy: row.last_read_by, createdAt: row.created_at, updatedAt: row.updated_at,
       lastMessage: row.last_occurred_at ? { body: row.last_body, direction: row.last_direction, occurredAt: row.last_occurred_at, messageType: row.last_message_type } : null,
       unread: Number(row.unread) || 0,
       pinned: Number(row.pinned) === 1,
     }));
-    return Response.json({ conversations, bridge, account }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ conversations, bridge, account, accounts }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     console.error('Falha ao listar conversas do WhatsApp', error);

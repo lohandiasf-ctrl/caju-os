@@ -282,6 +282,15 @@ export const whatsappConversationPins = sqliteTable('whatsapp_conversation_pins'
   pinnedAt: text('pinned_at').notNull(),
 }, (table) => [primaryKey({ columns: [table.email, table.account, table.contactPhone] })]);
 
+// Agenda de contatos da operação: o nome que a equipe usa (vem de vCard).
+export const whatsappContactNames = sqliteTable('whatsapp_contact_names', {
+  phoneKey: text('phone_key').primaryKey(),
+  phone: text('phone').notNull(),
+  name: text('name').notNull(),
+  source: text('source'),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export const whatsappConversations = sqliteTable('whatsapp_conversations', {
   contactPhone: text('contact_phone').notNull(),
   // A conversa pertence a um dos números da operação; a resposta sai por ele.

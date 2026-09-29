@@ -29,7 +29,8 @@ export async function requireWhatsappUser(request: Request) {
 // número. A conta nova usa as variáveis com sufixo, e a principal segue com os
 // nomes de sempre — assim o que já está no ar não muda de configuração.
 function bridgeCredentials(account: WhatsappAccountId = DEFAULT_ACCOUNT) {
-  const suffix = account === DEFAULT_ACCOUNT ? '' : `_${account.toUpperCase()}`;
+  // Os nomes das variáveis não mudam: a principal sem sufixo, as outras com _CONTA.
+  const suffix = account === 'principal' ? '' : `_${account.toUpperCase()}`;
   const config = env as unknown as Record<string, string | undefined>;
   return {
     url: config[`WHATSAPP_BRIDGE_URL${suffix}`]?.trim(),
