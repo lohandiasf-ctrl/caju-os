@@ -69,6 +69,7 @@ import { TicketHistory } from "@/components/ticket-history";
 import { WhatsAppInbox } from "@/components/whatsapp-inbox";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
+import { TicketDispatchCard } from "@/components/ticket-dispatch-card";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
 import { AssistantAudit } from "@/components/assistant-audit";
 import type { BulkStatus } from "@/lib/bulk-actions";
@@ -1778,6 +1779,9 @@ export default function Home() {
                     <Detail className="sm:col-span-2" label="Defeito alegado" value={details?.operationalFields.allegedDefect || "Não informado"} />
                   </div>
                 </section>
+              )}
+              {selected && (role === "gerencia" || role === "coordenador" || role === "analista") && (
+                <TicketDispatchCard ticketKey={selected.id} technician={details?.technicianName || selected.technician || null} user={user} />
               )}
               <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
                 <Button
