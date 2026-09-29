@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-28
 
+### Distribuição — E2: tela /distribuicao
+
+Tela para gerência e coordenação (menu Comunicação → Distribuição): ofertas
+recentes com status, FSAs, motivos das retidas, destinatários e a mensagem
+exatamente como o técnico lê; para a gerência, status dos templates na Meta e
+botão "Enviar para aprovação" (usa `/api/dispatch/templates`). Rota em
+`lib/permissions.ts` e item `dispatch` em `lib/navigation.ts`. Branch
+`claude/distribuicao-painel`.
+
 ### Distribuição de chamados por WhatsApp — E1 (simulação)
 
 Chamado novo vira oferta no WhatsApp oficial para os técnicos da cidade; o
