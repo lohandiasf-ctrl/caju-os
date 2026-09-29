@@ -7,7 +7,7 @@ import {
   DECLINE_REPLY, DECLINE_REPLY_ALREADY_WON, declinePayloadOffer, dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, isTestOffer, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
   parseAllowlist, samePhone, splitCity, storeKeyOf, technicianDataBlock, templateSendPayload, TEST_MODE, testNotice, testOfferTicket,
   unansweredNotice, whatsappPhone,
-  ACTIVE_OFFER_VERSION, pickOfferVersion, type DispatchMode, type DispatchTicket, type OfferGroup, type OfferVersionKey,
+  ACTIVE_OFFER_VERSION, HOLD_LABEL, pickOfferVersion, type HoldReason, type DispatchMode, type DispatchTicket, type OfferGroup, type OfferVersionKey,
 } from '@/lib/dispatch';
 import { getJiraIssue, searchJiraIssues, type JiraIssueSummary } from '@/lib/server/jira';
 import { enqueueJiraSync, processJiraSyncJobs } from '@/lib/server/jira-sync';
@@ -35,6 +35,15 @@ export function isNewForDispatch(issue: Pick<JiraIssueSummary, 'status' | 'techn
   return norm(issue.status).includes('agendamento')
     && !issue.technicianName?.trim()
     && Number.isFinite(created) && now - created <= LOOKBACK_HOURS * 3_600_000;
+}
+
+/**
+ * Técnicos que nunca recebem oferta (pedido da gerência): ids em
+ * DISPATCH_BLOCKLIST, separados por vírgula. Vale para a rodada e o reenvio.
+ */
+function notBlocked(t: { id: number }) {
+  const raw = (env as unknown as Record<string, string | undefined>).DISPATCH_BLOCKLIST ?? '';
+  return !raw.split(/[,;\s]+/).map(Number).filter(Number.isInteger).includes(t.id);
 }
 
 async function loadQueue(): Promise<JiraIssueSummary[]> {
@@ -104,10 +113,10 @@ export async function runDispatch(now = new Date()): Promise<Summary> {
   if (!fresh.length) return summary;
 
   const tickets = await Promise.all(fresh.map((i) => toDispatchTicket(i.key)));
-  const techs = await getDb().select({
+  const techs = (await getDb().select({
     id: technicians.id, name: technicians.name, phone: technicians.phone, approved: technicians.approved,
     baseCity: technicians.baseCity, baseState: technicians.baseState, extraCities: technicians.extraCities,
-  }).from(technicians).all();
+  }).from(technicians).all()).filter(notBlocked);
 
   const allowlist = parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ALLOWLIST);
   for (const group of groupByStore(tickets)) {
@@ -173,8 +182,13 @@ export async function offerVersionInUse(): Promise<OfferVersionKey> {
 }
 
 /** Status de entrega que a Meta devolve pelo webhook (delivered, read, failed). */
-export async function recordDeliveryStatus(wamid: string, status: string) {
+export async function recordDeliveryStatus(wamid: string, status: string, error?: string) {
   if (!['delivered', 'read', 'failed'].includes(status)) return;
+  if (status === 'failed') {
+    await env.DB.prepare(`INSERT INTO dispatch_events (offer_id, technician_id, kind, details, created_at)
+      SELECT offer_id, technician_id, 'delivery_failed', ?2, ?3 FROM dispatch_recipients WHERE wamid = ?1`)
+      .bind(wamid, JSON.stringify({ error: error ?? 'sem motivo' }), new Date().toISOString()).run();
+  }
   await env.DB.prepare(`UPDATE dispatch_recipients SET status = ?2, updated_at = ?3 WHERE wamid = ?1 AND status NOT IN ('clicked', 'declined')`).bind(wamid, status, new Date().toISOString()).run();
 }
 
@@ -365,14 +379,62 @@ export async function resendOffer(offerId: number, by: string, now = new Date())
   const keys = (await offerTicketKeys([offerId])).get(offerId) ?? [];
   if (!keys.length) return { error: 'A oferta não tem chamados.' };
   const tickets = await Promise.all(keys.map((key) => toDispatchTicket(key)));
-  const techs = await getDb().select({
+  const techs = (await getDb().select({
     id: technicians.id, name: technicians.name, phone: technicians.phone, approved: technicians.approved,
     baseCity: technicians.baseCity, baseState: technicians.baseState, extraCities: technicians.extraCities,
-  }).from(technicians).all();
+  }).from(technicians).all()).filter(notBlocked);
   const created = await createOffer({ storeKey: storeKeyOf(tickets[0].storeCode) ?? `sem-loja:${tickets[0].key}`, tickets }, techs, mode, now);
   if (!created) return { error: 'Não foi possível criar a nova oferta.' };
   if (created.status === 'open' && mode !== 'dry_run') {
     await sendOffer(created.id, tickets, mode, parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ALLOWLIST));
+  }
+  return { id: created.id, status: created.status, ...await sendSummary(created.id) };
+}
+
+export type TicketOfferInfo = {
+  offerId: number; status: string; mode: string; createdAt: string; expiresAt: string; assignedTo: string | null;
+  holdReasons: string[]; counts: Record<string, number>; total: number;
+} | null;
+
+/** A oferta mais recente de um chamado e o que aconteceu com cada envio (tela do chamado). */
+export async function ticketOffer(key: string): Promise<TicketOfferInfo> {
+  const db = env.DB;
+  const o = await db.prepare(`SELECT o.id, o.status, o.mode, o.created_at, o.expires_at, o.hold_reasons, t2.name AS assigned
+    FROM dispatch_offer_tickets t JOIN dispatch_offers o ON o.id = t.offer_id LEFT JOIN technicians t2 ON t2.id = o.assigned_technician_id
+    WHERE t.ticket_key = ?1 AND o.mode <> 'test' ORDER BY o.id DESC LIMIT 1`).bind(key)
+    .first<{ id: number; status: string; mode: string; created_at: string; expires_at: string; hold_reasons: string | null; assigned: string | null }>();
+  if (!o) return null;
+  const rows = (await db.prepare(`SELECT status, count(*) AS n FROM dispatch_recipients WHERE offer_id = ?1 GROUP BY status`).bind(o.id).all<{ status: string; n: number }>()).results;
+  const counts = Object.fromEntries(rows.map((r) => [r.status, r.n]));
+  return {
+    offerId: o.id, status: o.status, mode: o.mode, createdAt: o.created_at, expiresAt: o.expires_at, assignedTo: o.assigned,
+    holdReasons: (o.hold_reasons ? JSON.parse(o.hold_reasons) as HoldReason[] : []).map((r) => HOLD_LABEL[r] ?? r),
+    counts, total: rows.reduce((a, r) => a + r.n, 0),
+  };
+}
+
+/**
+ * Botão "Oferecer aos técnicos" na tela do chamado: se ele já está numa oferta
+ * valendo, reenvia (resendOffer); se não, cria uma oferta só com ele e manda.
+ * Oferta já aceita não é reaberta.
+ */
+export async function offerTicket(key: string, by: string, now = new Date()): Promise<ResendResult> {
+  const db = env.DB;
+  const current = await db.prepare(`SELECT o.id, o.status FROM dispatch_offer_tickets t JOIN dispatch_offers o ON o.id = t.offer_id
+    WHERE t.ticket_key = ?1 AND t.active = 1 ORDER BY o.id DESC LIMIT 1`).bind(key).first<{ id: number; status: string }>();
+  if (current) return resendOffer(current.id, by, now);
+  const mode = dispatchMode();
+  if (mode === 'off') return { error: 'A distribuição está desligada.' };
+  const ticket = await toDispatchTicket(key);
+  const techs = (await getDb().select({
+    id: technicians.id, name: technicians.name, phone: technicians.phone, approved: technicians.approved,
+    baseCity: technicians.baseCity, baseState: technicians.baseState, extraCities: technicians.extraCities,
+  }).from(technicians).all()).filter(notBlocked);
+  const created = await createOffer({ storeKey: storeKeyOf(ticket.storeCode) ?? `sem-loja:${ticket.key}`, tickets: [ticket] }, techs, mode, now);
+  if (!created) return { error: 'Não foi possível criar a oferta. Tente de novo.' };
+  await db.prepare(`INSERT INTO dispatch_events (offer_id, kind, details, created_at) VALUES (?1, 'manual', ?2, ?3)`).bind(created.id, JSON.stringify({ by }), now.toISOString()).run();
+  if (created.status === 'open' && mode !== 'dry_run') {
+    await sendOffer(created.id, [ticket], mode, parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ALLOWLIST));
   }
   return { id: created.id, status: created.status, ...await sendSummary(created.id) };
 }
