@@ -422,15 +422,23 @@ export async function ticketOffer(key: string): Promise<TicketOfferInfo> {
 }
 
 /**
- * Botão "Oferecer aos técnicos" na tela do chamado: se ele já está numa oferta
- * valendo, reenvia (resendOffer); se não, cria uma oferta só com ele e manda.
- * Oferta já aceita não é reaberta.
+ * Botão "Oferecer aos técnicos" na tela do chamado (qualquer etapa até o
+ * técnico em campo): se ele está numa oferta ainda sem aceite, reenvia
+ * (resendOffer); se a oferta já foi aceita, libera só este chamado dela e cria
+ * uma oferta nova (o técnico atual continua até outro aceitar; quem aceitar
+ * passa a ficar com o chamado no Caju OS e no Jira); se não há oferta, cria.
  */
 export async function offerTicket(key: string, by: string, now = new Date()): Promise<ResendResult> {
   const db = env.DB;
   const current = await db.prepare(`SELECT o.id, o.status FROM dispatch_offer_tickets t JOIN dispatch_offers o ON o.id = t.offer_id
     WHERE t.ticket_key = ?1 AND t.active = 1 ORDER BY o.id DESC LIMIT 1`).bind(key).first<{ id: number; status: string }>();
-  if (current) return resendOffer(current.id, by, now);
+  if (current && current.status !== 'assigned') return resendOffer(current.id, by, now);
+  if (current) {
+    await db.batch([
+      db.prepare(`UPDATE dispatch_offer_tickets SET active = 0 WHERE offer_id = ?1 AND ticket_key = ?2`).bind(current.id, key),
+      db.prepare(`INSERT INTO dispatch_events (offer_id, kind, details, created_at) VALUES (?1, 'reoffered', ?2, ?3)`).bind(current.id, JSON.stringify({ by, ticket: key }), now.toISOString()),
+    ]);
+  }
   const mode = dispatchMode();
   if (mode === 'off') return { error: 'A distribuição está desligada.' };
   const ticket = await toDispatchTicket(key);
