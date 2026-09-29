@@ -20,7 +20,7 @@ type Offer = {
   createdAt: string; expiresAt: string; assignedAt: string | null; assignedTo: string | null;
   holdReasons: string[]; tickets: string[]; recipients: { name: string; status: string }[]; preview: string | null;
 };
-type Template = { name: string; status: string; rejected_reason?: string };
+type Template = { name: string; status: string; category?: string; rejected_reason?: string };
 
 const MODE_LABEL: Record<string, string> = {
   off: 'Desligada', dry_run: 'Simulação (nada é enviado)', allowlist: 'Só números de teste', live: 'Enviando aos técnicos',
@@ -177,7 +177,7 @@ export default function DistribuicaoPage() {
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                 {templates.map((t) => (
                   <li key={t.name} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
-                    <span className="font-mono text-xs">{t.name}</span>
+                    <span className="font-mono text-xs">{t.name}{t.category === 'MARKETING' ? <span className="ml-2 font-sans text-warning">Marketing: entrega limitada</span> : t.category === 'UTILITY' ? <span className="ml-2 font-sans text-muted-foreground">Utilidade</span> : null}</span>
                     <Badge variant="outline" className={t.status === 'APPROVED' ? 'border-success/30 text-success' : t.status === 'REJECTED' ? 'border-danger/30 text-danger' : undefined}>
                       {t.status === 'APPROVED' ? <CheckCircle2 /> : t.status === 'REJECTED' ? <CircleAlert /> : <Clock3 />}{TEMPLATE_STATUS[t.status] ?? t.status}
                     </Badge>

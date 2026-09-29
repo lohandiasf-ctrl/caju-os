@@ -21,11 +21,11 @@ function config() {
   return { token, waba };
 }
 
-type MetaTemplate = { name: string; status: string; language: string; rejected_reason?: string; id: string };
+type MetaTemplate = { name: string; status: string; category?: string; language: string; rejected_reason?: string; id: string };
 
 async function listOurs(token: string, waba: string) {
   const names = new Set<string>(ALL_TEMPLATES.map((t) => t.name));
-  const response = await fetch(`${GRAPH}/${waba}/message_templates?fields=name,status,language,rejected_reason&limit=200`, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await fetch(`${GRAPH}/${waba}/message_templates?fields=name,status,category,language,rejected_reason&limit=200`, { headers: { Authorization: `Bearer ${token}` } });
   const payload = await response.json().catch(() => null) as { data?: MetaTemplate[]; error?: { message?: string } } | null;
   if (!response.ok) throw Response.json({ error: payload?.error?.message ?? 'A Meta não respondeu à consulta dos templates.' }, { status: 502 });
   return (payload?.data ?? []).filter((t) => names.has(t.name));
