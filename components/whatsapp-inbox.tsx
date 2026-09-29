@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, MessageCirclePlus, Mic, Paperclip, Search, Send, Trash2, Unlink, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, MessageCirclePlus, Mic, Paperclip, Pin, Search, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
@@ -14,7 +14,7 @@ type AuthHeaders = () => Promise<Record<string, string>>;
 type Ticket = { id: string; title: string; store: string; city: string };
 type Conversation = {
   contactPhone: string; contactName: string | null; ticketKey: string | null; assignedTo: string | null;
-  lastMessageAt: string; lastReadAt: string | null; unread: number;
+  lastMessageAt: string; lastReadAt: string | null; unread: number; pinned?: boolean;
   lastMessage: { body: string | null; direction: string; occurredAt: string; messageType: string } | null;
 };
 type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderJid: string | null; senderEmail: string | null;
@@ -49,7 +49,8 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   const load = useCallback(async () => {
     if (!user) return;
     try {
-      const response = await fetch(`/api/whatsapp/conversations?account=${account}`, { headers: await authHeaders(), cache: 'no-store' });
+      // Aba Grupos: pede todos os grupos (não só as 200 conversas mais recentes).
+      const response = await fetch(`/api/whatsapp/conversations?account=${account}${filter === 'groups' ? '&scope=groups' : ''}`, { headers: await authHeaders(), cache: 'no-store' });
       if (response.status === 429) return;
       const payload = await response.json() as { conversations?: Conversation[]; bridge?: BridgeHealth | null; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar as conversas.');
@@ -58,9 +59,10 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
       setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as conversas.'); }
     finally { setLoading(false); }
-  }, [user, authHeaders, account]);
+  }, [user, authHeaders, account, filter]);
 
-  useVisiblePolling(load, 15_000);
+  // Mensagem nova aparece em até 5 s (antes, 15 s).
+  useVisiblePolling(load, 5_000);
 
   // Trocar de número esvazia a lista até a nova chegar, e fecha a conversa
   // aberta: ela é do número anterior.
@@ -70,22 +72,33 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     setSelectedPhone(null);
     setConversations([]);
     setLoading(true);
-    // WhatsApp Caju não tem grupos, então reseta o filtro se estava em 'groups'
-    if (next === 'caju' && filter === 'groups') setFilter('all');
+  }
+
+  // Fixar/desafixar: aparece já no topo e volta atrás se o servidor recusar.
+  async function togglePin(conversation: Conversation) {
+    const next = !conversation.pinned;
+    const set = (value: boolean) => setConversations((list) => list.map((item) => (item.contactPhone === conversation.contactPhone ? { ...item, pinned: value } : item)));
+    set(next);
+    try {
+      const response = await fetch(`/api/whatsapp/conversations/${encodeURIComponent(conversation.contactPhone)}/pin?account=${account}`, {
+        method: 'PUT', headers: { ...(await authHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ pinned: next }),
+      });
+      if (!response.ok) throw new Error();
+    } catch { set(!next); setError('Não foi possível fixar a conversa. Tente de novo.'); }
   }
 
   const visible = useMemo(() => {
     const term = normalize(query);
-    return conversations.filter((conversation) => {
+    const matches = conversations.filter((conversation) => {
       if (filter === 'unread' && conversation.unread === 0) return false;
       if (filter === 'ticket' && !conversation.ticketKey) return false;
       if (filter === 'groups' && !isGroup(conversation.contactPhone)) return false;
-      // WhatsApp Caju é apenas para 1:1, nunca mostra grupos
-      if (account === 'caju' && isGroup(conversation.contactPhone)) return false;
       if (!term) return true;
       return normalize(`${conversation.contactName ?? ''} ${displayPhone(conversation.contactPhone)} ${conversation.ticketKey ?? ''} ${conversation.lastMessage?.body ?? ''}`).includes(term);
     });
-  }, [conversations, query, filter, account]);
+    // Fixadas primeiro; dentro de cada bloco, a ordem de sempre (mais recente antes).
+    return [...matches.filter((conversation) => conversation.pinned), ...matches.filter((conversation) => !conversation.pinned)];
+  }, [conversations, query, filter]);
 
   const selected = conversations.find((conversation) => conversation.contactPhone === selectedPhone) ?? null;
 
@@ -144,8 +157,6 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar conversas">
             {FILTERS.map(([value, label]) => {
-              // WhatsApp Caju só tem 1:1, então não mostra filtro de grupos
-              if (account === 'caju' && value === 'groups') return null;
               return (
                 <button
                   key={value}
@@ -175,7 +186,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
                 const active = conversation.contactPhone === selectedPhone;
                 const last = conversation.lastMessage;
                 return (
-                  <li key={conversation.contactPhone}>
+                  <li key={conversation.contactPhone} className="group relative">
                     <button
                       type="button"
                       onClick={() => setSelectedPhone(conversation.contactPhone)}
@@ -186,9 +197,10 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
                       <span className="flex min-w-0 flex-1 flex-col border-b border-white/5 py-3">
                         <span className="flex items-baseline gap-2">
                           <b className="min-w-0 flex-1 truncate text-[15px] font-medium text-neutral-100">{name}</b>
+                          {conversation.pinned && <Pin className="size-3.5 shrink-0 fill-current text-[#25d366]" aria-label="Fixada" />}
                           <span className={`shrink-0 text-xs ${conversation.unread > 0 ? 'text-[#25d366]' : 'text-neutral-400'}`}>{last ? listTimeLabel(last.occurredAt) : ''}</span>
                         </span>
-                        <span className="mt-0.5 flex items-center gap-2">
+                        <span className="mt-0.5 flex items-center gap-2 pr-7">
                           <span className="min-w-0 flex-1 truncate text-[13px] text-neutral-400">
                             {last ? <>{last.direction === 'outgoing' && <Check className="mr-1 inline size-3.5 align-[-2px]" aria-label="Enviada" />}{previewText(last.messageType, last.body)}</> : 'Sem mensagens ainda'}
                           </span>
@@ -196,6 +208,15 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
                           {conversation.unread > 0 && <span className="grid min-w-5 shrink-0 place-items-center rounded-full bg-[#25d366] px-1.5 text-[11px] font-bold text-[#111b21]">{conversation.unread}</span>}
                         </span>
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void togglePin(conversation)}
+                      aria-label={conversation.pinned ? `Desafixar ${name}` : `Fixar ${name}`}
+                      title={conversation.pinned ? 'Desafixar' : 'Fixar no topo'}
+                      className={`absolute right-2 bottom-2.5 grid size-6 place-items-center rounded-full transition focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00a884] ${conversation.pinned ? 'text-[#25d366] opacity-100' : 'text-neutral-400 opacity-0 hover:bg-white/10 hover:text-white group-hover:opacity-100'}`}
+                    >
+                      <Pin className={`size-3.5 ${conversation.pinned ? 'fill-current' : ''}`} />
                     </button>
                   </li>
                 );
@@ -300,7 +321,7 @@ function ConversationPane({ conversation, account, user, authHeaders, tickets, o
     finally { setLoading(false); }
   }, [user, basePath, authHeaders]);
 
-  useVisiblePolling(load, 4_000);
+  useVisiblePolling(load, 2_500);
 
   // Opening a conversation marks it read on the server; refresh the list badge.
   useEffect(() => { if (!loading) onUpdated(); }, [loading, onUpdated]);

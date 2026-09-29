@@ -5,19 +5,27 @@ import { toWhatsappAccount } from '@/lib/whatsapp-accounts';
 type Row = {
   contact_phone: string; contact_name: string | null; ticket_key: string | null; assigned_to: string | null;
   last_message_at: string; last_read_at: string | null; last_read_by: string | null; created_at: string; updated_at: string;
-  last_body: string | null; last_direction: string | null; last_occurred_at: string | null; last_message_type: string | null; unread: number;
+  last_body: string | null; last_direction: string | null; last_occurred_at: string | null; last_message_type: string | null; unread: number; pinned: number;
 };
 
 // Last message and unread count come from correlated subqueries instead of
 // an IN (...) list of phones: D1 caps a query at 100 bound parameters, and
 // the group sync easily puts more conversations than that in the list.
-const LIST_SQL = `
+// Lista normal: as 200 conversas mais recentes e as fixadas do funcionário.
+// Aba Grupos: todos os grupos (até 500), porque um grupo antigo continua útil.
+// ?1 conta, ?2 e-mail de quem está vendo (para o "fixar").
+const listSql = (scope: 'recent' | 'groups') => `
   SELECT c.*,
+    EXISTS (SELECT 1 FROM whatsapp_conversation_pins p WHERE p.email = ?2 AND p.account = c.account AND p.contact_phone = c.contact_phone) AS pinned,
     lm.body AS last_body, lm.direction AS last_direction, lm.occurred_at AS last_occurred_at, lm.message_type AS last_message_type,
     (SELECT COUNT(*) FROM whatsapp_messages u
       WHERE u.account = c.account AND u.contact_phone = c.contact_phone AND u.direction = 'incoming'
         AND (c.last_read_at IS NULL OR u.occurred_at > c.last_read_at)) AS unread
-  FROM (SELECT * FROM whatsapp_conversations WHERE account = ? ORDER BY last_message_at DESC LIMIT 200) c
+  FROM (${scope === 'groups'
+    ? `SELECT * FROM whatsapp_conversations WHERE account = ?1 AND contact_phone LIKE '%@g.us' ORDER BY last_message_at DESC LIMIT 500`
+    : `SELECT * FROM whatsapp_conversations WHERE account = ?1 AND (
+         contact_phone IN (SELECT contact_phone FROM whatsapp_conversations WHERE account = ?1 ORDER BY last_message_at DESC LIMIT 200)
+         OR contact_phone IN (SELECT contact_phone FROM whatsapp_conversation_pins WHERE email = ?2 AND account = ?1))`}) c
   LEFT JOIN whatsapp_messages lm ON lm.id = (
     SELECT m.id FROM whatsapp_messages m
     WHERE m.account = c.account AND m.contact_phone = c.contact_phone AND m.direction IN ('incoming', 'outgoing')
@@ -26,13 +34,15 @@ const LIST_SQL = `
 
 export async function GET(request: Request) {
   try {
-    await requireWhatsappUser(request);
+    const current = await requireWhatsappUser(request);
     // Cada número tem sua caixa: a lista e a saúde do bridge são da conta que
     // a tela está mostrando.
-    const account = toWhatsappAccount(new URL(request.url).searchParams.get('account'));
+    const params = new URL(request.url).searchParams;
+    const account = toWhatsappAccount(params.get('account'));
+    const scope = params.get('scope') === 'groups' ? 'groups' : 'recent';
     // Bridge health rides on the list poll instead of costing its own request.
     const [{ results }, bridge] = await Promise.all([
-      env.DB.prepare(LIST_SQL).bind(account).all<Row>(),
+      env.DB.prepare(listSql(scope)).bind(account, current.email.toLowerCase()).all<Row>(),
       fetchBridgeHealth(account),
     ]);
     const conversations = results.map((row) => ({
@@ -40,6 +50,7 @@ export async function GET(request: Request) {
       lastMessageAt: row.last_message_at, lastReadAt: row.last_read_at, lastReadBy: row.last_read_by, createdAt: row.created_at, updatedAt: row.updated_at,
       lastMessage: row.last_occurred_at ? { body: row.last_body, direction: row.last_direction, occurredAt: row.last_occurred_at, messageType: row.last_message_type } : null,
       unread: Number(row.unread) || 0,
+      pinned: Number(row.pinned) === 1,
     }));
     return Response.json({ conversations, bridge, account }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
