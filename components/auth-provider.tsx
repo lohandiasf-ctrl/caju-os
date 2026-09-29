@@ -6,7 +6,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { auth } from '@/lib/firebase';
 import { flagIdleExpired, isIdleExpired, markActivity, readLastActivity } from '@/lib/session-idle';
 import { CajuLoading } from '@/components/caju-loading';
-import { canAccess, isUserRole, type UserRole } from '@/lib/permissions';
+import { canAccess, isPublicPath, isUserRole, type UserRole } from '@/lib/permissions';
 
 type AuthContextValue = { user: User | null; role: UserRole | null; loading: boolean; accessError: string };
 const AuthContext = createContext<AuthContextValue>({ user: null, role: null, loading: true, accessError: '' });
@@ -149,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || isPublicPath(pathname)) return;
     if (!user && pathname !== '/login') {
       const search = window.location.search;
       router.replace(search ? `/login?redirect=${encodeURIComponent(pathname + search)}` : '/login');
@@ -180,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({ user, role, loading, accessError }), [user, role, loading, accessError]);
   const authorized = user && (pathname === '/acesso-negado' || canAccess(role, pathname));
-  const canRender = !loading && ((pathname === '/login' && !user) || (pathname !== '/login' && authorized));
+  const canRender = isPublicPath(pathname) || (!loading && ((pathname === '/login' && !user) || (pathname !== '/login' && authorized)));
 
   return (
     <AuthContext.Provider value={value}>
