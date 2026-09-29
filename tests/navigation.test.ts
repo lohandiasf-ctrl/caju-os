@@ -26,6 +26,12 @@ test('WhatsApp tab is open to gerência, coordenação and analistas, closed to 
   assert.equal(canUseDashboardView('analista', 'whatsapp'), true);
 });
 
+test('Distribuição é de quem despacha: gerência e coordenação', () => {
+  assert.equal(canUseNavItem('gerencia', 'dispatch'), true);
+  assert.equal(canUseNavItem('coordenador', 'dispatch'), true);
+  for (const role of ['n1', 'analista', 'tecnico'] as const) assert.equal(canUseNavItem(role, 'dispatch'), false);
+});
+
 test('unknown navigation targets are never offered', () => {
   assert.equal(isDashboardView('feedback'), true);
   assert.equal(isDashboardView(null), false);
