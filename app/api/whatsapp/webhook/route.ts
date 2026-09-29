@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { handleOfferClick, recordDeliveryStatus, replyToTechnician } from '@/lib/server/dispatch';
 
 type ObjectValue = Record<string, unknown>;
 
@@ -30,6 +31,9 @@ export async function POST(request: Request) {
 
   const now = new Date().toISOString();
   const statements: D1PreparedStatement[] = [];
+  // Toques no botão das ofertas e status de entrega: tratados depois de gravar.
+  const clicks: { payload: string; from: string; statement: number }[] = [];
+  const deliveries: { wamid: string; status: string }[] = [];
   for (const entry of array(payload.entry)) for (const change of array(object(entry).changes)) {
     if (object(change).field !== 'messages') continue;
     const value = object(object(change).value);
@@ -46,14 +50,30 @@ export async function POST(request: Request) {
       const content = object(item[type]);
       const occurredAt = timestamp(item.timestamp);
       statements.push(insertMessage(wamid, phoneNumberId, contactPhone || null, contactName, 'incoming', type, messageBody(type, content) ?? (type === 'button' ? string(content.payload) || null : null), string(content.id) || null, null, occurredAt, now));
+      const payload = type === 'button' ? string(content.payload) : type === 'interactive' ? string(object(content.button_reply).id) : '';
+      const from = string(item.from) || contactPhone;
+      // O índice da gravação diz depois se a mensagem é nova ou reenvio da Meta.
+      if (payload && from) clicks.push({ payload, from, statement: statements.length - 1 });
       if (contactPhone) statements.push(upsertConversation(contactPhone, contactName, occurredAt, now));
     }
     for (const status of array(value.statuses)) {
       const item = object(status); const wamid = string(item.id); if (!wamid) continue;
+      deliveries.push({ wamid, status: string(item.status) });
       statements.push(insertMessage(`status:${wamid}:${string(item.status)}`, phoneNumberId, string(item.recipient_id) || null, null, 'status', 'status', null, null, string(item.status) || null, timestamp(item.timestamp), now));
     }
   }
-  if (statements.length) await env.DB.batch(statements);
+  const saved = statements.length ? await env.DB.batch(statements) : [];
+  // Distribuição de chamados: o clique em "Aceitar atendimento" decide quem
+  // fica com a oferta; a resposta sai na hora pela janela de 24 h do clique.
+  // Reenvio do mesmo webhook (wamid já gravado) não responde de novo ao técnico.
+  for (const click of clicks.filter((c) => saved[c.statement]?.meta.changes === 1)) {
+    const reply = await handleOfferClick(click.payload, click.from).catch((error) => {
+      console.error('dispatch: clique falhou', error instanceof Error ? error.message : 'erro');
+      return null;
+    });
+    if (reply) await replyToTechnician(click.from, reply);
+  }
+  for (const d of deliveries) await recordDeliveryStatus(d.wamid, d.status).catch(() => undefined);
   return Response.json({ received: true });
 }
 

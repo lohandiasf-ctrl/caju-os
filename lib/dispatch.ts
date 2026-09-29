@@ -284,3 +284,73 @@ export function templateSendPayload(to: string, message: TemplateMessage) {
     },
   };
 }
+
+// ─── Lista de teste (DISPATCH_MODE=allowlist) ─────────
+/** DISPATCH_ALLOWLIST: telefones separados por vírgula. Só eles recebem ofertas no modo de teste. */
+export function parseAllowlist(value: string | null | undefined): string[] {
+  // Espaço não separa: "81 99173-8635" é um número só.
+  return (value ?? '').split(/[,;\n]+/).map((p) => whatsappPhone(p)).filter((p): p is string => Boolean(p));
+}
+
+export function allowedToReceive(mode: DispatchMode, allowlist: string[], phone: string | null | undefined) {
+  if (mode === 'live') return true;
+  if (mode === 'allowlist') return allowlist.some((p) => samePhone(p, phone));
+  return false;
+}
+
+// ─── Depois do aceite ──────────────────────────────────
+/** Campo "Dados dos Técnicos" do Jira, no mesmo formato do agendamento (o telefone não vai ao Jira). */
+export function technicianDataBlock(name: string, cpf: string | null | undefined) {
+  return `Nome: ${name}\nCPF: ${cpf?.trim() || 'Não informado'}\nRG: \nTEL: .`;
+}
+
+/** Texto do aviso interno (push e chat do Caju OS). */
+export function acceptedNotice(tickets: string[], storeKey: string, technician: string) {
+  return {
+    title: `Atendimento aceito · ${tickets.join(', ')}`,
+    body: `${technician} aceitou pelo WhatsApp · ${storeKey}`,
+    chat: `✅ ${tickets.join(', ')} (${storeKey}) aceito por ${technician} pelo WhatsApp.`,
+  };
+}
+
+export function unansweredNotice(tickets: string[], storeKey: string) {
+  return {
+    title: `Ninguém aceitou · ${tickets.join(', ')}`,
+    body: `A oferta de ${storeKey} expirou em ${OFFER_HOURS} h sem resposta. Ofereça de novo ou agende manualmente.`,
+    chat: `⚠️ Ninguém aceitou ${tickets.join(', ')} (${storeKey}) em ${OFFER_HOURS} h. Ofereça de novo ou agende manualmente.`,
+  };
+}
+
+/** Templates dos avisos no WhatsApp dos gestores (usados na etapa seguinte; aprovados antes). */
+export const NOTICE_TEMPLATES = [
+  {
+    name: 'atendimento_aceito',
+    language: 'pt_BR',
+    category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'O chamado {{1}} da loja {{2}} foi aceito por {{3}} pelo WhatsApp. Os detalhes estão no Caju OS.',
+      example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG', 'Fulano de Tal']] },
+    }],
+  },
+  {
+    name: 'atendimento_sem_resposta',
+    language: 'pt_BR',
+    category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'Ninguém aceitou o chamado {{1}} da loja {{2}} em 2 horas. Ofereça de novo ou agende manualmente pelo Caju OS.',
+      example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG']] },
+    }],
+  },
+  {
+    name: 'distribuicao_resumo',
+    language: 'pt_BR',
+    category: 'UTILITY',
+    components: [{
+      type: 'BODY',
+      text: 'Resumo da distribuição enquanto os seus avisos estavam pausados. Aceitos: {{1}}. Sem resposta: {{2}}. Os detalhes estão no Caju OS.',
+      example: { body_text: [['FSA-132506 (Fulano), FSA-132507 (Beltrano)', 'nenhum']] },
+    }],
+  },
+] as const;

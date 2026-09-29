@@ -11,6 +11,15 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-28
 
+### Distribuição — E3a: aceite pelo botão
+
+Clique em "Aceitar atendimento" (webhook oficial) → disputa atômica → resposta
+ao técnico → vínculo no Caju OS e no Jira (fila de sincronização) → push
+"Distribuição" e mensagem no grupo "Distribuição" do chat. Envio real das
+ofertas nos modos `allowlist` (`DISPATCH_ALLOWLIST`) e `live`; "ninguém
+aceitou" ao expirar. Templates de aviso aos gestores entram na aprovação. Ver
+`docs/DISPATCH_WHATSAPP.md`. Branch `claude/distribuicao-aceite`.
+
 ### Distribuição — E2: tela /distribuicao
 
 Tela para gerência e coordenação (menu Comunicação → Distribuição): ofertas

@@ -19,6 +19,7 @@ export const ALERT_KINDS = {
   schedule_missed: { label: 'Passou do horário agendado', hint: 'Agendado, 30 min depois do horário e ainda sem técnico em campo.', ops: true, default: true },
   new_ticket: { label: 'Chamado novo na fila', hint: 'Cada chamado que entra na fila operacional.', ops: true, default: false },
   new_comment: { label: 'Comentário novo', hint: 'Alguém comentou num chamado que você movimentou nos últimos 14 dias.', ops: true, default: true },
+  dispatch: { label: 'Distribuição', hint: 'Técnico aceitou um chamado pelo WhatsApp, ou ninguém aceitou a oferta.', ops: true, default: true },
 } as const;
 
 export type AlertKind = keyof typeof ALERT_KINDS;
@@ -215,6 +216,7 @@ const SUMMARY_TEXT: Record<AlertKind, (n: number) => string> = {
   schedule_missed: (n) => `${n} chamados passaram do horário agendado`,
   new_ticket: (n) => `${n} chamados novos na fila`,
   new_comment: (n) => `${n} comentários novos nos seus chamados`,
+  dispatch: (n) => `${n} avisos da distribuição`,
 };
 
 export type Note = { title: string; body: string; data: Record<string, string> };

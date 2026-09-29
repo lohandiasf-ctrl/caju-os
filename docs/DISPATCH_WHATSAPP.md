@@ -49,8 +49,8 @@ número exclusivo de distribuição.
 |---|---|
 | vazio / `off` | nada |
 | `dry_run` | cria ofertas e destinatários como simulação; **nenhuma mensagem** |
-| `allowlist` | (etapa seguinte) envia só para números de teste |
-| `live` | (etapa seguinte) envia para os técnicos |
+| `allowlist` | envia só para os técnicos cujo telefone está em `DISPATCH_ALLOWLIST` (vírgula) |
+| `live` | envia para todos os técnicos elegíveis |
 
 ## Configuração na Meta (feita em 2026-09-28)
 
@@ -73,6 +73,27 @@ número exclusivo de distribuição.
    Jira (fila `jira_sync_jobs`, sem reabrir a disputa se o Jira falhar) →
    respostas "confirmado" / "já aceito".
 5. **E4** — técnicos reais, página `/despacho/{id}` da oferta agrupada.
+
+## Depois do aceite (E3a)
+
+O clique chega pelo webhook `/api/whatsapp/webhook` (`button.payload =
+aceitar:<oferta>`). O técnico é identificado pelo número que clicou, comparado
+aos destinatários da oferta (sem o nono dígito). Só quem ganha a disputa:
+
+- recebe "Atendimento confirmado…"; os demais, "já foi aceito…" ou "expirou";
+- fica vinculado nos FSAs em `operational_workflows.technician_id`;
+- vai para o Jira (Dados dos Técnicos) pela fila `jira_sync_jobs` — se o Jira
+  falhar, repete sozinho, sem reabrir a disputa;
+- dispara aviso à equipe: push tipo **Distribuição** (gerência e coordenação,
+  desligável em Configurações → Avisos) e mensagem no grupo **Distribuição**
+  do chat do Caju OS (criado na primeira vez).
+
+Oferta que vence sem aceite (fora do `dry_run`) gera o aviso "Ninguém aceitou".
+Reenvio do webhook pela Meta não responde nem vincula duas vezes.
+
+Templates de aviso para os gestores (`NOTICE_TEMPLATES`: aceito, sem resposta,
+resumo) já vão para aprovação junto; o envio deles pelo WhatsApp, com a janela
+de entrega de cada gestor, resumo e pausa, é a E3b.
 
 ## Decisões ainda abertas
 
