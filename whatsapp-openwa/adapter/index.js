@@ -63,6 +63,25 @@ function setState(status) {
   if (status !== state.status) state = { status, since: new Date().toISOString() };
 }
 
+// Agenda (contatos + grupos): o OpenWA leva alguns segundos para listar, então
+// fica em cache e se renova por trás; a busca no Caju OS responde na hora.
+let book = { at: 0, contacts: [], groups: [], loading: null };
+function refreshBook() {
+  if (book.loading || !sessionId) return book.loading;
+  book.loading = Promise.all([
+    openwa(session('/contacts?limit=1000')).then(itemsOf).catch(() => null),
+    openwa(session('/groups?limit=500')).then(itemsOf).catch(() => null),
+  ]).then(([contacts, groups]) => {
+    book = { at: Date.now(), contacts: contacts ?? book.contacts, groups: groups ?? book.groups, loading: null };
+  }).finally(() => { book.loading = null; });
+  return book.loading;
+}
+async function loadBook() {
+  if (!book.at) await refreshBook();
+  else if (Date.now() - book.at > 60_000) void refreshBook();
+  return book;
+}
+
 // ─── Caju OS ───────────────────────────────────────────
 async function forward(payload) {
   try {
@@ -119,8 +138,8 @@ async function storeIncomingMedia(data, chat, wamid) {
 // ─── Eventos do OpenWA ─────────────────────────────────
 async function onOpenwaEvent(body) {
   const { event, data } = body ?? {};
-  if (event === 'session.status') { setState(connectionStatus(data?.status)); if (data?.status === 'ready') void syncGroups(); return; }
-  if (event === 'session.authenticated') { setState('open'); void syncGroups(); return; }
+  if (event === 'session.status') { setState(connectionStatus(data?.status)); if (data?.status === 'ready') { void syncGroups(); void refreshBook(); } return; }
+  if (event === 'session.authenticated') { setState('open'); void syncGroups(); void refreshBook(); return; }
   if (event === 'session.qr') { setState('qr'); return; }
   if (event === 'session.disconnected') { setState('connecting'); return; }
   if (event === 'presence.update') {
@@ -168,6 +187,7 @@ async function bootstrap() {
   const current = await openwa(session()).catch(() => null);
   setState(connectionStatus(current?.status));
   if (!['ready', 'qr_ready', 'initializing', 'authenticating'].includes(current?.status)) await openwa(session('/start'), { method: 'POST' }).catch((e) => console.error('start:', e?.message));
+  if (current?.status === 'ready') void refreshBook();
   console.log('Adapter pronto. Sessão:', SESSION, 'estado:', current?.status);
 }
 
@@ -297,10 +317,7 @@ http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/contacts') {
       const term = (url.searchParams.get('q') ?? '').trim().toLowerCase();
       const matches = (name, jid) => !term || `${name ?? ''} ${contactPhoneOf(jid)}`.toLowerCase().includes(term);
-      const [people, groups] = await Promise.all([
-        openwa(session('/contacts?limit=500')).then(itemsOf).catch(() => []),
-        openwa(session('/groups?limit=500')).then(itemsOf).catch(() => []),
-      ]);
+      const { contacts: people, groups } = await loadBook();
       const contacts = [
         ...people.map((c) => ({ jid: String(c?.id?._serialized ?? c?.id ?? ''), name: c?.name ?? c?.pushName ?? c?.shortName ?? '', type: 'contact' })).filter((c) => c.jid && !isGroup(c.jid) && matches(c.name, c.jid)),
         ...groups.map((g) => ({ jid: String(g?.id?._serialized ?? g?.id ?? ''), name: g?.name ?? g?.subject ?? '', type: 'group' })).filter((g) => g.jid && g.name && matches(g.name, g.jid)),
