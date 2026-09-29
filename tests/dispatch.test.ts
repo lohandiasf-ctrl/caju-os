@@ -105,7 +105,7 @@ test('templates: Aceitar e Recusar, sem link (índices usados no envio)', () => 
     assert.deepEqual(buttons.buttons.map((b) => [b.type, b.text]), [['QUICK_REPLY', 'Aceitar'], ['QUICK_REPLY', 'Recusar']]);
     const body = t.components.find((c) => c.type === 'BODY');
     assert.ok(body && 'text' in body && !/^\{\{|\}\}$/.test(body.text.trim()), 'a Meta recusa corpo que começa ou termina com variável');
-    assert.ok(/a partir de R\$ 70,00|Valor: a combinar/.test(body.text), 'toda oferta diz o valor');
+    assert.ok(/a partir de R\$ 70,00|Valor: /.test(body.text), 'toda oferta diz o valor');
   }
 });
 
@@ -202,7 +202,7 @@ test('recusar: payload próprio e respostas sem citar o Caju OS', async () => {
 test('versões da oferta: em uso a de R$ 70 (Utilidade); a candidata é aviso sem emoji', async () => {
   const { OFFER_VERSIONS, ACTIVE_OFFER_VERSION, DISPATCH_TEMPLATES } = await import('../lib/dispatch.ts');
   assert.equal(ACTIVE_OFFER_VERSION, 'r70');
-  assert.deepEqual(DISPATCH_TEMPLATES.map((t) => t.name), ['oferta_atendimento', 'oferta_atendimento_grupo', 'chamado_disponivel', 'chamados_disponiveis']);
+  assert.deepEqual(DISPATCH_TEMPLATES.map((t) => t.name), ['oferta_atendimento', 'oferta_atendimento_grupo', 'chamado_disponivel', 'chamados_disponiveis', 'oferta_valor', 'oferta_valor_grupo']);
   const aviso = OFFER_VERSIONS.aviso.singleBody('1', '2', '3', '4');
   assert.doesNotMatch(aviso, /\p{Extended_Pictographic}|Agora é com você/u);
   assert.match(aviso, /Valor: a combinar com a equipe/);
@@ -213,7 +213,28 @@ test('modelo em uso: aviso só quando os dois estão aprovados como Utilidade', 
   const ok = (name: string, category = 'UTILITY') => ({ name, status: 'APPROVED', category });
   assert.equal(pickOfferVersion([]), 'r70');
   assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis')]), 'aviso');
+  assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis'), ok('oferta_valor'), ok('oferta_valor_grupo')]), 'valor');
   assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis', 'MARKETING')]), 'r70');
   assert.equal(pickOfferVersion([ok('chamado_disponivel'), { name: 'chamados_disponiveis', status: 'PENDING', category: 'UTILITY' }]), 'r70');
   assert.equal(offerMessage(1, [ticket({ key: 'A' })], 'aviso').name, 'chamado_disponivel');
+});
+
+test('oferta manual: valor como campo, chamados de lojas diferentes e mesma cidade', async () => {
+  const { offerValue, sameCity, DEFAULT_OFFER_VALUE } = await import('../lib/dispatch.ts');
+  const one = offerMessage(4, [ticket({ key: 'FSA-1' })], 'valor', 'R$ 90,00');
+  assert.equal(one.name, 'oferta_valor');
+  assert.equal(one.body.length, 5);
+  assert.equal(one.body[4], 'R$ 90,00');
+  assert.equal(offerMessage(4, [ticket({ key: 'FSA-1' })], 'valor').body[4], DEFAULT_OFFER_VALUE);
+  assert.equal(offerMessage(4, [ticket({ key: 'FSA-1' })], 'r70', 'R$ 90,00').body.length, 4, 'modelo sem campo de valor ignora o valor');
+  const many = offerMessage(5, [ticket({ key: 'FSA-1', storeCode: 'L1' }), ticket({ key: 'FSA-2', storeCode: 'L2' })], 'valor', '  ');
+  assert.equal(many.name, 'oferta_valor_grupo');
+  assert.deepEqual(many.body.slice(0, 2), ['2 (FSA-1, FSA-2)', 'L1, L2 - Patos de Minas/MG']);
+  assert.equal(many.body[3], DEFAULT_OFFER_VALUE);
+  assert.equal(offerValue('x'.repeat(200)).length, 60);
+  assert.ok(sameCity('Patos de Minas/MG', 'patos de minas'));
+  assert.ok(sameCity('Ribeirão das Neves - MG', 'Ribeirao Das Neves/MG'));
+  assert.ok(!sameCity('Patos de Minas/MG', 'Patos/PB'));
+  assert.ok(!sameCity('Santa Luzia/MG', 'Santa Luzia/PB'));
+  assert.ok(!sameCity(null, 'Recife'));
 });

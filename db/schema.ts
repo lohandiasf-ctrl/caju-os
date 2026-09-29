@@ -1148,6 +1148,7 @@ export const dispatchOffers = sqliteTable(
     status: text('status', { enum: ['held', 'open', 'assigned', 'expired', 'cancelled'] }).notNull().default('open'),
     holdReasons: text('hold_reasons'),
     mode: text('mode').notNull(),
+    valueText: text('value_text'),
     assignedTechnicianId: integer('assigned_technician_id').references(() => technicians.id),
     assignedAt: text('assigned_at'),
     expiresAt: text('expires_at').notNull(),

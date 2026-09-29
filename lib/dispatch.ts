@@ -154,114 +154,124 @@ export function holdReasons(group: OfferGroup, eligibleCount: number): HoldReaso
 }
 
 // ─── Modelos da oferta ─────────────────────────────────
-// Cada versão é um par de modelos na Meta (um chamado / vários da mesma loja),
-// com os mesmos parâmetros e os mesmos botões Aceitar e Recusar. Texto de
-// modelo aprovado não muda: versão nova = nomes novos. O clique em qualquer
-// versão antiga continua valendo, porque o payload é o mesmo.
+// Cada versão é um par de modelos na Meta (um chamado / vários chamados), com
+// os mesmos botões Aceitar e Recusar. Texto de modelo aprovado não muda:
+// versão nova = nomes novos. O clique em qualquer versão antiga continua
+// valendo, porque o payload é o mesmo.
 //   atendimento_disponivel*  "Ver chamado" (sem uso)
-//   oferta_atendimento*      "a partir de R$ 70,00", Utilidade (em uso)
-//   oferta_chamado*          "Valor: a combinar", a Meta passou para Marketing (sem uso)
-//   chamado_disponivel*      "a combinar" em tom de aviso, tentando Utilidade
+//   oferta_atendimento*      "a partir de R$ 70,00" (reserva; a Meta passou para Marketing)
+//   oferta_chamado*          "Valor: a combinar" com emoji (Marketing, sem uso)
+//   chamado_disponivel*      "a combinar" fixo, tom de aviso (candidata)
+//   oferta_valor*            valor como campo: padrão "a combinar com a equipe"
+//                            ou o que o funcionário digitar (preferida)
 type OfferVersion = {
   single: string; group: string; header: string; groupHeader: string; footer: string;
-  singleBody: (a: string, b: string, c: string, d: string) => string;
-  groupBody: (a: string, b: string, c: string) => string;
+  /** Tem o valor como parâmetro (o último do corpo). */
+  valued?: boolean;
+  singleBody: (a: string, b: string, c: string, d: string, e: string) => string;
+  groupBody: (a: string, b: string, c: string, d: string) => string;
 };
 
 const R70_VALUE = '💰 Ganho: a partir de R$ 70,00. Quanto mais atendimentos, maior o valor.';
+/** Valor quando o funcionário não muda (e o da oferta automática). */
+export const DEFAULT_OFFER_VALUE = 'a combinar com a equipe';
+
 export const OFFER_VERSIONS = {
   r70: {
     single: 'oferta_atendimento', group: 'oferta_atendimento_grupo',
     header: 'Atendimento disponível', groupHeader: 'Atendimento disponível', footer: 'Responde aí pra gente:',
-    singleBody: (a, b, c, d) => `🔧 Chamado: ${a}
-📍 Loja: ${b}
-🖥️ Equipamento: ${c}
-⚠️ Problema: ${d}
-${R70_VALUE}
-
-Agora é com você!`,
-    groupBody: (a, b, c) => `🔧 Chamados: ${a} na mesma loja
-📍 Loja: ${b}
-🖥️ Equipamentos: ${c}
-${R70_VALUE}
-
-Aceitando, você fica com todos eles. Agora é com você!`,
+    singleBody: (a, b, c, d) => `🔧 Chamado: ${a}\n📍 Loja: ${b}\n🖥️ Equipamento: ${c}\n⚠️ Problema: ${d}\n${R70_VALUE}\n\nAgora é com você!`,
+    groupBody: (a, b, c) => `🔧 Chamados: ${a} na mesma loja\n📍 Loja: ${b}\n🖥️ Equipamentos: ${c}\n${R70_VALUE}\n\nAceitando, você fica com todos eles. Agora é com você!`,
   },
   aviso: {
     single: 'chamado_disponivel', group: 'chamados_disponiveis',
     header: 'Novo chamado na sua região', groupHeader: 'Novos chamados na sua região', footer: 'Caju Tech',
-    singleBody: (a, b, c, d) => `Chamado: ${a}
-Loja: ${b}
-Equipamento: ${c}
-Problema: ${d}
-Valor: a combinar com a equipe
-
-Para ficar com este atendimento, toque em Aceitar. Se não puder, toque em Recusar.`,
-    groupBody: (a, b, c) => `Chamados: ${a} na mesma loja
-Loja: ${b}
-Equipamentos: ${c}
-Valor: a combinar com a equipe
-
-Para ficar com todos estes atendimentos, toque em Aceitar. Se não puder, toque em Recusar.`,
+    singleBody: (a, b, c, d) => `Chamado: ${a}\nLoja: ${b}\nEquipamento: ${c}\nProblema: ${d}\nValor: a combinar com a equipe\n\nPara ficar com este atendimento, toque em Aceitar. Se não puder, toque em Recusar.`,
+    groupBody: (a, b, c) => `Chamados: ${a} na mesma loja\nLoja: ${b}\nEquipamentos: ${c}\nValor: a combinar com a equipe\n\nPara ficar com todos estes atendimentos, toque em Aceitar. Se não puder, toque em Recusar.`,
+  },
+  valor: {
+    single: 'oferta_valor', group: 'oferta_valor_grupo', valued: true,
+    header: 'Novo chamado na sua região', groupHeader: 'Novos chamados na sua região', footer: 'Caju Tech',
+    singleBody: (a, b, c, d, e) => `Chamado: ${a}\nLoja: ${b}\nEquipamento: ${c}\nProblema: ${d}\nValor: ${e}\n\nPara ficar com este atendimento, toque em Aceitar. Se não puder, toque em Recusar.`,
+    groupBody: (a, b, c, d) => `Chamados: ${a}\nLojas: ${b}\nEquipamentos: ${c}\nValor: ${d}\n\nPara ficar com todos estes atendimentos, toque em Aceitar. Se não puder, toque em Recusar.`,
   },
 } satisfies Record<string, OfferVersion>;
 
 export type OfferVersionKey = keyof typeof OFFER_VERSIONS;
 /**
- * Preferida: "aviso", assim que a Meta aprovar os dois modelos dela como
- * Utilidade (em Marketing a entrega é limitada por pessoa e custa mais). Até
- * lá sai a reserva, "r70". Quem escolhe é offerVersionInUse, no servidor.
+ * Ordem de preferência: a primeira com os dois modelos aprovados como
+ * Utilidade (em Marketing a entrega é limitada por pessoa e custa mais). Sem
+ * nenhuma, sai a reserva "r70". Quem escolhe é offerVersionInUse, no servidor.
  */
-export const PREFERRED_OFFER_VERSION: OfferVersionKey = 'aviso';
+export const PREFERRED_OFFER_VERSIONS: OfferVersionKey[] = ['valor', 'aviso'];
 export const ACTIVE_OFFER_VERSION: OfferVersionKey = 'r70';
 
 /** Versão a usar, dado o status dos modelos na Meta (nome → status e categoria). */
 export function pickOfferVersion(templates: { name: string; status: string; category?: string }[]): OfferVersionKey {
-  const v = OFFER_VERSIONS[PREFERRED_OFFER_VERSION];
   const ok = (name: string) => templates.some((t) => t.name === name && t.status === 'APPROVED' && t.category === 'UTILITY');
-  return ok(v.single) && ok(v.group) ? PREFERRED_OFFER_VERSION : ACTIVE_OFFER_VERSION;
+  return PREFERRED_OFFER_VERSIONS.find((k) => ok(OFFER_VERSIONS[k].single) && ok(OFFER_VERSIONS[k].group)) ?? ACTIVE_OFFER_VERSION;
 }
+export const versionHasValue = (version: OfferVersionKey) => !!(OFFER_VERSIONS[version] as OfferVersion).valued;
+
+/** Valor digitado pelo funcionário, limpo para o modelo (vazio = padrão). */
+export function offerValue(value: string | null | undefined): string {
+  const v = templateParam(value ?? '', 60);
+  return v || DEFAULT_OFFER_VALUE;
+}
+
 const ACTIVE = OFFER_VERSIONS[ACTIVE_OFFER_VERSION];
 export const ACCEPT_PAYLOAD_PREFIX = 'aceitar:';
 export const DECLINE_PAYLOAD_PREFIX = 'recusar:';
 
 export type TemplateMessage = { name: string; body: string[]; payload: string; declinePayload: string };
 
+/** Lojas de uma oferta com vários chamados: uma só vira a linha de sempre; várias, os códigos e a cidade. */
+function storesLine(tickets: DispatchTicket[]) {
+  const stores = [...new Set(tickets.map((t) => storeKeyOf(t.storeCode) ?? 'sem código'))];
+  return stores.length === 1 ? storeLine(tickets[0]) : `${stores.join(', ')} - ${tickets[0].city ?? ''}`.trim();
+}
+
 /**
  * Parâmetros do template para uma oferta. Um FSA: os dados dele. Vários FSAs
- * da mesma loja: quantidade, loja e equipamentos, aceitos juntos.
+ * (da mesma loja, ou anexados pelo funcionário na mesma cidade): quantidade,
+ * lojas e equipamentos, aceitos juntos. `value` só entra na versão com valor.
  */
-export function offerMessage(offerId: number, tickets: DispatchTicket[], version: OfferVersionKey = ACTIVE_OFFER_VERSION): TemplateMessage {
-  const v = OFFER_VERSIONS[version];
+export function offerMessage(offerId: number, tickets: DispatchTicket[], version: OfferVersionKey = ACTIVE_OFFER_VERSION, value?: string | null): TemplateMessage {
+  const v: OfferVersion = OFFER_VERSIONS[version];
   const payload = `${ACCEPT_PAYLOAD_PREFIX}${offerId}`;
   const declinePayload = `${DECLINE_PAYLOAD_PREFIX}${offerId}`;
+  const valueParam = v.valued ? [offerValue(value)] : [];
   if (tickets.length === 1) {
     const t = tickets[0];
     return {
       name: v.single,
-      body: [t.key, storeLine(t), equipmentLine(t), t.allegedDefect ?? ''].map((v) => templateParam(v)),
+      body: [...[t.key, storeLine(t), equipmentLine(t), t.allegedDefect ?? ''].map((p) => templateParam(p)), ...valueParam],
       payload, declinePayload,
     };
   }
   const equipments = [...new Set(tickets.map((t) => t.equipment?.trim()).filter(Boolean))].join(', ') || 'Equipamento não informado';
+  const count = v.valued ? templateParam(`${tickets.length} (${tickets.map((t) => t.key).join(', ')})`, 120) : String(tickets.length);
   return {
     name: v.group,
-    body: [String(tickets.length), storeLine(tickets[0]), templateParam(equipments, 120)],
+    body: [count, templateParam(storesLine(tickets), 120), templateParam(equipments, 120), ...valueParam],
     payload, declinePayload,
   };
 }
 
 /** Texto como o técnico vai ler, para o painel. */
 export function previewText(message: TemplateMessage): string {
-  const [a, b, c, d] = message.body;
+  const [a, b, c, d, e] = message.body;
   const v: OfferVersion = Object.values(OFFER_VERSIONS).find((x) => x.single === message.name || x.group === message.name) ?? ACTIVE;
   const single = message.name === v.single;
-  return `${single ? v.header : v.groupHeader}
+  return `${single ? v.header : v.groupHeader}\n\n${single ? v.singleBody(a, b, c, d, e) : v.groupBody(a, b, c, d)}\n\n${v.footer}\n[Aceitar] [Recusar]`;
+}
 
-${single ? v.singleBody(a, b, c, d) : v.groupBody(a, b, c)}
-
-${v.footer}
-[Aceitar] [Recusar]`;
+/** Mesma cidade (sem acento, maiúscula ou UF diferente escrita de outro jeito). */
+export function sameCity(a: string | null | undefined, b: string | null | undefined) {
+  const x = splitCity(a ?? ''); const y = splitCity(b ?? '');
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  if (!x.city || !y.city || norm(x.city) !== norm(y.city)) return false;
+  return !x.uf || !y.uf || x.uf.toUpperCase() === y.uf.toUpperCase();
 }
 
 /** Id da oferta num clique de botão ("aceitar:42"), ou null se não for aceite. */
@@ -300,7 +310,7 @@ const offerTemplates = (v: OfferVersion) => [
     name: v.single, language: 'pt_BR', category: 'UTILITY',
     components: [
       { type: 'HEADER', format: 'TEXT', text: v.header },
-      { type: 'BODY', text: v.singleBody('{{1}}', '{{2}}', '{{3}}', '{{4}}'), example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG', 'CPU - PDV 308', 'PC não liga']] } },
+      { type: 'BODY', text: v.singleBody('{{1}}', '{{2}}', '{{3}}', '{{4}}', '{{5}}'), example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG', 'CPU - PDV 308', 'PC não liga', ...(v.valued ? ['R$ 90,00'] : [])]] } },
       { type: 'FOOTER', text: v.footer },
       OFFER_BUTTONS,
     ],
@@ -309,7 +319,7 @@ const offerTemplates = (v: OfferVersion) => [
     name: v.group, language: 'pt_BR', category: 'UTILITY',
     components: [
       { type: 'HEADER', format: 'TEXT', text: v.groupHeader },
-      { type: 'BODY', text: v.groupBody('{{1}}', '{{2}}', '{{3}}'), example: { body_text: [['3', 'L497 - Candeias/BA', 'CPU, teclado e monitor']] } },
+      { type: 'BODY', text: v.groupBody('{{1}}', '{{2}}', '{{3}}', '{{4}}'), example: { body_text: [v.valued ? ['3 (FSA-1, FSA-2, FSA-3)', 'L497, L500 - Candeias/BA', 'CPU, teclado e monitor', 'a combinar com a equipe'] : ['3', 'L497 - Candeias/BA', 'CPU, teclado e monitor']] } },
       { type: 'FOOTER', text: v.footer },
       OFFER_BUTTONS,
     ],
@@ -317,7 +327,7 @@ const offerTemplates = (v: OfferVersion) => [
 ];
 
 /** A versão em uso e a candidata: o painel mostra o status das duas e envia a que faltar. */
-export const DISPATCH_TEMPLATES = [...offerTemplates(OFFER_VERSIONS.r70), ...offerTemplates(OFFER_VERSIONS.aviso)];
+export const DISPATCH_TEMPLATES = [...offerTemplates(OFFER_VERSIONS.r70), ...offerTemplates(OFFER_VERSIONS.aviso), ...offerTemplates(OFFER_VERSIONS.valor)];
 
 /** Corpo do POST /{phone-number-id}/messages para uma oferta. */
 export function templateSendPayload(to: string, message: TemplateMessage) {
