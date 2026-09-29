@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { bridgeConfigured, fetchBridgeHealth, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
-import { toWhatsappAccount, WHATSAPP_ACCOUNTS } from '@/lib/whatsapp-accounts';
+import { fetchBridgeHealth, requireWhatsappUser } from '@/lib/server/whatsapp-bridge';
+import { toWhatsappAccount } from '@/lib/whatsapp-accounts';
 
 type Row = {
   contact_phone: string; contact_name: string | null; ticket_key: string | null; assigned_to: string | null;
@@ -45,15 +45,10 @@ export async function GET(request: Request) {
     const account = toWhatsappAccount(params.get('account'));
     const scope = params.get('scope') === 'groups' ? 'groups' : 'recent';
     // Bridge health rides on the list poll instead of costing its own request.
-    const [{ results }, bridge, counts] = await Promise.all([
+    const [{ results }, bridge] = await Promise.all([
       env.DB.prepare(listSql(scope)).bind(account, current.email.toLowerCase()).all<Row>(),
       fetchBridgeHealth(account),
-      env.DB.prepare(`SELECT account, COUNT(*) AS n FROM whatsapp_conversations GROUP BY account`).all<{ account: string; n: number }>(),
     ]);
-    // Só mostra a aba de um número que tem bridge e alguma conversa (ou o que está aberto):
-    // um número que nunca foi conectado só ocuparia espaço.
-    const used = new Map(counts.results.map((row) => [row.account, Number(row.n)]));
-    const accounts = WHATSAPP_ACCOUNTS.filter((item) => item.id === account || (bridgeConfigured(item.id) && (used.get(item.id) ?? 0) > 0)).map((item) => item.id);
     const conversations = results.map((row) => ({
       // O nome da agenda da operação vale mais que o do perfil do WhatsApp.
       contactPhone: row.contact_phone, contactName: row.agenda_name ?? row.contact_name, ticketKey: row.ticket_key, assignedTo: row.assigned_to,
@@ -62,7 +57,7 @@ export async function GET(request: Request) {
       unread: Number(row.unread) || 0,
       pinned: Number(row.pinned) === 1,
     }));
-    return Response.json({ conversations, bridge, account, accounts }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ conversations, bridge, account }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     console.error('Falha ao listar conversas do WhatsApp', error);
@@ -75,18 +70,19 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireWhatsappUser(request);
+    const account = toWhatsappAccount(new URL(request.url).searchParams.get('account'));
     const body = await request.json().catch(() => null) as { contactPhone?: unknown; contactName?: unknown } | null;
     const contactPhone = typeof body?.contactPhone === 'string' ? body.contactPhone.trim() : '';
     if (!/^[\w.:+-]+@(s\.whatsapp\.net|lid|g\.us)$/.test(contactPhone)) return Response.json({ error: 'Contato inválido.' }, { status: 400 });
     const contactName = typeof body?.contactName === 'string' ? body.contactName.trim().slice(0, 120) || null : null;
     const now = new Date().toISOString();
     await env.DB.prepare(`
-      INSERT INTO whatsapp_conversations (contact_phone, contact_name, last_message_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(contact_phone) DO UPDATE SET
+      INSERT INTO whatsapp_conversations (account, contact_phone, contact_name, last_message_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(account, contact_phone) DO UPDATE SET
         contact_name = COALESCE(whatsapp_conversations.contact_name, excluded.contact_name),
         updated_at = excluded.updated_at
-    `).bind(contactPhone, contactName, now, now, now).run();
+    `).bind(account, contactPhone, contactName, now, now, now).run();
     return Response.json({ contactPhone });
   } catch (error) {
     if (error instanceof Response) return error;

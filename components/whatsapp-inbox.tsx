@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
 import { splitTicketKeys } from '@/lib/whatsapp-bridge-payload';
-import { DEFAULT_ACCOUNT, WHATSAPP_ACCOUNTS, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
+import { DEFAULT_ACCOUNT, type WhatsappAccountId } from '@/lib/whatsapp-accounts';
 
 type User = { getIdToken: () => Promise<string> } | null;
 type AuthHeaders = () => Promise<Record<string, string>>;
@@ -39,12 +39,9 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [bridge, setBridge] = useState<BridgeHealth | null>(null);
-  // Números com conversas: a faixa de abas só aparece quando há mais de um.
-  const [accounts, setAccounts] = useState<WhatsappAccountId[]>([DEFAULT_ACCOUNT]);
   const [newChatOpen, setNewChatOpen] = useState(false);
-  // Qual número está aberto. Cada um tem sua caixa de entrada; trocar de aba
-  // fecha a conversa, porque ela pertence ao número anterior.
-  const [account, setAccount] = useState<WhatsappAccountId>(DEFAULT_ACCOUNT);
+  // Hoje há um número só (Caju); a conversa já guarda de qual número vem.
+  const account: WhatsappAccountId = DEFAULT_ACCOUNT;
   const bridgeWarning = bridgeWarningText(bridge);
 
   const authHeaders = useCallback<AuthHeaders>(async (): Promise<Record<string, string>> => (user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}), [user]);
@@ -55,10 +52,9 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
       // Aba Grupos: pede todos os grupos (não só as 200 conversas mais recentes).
       const response = await fetch(`/api/whatsapp/conversations?account=${account}${filter === 'groups' ? '&scope=groups' : ''}`, { headers: await authHeaders(), cache: 'no-store' });
       if (response.status === 429) return;
-      const payload = await response.json() as { conversations?: Conversation[]; bridge?: BridgeHealth | null; accounts?: WhatsappAccountId[]; error?: string };
+      const payload = await response.json() as { conversations?: Conversation[]; bridge?: BridgeHealth | null; error?: string };
       if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar as conversas.');
       setConversations(payload.conversations ?? []);
-      if (payload.accounts?.length) setAccounts(payload.accounts);
       setBridge(payload.bridge ?? null);
       setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as conversas.'); }
@@ -67,16 +63,6 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
 
   // Mensagem nova aparece em até 5 s (antes, 15 s).
   useVisiblePolling(load, 5_000);
-
-  // Trocar de número esvazia a lista até a nova chegar, e fecha a conversa
-  // aberta: ela é do número anterior.
-  function switchAccount(next: WhatsappAccountId) {
-    if (next === account) return;
-    setAccount(next);
-    setSelectedPhone(null);
-    setConversations([]);
-    setLoading(true);
-  }
 
   // Fixar/desafixar: aparece já no topo e volta atrás se o servidor recusar.
   async function togglePin(conversation: Conversation) {
@@ -115,20 +101,6 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
     <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0b141a] text-neutral-100">
       {/* Chat list */}
       <div className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-white/10 bg-[#111b21] md:w-[340px] lg:w-[380px]`}>
-        {/* Uma aba por número: a conversa pertence a um deles, e a resposta
-            sai por ele. */}
-        {accounts.length > 1 && <div className="flex shrink-0 gap-1 bg-[#202c33] px-2 pt-2" role="tablist" aria-label="Números de WhatsApp">
-          {WHATSAPP_ACCOUNTS.filter((item) => accounts.includes(item.id)).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={account === item.id}
-              onClick={() => switchAccount(item.id)}
-              className={`min-h-9 flex-1 rounded-t-lg px-3 text-xs font-semibold transition ${account === item.id ? "bg-[#111b21] text-neutral-100" : "text-neutral-400 hover:text-neutral-200"}`}
-            >{item.label}</button>
-          ))}
-        </div>}
         <div className="flex h-16 shrink-0 items-center justify-between bg-[#202c33] px-4">
           <h2 className="text-lg font-bold tracking-tight">Conversas</h2>
           <div className="flex items-center gap-2">
