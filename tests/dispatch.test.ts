@@ -147,3 +147,27 @@ test('o mesmo FSA não fica em duas ofertas valendo; depois de expirar, pode', (
   db.prepare(`UPDATE dispatch_offer_tickets SET active = 0 WHERE offer_id = 1`).run();
   db.prepare(`INSERT INTO dispatch_offer_tickets (offer_id, ticket_key, active) VALUES (2, 'FSA-1', 1)`).run();
 });
+
+test('lista de teste: só os números dela recebem no modo allowlist', async () => {
+  const { parseAllowlist, allowedToReceive } = await import('../lib/dispatch.ts');
+  const list = parseAllowlist('81 99173-8635, lixo, +55 (11) 98888-7777');
+  assert.deepEqual(list, ['5581991738635', '5511988887777']);
+  assert.equal(allowedToReceive('allowlist', list, '(81) 99173-8635'), true);
+  assert.equal(allowedToReceive('allowlist', list, '(81) 99999-0000'), false);
+  assert.equal(allowedToReceive('live', [], '(81) 99999-0000'), true);
+  assert.equal(allowedToReceive('dry_run', list, '(81) 99173-8635'), false);
+});
+
+test('depois do aceite: bloco do técnico no formato do Jira e avisos', async () => {
+  const { technicianDataBlock, acceptedNotice, unansweredNotice, NOTICE_TEMPLATES } = await import('../lib/dispatch.ts');
+  assert.equal(technicianDataBlock('Fulano de Tal', null), 'Nome: Fulano de Tal\nCPF: Não informado\nRG: \nTEL: .');
+  const n = acceptedNotice(['FSA-1', 'FSA-2'], 'L330', 'Fulano');
+  assert.equal(n.title, 'Atendimento aceito · FSA-1, FSA-2');
+  assert.match(n.chat, /FSA-1, FSA-2 \(L330\) aceito por Fulano/);
+  assert.match(unansweredNotice(['FSA-9'], 'L12').body, /expirou em 2 h/);
+  for (const t of NOTICE_TEMPLATES) {
+    const body = t.components[0];
+    assert.ok(!/^\{\{|\}\}$/.test(body.text.trim()), `${t.name}: corpo não pode começar ou terminar com variável`);
+    assert.equal(t.category, 'UTILITY');
+  }
+});

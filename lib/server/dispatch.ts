@@ -1,16 +1,22 @@
 import { env } from 'cloudflare:workers';
 import { getDb } from '@/db';
-import { technicians } from '@/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
+import { appUsers, chatGroupMembers, chatGroupMessages, chatGroups, technicians } from '@/db/schema';
 import {
-  ACCEPT_OFFER_SQL, dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, LOOKBACK_HOURS, OFFER_HOURS,
-  splitCity, storeKeyOf, whatsappPhone, type DispatchMode, type DispatchTicket, type OfferGroup,
+  ACCEPT_OFFER_SQL, ACCEPT_REPLY_EXPIRED, ACCEPT_REPLY_TAKEN, ACCEPT_REPLY_WON, acceptedNotice, acceptPayloadOffer, allowedToReceive,
+  dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
+  parseAllowlist, samePhone, splitCity, storeKeyOf, technicianDataBlock, templateSendPayload, unansweredNotice, whatsappPhone,
+  type DispatchMode, type DispatchTicket, type OfferGroup,
 } from '@/lib/dispatch';
 import { getJiraIssue, searchJiraIssues, type JiraIssueSummary } from '@/lib/server/jira';
+import { enqueueJiraSync, processJiraSyncJobs } from '@/lib/server/jira-sync';
+import { sendPushToEmails } from '@/lib/server/push';
+import { sendTemplateMessage, sendTextMessage } from '@/lib/server/whatsapp-cloud';
 
 // Lado do servidor da distribuição (lib/dispatch.ts): acha os chamados novos,
 // agrupa por loja, grava as ofertas e resolve a disputa pelo aceite.
-// Envio de mensagens reais fica para a etapa com os templates aprovados; aqui,
-// em dry_run, as ofertas e os destinatários são gravados como simulação.
+// Em dry_run as ofertas e os destinatários são só gravados; em allowlist a
+// oferta sai para os números de DISPATCH_ALLOWLIST; em live, para todos.
 
 export const dispatchMode = (): DispatchMode => dispatchModeOf((env as unknown as Record<string, string | undefined>).DISPATCH_MODE);
 
@@ -72,13 +78,18 @@ export async function runDispatch(now = new Date()): Promise<Summary> {
   const iso = now.toISOString();
 
   // Oferta vencida libera os FSAs para uma nova oferta numa rodada futura.
-  const expired = await db.prepare(`UPDATE dispatch_offers SET status = 'expired', updated_at = ?1 WHERE status = 'open' AND expires_at <= ?1 RETURNING id`).bind(iso).all<{ id: number }>();
+  const expired = await db.prepare(`UPDATE dispatch_offers SET status = 'expired', updated_at = ?1 WHERE status = 'open' AND expires_at <= ?1 RETURNING id, mode, store_key`).bind(iso).all<{ id: number; mode: string; store_key: string }>();
   if (expired.results.length) {
     const ids = expired.results.map((r) => r.id);
+    const keysByOffer = await offerTicketKeys(ids);
     await db.batch([
       ...ids.map((id) => db.prepare(`UPDATE dispatch_offer_tickets SET active = 0 WHERE offer_id = ?1`).bind(id)),
       ...ids.map((id) => db.prepare(`INSERT INTO dispatch_events (offer_id, kind, created_at) VALUES (?1, 'expired', ?2)`).bind(id, iso)),
     ]);
+    // Simulação não avisa ninguém: a oferta nem saiu.
+    for (const offer of expired.results.filter((o) => o.mode !== 'dry_run')) {
+      await notifyTeam(unansweredNotice(keysByOffer.get(offer.id) ?? [], offer.store_key), offer.id);
+    }
   }
   summary.expired = expired.results.length;
 
@@ -97,15 +108,149 @@ export async function runDispatch(now = new Date()): Promise<Summary> {
     baseCity: technicians.baseCity, baseState: technicians.baseState, extraCities: technicians.extraCities,
   }).from(technicians).all();
 
+  const allowlist = parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ALLOWLIST);
   for (const group of groupByStore(tickets)) {
     const created = await createOffer(group, techs, mode, now);
-    if (created === 'held') summary.held += 1;
-    if (created) summary.created += 1;
+    if (!created) continue;
+    summary.created += 1;
+    if (created.status === 'held') summary.held += 1;
+    else if (mode !== 'dry_run') await sendOffer(created.id, group.tickets, mode, allowlist);
   }
   return summary;
 }
 
-async function createOffer(group: OfferGroup, techs: Parameters<typeof eligibleTechnicians>[0], mode: DispatchMode, now: Date): Promise<'open' | 'held' | null> {
+async function offerTicketKeys(ids: number[]) {
+  const byOffer = new Map<number, string[]>();
+  if (!ids.length) return byOffer;
+  const rows = (await env.DB.prepare(`SELECT offer_id, ticket_key FROM dispatch_offer_tickets WHERE offer_id IN (${ids.map(() => '?').join(',')}) ORDER BY ticket_key`).bind(...ids).all<{ offer_id: number; ticket_key: string }>()).results;
+  for (const r of rows) byOffer.set(r.offer_id, [...(byOffer.get(r.offer_id) ?? []), r.ticket_key]);
+  return byOffer;
+}
+
+/**
+ * Manda a oferta (template aprovado) para cada destinatário. Um envio que
+ * falha não impede os outros; fica marcado como "failed" no painel.
+ */
+async function sendOffer(offerId: number, tickets: DispatchTicket[], mode: DispatchMode, allowlist: string[]) {
+  const db = env.DB;
+  const recipients = (await db.prepare(`SELECT technician_id, phone FROM dispatch_recipients WHERE offer_id = ?1`).bind(offerId).all<{ technician_id: number; phone: string }>()).results;
+  const message = offerMessage(offerId, tickets);
+  for (const r of recipients) {
+    const at = new Date().toISOString();
+    if (!allowedToReceive(mode, allowlist, r.phone)) {
+      await db.prepare(`UPDATE dispatch_recipients SET status = 'skipped', updated_at = ?3 WHERE offer_id = ?1 AND technician_id = ?2`).bind(offerId, r.technician_id, at).run();
+      continue;
+    }
+    try {
+      const wamid = await sendTemplateMessage(templateSendPayload(r.phone, message));
+      await db.prepare(`UPDATE dispatch_recipients SET status = 'sent', wamid = ?3, updated_at = ?4 WHERE offer_id = ?1 AND technician_id = ?2`).bind(offerId, r.technician_id, wamid, at).run();
+    } catch (error) {
+      await db.batch([
+        db.prepare(`UPDATE dispatch_recipients SET status = 'failed', updated_at = ?3 WHERE offer_id = ?1 AND technician_id = ?2`).bind(offerId, r.technician_id, at),
+        db.prepare(`INSERT INTO dispatch_events (offer_id, technician_id, kind, details, created_at) VALUES (?1, ?2, 'send_failed', ?3, ?4)`)
+          .bind(offerId, r.technician_id, JSON.stringify({ error: error instanceof Error ? error.message.slice(0, 300) : 'erro' }), at),
+      ]);
+    }
+  }
+}
+
+/** Status de entrega que a Meta devolve pelo webhook (delivered, read, failed). */
+export async function recordDeliveryStatus(wamid: string, status: string) {
+  if (!['delivered', 'read', 'failed'].includes(status)) return;
+  await env.DB.prepare(`UPDATE dispatch_recipients SET status = ?2, updated_at = ?3 WHERE wamid = ?1 AND status <> 'clicked'`).bind(wamid, status, new Date().toISOString()).run();
+}
+
+// ─── Avisos para a equipe ──────────────────────────────
+const DISPATCH_GROUP_NAME = 'Distribuição';
+/** Remetente das mensagens automáticas no chat do Caju OS. */
+const SYSTEM_SENDER = 'distribuicao@caju-os';
+
+async function teamEmails() {
+  const users = await getDb().select({ email: appUsers.email }).from(appUsers)
+    .where(and(eq(appUsers.active, true), inArray(appUsers.role, ['gerencia', 'coordenador']))).all();
+  return users.map((u) => u.email.toLowerCase());
+}
+
+/** Grupo "Distribuição" do chat do Caju OS; criado na primeira vez com gerência e coordenação. */
+async function dispatchChatGroup(emails: string[]) {
+  const db = getDb();
+  const existing = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq(chatGroups.name, DISPATCH_GROUP_NAME)).get();
+  if (existing) return existing.id;
+  const now = new Date().toISOString();
+  const created = await db.insert(chatGroups).values({ name: DISPATCH_GROUP_NAME, createdBy: SYSTEM_SENDER, createdAt: now, updatedAt: now }).returning({ id: chatGroups.id }).get();
+  if (emails.length) {
+    await db.insert(chatGroupMembers).values(emails.map((email, i) => ({ groupId: created.id, email, memberRole: i === 0 ? 'owner' as const : 'member' as const, joinedAt: now }))).onConflictDoNothing();
+  }
+  return created.id;
+}
+
+/**
+ * Aviso interno: push no app (tipo "Distribuição", que cada um pode desligar)
+ * e mensagem no grupo "Distribuição" do chat. Nunca lança: o aceite já está
+ * gravado, e o aviso é um extra.
+ */
+async function notifyTeam(notice: { title: string; body: string; chat: string }, offerId: number) {
+  try {
+    const emails = await teamEmails();
+    const groupId = await dispatchChatGroup(emails);
+    const now = new Date().toISOString();
+    await getDb().insert(chatGroupMessages).values({ groupId, senderEmail: SYSTEM_SENDER, body: notice.chat, createdAt: now });
+    await getDb().update(chatGroups).set({ updatedAt: now }).where(eq(chatGroups.id, groupId));
+    await sendPushToEmails(emails, { title: notice.title, body: notice.body, data: { kind: 'group', groupId: String(groupId), offerId: String(offerId) } }, 'dispatch');
+  } catch (error) {
+    console.error('dispatch: aviso à equipe falhou', error instanceof Error ? error.message : 'erro');
+  }
+}
+
+// ─── Clique em "Aceitar atendimento" ───────────────────
+/**
+ * Clique no botão do template, vindo do webhook. Identifica o técnico pelo
+ * número que clicou (nunca por um id enviado pelo cliente), resolve a disputa
+ * e devolve a resposta para mandar a ele. No aceite: vínculo no Caju OS, Jira
+ * pela fila de sincronização (sem reabrir a disputa se o Jira falhar) e aviso
+ * à equipe.
+ */
+export async function handleOfferClick(payload: string | null, fromPhone: string): Promise<string | null> {
+  const offerId = acceptPayloadOffer(payload);
+  if (!offerId) return null;
+  const db = env.DB;
+  const recipients = (await db.prepare(`SELECT r.technician_id, r.phone, t.name, t.cpf FROM dispatch_recipients r JOIN technicians t ON t.id = r.technician_id WHERE r.offer_id = ?1`)
+    .bind(offerId).all<{ technician_id: number; phone: string; name: string; cpf: string | null }>()).results;
+  const me = recipients.find((r) => samePhone(r.phone, fromPhone));
+  if (!me) return 'Não encontramos esta oferta para o seu número. Fale com a coordenação da Caju Tech.';
+
+  const result = await acceptOffer(offerId, me.technician_id);
+  if (result !== 'won') return result === 'taken' ? ACCEPT_REPLY_TAKEN : ACCEPT_REPLY_EXPIRED;
+
+  const offer = await db.prepare(`SELECT store_key FROM dispatch_offers WHERE id = ?1`).bind(offerId).first<{ store_key: string }>();
+  const keys = (await offerTicketKeys([offerId])).get(offerId) ?? [];
+  // Reenvio do mesmo clique: já ganhou antes, não repete vínculo nem aviso.
+  const already = await db.prepare(`SELECT 1 AS ok FROM dispatch_events WHERE offer_id = ?1 AND kind = 'linked'`).bind(offerId).first();
+  if (!already) {
+    const now = new Date().toISOString();
+    await db.batch([
+      ...keys.map((key) => db.prepare(`INSERT INTO operational_workflows (ticket_key, status, technician_id, created_by, created_at, updated_at)
+        VALUES (?1, 'scheduling', ?2, ?3, ?4, ?4)
+        ON CONFLICT(ticket_key) DO UPDATE SET technician_id = excluded.technician_id, updated_at = excluded.updated_at`).bind(key, me.technician_id, SYSTEM_SENDER, now)),
+      db.prepare(`INSERT INTO dispatch_events (offer_id, technician_id, kind, created_at) VALUES (?1, ?2, 'linked', ?3)`).bind(offerId, me.technician_id, now),
+    ]);
+    for (const key of keys) {
+      await enqueueJiraSync(key, 'update', { technicianData: technicianDataBlock(me.name, me.cpf) }, SYSTEM_SENDER, `dispatch:${offerId}:${key}`).catch(() => undefined);
+    }
+    await processJiraSyncJobs(Math.max(1, keys.length)).catch(() => []);
+    await notifyTeam(acceptedNotice(keys, offer?.store_key ?? '', me.name), offerId);
+  }
+  return ACCEPT_REPLY_WON;
+}
+
+/** Resposta ao técnico logo depois do clique (a janela de 24 h está aberta). */
+export async function replyToTechnician(to: string, text: string) {
+  try { await sendTextMessage(to, text); } catch (error) {
+    console.error('dispatch: resposta ao técnico falhou', error instanceof Error ? error.message : 'erro');
+  }
+}
+
+async function createOffer(group: OfferGroup, techs: Parameters<typeof eligibleTechnicians>[0], mode: DispatchMode, now: Date): Promise<{ id: number; status: 'open' | 'held' } | null> {
   const db = env.DB;
   const iso = now.toISOString();
   const first = group.tickets[0];
@@ -137,7 +282,7 @@ async function createOffer(group: OfferGroup, techs: Parameters<typeof eligibleT
     await db.prepare(`DELETE FROM dispatch_offers WHERE id = ?1`).bind(offer.id).run();
     return null;
   }
-  return status;
+  return { id: offer.id, status };
 }
 
 export type AcceptResult = 'won' | 'taken' | 'expired' | 'not_recipient' | 'unknown';

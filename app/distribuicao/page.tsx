@@ -42,6 +42,7 @@ export default function DistribuicaoPage() {
   const [mode, setMode] = useState<string>('off');
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [templates, setTemplates] = useState<Template[] | null>(null);
+  const [expected, setExpected] = useState<string[]>([]);
   const [templatesError, setTemplatesError] = useState('');
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
@@ -61,8 +62,8 @@ export default function DistribuicaoPage() {
     if (!offersRes.ok) setError(offersBody.error ?? 'Não foi possível carregar as ofertas.');
     else { setMode(offersBody.mode ?? 'off'); setOffers(offersBody.offers ?? []); }
     if (templatesRes) {
-      const body = await templatesRes.json().catch(() => ({})) as { templates?: Template[]; error?: string };
-      if (templatesRes.ok) { setTemplates(body.templates ?? []); setTemplatesError(''); } else setTemplatesError(body.error ?? 'Não foi possível consultar os templates.');
+      const body = await templatesRes.json().catch(() => ({})) as { templates?: Template[]; expected?: string[]; error?: string };
+      if (templatesRes.ok) { setTemplates(body.templates ?? []); setExpected(body.expected ?? []); setTemplatesError(''); } else setTemplatesError(body.error ?? 'Não foi possível consultar os templates.');
     }
   }, [user, gerencia]);
 
@@ -83,7 +84,8 @@ export default function DistribuicaoPage() {
     }
   }
 
-  const missingTemplates = templates !== null && templates.length < 2;
+  const missing = templates === null ? [] : expected.filter((name) => !templates.some((t) => t.name === name));
+  const missingTemplates = missing.length > 0;
 
   return <main className="min-h-screen text-foreground">
     <AppNavigation active="dispatch" open={menu} onOpenChange={setMenu} />
@@ -135,6 +137,7 @@ export default function DistribuicaoPage() {
                 ))}
               </ul>
             ) : <p className="mt-3 text-sm text-muted-foreground">Nenhum modelo enviado ainda.</p>}
+            {missingTemplates && <p className="mt-3 text-xs text-muted-foreground">Ainda não enviados: {missing.join(', ')}</p>}
             {notice && <p aria-live="polite" className="mt-3 text-xs text-muted-foreground">{notice}</p>}
           </article>
         )}
