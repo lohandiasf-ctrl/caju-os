@@ -1,0 +1,37 @@
+# OpenWA (gateway do WhatsApp) do Caju OS: só na rede privada do Fly.io
+# (caju-openwa.internal:2785), sem endereço público. Quem fala com ele é o
+# caju-openwa-adapter, que traduz para o formato que o Caju OS já usa.
+app = 'caju-openwa'
+primary_region = 'gru'
+
+[build]
+  dockerfile = 'OpenWA/Dockerfile'
+
+[env]
+  NODE_ENV = 'production'
+  PORT = '2785'
+  LOG_LEVEL = 'info'
+  # Motor leve (sem Chromium): ~30-80 MB por número.
+  ENGINE_TYPE = 'baileys'
+  BAILEYS_AUTH_DIR = '/app/data/baileys'
+  # Não silenciar as notificações do celular do chip.
+  BAILEYS_MARK_ONLINE_ON_CONNECT = 'false'
+  SESSION_DATA_PATH = '/app/data/sessions'
+  STORAGE_TYPE = 'local'
+  STORAGE_LOCAL_PATH = '/app/data/media'
+  # Depois de reiniciar, os números conectados voltam sozinhos.
+  AUTO_START_SESSIONS = 'true'
+  SERVE_DASHBOARD = 'false'
+  # Só o endereço privado da camada de tradução pode receber os eventos.
+  SSRF_ALLOWED_HOSTS = 'caju-openwa-adapter.internal'
+  REDIS_ENABLED = 'false'
+  QUEUE_ENABLED = 'false'
+  CACHE_ENABLED = 'false'
+
+[[mounts]]
+  source = 'openwa_data'
+  destination = '/app/data'
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '1gb'
