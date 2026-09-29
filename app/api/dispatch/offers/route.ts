@@ -7,7 +7,7 @@ import { requireApiUser } from '@/lib/server/firebase-auth';
 // como o técnico leria. Em dry_run é aqui que se confere tudo antes de ligar
 // o envio de verdade.
 
-type OfferRow = { id: number; store_key: string; store_name: string | null; city: string | null; status: string; hold_reasons: string | null; mode: string; assigned_technician_id: number | null; assigned_at: string | null; expires_at: string; created_at: string };
+type OfferRow = { id: number; value_text: string | null; store_key: string; store_name: string | null; city: string | null; status: string; hold_reasons: string | null; mode: string; assigned_technician_id: number | null; assigned_at: string | null; expires_at: string; created_at: string };
 type TicketRow = { offer_id: number; ticket_key: string; equipment: string | null; alleged_defect: string | null };
 
 export async function GET(request: Request) {
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
           holdReasons: reasons.map((r) => HOLD_LABEL[r] ?? r),
           tickets: own.map((t) => t.ticket_key),
           recipients: recipients.filter((r) => r.offer_id === o.id).map((r) => ({ name: r.name, status: r.status, reason: r.status === 'failed' && r.failure ? (JSON.parse(r.failure) as { error?: string }).error ?? null : null })),
-          preview: own.length ? previewText(offerMessage(o.id, dispatchTickets, version)) : null,
+          preview: own.length ? previewText(offerMessage(o.id, dispatchTickets, version, o.value_text)) : null,
         };
       }),
     });

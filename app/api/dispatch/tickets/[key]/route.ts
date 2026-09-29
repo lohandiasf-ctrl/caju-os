@@ -24,7 +24,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ key
     const user = await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const key = decodeURIComponent((await params).key).toUpperCase();
     if (!KEY.test(key)) return Response.json({ error: 'Chamado inválido.' }, { status: 400 });
-    const result = await offerTicket(key, user.email);
+    // Anexos (outros FSAs da mesma cidade) e valor: só na oferta manual, pela tela do chamado.
+    const body = await request.json().catch(() => ({})) as { extra?: unknown; value?: unknown };
+    const extra = Array.isArray(body.extra) ? body.extra.filter((k): k is string => typeof k === 'string') : [];
+    const value = typeof body.value === 'string' ? body.value : null;
+    const result = await offerTicket(key, user.email, new Date(), { extra, value });
     if ('error' in result) return Response.json(result, { status: 409 });
     return Response.json({ ...result, offer: await ticketOffer(key) });
   } catch (error) {
