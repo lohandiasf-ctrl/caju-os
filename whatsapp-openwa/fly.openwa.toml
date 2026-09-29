@@ -22,6 +22,8 @@ primary_region = 'gru'
   # Depois de reiniciar, os números conectados voltam sozinhos.
   AUTO_START_SESSIONS = 'true'
   SERVE_DASHBOARD = 'false'
+  # Atendimento feito por pessoas: sem o "digitando..." e a espera de até 5 s antes de cada texto.
+  SIMULATE_TYPING = 'false'
   # Só o endereço privado da camada de tradução pode receber os eventos.
   SSRF_ALLOWED_HOSTS = 'caju-openwa-adapter.internal'
   REDIS_ENABLED = 'false'
