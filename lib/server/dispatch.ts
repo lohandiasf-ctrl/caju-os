@@ -303,12 +303,61 @@ export async function sendTestOffer(now = new Date()): Promise<{ id: number; sen
       .bind(offer.id, JSON.stringify({ test: true, tickets: [ticket.key], recipients: byPhone.size }), iso),
   ]);
   await sendOffer(offer.id, [ticket], 'allowlist', allowlist);
-  const statuses = (await db.prepare(`SELECT status FROM dispatch_recipients WHERE offer_id = ?1`).bind(offer.id).all<{ status: string }>()).results;
-  const failure = await db.prepare(`SELECT details FROM dispatch_events WHERE offer_id = ?1 AND kind = 'send_failed' ORDER BY id DESC LIMIT 1`).bind(offer.id).first<{ details: string }>();
+  return { id: offer.id, ...await sendSummary(offer.id) };
+}
+
+/** Quantos envios saíram e, se algum falhou, o motivo que a Meta deu. */
+async function sendSummary(offerId: number) {
+  const db = env.DB;
+  const statuses = (await db.prepare(`SELECT status FROM dispatch_recipients WHERE offer_id = ?1`).bind(offerId).all<{ status: string }>()).results;
+  const failure = await db.prepare(`SELECT details FROM dispatch_events WHERE offer_id = ?1 AND kind = 'send_failed' ORDER BY id DESC LIMIT 1`).bind(offerId).first<{ details: string }>();
   return {
-    id: offer.id, sent: statuses.filter((s) => s.status === 'sent').length, failed: statuses.filter((s) => s.status === 'failed').length,
+    sent: statuses.filter((s) => s.status === 'sent').length, failed: statuses.filter((s) => s.status === 'failed').length,
     reason: failure ? (JSON.parse(failure.details) as { error?: string }).error : undefined,
   };
+}
+
+export type ResendResult = { id: number; status: 'open' | 'held'; sent: number; failed: number; reason?: string } | { error: string };
+
+/**
+ * Botão "Reenviar" do painel: cancela a oferta (se ainda não foi aceita) e cria
+ * outra para os mesmos chamados, com os dados de agora do Jira, os técnicos de
+ * agora e um prazo novo. O cancelamento é condicional: se alguém aceitou no
+ * meio do caminho, o aceite vale e nada é reenviado.
+ */
+export async function resendOffer(offerId: number, by: string, now = new Date()): Promise<ResendResult> {
+  const db = env.DB;
+  const offer = await db.prepare(`SELECT mode, status FROM dispatch_offers WHERE id = ?1`).bind(offerId).first<{ mode: string; status: string }>();
+  if (!offer) return { error: 'Oferta não encontrada.' };
+  if (offer.status === 'assigned') return { error: 'Esta oferta já foi aceita. Não dá para reenviar.' };
+  const mode = dispatchMode();
+  if (!isTestOffer(offer.mode) && mode === 'off') return { error: 'A distribuição está desligada.' };
+
+  const iso = now.toISOString();
+  const cancelled = await db.prepare(`UPDATE dispatch_offers SET status = 'cancelled', updated_at = ?2 WHERE id = ?1 AND status <> 'assigned'`).bind(offerId, iso).run();
+  if (cancelled.meta.changes !== 1) return { error: 'Esta oferta acabou de ser aceita. Não dá para reenviar.' };
+  await db.batch([
+    db.prepare(`UPDATE dispatch_offer_tickets SET active = 0 WHERE offer_id = ?1`).bind(offerId),
+    db.prepare(`INSERT INTO dispatch_events (offer_id, kind, details, created_at) VALUES (?1, 'resent', ?2, ?3)`).bind(offerId, JSON.stringify({ by }), iso),
+  ]);
+
+  if (isTestOffer(offer.mode)) {
+    const test = await sendTestOffer(now);
+    return 'error' in test ? test : { ...test, status: 'open' };
+  }
+  const keys = (await offerTicketKeys([offerId])).get(offerId) ?? [];
+  if (!keys.length) return { error: 'A oferta não tem chamados.' };
+  const tickets = await Promise.all(keys.map((key) => toDispatchTicket(key)));
+  const techs = await getDb().select({
+    id: technicians.id, name: technicians.name, phone: technicians.phone, approved: technicians.approved,
+    baseCity: technicians.baseCity, baseState: technicians.baseState, extraCities: technicians.extraCities,
+  }).from(technicians).all();
+  const created = await createOffer({ storeKey: storeKeyOf(tickets[0].storeCode) ?? `sem-loja:${tickets[0].key}`, tickets }, techs, mode, now);
+  if (!created) return { error: 'Não foi possível criar a nova oferta.' };
+  if (created.status === 'open' && mode !== 'dry_run') {
+    await sendOffer(created.id, tickets, mode, parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ALLOWLIST));
+  }
+  return { id: created.id, status: created.status, ...await sendSummary(created.id) };
 }
 
 /** Resposta ao técnico logo depois do clique (a janela de 24 h está aberta). */
