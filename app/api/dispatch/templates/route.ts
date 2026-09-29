@@ -33,7 +33,7 @@ async function listOurs(token: string, waba: string) {
 
 export async function GET(request: Request) {
   try {
-    await requireApiUser(request, ['gerencia']);
+    await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const { token, waba } = config();
     return Response.json({ templates: await listOurs(token, waba), expected: ALL_TEMPLATES.map((t) => t.name) });
   } catch (error) {
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await requireApiUser(request, ['gerencia']);
+    await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const { token, waba } = config();
     const existing = new Set((await listOurs(token, waba)).map((t) => t.name));
     const results: { name: string; status: string; error?: string }[] = [];

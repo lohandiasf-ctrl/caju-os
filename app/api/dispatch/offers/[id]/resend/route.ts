@@ -7,7 +7,7 @@ import { requireApiUser } from '@/lib/server/firebase-auth';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireApiUser(request, ['gerencia', 'coordenador']);
+    const user = await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const id = Number((await params).id);
     if (!Number.isInteger(id) || id <= 0) return Response.json({ error: 'Oferta inválida.' }, { status: 400 });
     const result = await resendOffer(id, user.email);

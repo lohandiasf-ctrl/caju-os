@@ -28,7 +28,7 @@ export function canUseDashboardView(role: string | null, view: DashboardView) {
 export function canUseNavItem(role: UserRole | null, key: string) {
   if (key === 'spares' || key === 'finance') return role === 'gerencia';
   // Distribuição de chamados por WhatsApp (app/distribuicao): quem despacha.
-  if (key === 'dispatch') return role === 'gerencia' || role === 'coordenador';
+  if (key === 'dispatch') return role === 'gerencia' || role === 'coordenador' || role === 'analista';
   if (key === 'map') return Boolean(role);
   return isDashboardView(key) && canUseDashboardView(role, key);
 }

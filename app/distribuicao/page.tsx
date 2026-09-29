@@ -56,7 +56,8 @@ export default function DistribuicaoPage() {
   const [testNotice, setTestNotice] = useState('');
   const [open, setOpen] = useState<number | null>(null);
   const [resending, setResending] = useState<number | null>(null);
-  const gerencia = role === 'gerencia';
+  // Gerência, coordenação e analistas operam a distribuição inteira.
+  const gerencia = role === 'gerencia' || role === 'coordenador' || role === 'analista';
 
   const load = useCallback(async () => {
     if (!user) return;

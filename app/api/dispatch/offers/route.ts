@@ -12,7 +12,7 @@ type TicketRow = { offer_id: number; ticket_key: string; equipment: string | nul
 
 export async function GET(request: Request) {
   try {
-    await requireApiUser(request, ['gerencia', 'coordenador']);
+    await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const db = env.DB;
     const offers = (await db.prepare(`SELECT * FROM dispatch_offers ORDER BY id DESC LIMIT 50`).all<OfferRow>()).results;
     if (!offers.length) return Response.json({ mode: dispatchMode(), offers: [] });

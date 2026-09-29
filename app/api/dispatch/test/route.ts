@@ -7,7 +7,7 @@ import { requireApiUser } from '@/lib/server/firebase-auth';
 
 export async function POST(request: Request) {
   try {
-    await requireApiUser(request, ['gerencia']);
+    await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const result = await sendTestOffer();
     if ('error' in result) return Response.json(result, { status: 400 });
     return Response.json(result);

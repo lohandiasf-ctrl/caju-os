@@ -6,7 +6,7 @@ const routeRoles: Record<string, UserRole[]> = {
   '/central-n1': ['gerencia', 'coordenador', 'n1'],
   '/spares': ['gerencia'],
   '/financeiro': ['gerencia'],
-  '/distribuicao': ['gerencia', 'coordenador'],
+  '/distribuicao': ['gerencia', 'coordenador', 'analista'],
 };
 
 export const roleLabels: Record<UserRole, string> = {
