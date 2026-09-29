@@ -11,6 +11,14 @@ Convenção: cada entrada tem a data, o commit (curto) e, quando aplicável,
 
 ## 2026-09-28
 
+### Política de privacidade pública (/privacidade)
+
+A Meta exige uma URL de política de privacidade para publicar o app do
+WhatsApp da distribuição (sem publicar, o webhook só recebe testes). Página
+`app/privacidade`, liberada sem login por `PUBLIC_PATHS` em `lib/permissions.ts`
+(o `AuthProvider` não redireciona nem espera o login nela). Seção `#exclusao`
+serve como URL de exclusão de dados. Texto básico: revisar pela empresa.
+
 ### Distribuição — E3a: aceite pelo botão
 
 Clique em "Aceitar atendimento" (webhook oficial) → disputa atômica → resposta

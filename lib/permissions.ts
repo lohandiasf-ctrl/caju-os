@@ -21,6 +21,12 @@ export function isUserRole(value: unknown): value is UserRole {
   return value === 'gerencia' || value === 'coordenador' || value === 'n1' || value === 'analista' || value === 'tecnico';
 }
 
+/** Abrem sem login: a política de privacidade exigida pela Meta para o app do WhatsApp. */
+export const PUBLIC_PATHS = ['/privacidade'] as const;
+export function isPublicPath(pathname: string) {
+  return (PUBLIC_PATHS as readonly string[]).includes(pathname);
+}
+
 export function canAccess(role: UserRole | null, pathname: string) {
   if (!role) return false;
   // Gerência é o topo da hierarquia: acessa tudo, sempre. Explícito aqui para
