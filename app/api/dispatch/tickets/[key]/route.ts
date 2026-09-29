@@ -9,7 +9,7 @@ const KEY = /^[A-Z][A-Z0-9]+-\d+$/;
 
 export async function GET(request: Request, { params }: { params: Promise<{ key: string }> }) {
   try {
-    await requireApiUser(request, ['gerencia', 'coordenador']);
+    await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const key = decodeURIComponent((await params).key).toUpperCase();
     if (!KEY.test(key)) return Response.json({ error: 'Chamado inválido.' }, { status: 400 });
     return Response.json({ mode: dispatchMode(), offer: await ticketOffer(key) });
@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
 
 export async function POST(request: Request, { params }: { params: Promise<{ key: string }> }) {
   try {
-    const user = await requireApiUser(request, ['gerencia', 'coordenador']);
+    const user = await requireApiUser(request, ['gerencia', 'coordenador', 'analista']);
     const key = decodeURIComponent((await params).key).toUpperCase();
     if (!KEY.test(key)) return Response.json({ error: 'Chamado inválido.' }, { status: 400 });
     const result = await offerTicket(key, user.email);

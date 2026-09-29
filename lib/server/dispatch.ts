@@ -199,16 +199,24 @@ const SYSTEM_SENDER = 'distribuicao@caju-os';
 
 async function teamEmails() {
   const users = await getDb().select({ email: appUsers.email }).from(appUsers)
-    .where(and(eq(appUsers.active, true), inArray(appUsers.role, ['gerencia', 'coordenador']))).all();
+    .where(and(eq(appUsers.active, true), inArray(appUsers.role, ['gerencia', 'coordenador', 'analista']))).all();
   return users.map((u) => u.email.toLowerCase());
 }
 
-/** Grupo "Distribuição" do chat do Caju OS; criado na primeira vez com gerência e coordenação. */
+/**
+ * Grupo "Distribuição" do chat do Caju OS, com gerência, coordenação e
+ * analistas; quem entrou nesses perfis depois é incluído no próximo aviso.
+ */
 async function dispatchChatGroup(emails: string[]) {
   const db = getDb();
-  const existing = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq(chatGroups.name, DISPATCH_GROUP_NAME)).get();
-  if (existing) return existing.id;
   const now = new Date().toISOString();
+  const existing = await db.select({ id: chatGroups.id }).from(chatGroups).where(eq(chatGroups.name, DISPATCH_GROUP_NAME)).get();
+  if (existing) {
+    if (emails.length) {
+      await db.insert(chatGroupMembers).values(emails.map((email) => ({ groupId: existing.id, email, memberRole: 'member' as const, joinedAt: now }))).onConflictDoNothing();
+    }
+    return existing.id;
+  }
   const created = await db.insert(chatGroups).values({ name: DISPATCH_GROUP_NAME, createdBy: SYSTEM_SENDER, createdAt: now, updatedAt: now }).returning({ id: chatGroups.id }).get();
   if (emails.length) {
     await db.insert(chatGroupMembers).values(emails.map((email, i) => ({ groupId: created.id, email, memberRole: i === 0 ? 'owner' as const : 'member' as const, joinedAt: now }))).onConflictDoNothing();
