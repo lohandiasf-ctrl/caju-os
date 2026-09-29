@@ -61,7 +61,10 @@ export async function POST(request: Request) {
       const semEmailAlheio = donoDoEmail !== undefined && donoDoEmail !== achado?.id ? { ...values, email: null } : values;
 
       if (achado && achado.id > 0) {
-        const { createdAt: _createdAt, ...update } = semEmailAlheio;
+        const { createdAt: _createdAt, approved, ...resto } = semEmailAlheio;
+        // A planilha só aprova: quem já está aprovado no Caju OS não perde a
+        // aprovação (é ela que libera as ofertas da distribuição).
+        const update = approved ? { ...resto, approved } : resto;
         // Campo vazio na planilha não apaga o que o cadastro já tem.
         atualizar.set(achado.id, { ...atualizar.get(achado.id), ...semNulos(update) } as Omit<Valores, 'createdAt'>);
         if (update.email) emailsEmUso.set(update.email, achado.id);
