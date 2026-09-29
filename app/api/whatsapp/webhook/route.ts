@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   const statements: D1PreparedStatement[] = [];
   // Toques no botão das ofertas e status de entrega: tratados depois de gravar.
   const clicks: { payload: string; from: string; statement: number }[] = [];
-  const deliveries: { wamid: string; status: string }[] = [];
+  const deliveries: { wamid: string; status: string; error?: string }[] = [];
   for (const entry of array(payload.entry)) for (const change of array(object(entry).changes)) {
     if (object(change).field !== 'messages') continue;
     const value = object(object(change).value);
@@ -58,7 +58,10 @@ export async function POST(request: Request) {
     }
     for (const status of array(value.statuses)) {
       const item = object(status); const wamid = string(item.id); if (!wamid) continue;
-      deliveries.push({ wamid, status: string(item.status) });
+      // Falha: a Meta diz o motivo (número sem WhatsApp, limite de marketing…).
+      const err = object(array(item.errors)[0]);
+      const reason = [err.code == null ? '' : String(err.code), string(object(err.error_data).details) || string(err.title)].filter(Boolean).join(' · ');
+      deliveries.push({ wamid, status: string(item.status), error: reason || undefined });
       statements.push(insertMessage(`status:${wamid}:${string(item.status)}`, phoneNumberId, string(item.recipient_id) || null, null, 'status', 'status', null, null, string(item.status) || null, timestamp(item.timestamp), now));
     }
   }
@@ -73,7 +76,7 @@ export async function POST(request: Request) {
     });
     if (reply) await replyToTechnician(click.from, reply);
   }
-  for (const d of deliveries) await recordDeliveryStatus(d.wamid, d.status).catch(() => undefined);
+  for (const d of deliveries) await recordDeliveryStatus(d.wamid, d.status, d.error).catch(() => undefined);
   return Response.json({ received: true });
 }
 

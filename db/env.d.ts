@@ -31,6 +31,7 @@ declare namespace Cloudflare {
     DISPATCH_MODE?: string;
     // Telefones (vírgula) que recebem as ofertas no modo allowlist.
     DISPATCH_ALLOWLIST?: string;
+    DISPATCH_BLOCKLIST?: string;
     // Non-official bridge (whatsapp-bridge/, Baileys) as an alternative to the
     // Meta Cloud API above — same phone number stays usable on the phone app.
     // When set, the send route uses the bridge instead of the Graph API.

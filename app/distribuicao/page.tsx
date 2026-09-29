@@ -18,7 +18,7 @@ type Offer = {
   id: number; status: 'held' | 'open' | 'assigned' | 'expired' | 'cancelled'; mode: string;
   storeKey: string; storeName: string | null; city: string | null;
   createdAt: string; expiresAt: string; assignedAt: string | null; assignedTo: string | null;
-  holdReasons: string[]; tickets: string[]; recipients: { name: string; status: string }[]; preview: string | null;
+  holdReasons: string[]; tickets: string[]; recipients: { name: string; status: string; reason?: string | null }[]; preview: string | null;
 };
 type Template = { name: string; status: string; category?: string; rejected_reason?: string };
 
@@ -230,7 +230,7 @@ export default function DistribuicaoPage() {
                         <p className="mb-1 text-xs font-semibold text-muted-foreground">{o.recipients.length ? `Destinatários (${o.recipients.length})` : 'Destinatários'}</p>
                         {o.recipients.length ? (
                           <ul className="rounded-xl border border-border text-sm">
-                            {o.recipients.map((r) => <li key={r.name} className="flex justify-between gap-2 border-b border-border px-3 py-2 last:border-0"><span>{r.name}</span><span className="text-xs text-muted-foreground">{DELIVERY[r.status] ?? r.status}</span></li>)}
+                            {o.recipients.map((r) => <li key={r.name} className="flex justify-between gap-2 border-b border-border px-3 py-2 last:border-0"><span>{r.name}</span><span className="text-xs text-muted-foreground">{DELIVERY[r.status] ?? r.status}{r.reason ? `: ${r.reason}` : ''}</span></li>)}
                           </ul>
                         ) : <p className="text-sm text-muted-foreground">Ninguém: a oferta está retida.</p>}
                       </div>

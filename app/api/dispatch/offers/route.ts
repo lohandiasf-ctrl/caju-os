@@ -19,7 +19,9 @@ export async function GET(request: Request) {
     const ids = offers.map((o) => o.id);
     const marks = ids.map(() => '?').join(',');
     const tickets = (await db.prepare(`SELECT offer_id, ticket_key, equipment, alleged_defect FROM dispatch_offer_tickets WHERE offer_id IN (${marks})`).bind(...ids).all<TicketRow>()).results;
-    const recipients = (await db.prepare(`SELECT r.offer_id, r.status, t.name FROM dispatch_recipients r JOIN technicians t ON t.id = r.technician_id WHERE r.offer_id IN (${marks})`).bind(...ids).all<{ offer_id: number; status: string; name: string }>()).results;
+    const recipients = (await db.prepare(`SELECT r.offer_id, r.status, t.name,
+      (SELECT e.details FROM dispatch_events e WHERE e.offer_id = r.offer_id AND e.technician_id = r.technician_id AND e.kind IN ('send_failed', 'delivery_failed') ORDER BY e.id DESC LIMIT 1) AS failure
+      FROM dispatch_recipients r JOIN technicians t ON t.id = r.technician_id WHERE r.offer_id IN (${marks})`).bind(...ids).all<{ offer_id: number; status: string; name: string; failure: string | null }>()).results;
     const version = await offerVersionInUse();
     const winners = new Map((await db.prepare(`SELECT id, name FROM technicians WHERE id IN (SELECT assigned_technician_id FROM dispatch_offers WHERE id IN (${marks}))`).bind(...ids).all<{ id: number; name: string }>()).results.map((t) => [t.id, t.name]));
 
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
           assignedTo: o.assigned_technician_id ? winners.get(o.assigned_technician_id) ?? null : null,
           holdReasons: reasons.map((r) => HOLD_LABEL[r] ?? r),
           tickets: own.map((t) => t.ticket_key),
-          recipients: recipients.filter((r) => r.offer_id === o.id).map((r) => ({ name: r.name, status: r.status })),
+          recipients: recipients.filter((r) => r.offer_id === o.id).map((r) => ({ name: r.name, status: r.status, reason: r.status === 'failed' && r.failure ? (JSON.parse(r.failure) as { error?: string }).error ?? null : null })),
           preview: own.length ? previewText(offerMessage(o.id, dispatchTickets, version)) : null,
         };
       }),
