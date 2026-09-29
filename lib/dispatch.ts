@@ -153,6 +153,12 @@ export function holdReasons(group: OfferGroup, eligibleCount: number): HoldReaso
   return [...reasons];
 }
 
+/**
+ * Valor para o técnico, igual em toda oferta (decisão da gerência em
+ * 2026-09-28). Texto fixo do template: mudar exige nova aprovação da Meta.
+ */
+export const VALUE_LINE = 'Seu ganho: a partir de R$ 70,00. Quanto mais atendimentos, maior o valor.';
+
 export const TEMPLATE_SINGLE = 'atendimento_disponivel';
 export const TEMPLATE_GROUP = 'atendimento_disponivel_grupo';
 export const ACCEPT_PAYLOAD_PREFIX = 'aceitar:';
@@ -190,8 +196,8 @@ export function previewText(message: TemplateMessage): string {
     ? `https://operacoes.cajutech.net/?ticket=${message.urlSuffix}`
     : `https://operacoes.cajutech.net/despacho/${message.urlSuffix}`;
   const body = message.name === TEMPLATE_SINGLE
-    ? `Chamado ${a}\n\nLoja: ${b}\n\nEquipamento: ${c}\n\nResumo do problema: "${d}"\n\nToque em Aceitar para ficar com este atendimento.`
-    : `Há ${a} chamados na loja ${b}.\n\nEquipamentos: ${c}\n\nToque em Aceitar para ficar com todos eles de uma vez. Os detalhes estão no link.`;
+    ? `Chamado ${a}\n\nLoja: ${b}\n\nEquipamento: ${c}\n\nResumo do problema: "${d}"\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com este atendimento.`
+    : `Há ${a} chamados na loja ${b}.\n\nEquipamentos: ${c}\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com todos eles de uma vez. Os detalhes estão no link.`;
   return `Atendimento disponível\n\n${body}\n\n[Aceitar atendimento] [${message.name === TEMPLATE_SINGLE ? 'Ver chamado' : 'Ver chamados'}: ${link}]`;
 }
 
@@ -225,7 +231,7 @@ export const DISPATCH_TEMPLATES = [
       { type: 'HEADER', format: 'TEXT', text: 'Atendimento disponível' },
       {
         type: 'BODY',
-        text: 'Chamado {{1}}\n\nLoja: {{2}}\n\nEquipamento: {{3}}\n\nResumo do problema: "{{4}}"\n\nToque em Aceitar para ficar com este atendimento.',
+        text: `Chamado {{1}}\n\nLoja: {{2}}\n\nEquipamento: {{3}}\n\nResumo do problema: "{{4}}"\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com este atendimento.`,
         example: { body_text: [['FSA-132506', 'L330 - Patos de Minas/MG', 'CPU - PDV 308', 'PC não liga']] },
       },
       { type: 'FOOTER', text: 'Caju Tech' },
@@ -246,7 +252,7 @@ export const DISPATCH_TEMPLATES = [
       { type: 'HEADER', format: 'TEXT', text: 'Atendimento disponível' },
       {
         type: 'BODY',
-        text: 'Há {{1}} chamados na loja {{2}}.\n\nEquipamentos: {{3}}\n\nToque em Aceitar para ficar com todos eles de uma vez. Os detalhes estão no link.',
+        text: `Há {{1}} chamados na loja {{2}}.\n\nEquipamentos: {{3}}\n\n${VALUE_LINE}\n\nToque em Aceitar para ficar com todos eles de uma vez. Os detalhes estão no link.`,
         example: { body_text: [['3', 'L497 - Candeias/BA', 'CPU, teclado e monitor']] },
       },
       { type: 'FOOTER', text: 'Caju Tech' },
