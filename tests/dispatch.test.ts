@@ -208,13 +208,15 @@ test('versões da oferta: em uso a de R$ 70 (Utilidade); a candidata é aviso se
   assert.match(aviso, /Valor: a combinar com a equipe/);
 });
 
-test('modelo em uso: aviso só quando os dois estão aprovados como Utilidade', async () => {
+test('modelo em uso: Utilidade primeiro; sem nenhuma, a preferida aprovada em Marketing', async () => {
   const { pickOfferVersion } = await import('../lib/dispatch.ts');
   const ok = (name: string, category = 'UTILITY') => ({ name, status: 'APPROVED', category });
   assert.equal(pickOfferVersion([]), 'r70');
   assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis')]), 'aviso');
   assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis'), ok('oferta_valor'), ok('oferta_valor_grupo')]), 'valor');
-  assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis', 'MARKETING')]), 'r70');
+  assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis', 'MARKETING')]), 'aviso', 'nenhuma em Utilidade: a aprovada em Marketing');
+  assert.equal(pickOfferVersion([ok('chamado_disponivel', 'MARKETING'), ok('chamados_disponiveis', 'MARKETING'), ok('oferta_valor', 'MARKETING'), ok('oferta_valor_grupo', 'MARKETING')]), 'valor');
+  assert.equal(pickOfferVersion([ok('oferta_valor', 'MARKETING'), ok('oferta_valor_grupo', 'MARKETING'), ok('chamado_disponivel'), ok('chamados_disponiveis')]), 'aviso', 'Utilidade vence');
   assert.equal(pickOfferVersion([ok('chamado_disponivel'), { name: 'chamados_disponiveis', status: 'PENDING', category: 'UTILITY' }]), 'r70');
   assert.equal(offerMessage(1, [ticket({ key: 'A' })], 'aviso').name, 'chamado_disponivel');
 });
