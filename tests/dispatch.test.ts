@@ -207,3 +207,13 @@ test('versões da oferta: em uso a de R$ 70 (Utilidade); a candidata é aviso se
   assert.doesNotMatch(aviso, /\p{Extended_Pictographic}|Agora é com você/u);
   assert.match(aviso, /Valor: a combinar com a equipe/);
 });
+
+test('modelo em uso: aviso só quando os dois estão aprovados como Utilidade', async () => {
+  const { pickOfferVersion } = await import('../lib/dispatch.ts');
+  const ok = (name: string, category = 'UTILITY') => ({ name, status: 'APPROVED', category });
+  assert.equal(pickOfferVersion([]), 'r70');
+  assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis')]), 'aviso');
+  assert.equal(pickOfferVersion([ok('chamado_disponivel'), ok('chamados_disponiveis', 'MARKETING')]), 'r70');
+  assert.equal(pickOfferVersion([ok('chamado_disponivel'), { name: 'chamados_disponiveis', status: 'PENDING', category: 'UTILITY' }]), 'r70');
+  assert.equal(offerMessage(1, [ticket({ key: 'A' })], 'aviso').name, 'chamado_disponivel');
+});

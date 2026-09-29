@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { HOLD_LABEL, offerMessage, previewText, type HoldReason } from '@/lib/dispatch';
-import { dispatchMode } from '@/lib/server/dispatch';
+import { dispatchMode, offerVersionInUse } from '@/lib/server/dispatch';
 import { requireApiUser } from '@/lib/server/firebase-auth';
 
 // Painel da distribuição: as ofertas mais recentes, com a mensagem exatamente
@@ -20,6 +20,7 @@ export async function GET(request: Request) {
     const marks = ids.map(() => '?').join(',');
     const tickets = (await db.prepare(`SELECT offer_id, ticket_key, equipment, alleged_defect FROM dispatch_offer_tickets WHERE offer_id IN (${marks})`).bind(...ids).all<TicketRow>()).results;
     const recipients = (await db.prepare(`SELECT r.offer_id, r.status, t.name FROM dispatch_recipients r JOIN technicians t ON t.id = r.technician_id WHERE r.offer_id IN (${marks})`).bind(...ids).all<{ offer_id: number; status: string; name: string }>()).results;
+    const version = await offerVersionInUse();
     const winners = new Map((await db.prepare(`SELECT id, name FROM technicians WHERE id IN (SELECT assigned_technician_id FROM dispatch_offers WHERE id IN (${marks}))`).bind(...ids).all<{ id: number; name: string }>()).results.map((t) => [t.id, t.name]));
 
     return Response.json({
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
           holdReasons: reasons.map((r) => HOLD_LABEL[r] ?? r),
           tickets: own.map((t) => t.ticket_key),
           recipients: recipients.filter((r) => r.offer_id === o.id).map((r) => ({ name: r.name, status: r.status })),
-          preview: own.length ? previewText(offerMessage(o.id, dispatchTickets)) : null,
+          preview: own.length ? previewText(offerMessage(o.id, dispatchTickets, version)) : null,
         };
       }),
     });
