@@ -66,13 +66,22 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket, openPhone }: { user
 
   // "Mensagem ao técnico" vindo de outra tela: carrega a lista e abre a conversa pedida.
   const lastOpen = useRef(0);
+  const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   useEffect(() => {
     if (!openPhone || openPhone.nonce === lastOpen.current) return;
     lastOpen.current = openPhone.nonce;
-    setFilter('all');
+    // Grupo só está na lista completa da aba Grupos; pessoa, na lista de conversas.
+    setFilter(openPhone.phone.endsWith('@g.us') ? 'groups' : 'all');
     setQuery('');
-    void load().then(() => setSelectedPhone(openPhone.phone));
-  }, [openPhone, load]);
+    setPendingPhone(openPhone.phone);
+  }, [openPhone]);
+  // Abre assim que a conversa pedida aparece na lista já carregada.
+  useEffect(() => {
+    if (pendingPhone && conversations.some((item) => item.contactPhone === pendingPhone)) {
+      setSelectedPhone(pendingPhone);
+      setPendingPhone(null);
+    }
+  }, [pendingPhone, conversations]);
 
   // Fixar/desafixar: aparece já no topo e volta atrás se o servidor recusar.
   async function togglePin(conversation: Conversation) {

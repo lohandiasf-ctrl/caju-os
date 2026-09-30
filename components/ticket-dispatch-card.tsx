@@ -6,7 +6,7 @@
 // dá para anexar outros chamados da mesma cidade e mudar o valor.
 
 import { useEffect, useState } from "react";
-import { Loader2, MessageCircle, Plus, Send, X } from "lucide-react";
+import { Loader2, MessageCircle, Plus, Send, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -42,6 +42,7 @@ export function TicketDispatchCard({ ticketKey, technician, user }: {
   const [sending, setSending] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [opening, setOpening] = useState(false);
+  const [openingGroup, setOpeningGroup] = useState(false);
   // Painel da oferta manual.
   const [open, setOpen] = useState(false);
   const [nearby, setNearby] = useState<{ city: string | null; tickets: Nearby[]; valueAllowed: boolean } | null>(null);
@@ -114,6 +115,22 @@ export function TicketDispatchCard({ ticketKey, technician, user }: {
     }
   }
 
+  // Grupo do chamado: o que tem o FSA no nome e a data mais recente no título.
+  async function openGroup() {
+    if (!user || openingGroup) return;
+    setOpeningGroup(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/whatsapp/ticket-group?ticketKey=${encodeURIComponent(ticketKey)}`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, cache: "no-store" });
+      const body = await response.json().catch(() => ({})) as { group?: { contactPhone: string } | null; error?: string };
+      if (!response.ok) { setMessage(body.error ?? "Não foi possível buscar o grupo."); return; }
+      if (!body.group) { setMessage(`Nenhum grupo do WhatsApp tem o ${ticketKey} no nome.`); return; }
+      window.dispatchEvent(new CustomEvent("caju:open-whatsapp", { detail: { phone: body.group.contactPhone } }));
+    } finally {
+      setOpeningGroup(false);
+    }
+  }
+
   async function send() {
     if (!user || sending) return;
     setSending(true);
@@ -158,6 +175,9 @@ export function TicketDispatchCard({ ticketKey, technician, user }: {
         </div>
         {data && !open && (
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={openingGroup} onClick={() => void openGroup()}>
+              {openingGroup ? <Loader2 className="animate-spin" /> : <Users />}Ir ao grupo do WhatsApp
+            </Button>
             {(offer?.assignedTo || technician) && (
               <Button size="sm" variant="outline" disabled={opening} onClick={() => void messageTechnician()}>
                 {opening ? <Loader2 className="animate-spin" /> : <MessageCircle />}Mensagem ao técnico
