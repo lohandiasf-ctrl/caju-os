@@ -9,9 +9,27 @@ export function ticketNumber(key: string): string | null {
   return key.trim().toUpperCase().match(/^[A-Z][A-Z0-9]*-(\d{3,})$/)?.[1] ?? null;
 }
 
-/** O nome cita o número inteiro, com ou sem "FSA-" (e não como pedaço de outro número). */
+/**
+ * Números citados entre parênteses, com a abreviação que os grupos usam:
+ * "(FSA-133516 | 133512 | FSA-133614 | 825 | 826)" cita 133516, 133512, 133614,
+ * 133825 e 133826 (o número curto herda o começo do último número inteiro).
+ */
+export function listedNumbers(name: string | null | undefined): string[] {
+  const inside = [...(name ?? '').matchAll(/\(([^()]*)\)/g)].map((m) => m[1]).join('|');
+  const out: string[] = [];
+  let last = '';
+  for (const token of inside.split(/[|,;+&/]|\be\b/i)) {
+    const digits = token.replace(/\D/g, '');
+    if (!digits || !/^\s*(?:FSA\s*-?\s*)?\d+\s*$/i.test(token)) continue;
+    if (digits.length >= 6) { out.push(digits); last = digits; }
+    else if (last && digits.length < last.length) out.push(last.slice(0, last.length - digits.length) + digits);
+  }
+  return out;
+}
+
+/** O nome cita o chamado: número inteiro (com ou sem "FSA-") ou abreviado na lista entre parênteses. */
 export function namesTicket(name: string | null | undefined, number: string): boolean {
-  return new RegExp(`(?<!\\d)${number}(?!\\d)`).test(name ?? '');
+  return new RegExp(`(?<!\\d)${number}(?!\\d)`).test(name ?? '') || listedNumbers(name).includes(number);
 }
 
 /** "30/09 às 13:00" → instante (ano mais próximo de `now`); sem data no título → null. */

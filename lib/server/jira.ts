@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { comentarioUp, dataDoComentario, extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
 import { JIRA_PHONE_PLACEHOLDER, scrubTechnicianPhone } from '@/lib/technician-data';
-import { splitCityUf } from '@/lib/whatsapp-group-name';
+import { cityWithUf } from '@/lib/jira-city';
 
 export { extrairRastreioDeTexto, formatarDataExcelOuIso } from '@/lib/assistant';
 
@@ -1000,26 +1000,6 @@ function toSummary(issue: JiraIssue): JiraIssueSummary {
     valueR$: customFieldText(fields.customfield_16195),
     ticketTotal: customFieldText(fields.customfield_12413),
   };
-}
-
-// The city text field has no UF; "Cidade / UF" (customfield_12317) is a
-// cascading select with both levels. Appends the UF when the text lacks one,
-// e.g. "Itabuna" -> "Itabuna - BA" (the WhatsApp group name needs it).
-function cityWithUf(city: string | null, cascade: unknown): string | null {
-  const parts = cascadingValues(cascade);
-  const uf = parts.find((part) => /^[A-Z]{2}$/.test(part.toUpperCase()) && part.length === 2)?.toUpperCase() ?? null;
-  const cascadeCity = parts.find((part) => part.length > 2) ?? null;
-  const base = city ?? cascadeCity;
-  if (!base) return null;
-  if (!uf || splitCityUf(base).uf) return base;
-  return `${base} - ${uf}`;
-}
-
-function cascadingValues(value: unknown): string[] {
-  if (!value || typeof value !== 'object') return [];
-  const node = value as { value?: unknown; child?: unknown };
-  const own = typeof node.value === 'string' && node.value.trim() ? [node.value.trim()] : [];
-  return [...own, ...cascadingValues(node.child)];
 }
 
 function customFieldText(value: unknown): string | null {

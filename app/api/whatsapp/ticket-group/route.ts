@@ -11,8 +11,9 @@ export async function GET(request: Request) {
     const key = new URL(request.url).searchParams.get('ticketKey') ?? '';
     const number = ticketNumber(key);
     if (!number) return Response.json({ error: 'Chamado inválido.' }, { status: 400 });
+    // Todos os grupos: o título pode abreviar o número ("FSA-133516 | 825"), então o filtro é em código.
     const rows = (await env.DB.prepare(`SELECT contact_phone AS contactPhone, contact_name AS contactName, last_message_at AS lastMessageAt
-      FROM whatsapp_conversations WHERE account = ?1 AND contact_phone LIKE '%@g.us' AND contact_name LIKE ?2`).bind(DEFAULT_ACCOUNT, `%${number}%`).all<GroupRow>()).results;
+      FROM whatsapp_conversations WHERE account = ?1 AND contact_phone LIKE '%@g.us' AND contact_name IS NOT NULL`).bind(DEFAULT_ACCOUNT).all<GroupRow>()).results;
     const groups = ticketGroups(rows, key);
     const best = groups[0];
     return Response.json({ group: best ? { contactPhone: best.contactPhone, name: best.contactName } : null, others: Math.max(0, groups.length - 1) }, { headers: { 'Cache-Control': 'private, no-store' } });
