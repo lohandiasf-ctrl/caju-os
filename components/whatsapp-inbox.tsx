@@ -31,7 +31,7 @@ const FILTERS: Array<[Filter, string]> = [['all', 'Conversas'], ['groups', 'Grup
 // A reconnect usually takes a few seconds; only warn if it drags on.
 const RECONNECT_GRACE_MS = 60_000;
 
-export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tickets: Ticket[]; onOpenTicket: (ticketId: string) => void }) {
+export function WhatsAppInbox({ user, tickets, onOpenTicket, openPhone }: { user: User; tickets: Ticket[]; onOpenTicket: (ticketId: string) => void; openPhone?: { phone: string; nonce: number } | null }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -63,6 +63,16 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket }: { user: User; tic
 
   // Mensagem nova aparece em até 5 s (antes, 15 s).
   useVisiblePolling(load, 5_000);
+
+  // "Mensagem ao técnico" vindo de outra tela: carrega a lista e abre a conversa pedida.
+  const lastOpen = useRef(0);
+  useEffect(() => {
+    if (!openPhone || openPhone.nonce === lastOpen.current) return;
+    lastOpen.current = openPhone.nonce;
+    setFilter('all');
+    setQuery('');
+    void load().then(() => setSelectedPhone(openPhone.phone));
+  }, [openPhone, load]);
 
   // Fixar/desafixar: aparece já no topo e volta atrás se o servidor recusar.
   async function togglePin(conversation: Conversation) {

@@ -376,6 +376,19 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [activeView, user]);
   const [selected, setSelected] = useState<Ticket | null>(null);
+  // "Mensagem ao técnico" (em qualquer tela): fecha o chamado e abre a conversa no WhatsApp interno.
+  const [openWhatsapp, setOpenWhatsapp] = useState<{ phone: string; nonce: number } | null>(null);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const phone = (event as CustomEvent<{ phone?: string }>).detail?.phone;
+      if (!phone) return;
+      setSelected(null);
+      setActiveView("whatsapp");
+      setOpenWhatsapp({ phone, nonce: Date.now() });
+    };
+    window.addEventListener("caju:open-whatsapp", open);
+    return () => window.removeEventListener("caju:open-whatsapp", open);
+  }, []);
   const [linkedSpare, setLinkedSpare] = useState<LinkedSpare | null>(null);
   const [ticketToShare, setTicketToShare] = useState<{
     id: string;
@@ -1695,6 +1708,7 @@ export default function Home() {
           {activeView === "whatsapp" && (
             <WhatsAppInbox
               user={user}
+              openPhone={openWhatsapp}
               tickets={tickets.map((ticket) => ({ id: ticket.id, title: ticket.title, store: ticket.store, city: ticket.city }))}
               onOpenTicket={(ticketId) => {
                 const ticket = tickets.find((item) => item.id === ticketId);
