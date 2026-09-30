@@ -44,7 +44,7 @@ test('agrupa FSAs da mesma loja e separa lojas diferentes da mesma cidade', () =
   assert.deepEqual(byStore['sem-loja:FSA-8'], ['FSA-8']);
 });
 
-test('técnicos elegíveis: aprovados, com WhatsApp, da cidade ou com ela nas extras', () => {
+test('técnicos elegíveis: aprovados, com WhatsApp e da mesma cidade (outras cidades do cadastro não contam)', () => {
   const techs = [
     tech({ id: 1 }),
     tech({ id: 2, approved: false }),
@@ -53,7 +53,8 @@ test('técnicos elegíveis: aprovados, com WhatsApp, da cidade ou com ela nas ex
     tech({ id: 5, baseCity: 'Patos de Minas', baseState: 'SP' }),
     tech({ id: 6, baseCity: 'patos de minas' }),
   ];
-  assert.deepEqual(eligibleTechnicians(techs, 'Patos de Minas', 'MG').map((t) => t.id), [1, 4, 6]);
+  assert.deepEqual(eligibleTechnicians(techs, 'Patos de Minas', 'MG').map((t) => t.id), [1, 6]);
+  assert.deepEqual(eligibleTechnicians(techs, 'Araxá', 'MG'), [], 'cidade só nas extras: ninguém');
 });
 
 test('telefone no formato do WhatsApp e comparação sem o nono dígito', () => {

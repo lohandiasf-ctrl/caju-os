@@ -108,8 +108,11 @@ export type DispatchTechnician = {
 };
 
 /**
- * Todos os técnicos cadastrados na cidade (requisito 2), com cadastro aprovado
- * e telefone válido para WhatsApp. Cidade base ou listada em "outras cidades".
+ * Só os técnicos da MESMA cidade do chamado (a cidade base do cadastro), com
+ * cadastro aprovado e telefone válido para WhatsApp. "Outras cidades" do
+ * cadastro não contam: um técnico de Timbaúba com dezenas de cidades listadas
+ * recebia chamados de todas elas. Sem técnico na cidade, a oferta fica retida
+ * e a equipe é avisada (sem_tecnico); nada é enviado a cidade vizinha.
  * O `status` (online/ocupado) não entra: ninguém o mantém atualizado.
  */
 export function eligibleTechnicians(techs: DispatchTechnician[], city: string, uf: string | null): DispatchTechnician[] {
@@ -117,9 +120,7 @@ export function eligibleTechnicians(techs: DispatchTechnician[], city: string, u
   if (!target) return [];
   return techs.filter((t) => {
     if (!t.approved || !whatsappPhone(t.phone)) return false;
-    const sameBase = fold(t.baseCity) === target && (!uf || !t.baseState || t.baseState.trim().toUpperCase() === uf);
-    const extras = (t.extraCities ?? '').split(/[;,\n|]+/).map((c) => fold(splitCity(c).city)).filter(Boolean);
-    return sameBase || extras.includes(target);
+    return fold(t.baseCity) === target && (!uf || !t.baseState || t.baseState.trim().toUpperCase() === uf);
   });
 }
 
@@ -398,6 +399,15 @@ export function testOfferTicket(offerId: number, city: string): DispatchTicket {
 /** Aviso de teste: igual ao de verdade, marcado para ninguém agir nele. */
 export function testNotice(notice: { title: string; body: string; chat: string }) {
   return { title: `Teste · ${notice.title}`, body: notice.body, chat: `[Teste] ${notice.chat}` };
+}
+
+/** Sem técnico na cidade: a oferta fica retida e só a equipe é avisada (nada vai a cidade vizinha). */
+export function noTechnicianNotice(tickets: string[], storeKey: string, city: string) {
+  return {
+    title: `Sem técnico em ${city} · ${tickets.join(', ')}`,
+    body: `Nenhum técnico cadastrado em ${city} para ${storeKey}. A oferta ficou retida: agende manualmente ou cadastre um técnico na cidade.`,
+    chat: `⚠️ ${tickets.join(', ')} (${storeKey}) é de ${city} e não há técnico cadastrado lá. Nada foi enviado aos técnicos. Agende manualmente ou cadastre um técnico na cidade.`,
+  };
 }
 
 export function unansweredNotice(tickets: string[], storeKey: string) {

@@ -6,7 +6,7 @@ import {
   ACCEPT_OFFER_SQL, ACCEPT_REPLY_EXPIRED, ACCEPT_REPLY_TAKEN, ACCEPT_REPLY_WON, acceptedNotice, acceptPayloadOffer, allowedToReceive,
   DECLINE_REPLY, DECLINE_REPLY_ALREADY_WON, declinePayloadOffer, dispatchModeOf, eligibleTechnicians, equipmentLine, groupByStore, holdReasons, isTestOffer, LOOKBACK_HOURS, OFFER_HOURS, offerMessage,
   parseAllowlist, samePhone, splitCity, storeKeyOf, technicianDataBlock, templateSendPayload, TEST_MODE, testNotice, testOfferTicket,
-  unansweredNotice, whatsappPhone,
+  noTechnicianNotice, unansweredNotice, whatsappPhone,
   ACTIVE_OFFER_VERSION, HOLD_LABEL, offerValue, pickOfferVersion, sameCity, versionHasValue, type HoldReason, type DispatchMode, type DispatchTicket, type OfferGroup, type OfferVersionKey,
 } from '@/lib/dispatch';
 import { getJiraIssue, searchJiraIssues, type JiraIssueSummary } from '@/lib/server/jira';
@@ -564,6 +564,10 @@ async function createOffer(group: OfferGroup, techs: Parameters<typeof eligibleT
   } catch {
     await db.prepare(`DELETE FROM dispatch_offers WHERE id = ?1`).bind(offer.id).run();
     return null;
+  }
+  // Sem técnico na cidade: avisa a equipe no sistema (push e chat), sem mandar mensagem a ninguém.
+  if (reasons.includes('sem_tecnico') && mode !== 'dry_run') {
+    await notifyTeam(noTechnicianNotice(group.tickets.map((t) => t.key), storeKeyOf(first.storeCode) ?? group.storeKey, city), offer.id, group.tickets[0].key);
   }
   return { id: offer.id, status };
 }
