@@ -12,6 +12,7 @@ import {
 import { getJiraIssue, searchJiraIssues, type JiraIssueSummary } from '@/lib/server/jira';
 import { enqueueJiraSync, processJiraSyncJobs } from '@/lib/server/jira-sync';
 import { sendPushToEmails } from '@/lib/server/push';
+import { bridgeConfigured, bridgeFetch } from '@/lib/server/whatsapp-bridge';
 import { listTemplateStatuses, sendTemplateMessage, sendTextMessage } from '@/lib/server/whatsapp-cloud';
 
 // Lado do servidor da distribuição (lib/dispatch.ts): acha os chamados novos,
@@ -246,6 +247,23 @@ async function notifyTeam(notice: { title: string; body: string; chat: string },
   }
 }
 
+/**
+ * Aviso do aceite no WhatsApp dos analistas (DISPATCH_ANALYST_PHONES, números
+ * separados por vírgula). Sai pelo número da caixa compartilhada como mensagem
+ * comum, então não depende de template nem de janela de 24 h. Nunca lança.
+ */
+async function notifyAnalystsWhatsapp(text: string) {
+  try {
+    const phones = parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ANALYST_PHONES);
+    if (!phones.length || !bridgeConfigured()) return;
+    await Promise.all(phones.map((to) => bridgeFetch('/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, text }),
+    }).catch(() => null)));
+  } catch (error) {
+    console.error('dispatch: aviso aos analistas no WhatsApp falhou', error instanceof Error ? error.message : 'erro');
+  }
+}
+
 // ─── Clique em "Aceitar atendimento" ───────────────────
 /**
  * Clique no botão do template, vindo do webhook. Identifica o técnico pelo
@@ -276,6 +294,7 @@ export async function handleOfferClick(payload: string | null, fromPhone: string
     // Teste: o chamado é fictício. Só marca o aceite e avisa a equipe.
     await db.prepare(`INSERT INTO dispatch_events (offer_id, technician_id, kind, created_at) VALUES (?1, ?2, 'linked', ?3)`).bind(offerId, me.technician_id, new Date().toISOString()).run();
     await notifyTeam(testNotice(acceptedNotice(keys, offer?.store_key ?? '', me.name)), offerId);
+    await notifyAnalystsWhatsapp(testNotice(acceptedNotice(keys, offer?.store_key ?? '', me.name)).chat);
   } else if (!already) {
     const now = new Date().toISOString();
     await db.batch([
@@ -289,6 +308,7 @@ export async function handleOfferClick(payload: string | null, fromPhone: string
     }
     await processJiraSyncJobs(Math.max(1, keys.length)).catch(() => []);
     await notifyTeam(acceptedNotice(keys, offer?.store_key ?? '', me.name), offerId, keys[0]);
+    await notifyAnalystsWhatsapp(acceptedNotice(keys, offer?.store_key ?? '', me.name).chat);
   }
   return ACCEPT_REPLY_WON;
 }
