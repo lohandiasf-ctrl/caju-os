@@ -30,7 +30,7 @@ export type AuthorizedUser = {
 let jwksCache: { expiresAt: number; keys: FirebaseJwk[] } | null = null;
 
 export async function requireApiUser(request: Request, allowedRoles?: UserRole[]): Promise<AuthorizedUser> {
-  enforceRateLimit(request, 'api-auth', { limit: 120, windowMs: 60_000 });
+  enforceRateLimit(request, 'api-auth', { limit: 900, windowMs: 60_000 });
   const token = bearerToken(request);
   if (!token) throw jsonError('Autenticação necessária.', 401);
 
@@ -56,7 +56,7 @@ export async function requireApiUser(request: Request, allowedRoles?: UserRole[]
 
   if (!record || !record.active) throw jsonError('Usuário sem acesso ao sistema.', 403);
   if (normalizedEmail !== record.email.toLowerCase()) throw jsonError('Identidade do usuário não confere.', 403);
-  enforceRateLimit(request, `api-user:${record.email}:${request.method}`, { limit: request.method === 'GET' ? 300 : 90, windowMs: 60_000 });
+  enforceRateLimit(request, `api-user:${record.email}:${request.method}`, { limit: request.method === 'GET' ? 600 : 120, windowMs: 60_000 });
   if (allowedRoles && !allowedRoles.includes(record.role)) {
     logSecurityEvent({ request, user: record, action: 'role_denied', outcome: 'denied', details: { allowedRoles, actualRole: record.role } });
     throw jsonError('Perfil sem permissão para esta ação.', 403);
