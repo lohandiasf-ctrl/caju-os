@@ -4,9 +4,8 @@ import { cityWithUf } from '../lib/jira-city.ts';
 
 const select = (city: string, uf: string) => ({ value: city, child: { value: uf } });
 
-test('o select Cidade / UF vale mais que o texto livre', () => {
-  // FSA-133833: o texto trazia o nome da rua.
-  assert.equal(cityWithUf('Gandu', select('Jaboatão dos Guararapes', 'PE')), 'Jaboatão dos Guararapes - PE');
+test('o texto da cidade vale; o select só completa a UF', () => {
+  assert.equal(cityWithUf('Gandu', select('Jaboatão dos Guararapes', 'PE')), 'Gandu - PE');
 });
 
 test('sem select, vale o texto; com UF no texto, não repete', () => {
