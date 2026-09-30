@@ -6,7 +6,7 @@
 // dá para anexar outros chamados da mesma cidade e mudar o valor.
 
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Send, X } from "lucide-react";
+import { Loader2, MessageCircle, Plus, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -41,6 +41,7 @@ export function TicketDispatchCard({ ticketKey, technician, user }: {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [opening, setOpening] = useState(false);
   // Painel da oferta manual.
   const [open, setOpen] = useState(false);
   const [nearby, setNearby] = useState<{ city: string | null; tickets: Nearby[]; valueAllowed: boolean } | null>(null);
@@ -94,6 +95,25 @@ export function TicketDispatchCard({ ticketKey, technician, user }: {
     setMessage("");
   }
 
+  // Abre a conversa com o técnico no WhatsApp interno, pelo telefone do cadastro.
+  async function messageTechnician() {
+    if (!user || opening) return;
+    setOpening(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/whatsapp/technician-chat", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketKey, name: offer?.assignedTo ?? technician ?? undefined }),
+      });
+      const body = await response.json().catch(() => ({})) as { contactPhone?: string; error?: string };
+      if (!response.ok || !body.contactPhone) { setMessage(body.error ?? "Não foi possível abrir a conversa com o técnico."); return; }
+      window.dispatchEvent(new CustomEvent("caju:open-whatsapp", { detail: { phone: body.contactPhone } }));
+    } finally {
+      setOpening(false);
+    }
+  }
+
   async function send() {
     if (!user || sending) return;
     setSending(true);
@@ -137,9 +157,16 @@ export function TicketDispatchCard({ ticketKey, technician, user }: {
           ) : <p className="mt-1 text-sm text-muted-foreground">Este chamado ainda não foi oferecido aos técnicos.</p>}
         </div>
         {data && !open && (
-          <Button size="sm" variant="outline" onClick={() => void openPanel()}>
-            <Send />{again ? "Reenviar aos técnicos" : "Oferecer aos técnicos"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {(offer?.assignedTo || technician) && (
+              <Button size="sm" variant="outline" disabled={opening} onClick={() => void messageTechnician()}>
+                {opening ? <Loader2 className="animate-spin" /> : <MessageCircle />}Mensagem ao técnico
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => void openPanel()}>
+              <Send />{again ? "Reenviar aos técnicos" : "Oferecer aos técnicos"}
+            </Button>
+          </div>
         )}
       </div>
 
