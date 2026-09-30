@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { namesTicket, ticketGroups, ticketNumber, titleDate } from '../lib/whatsapp-ticket-group.ts';
+import { listedNumbers, namesTicket, ticketGroups, ticketNumber, titleDate } from '../lib/whatsapp-ticket-group.ts';
 
 const now = new Date(2026, 8, 30, 15, 0);
 const g = (id: string, name: string, last = '2026-09-30T10:00:00Z') => ({ contactPhone: `${id}@g.us`, contactName: name, lastMessageAt: last });
@@ -11,6 +11,15 @@ test('número do chamado e menção no nome', () => {
   assert.ok(namesTicket('30/09 - PRNM/RN (FSA-133639 | FSA-133637)', '133639'));
   assert.ok(namesTicket('L5082 (FSA-133516 | 133512 | FSA-133614)', '133512'), 'sem o prefixo FSA');
   assert.ok(!namesTicket('L1 (FSA-1336390)', '133639'), 'não casa pedaço de outro número');
+});
+
+test('números abreviados na lista do título', () => {
+  const name = '30/09 às 11:00 - JPNH/MG - AMERICANAS L5082 (FSA-133516 | 133512 | FSA-133614 | 825 | 826 | 827)';
+  for (const n of ['133516', '133512', '133614', '133825', '133826', '133827']) assert.ok(namesTicket(name, n), n);
+  assert.ok(!namesTicket(name, '133828'));
+  assert.ok(!namesTicket(name, '135082'), 'L5082 fora dos parênteses não conta como abreviação');
+  assert.deepEqual(listedNumbers('X (FSA-133639 | FSA-133637)'), ['133639', '133637']);
+  assert.deepEqual(listedNumbers('X (FSA-100100 | 5 | 12)'), ['100100', '100105', '100112']);
 });
 
 test('data do título, com hora e sem ano', () => {
