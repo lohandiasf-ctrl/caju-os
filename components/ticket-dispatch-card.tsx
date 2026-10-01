@@ -243,7 +243,7 @@ export function TicketDispatchCard({ ticketKey, technician, user }: {
             </div>
           </div>
 
-          {technician && <p className="text-xs text-muted-foreground">{technician} continua no chamado até outro técnico aceitar; quem aceitar passa a ficar com ele no Caju OS e no Jira.</p>}
+          {technician && <p className="text-xs text-muted-foreground">Se {technician} aceitou esta oferta pelo WhatsApp, ele sai do chamado (Caju OS e Jira) até outro aceitar e não recebe a nova oferta.</p>}
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => void send()} disabled={sending || (customValue && !value.trim())}>
               {sending ? <Loader2 className="animate-spin" /> : <Send />}Enviar oferta{extra.length ? ` (${extra.length + 1} chamados)` : ""}
