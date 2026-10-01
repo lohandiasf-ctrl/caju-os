@@ -415,7 +415,8 @@ export async function resendOffer(offerId: number, by: string, now = new Date())
     id: technicians.id, name: technicians.name, phone: technicians.phone, approved: technicians.approved,
     baseCity: technicians.baseCity, baseState: technicians.baseState, extraCities: technicians.extraCities,
   }).from(technicians).all()).filter(notBlocked);
-  const created = await createOffer({ storeKey: storeKeyOf(tickets[0].storeCode) ?? `sem-loja:${tickets[0].key}`, tickets }, techs, mode, now, offer.value_text);
+  const before = new Set(await previousAssignees(keys));
+  const created = await createOffer({ storeKey: storeKeyOf(tickets[0].storeCode) ?? `sem-loja:${tickets[0].key}`, tickets }, techs.filter((t) => !before.has(t.id)), mode, now, offer.value_text);
   if (!created) return { error: 'Não foi possível criar a nova oferta.' };
   if (created.status === 'open' && mode !== 'dry_run') {
     await sendOffer(created.id, tickets, mode, parseAllowlist((env as unknown as Record<string, string | undefined>).DISPATCH_ALLOWLIST));
@@ -445,6 +446,39 @@ export async function ticketOffer(key: string): Promise<TicketOfferInfo> {
   };
 }
 
+/** Técnicos que já aceitaram algum destes chamados (não recebem a oferta de novo). */
+async function previousAssignees(keys: string[]): Promise<number[]> {
+  if (!keys.length) return [];
+  const marks = keys.map((_, i) => `?${i + 1}`).join(', ');
+  const rows = (await env.DB.prepare(`SELECT DISTINCT o.assigned_technician_id AS id FROM dispatch_offers o JOIN dispatch_offer_tickets t ON t.offer_id = o.id
+    WHERE t.ticket_key IN (${marks}) AND o.assigned_technician_id IS NOT NULL AND o.mode <> 'test'`).bind(...keys).all<{ id: number }>()).results;
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Reoferta de chamado já aceito: o técnico que aceitou sai do chamado, no Caju OS
+ * e no Jira, até outro aceitar. Só limpa quando o vínculo do Caju OS ainda é de
+ * quem aceitou: se alguém da equipe já trocou o técnico à mão, isso fica como está.
+ */
+async function clearAcceptedTechnician(keys: string[], by: string, now: Date) {
+  const db = env.DB;
+  const iso = now.toISOString();
+  for (const key of keys) {
+    const assigned = await db.prepare(`SELECT o.id AS offer_id, o.assigned_technician_id AS tech_id FROM dispatch_offer_tickets t JOIN dispatch_offers o ON o.id = t.offer_id
+      WHERE t.ticket_key = ?1 AND t.active = 1 AND o.status = 'assigned' AND o.mode <> 'test' ORDER BY o.id DESC LIMIT 1`).bind(key).first<{ offer_id: number; tech_id: number }>();
+    if (!assigned) continue;
+    const workflow = await db.prepare(`SELECT technician_id FROM operational_workflows WHERE ticket_key = ?1`).bind(key).first<{ technician_id: number | null }>();
+    if (workflow?.technician_id !== assigned.tech_id) continue;
+    await db.batch([
+      db.prepare(`UPDATE operational_workflows SET technician_id = NULL, updated_at = ?2 WHERE ticket_key = ?1`).bind(key, iso),
+      db.prepare(`INSERT INTO dispatch_events (offer_id, technician_id, kind, details, created_at) VALUES (?1, ?2, 'technician_cleared', ?3, ?4)`)
+        .bind(assigned.offer_id, assigned.tech_id, JSON.stringify({ by, ticket: key }), iso),
+    ]);
+    await enqueueJiraSync(key, 'update', { technicianData: '' }, by, `dispatch-clear:${assigned.offer_id}:${key}:${now.getTime()}`).catch(() => undefined);
+  }
+  await processJiraSyncJobs(Math.max(1, keys.length)).catch(() => []);
+}
+
 /** Tira os chamados de qualquer oferta valendo; oferta que fica sem chamado e não foi aceita é cancelada. */
 async function releaseTickets(keys: string[], by: string, now: Date) {
   const db = env.DB;
@@ -469,8 +503,9 @@ export type OfferTicketOptions = { extra?: string[]; value?: string | null };
  * técnico em campo). Sem anexos nem valor: reenvia a oferta que ainda vale
  * (resendOffer) ou, se ela já foi aceita, libera este chamado e cria outra.
  * Com chamados anexados (só da mesma cidade) ou valor digitado: tira todos de
- * qualquer oferta valendo e cria uma oferta única. O técnico atual continua
- * até outro aceitar; quem aceitar passa a ficar com os chamados.
+ * qualquer oferta valendo e cria uma oferta única. Se o chamado já tinha sido
+ * aceito, o técnico que aceitou é tirado do chamado (Caju OS e Jira) até outro
+ * aceitar e não recebe a nova oferta; quem aceitar passa a ficar com os chamados.
  */
 export async function offerTicket(key: string, by: string, now = new Date(), options: OfferTicketOptions = {}): Promise<ResendResult> {
   const db = env.DB;
@@ -499,11 +534,14 @@ export async function offerTicket(key: string, by: string, now = new Date(), opt
   const other = tickets.find((t) => !sameCity(t.city, tickets[0].city));
   if (other) return { error: `${other.key} é de ${other.city ?? 'cidade não informada'}. Só dá para anexar chamados de ${tickets[0].city ?? 'mesma cidade'}.` };
 
+  // Chamado já aceito por outro técnico: ele sai do chamado (Caju OS e Jira) e não recebe esta oferta.
+  const before = new Set(await previousAssignees(keys));
+  await clearAcceptedTechnician(keys, by, now);
   await releaseTickets(keys, by, now);
   const techs = (await getDb().select({
     id: technicians.id, name: technicians.name, phone: technicians.phone, approved: technicians.approved,
     baseCity: technicians.baseCity, baseState: technicians.baseState, extraCities: technicians.extraCities,
-  }).from(technicians).all()).filter(notBlocked);
+  }).from(technicians).all()).filter(notBlocked).filter((t) => !before.has(t.id));
   const created = await createOffer({ storeKey: storeKeyOf(tickets[0].storeCode) ?? `sem-loja:${tickets[0].key}`, tickets }, techs, mode, now, value);
   if (!created) return { error: 'Não foi possível criar a oferta. Tente de novo.' };
   await db.prepare(`INSERT INTO dispatch_events (offer_id, kind, details, created_at) VALUES (?1, 'manual', ?2, ?3)`).bind(created.id, JSON.stringify({ by, tickets: keys, value }), now.toISOString()).run();

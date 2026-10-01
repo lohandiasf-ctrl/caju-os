@@ -499,7 +499,9 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
       customfield_12316: technician.name, customfield_16237: JIRA_PHONE_PLACEHOLDER, customfield_11956: technician.rg,
       customfield_16238: technician.cpf,
     };
-    for (const [id, value] of Object.entries(individualFields)) if (value) fields[id] = value;
+    // Bloco de técnico vazio = limpar o técnico (reoferta do chamado): apaga também os campos individuais.
+    const clearing = cleanJiraValue(input.technicianData) === null;
+    for (const [id, value] of Object.entries(individualFields)) if (value || clearing) fields[id] = clearing ? null : value;
   }
   if (['identifiedProblem', 'testsPerformed', 'partToReplace'].some((name) => input[name] !== undefined)) {
     const id = ids.get(normalizeText('Resumo do defeito'));
