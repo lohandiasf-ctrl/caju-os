@@ -1,3 +1,7 @@
+import { and, eq, inArray } from 'drizzle-orm';
+import { getDb } from '@/db';
+import { appUsers } from '@/db/schema';
+import { sendPushToEmails } from '@/lib/server/push';
 import type { Solicitation } from '@/lib/solicitations';
 
 export type SolicitationRow = {
@@ -16,3 +20,21 @@ export function toSolicitation(r: SolicitationRow): Solicitation {
   };
 }
 
+
+/** Avisa a equipe (gerência, coordenação e analistas, menos quem pediu) de uma solicitação nova. Nunca lança. */
+export async function notifyNewSolicitation(id: number, s: { client: string; store: string | null; city: string; uf: string | null; description: string; priority: string }, requesterEmail: string) {
+  try {
+    const users = await getDb().select({ email: appUsers.email }).from(appUsers)
+      .where(and(eq(appUsers.active, true), inArray(appUsers.role, ['gerencia', 'coordenador', 'analista']))).all();
+    const emails = users.map((u) => u.email.toLowerCase()).filter((email) => email !== requesterEmail.toLowerCase());
+    const place = [s.city, s.uf].filter(Boolean).join('/');
+    const text = s.description.replace(/\s+/g, ' ').trim();
+    await sendPushToEmails(emails, {
+      title: `${s.priority === 'alta' ? 'Solicitação urgente' : 'Nova solicitação'} · ${s.client}${s.store ? ` ${s.store}` : ''}`,
+      body: `${place} — ${text.length > 110 ? `${text.slice(0, 109)}…` : text}`,
+      data: { kind: 'solicitation', url: '/solicitacoes', solicitationId: String(id) },
+    }, 'dispatch');
+  } catch (error) {
+    console.error('solicitação: aviso à equipe falhou', error instanceof Error ? error.message : 'erro');
+  }
+}
