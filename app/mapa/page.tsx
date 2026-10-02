@@ -7,7 +7,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
-  Car,
   LayoutDashboard,
   Map,
   MapPin,
@@ -17,7 +16,6 @@ import {
   Phone,
   Search,
   Settings,
-  ShieldCheck,
   Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +59,12 @@ type Technician = {
   lng: number;
   onboarded: boolean;
   vehicle: boolean;
+};
+// "Pernambuco" digitado na busca vale como o filtro de estado PE.
+const STATE_NAMES: Record<string, string> = {
+  acre: "AC", alagoas: "AL", amapa: "AP", amazonas: "AM", bahia: "BA", ceara: "CE", "distrito federal": "DF", "espirito santo": "ES", goias: "GO", maranhao: "MA",
+  "mato grosso": "MT", "mato grosso do sul": "MS", "minas gerais": "MG", para: "PA", paraiba: "PB", parana: "PR", pernambuco: "PE", piaui: "PI",
+  "rio de janeiro": "RJ", "rio grande do norte": "RN", "rio grande do sul": "RS", rondonia: "RO", roraima: "RR", "santa catarina": "SC", "sao paulo": "SP", sergipe: "SE", tocantins: "TO",
 };
 export default function Page() {
   const el = useRef<HTMLDivElement>(null),
@@ -149,30 +153,36 @@ export default function Page() {
     ],
     [liveData, roster, rosterReady],
   );
+  const qUf = useMemo(() => {
+    const needle = normalize(q);
+    if (needle.length < 4) return null;
+    return Object.entries(STATE_NAMES).find(([name]) => name === needle || name.startsWith(needle))?.[1] ?? null;
+  }, [q]);
+  const activeUf = uf !== "Todos" ? uf : qUf ?? "Todos";
   const show = useMemo(
     () =>
       liveData.filter(
         (x) =>
-          (uf === "Todos" || x.uf === uf) &&
-          (!q ||
+          (activeUf === "Todos" || x.uf === activeUf) &&
+          (!q || qUf ||
             [x.city, x.uf, x.address].some((v) =>
               v.toLowerCase().includes(q.toLowerCase()),
             )),
       ),
-    [liveData, q, uf],
+    [liveData, q, activeUf, qUf],
   );
   const targetCity = useMemo(() => {
     const needle = normalize(q);
-    if (needle.length < 2) return null;
+    if (needle.length < 2 || qUf) return null;
     const candidates = liveData.filter((city) => normalize(city.city).includes(needle) && (uf === 'Todos' || city.uf === uf));
     return candidates.find((city) => normalize(city.city) === needle) ?? candidates[0] ?? null;
-  }, [liveData, q, uf]);
+  }, [liveData, q, uf, qUf]);
   // A cidade buscada pode não estar em technician-map.json, que só lista as 425
   // com técnico. Sem isso, procurar por uma cidade descoberta não devolvia nada
   // — nem sequer os técnicos vizinhos. Aqui ela é geocodificada sob demanda.
   useEffect(() => {
     const term = q.trim();
-    if (targetCity || term.length < 3) { setGeo(null); return; }
+    if (targetCity || term.length < 3 || qUf) { setGeo(null); return; }
     let active = true;
     const timer = setTimeout(() => {
       setGeoLoading(true);
@@ -196,7 +206,7 @@ export default function Page() {
       })();
     }, 500);
     return () => { active = false; clearTimeout(timer); };
-  }, [q, targetCity]);
+  }, [q, targetCity, qUf]);
 
   // O diretório estático do mapa não tem telefone nem especialidade; o cadastro
   // completo vem do banco e é cruzado por nome + cidade.
@@ -327,19 +337,13 @@ export default function Page() {
   }, [ready, mapEnabled, show, origin, originLabel, fallbackTechnicians]);
   const filteredRoster = rosterReady
     ? roster.filter((technician) => {
-        const matchesState = uf === 'Todos' || technician.state?.toUpperCase() === uf;
+        const matchesState = activeUf === 'Todos' || technician.state?.toUpperCase() === activeUf;
         const needle = normalize(q);
-        const matchesQuery = !needle || [technician.city, technician.state].some((value) => normalize(value ?? '').includes(needle));
+        const matchesQuery = !needle || Boolean(qUf) || [technician.city, technician.state].some((value) => normalize(value ?? '').includes(needle));
         return matchesState && matchesQuery;
       })
     : [];
   const total = rosterReady ? filteredRoster.length : show.reduce((sum, city) => sum + city.technicians, 0);
-  const onboard = rosterReady
-    ? filteredRoster.filter((technician) => technician.approved || positive(technician.onboardingCompleted)).length
-    : show.reduce((sum, city) => sum + city.onboarded, 0);
-  const vehicles = rosterReady
-    ? filteredRoster.filter((technician) => positive(technician.hasVehicle)).length
-    : show.reduce((sum, city) => sum + city.vehicles, 0);
   const displayedCities = rosterReady
     ? new Set(filteredRoster.filter((item) => item.city && item.state).map((item) => `${normalize(item.city ?? '')}|${item.state}`)).size
     : show.length;
@@ -411,16 +415,13 @@ export default function Page() {
               </select>
             </div>
           </div>
-          {/* Técnicos é o número principal; onboarding e veículo são lidos
-              como fatia desse total. */}
+          {/* Só o que ajuda a decidir: quantos técnicos o filtro mostra e em quantas cidades. */}
           <MetricStrip
             className="mt-5"
             label="Resumo do mapa"
             items={[
-              { label: "Técnicos vinculados", value: total, note: `em ${displayedCities} ${displayedCities === 1 ? "cidade exibida" : "cidades exibidas"}`, icon: Users },
-              { label: "Onboarding concluído", value: onboard, note: total ? `${Math.round((onboard / total) * 100)}% dos técnicos` : "Sem técnicos no filtro", icon: ShieldCheck },
-              { label: "Com veículo", value: vehicles, note: total ? `${Math.round((vehicles / total) * 100)}% dos técnicos` : "Sem técnicos no filtro", icon: Car },
-              { label: "Cidades exibidas", value: displayedCities, note: `de ${directoryCities} no banco`, icon: MapPin },
+              { label: "Técnicos no filtro", value: total, note: total ? "cadastrados e ativos no mapa" : "Sem técnicos no filtro", icon: Users },
+              { label: "Cidades atendidas", value: displayedCities, note: `de ${directoryCities} cidades com técnico`, icon: MapPin },
             ]}
           />
           {geoLoading && !origin && (
