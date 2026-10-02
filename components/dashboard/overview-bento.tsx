@@ -13,6 +13,9 @@ import {
   dailyActivity, daysAgo, deltaPercent, jiraSla, parseSnapshotStore, percent, rollSnapshot, slaOnTimePercent, statusCounts,
   type DashboardTicket, type KpiSnapshotStore, type KpiValues,
 } from '@/lib/dashboard-metrics';
+import { ManagementSummary } from '@/components/dashboard/management-summary';
+import { auth } from '@/lib/firebase';
+import { compareTarget, pickRow, type CompareChoice, type KpiRow } from '@/lib/kpi-history';
 import { canUseNavItem } from '@/lib/navigation';
 import type { UserRole } from '@/lib/permissions';
 import { matchesQueueFilters, NO_QUEUE_FILTERS, PRIORITY_LABEL, PRIORITY_STEPS, queueFiltersHref, STALE_DAYS_MAX, staleLabel, type QueueFilters, type TicketPriority } from '@/lib/queue-filters';
@@ -98,20 +101,60 @@ export function OverviewBento<T extends BentoTicket>({ tickets, loading, error, 
     if (!snapshot) return;
     try { window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot)); } catch { /* sem storage */ }
   }, [snapshot]);
-  const previous = snapshot?.previous?.values;
+  // Comparação com o período escolhido (série diária gravada pelo servidor).
+  const [choice, setChoice] = useState<CompareChoice>('yesterday');
+  const [pickedDay, setPickedDay] = useState('');
+  const [history, setHistory] = useState<KpiRow[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const response = await fetch('/api/kpi/history', { headers: { Authorization: `Bearer ${token}` } });
+        const payload = await response.json().catch(() => ({})) as { rows?: KpiRow[] };
+        if (active) setHistory(response.ok ? payload.rows ?? [] : []);
+      } catch { if (active) setHistory([]); }
+    })();
+    return () => { active = false; };
+  }, []);
+  const pickedDate = pickedDay ? new Date(`${pickedDay}T00:00:00`) : null;
+  const target = compareTarget(choice, now, pickedDate);
+  const compared = pickRow(history ?? [], target);
+  const legacy = snapshot?.previous?.values;
+  const previous = compared ? { open: compared.open, inField: compared.inField, scheduled: compared.scheduled } : choice === 'yesterday' && !history?.length ? legacy : undefined;
+  const oldestDay = history?.length ? history[history.length - 1].day : null;
+  const dayLabel = (day: string) => day.split('-').reverse().join('/');
+  const compareNote = history === null
+    ? 'Carregando o histórico…'
+    : compared
+      ? `Variação em relação a ${dayLabel(compared.day)}.`
+      : target
+        ? `Sem registro de ${dayLabel(target)}.${oldestDay ? ` O histórico começa em ${dayLabel(oldestDay)}.` : ' O histórico começa a ser gravado agora.'}`
+        : 'Escolha a data para comparar.';
 
   const criticalKeys = useMemo(() => new Set((operational?.alerts ?? []).filter((alert) => alert.level === 'critical').map((alert) => alert.ticketKey)), [operational]);
   const jiraError = error && !tickets.length ? error : '';
 
   return (
     <motion.div className="bento-grid mt-6" variants={cachedAtMount ? gridFast : grid} initial="hidden" animate="show">
+      {(role === 'gerencia' || role === 'coordenador') && <ManagementSummary tickets={tickets} now={now} />}
       {/* Informação primária da página: a fila. Ocupa mais espaço e traz o
           número grande; SLA e agenda são secundários ao lado. */}
       <BentoCard label="Fila de chamados" className="lg:col-span-2 xl:col-span-6">
         <CardHeader
           title="Fila de chamados"
-          description={previous ? 'Variação desde o último dia visto neste navegador.' : 'Chamados ativos no Jira.'}
+          description={compareNote}
           action={<>
+            <label className="sr-only" htmlFor="kpi-compare">Comparar com</label>
+            <select id="kpi-compare" value={choice} onChange={(event) => setChoice(event.target.value as CompareChoice)} className="field min-h-9 w-auto py-0 text-xs">
+              <option value="yesterday">vs. ontem</option>
+              <option value="week">vs. semana passada</option>
+              <option value="month">vs. mês passado</option>
+              <option value="year">vs. ano passado</option>
+              <option value="date">vs. data escolhida</option>
+            </select>
+            {choice === 'date' && <input type="date" aria-label="Data para comparar" value={pickedDay} max={new Date().toISOString().slice(0, 10)} onChange={(event) => setPickedDay(event.target.value)} className="field min-h-9 w-auto py-0 text-xs" />}
             <FreshnessBadge updatedAt={updatedAt} online={online} now={now} />
             <a href="/?view=tickets" onClick={(event) => onNavigate(event, '/?view=tickets')} className="inline-flex min-h-9 items-center gap-0.5 rounded-md px-2 text-sm font-medium text-primary hover:underline">Ver fila<ChevronRight aria-hidden="true" className="size-4" /></a>
           </>}
