@@ -33,6 +33,7 @@ Estado em 2026-10-02. Tudo o que está aqui já foi para `main` (web) e para a b
 Feitos: 1-13 e 15-21, 23-26, 29 (inclui painel Equipe redimensionável, aceites clicáveis, histórico da loja,
 histórico por técnico na Distribuição, atividade por pessoa em Gestão > Equipe, resumo da gestão e comparação de períodos).
 O item 7 (contagem 12 vs 11) parece ser o próprio usuário somado à lista; não alterado.
-Pendentes: 27 (solicitações da gerência → equipe cria grupo/técnico/dia e devolve) e 28 (checklist de prioridades por
+Item 27 (Solicitações) feito no web e no app: assumir, técnico da cidade, dia, grupo (registrado à mão; criação automática precisa do número de grupos: WHATSAPP_GROUP_BRIDGE_URL/SECRET), devolução por WhatsApp, anexos e aviso push à equipe.
+Pendente: 28 (checklist de prioridades por
 colaborador) — precisam de desenho junto com o chefe. 14 e 22 eram perguntas ao chefe.
 Mais detalhes no histórico de commits (`git log --oneline`).
