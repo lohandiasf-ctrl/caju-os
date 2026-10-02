@@ -1709,7 +1709,7 @@ export default function Home() {
             <WhatsAppInbox
               user={user}
               openPhone={openWhatsapp}
-              tickets={tickets.map((ticket) => ({ id: ticket.id, title: ticket.title, store: ticket.store, city: ticket.city }))}
+              tickets={tickets.map((ticket) => ({ id: ticket.id, title: ticket.title, store: ticket.store, city: ticket.city, technician: ticket.technician || null }))}
               onOpenTicket={(ticketId) => {
                 const ticket = tickets.find((item) => item.id === ticketId);
                 if (ticket) void openTicket(ticket);

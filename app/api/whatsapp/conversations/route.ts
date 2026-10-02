@@ -73,7 +73,8 @@ export async function POST(request: Request) {
     const account = toWhatsappAccount(new URL(request.url).searchParams.get('account'));
     const body = await request.json().catch(() => null) as { contactPhone?: unknown; contactName?: unknown } | null;
     const contactPhone = typeof body?.contactPhone === 'string' ? body.contactPhone.trim() : '';
-    if (!/^[\w.:+-]+@(s\.whatsapp\.net|lid|g\.us)$/.test(contactPhone)) return Response.json({ error: 'Contato inválido.' }, { status: 400 });
+    // Pessoa: o número com DDI (como as conversas que chegam) ou o jid; grupo e "@lid" só pelo jid.
+    if (!/^\d{12,13}$/.test(contactPhone) && !/^[\w.:+-]+@(s\.whatsapp\.net|lid|g\.us)$/.test(contactPhone)) return Response.json({ error: 'Contato inválido.' }, { status: 400 });
     const contactName = typeof body?.contactName === 'string' ? body.contactName.trim().slice(0, 120) || null : null;
     const now = new Date().toISOString();
     await env.DB.prepare(`

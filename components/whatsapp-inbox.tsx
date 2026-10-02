@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Camera, Check, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, MessageCirclePlus, Mic, Paperclip, Pin, Search, Send, Trash2, Unlink, X } from 'lucide-react';
+import { ArrowLeft, Camera, Check, CheckCheck, ClipboardCheck, Download, FileText, Link2, Loader2, MessageCircle, MessageCirclePlus, Mic, Paperclip, Pin, Search, Send, Trash2, Unlink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { whatsappSenderLabel } from '@/lib/whatsapp-sender';
@@ -11,14 +11,14 @@ import { DEFAULT_ACCOUNT, type WhatsappAccountId } from '@/lib/whatsapp-accounts
 
 type User = { getIdToken: () => Promise<string> } | null;
 type AuthHeaders = () => Promise<Record<string, string>>;
-type Ticket = { id: string; title: string; store: string; city: string };
+type Ticket = { id: string; title: string; store: string; city: string; technician?: string | null };
 type Conversation = {
   contactPhone: string; contactName: string | null; ticketKey: string | null; assignedTo: string | null;
   lastMessageAt: string; lastReadAt: string | null; unread: number; pinned?: boolean;
   lastMessage: { body: string | null; direction: string; occurredAt: string; messageType: string } | null;
 };
 type Message = { id: number; wamid: string; direction: string; messageType: string; body: string | null; mediaId: string | null; contactName: string | null; senderJid: string | null; senderEmail: string | null;
-  quotedWamid: string | null; quotedBody: string | null; quotedName: string | null; editedAt: string | null; deletedAt: string | null; evidenceTicketKeys: string | null; occurredAt: string };
+  quotedWamid: string | null; quotedBody: string | null; quotedName: string | null; editedAt: string | null; deletedAt: string | null; evidenceTicketKeys: string | null; occurredAt: string; deliveryStatus?: string | null };
 type Colleague = { email: string; role: string | null; displayName: string | null };
 type Presence = { state: string | null; photoUrl: string | null };
 type Recording = { recorder: MediaRecorder; stream: MediaStream; chunks: Blob[]; startedAt: number; cancelled: boolean };
@@ -96,20 +96,33 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket, openPhone }: { user
     } catch { set(!next); setError('Não foi possível fixar a conversa. Tente de novo.'); }
   }
 
+  const ticketsByKey = useMemo(() => new Map(tickets.map((ticket) => [ticket.id, ticket])), [tickets]);
   const visible = useMemo(() => {
     const term = normalize(query);
     const matches = conversations.filter((conversation) => {
       // Na lista principal, grupo só aparece se estiver fixado.
       if (filter === 'all' && isGroup(conversation.contactPhone) && !conversation.pinned) return false;
-      if (filter === 'unread' && conversation.unread === 0) return false;
+      // Não lidas são as conversas com pessoas: grupo tem a sua aba (e o seu próprio contador).
+      if (filter === 'unread' && (conversation.unread === 0 || isGroup(conversation.contactPhone))) return false;
       if (filter === 'ticket' && !conversation.ticketKey) return false;
       if (filter === 'groups' && !isGroup(conversation.contactPhone)) return false;
       if (!term) return true;
-      return normalize(`${conversation.contactName ?? ''} ${displayPhone(conversation.contactPhone)} ${conversation.ticketKey ?? ''} ${conversation.lastMessage?.body ?? ''}`).includes(term);
+      if (normalize(`${conversation.contactName ?? ''} ${displayPhone(conversation.contactPhone)} ${conversation.ticketKey ?? ''} ${conversation.lastMessage?.body ?? ''}`).includes(term)) return true;
+      // Número digitado com ou sem formatação ("81 99173-8635", "+5581991738635").
+      const digits = term.replace(/\D/g, '');
+      if (digits.length >= 4 && conversation.contactPhone.replace(/\D/g, '').includes(digits)) return true;
+      // Pelo chamado ligado: o técnico que atende, a loja ou a cidade.
+      return splitTicketKeys(conversation.ticketKey).some((key) => {
+        const ticket = ticketsByKey.get(key);
+        return Boolean(ticket && normalize(`${ticket.technician ?? ''} ${ticket.store} ${ticket.city} ${ticket.title}`).includes(term));
+      });
     });
     // Fixadas primeiro; dentro de cada bloco, a ordem de sempre (mais recente antes).
     return [...matches.filter((conversation) => conversation.pinned), ...matches.filter((conversation) => !conversation.pinned)];
-  }, [conversations, query, filter]);
+  }, [conversations, query, filter, ticketsByKey]);
+
+  // Contador do topo: só conversas com pessoas (grupos não entram).
+  const unreadPeople = useMemo(() => conversations.filter((conversation) => conversation.unread > 0 && !isGroup(conversation.contactPhone)).length, [conversations]);
 
   const selected = conversations.find((conversation) => conversation.contactPhone === selectedPhone) ?? null;
 
@@ -123,8 +136,9 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket, openPhone }: { user
         <div className="flex h-16 shrink-0 items-center justify-between bg-[#202c33] px-4">
           <h2 className="text-lg font-bold tracking-tight">Conversas</h2>
           <div className="flex items-center gap-2">
-            {conversations.some((conversation) => conversation.unread > 0) && (
-              <span className="rounded-full bg-[#00a884] px-2 py-0.5 text-xs font-bold text-[#111b21]">{conversations.filter((conversation) => conversation.unread > 0).length} não lida(s)</span>
+            {unreadPeople > 0 && (
+              <button type="button" onClick={() => { setFilter('unread'); setQuery(''); }} aria-label={`Ver as ${unreadPeople} conversas não lidas`}
+                className="rounded-full bg-[#00a884] px-2 py-0.5 text-xs font-bold text-[#111b21] transition hover:bg-[#06cf9c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">{unreadPeople} não lida(s)</button>
             )}
             <button
               type="button"
@@ -193,7 +207,7 @@ export function WhatsAppInbox({ user, tickets, onOpenTicket, openPhone }: { user
                       <ContactAvatar contactPhone={conversation.contactPhone} name={name} authHeaders={authHeaders} className="size-12" />
                       <span className="flex min-w-0 flex-1 flex-col border-b border-white/5 py-3">
                         <span className="flex items-baseline gap-2">
-                          <b className="min-w-0 flex-1 truncate text-[15px] font-medium text-neutral-100">{name}</b>
+                          <b className="min-w-0 flex-1 truncate text-[15px] font-medium text-neutral-100">{name}{!isGroup(conversation.contactPhone) && displayPhone(conversation.contactPhone) && name !== displayPhone(conversation.contactPhone) && <span className="ml-1.5 text-[11px] font-normal text-neutral-400">{displayPhone(conversation.contactPhone)}</span>}</b>
                           {conversation.pinned && <Pin className="size-3.5 shrink-0 fill-current text-[#25d366]" aria-label="Fixada" />}
                           <span className={`shrink-0 text-xs ${conversation.unread > 0 ? 'text-[#25d366]' : 'text-neutral-400'}`}>{last ? listTimeLabel(last.occurredAt) : ''}</span>
                         </span>
@@ -576,7 +590,13 @@ function ConversationPane({ conversation, account, user, authHeaders, tickets, o
                     <div className="mt-0.5 flex items-center justify-end gap-1 px-1 text-[11px] text-neutral-400">
                       {message.editedAt && !message.deletedAt && <span className="italic">editada</span>}
                       <span>{timeLabel(message.occurredAt)}</span>
-                      {outgoing && <Check className="size-3.5" aria-label="Enviada" />}
+                      {outgoing && (message.deliveryStatus === 'read'
+                        ? <CheckCheck className="size-4 text-[#53bdeb]" aria-label="Lida" />
+                        : message.deliveryStatus === 'delivered'
+                          ? <CheckCheck className="size-4" aria-label="Entregue" />
+                          : message.deliveryStatus === 'failed'
+                            ? <X className="size-3.5 text-rose-400" aria-label="Não enviada" />
+                            : <Check className="size-3.5" aria-label="Enviada" />)}
                     </div>
                   </div>
                 </motion.div>
@@ -680,6 +700,13 @@ function NewChatPanel({ authHeaders, onPicked }: { authHeaders: AuthHeaders; onP
     return () => { active = false; window.clearTimeout(timer); };
   }, [query, authHeaders]);
 
+  // Número digitado (com DDD): dá para iniciar a conversa mesmo sem estar na agenda.
+  const typedNumber = (() => {
+    const digits = query.replace(/\D/g, '').replace(/^0+/, '');
+    if (digits.length < 10 || digits.length > 13 || /[a-z]/i.test(query.replace(/[+()\s.-]|\d/g, ''))) return null;
+    return digits.startsWith('55') && digits.length >= 12 ? digits : `55${digits}`;
+  })();
+
   async function open(item: { jid: string; name: string }) {
     if (opening) return;
     setOpening(item.jid); setError('');
@@ -710,8 +737,18 @@ function NewChatPanel({ authHeaders, onPicked }: { authHeaders: AuthHeaders; onP
       {error && <p role="alert" className="mt-2 text-xs text-rose-300">{error}</p>}
       {loading ? (
         <p className="mt-2 flex items-center gap-2 text-xs text-neutral-400"><Loader2 className="size-3.5 animate-spin" />Buscando...</p>
-      ) : results.length ? (
+      ) : (typedNumber || results.length) ? (
         <ul className="mt-2 max-h-64 overflow-y-auto">
+          {typedNumber && (
+            <li>
+              <button type="button" disabled={Boolean(opening)} onClick={() => void open({ jid: typedNumber, name: displayPhone(typedNumber) })} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white/5 disabled:opacity-60">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#00a884]/20 text-[#25d366]" aria-hidden="true"><MessageCirclePlus className="size-4" /></span>
+                <span className="min-w-0 flex-1 truncate text-sm">Conversar com {displayPhone(typedNumber)}</span>
+                <span className="shrink-0 text-[11px] text-neutral-400">fora da agenda</span>
+                {opening === typedNumber && <Loader2 className="size-3.5 animate-spin text-[#25d366]" />}
+              </button>
+            </li>
+          )}
           {results.slice(0, 50).map((item) => (
             <li key={item.jid}>
               <button type="button" disabled={Boolean(opening)} onClick={() => void open(item)} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-white/5 disabled:opacity-60">
