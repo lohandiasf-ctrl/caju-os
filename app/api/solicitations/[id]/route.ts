@@ -41,7 +41,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     const s = Number.isInteger(id) ? await load(id) : null;
     if (!s) return Response.json({ error: 'Solicitação não encontrada.' }, { status: 404 });
     const events = (await env.DB.prepare(`SELECT kind, actor_email AS actor, details, created_at AS at FROM solicitation_events WHERE solicitation_id = ?1 ORDER BY id DESC LIMIT 60`).bind(id).all()).results;
-    return Response.json({ solicitation: { ...s, status: statusOf(s) }, events, candidates: s.returnedAt || s.cancelledAt ? [] : await candidates(s.city, s.uf), groupCreation: groupCreationEnabled() }, { headers: { 'Cache-Control': 'private, no-store' } });
+    const files = (await env.DB.prepare(`SELECT id, name, mime_type AS mimeType, size FROM solicitation_files WHERE solicitation_id = ?1 ORDER BY id`).bind(id).all()).results;
+    return Response.json({ solicitation: { ...s, status: statusOf(s) }, events, files, candidates: s.returnedAt || s.cancelledAt ? [] : await candidates(s.city, s.uf), groupCreation: groupCreationEnabled() }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof Response) return error;
     return Response.json({ error: 'Não foi possível carregar a solicitação.' }, { status: 500 });
