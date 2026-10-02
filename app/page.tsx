@@ -355,6 +355,8 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<Status | "Todos">("Todos");
   // Filtros vindos dos sliders das Ações rápidas (via URL); só na fila.
   const [queueFilters, setQueueFilters] = useState<QueueFilters>(NO_QUEUE_FILTERS);
+  // Filtros por cidade, técnico, loja e categoria (Central e fila).
+  const [facets, setFacets] = useState({ city: "", technician: "", store: "", category: "" });
   const [mobileColumn, setMobileColumn] = useState<Status>(columns[0]);
   const [jiraFilterPreset, setJiraFilterPreset] =
     useState<JiraFilterPreset>("operational");
@@ -527,14 +529,31 @@ export default function Home() {
       const matchesQueue =
         activeView !== "tickets" ||
         matchesQueueFilters(ticket, queueFilters, new Date(), parseTicketDate);
+      const matchesFacets =
+        (!facets.city || ticket.city === facets.city) &&
+        (!facets.technician || (ticket.technician ?? "") === facets.technician) &&
+        (!facets.store || ticket.store === facets.store) &&
+        (!facets.category || categoryOf(ticket.title) === facets.category);
       return (
         matchesQuery &&
         matchesDate &&
         matchesQueue &&
+        matchesFacets &&
         (statusFilter === "Todos" || ticket.status === statusFilter)
       );
     });
-  }, [activeView, archivedKeys, query, queueFilters, statusFilter, ticketDate, tickets]);
+  }, [activeView, archivedKeys, facets, query, queueFilters, statusFilter, ticketDate, tickets]);
+  // Opções dos filtros a partir dos chamados que estão na tela.
+  const facetOptions = useMemo(() => {
+    const unique = (values: Array<string | undefined>) => [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+    const live = tickets.filter((ticket) => !archivedKeys.has(ticket.id));
+    return {
+      city: unique(live.map((ticket) => ticket.city)),
+      technician: unique(live.map((ticket) => ticket.technician)),
+      store: unique(live.map((ticket) => ticket.store)),
+      category: unique(live.map((ticket) => categoryOf(ticket.title))),
+    };
+  }, [tickets, archivedKeys]);
   function updateQueueFilters(next: QueueFilters) {
     setQueueFilters(next);
     const params = writeQueueFilters(new URLSearchParams(window.location.search), next);
@@ -1486,6 +1505,28 @@ export default function Home() {
                     </div>
                   </div>
                   <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="label-caps">Cidade, técnico, loja e categoria</p>
+                      {Object.values(facets).some(Boolean) && (
+                        <Button size="sm" variant="ghost" onClick={() => setFacets({ city: "", technician: "", store: "", category: "" })}>Limpar</Button>
+                      )}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      {([["city", "Cidade", "Todas as cidades"], ["technician", "Técnico", "Todos os técnicos"], ["store", "Loja", "Todas as lojas"], ["category", "Categoria", "Todas as categorias"]] as const).map(([key, label, all]) => (
+                        <select
+                          key={key}
+                          aria-label={`Filtrar por ${label.toLowerCase()}`}
+                          className="field min-h-10 py-0"
+                          value={facets[key]}
+                          onChange={(event) => setFacets((current) => ({ ...current, [key]: event.target.value }))}
+                        >
+                          <option value="">{all}</option>
+                          {facetOptions[key].map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
                     <p className="label-caps mb-2">
                       Status
                     </p>
@@ -2346,17 +2387,58 @@ function AgendaView({
   loading: boolean;
   onOpen: (ticket: Ticket) => void;
 }) {
-  const scheduled = tickets.filter(
+  const [day, setDay] = useState<Date | undefined>();
+  const [range, setRange] = useState<"day" | "week">("day");
+  const all = tickets.filter(
     (ticket) =>
       ticket.schedule ||
       ticket.status === "Pendente de agendamento" ||
       ticket.status === "Agendado",
   );
+  // Dias com atendimento marcados no calendário.
+  const visitDays = useMemo(() => all.flatMap((ticket) => (ticket.scheduledAt && !Number.isNaN(new Date(ticket.scheduledAt).getTime()) ? [new Date(ticket.scheduledAt)] : [])), [all]);
+  const weekOf = (date: Date) => {
+    const start = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
+    return [start, new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)] as const;
+  };
+  const scheduled = day
+    ? all.filter((ticket) => {
+        if (!ticket.scheduledAt) return false;
+        const at = new Date(ticket.scheduledAt);
+        if (Number.isNaN(at.getTime())) return false;
+        if (range === "day") return sameDay(at, day);
+        const [from, to] = weekOf(day);
+        return at >= from && at < to;
+      })
+    : all;
   if (loading) return <LoadingPanel label="Carregando agenda..." />;
-  if (!scheduled.length)
+  if (!all.length)
     return <EmptyState label="Nenhum atendimento aguardando agenda." hint="Chamados pendentes de agendamento ou já agendados aparecem aqui." />;
   return (
-    <div className="surface-panel mt-6 overflow-hidden rounded-2xl">
+    <div className="mt-6 grid items-start gap-4 lg:grid-cols-[auto_minmax(0,1fr)]">
+    <aside className="surface-panel rounded-2xl p-2" aria-label="Calendário da agenda">
+      <Calendar
+        mode="single"
+        selected={day}
+        onSelect={setDay}
+        locale={ptBR}
+        modifiers={{ hasVisit: visitDays }}
+        modifiersClassNames={{
+          hasVisit: "[&>button]:after:absolute [&>button]:after:bottom-1 [&>button]:after:size-1 [&>button]:after:rounded-full [&>button]:after:bg-primary",
+        }}
+      />
+      <div className="flex items-center justify-between gap-2 px-2 pb-2">
+        <div className="flex rounded-lg border border-border p-0.5" role="group" aria-label="Período">
+          <Button size="sm" variant={range === "day" ? "secondary" : "ghost"} aria-pressed={range === "day"} onClick={() => setRange("day")}>Dia</Button>
+          <Button size="sm" variant={range === "week" ? "secondary" : "ghost"} aria-pressed={range === "week"} onClick={() => setRange("week")}>Semana</Button>
+        </div>
+        {day && <Button size="sm" variant="ghost" onClick={() => setDay(undefined)}>Ver todos</Button>}
+      </div>
+    </aside>
+    <div className="surface-panel overflow-hidden rounded-2xl">
+      {!scheduled.length && (
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground">Nenhum atendimento {range === "week" ? "nesta semana" : "neste dia"}.</p>
+      )}
       <div className="hidden border-b border-border bg-(--surface-table-head) px-4 py-2.5 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[130px_minmax(0,1fr)_160px_180px]">
         <span>Data</span>
         <span>Chamado</span>
@@ -2388,6 +2470,7 @@ function AgendaView({
           </span>
         </button>
       ))}
+    </div>
     </div>
   );
 }
@@ -3699,6 +3782,12 @@ function displayStatus(raw: string | null | undefined): string {
   if (text === "direcionado") return "Direcionado";
   if (text.includes("campo") || text.includes("atendimento")) return "Técnico em campo";
   return raw ?? "";
+}
+
+/** Categoria do chamado: o começo do tipo de problema no título ("Loja L365 | CPU - Instalação…" → "CPU"). */
+function categoryOf(title: string): string {
+  const afterStore = title.includes("|") ? title.split("|").slice(1).join("|") : title;
+  return afterStore.split(" - ")[0].replace(/,.*$/, "").trim();
 }
 
 function toTicket(issue: JiraTicket): Ticket {
