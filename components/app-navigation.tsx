@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore, type KeyboardEvent as ReactK
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
-import { Archive, Briefcase, Building2, CalendarClock, ChevronRight, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Send, Users, type LucideIcon } from 'lucide-react';
+import { Archive, Briefcase, FilePlus2, Building2, CalendarClock, ChevronRight, CircleDollarSign, ClipboardList, Headphones, LayoutDashboard, Map, MessageCircle, MessageSquarePlus, PackageOpen, PanelLeftClose, Send, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -65,6 +65,7 @@ const groups = [
   ['Comunicação', [
     ['WhatsApp', MessageCircle, '/?view=whatsapp', 'whatsapp'],
     ['Distribuição', Send, '/distribuicao', 'dispatch'],
+    ['Solicitações', FilePlus2, '/solicitacoes', 'solicitations'],
   ]],
   // Em tela baixa (desktop) vira uma linha com menu flutuante, para sobrar
   // altura para a equipe na barra.
