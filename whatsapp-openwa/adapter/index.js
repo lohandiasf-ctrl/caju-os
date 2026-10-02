@@ -164,6 +164,12 @@ async function onOpenwaEvent(body) {
     if (change) await forward(change);
     return;
   }
+  if (event === 'message.ack') {
+    // Entregue / lido: o Caju OS mostra os tiques da mensagem enviada.
+    const wamid = String(data?.messageId ?? data?.id ?? '').trim();
+    if (wamid && ['sent', 'delivered', 'read', 'failed'].includes(String(data?.status))) await forward({ type: 'ack', wamid, status: String(data.status) });
+    return;
+  }
   if (event !== 'message.received' && event !== 'message.sent') return;
   const chat = String(data?.chatId ?? (event === 'message.sent' ? data?.to : data?.from) ?? '');
   if (isGroup(chat) && !groupNames.has(chat)) {
@@ -197,11 +203,13 @@ async function bootstrap() {
   // Webhook: registra uma vez (procura pelo endereço antes de criar).
   const hookUrl = `${SELF_URL}/openwa-webhook`;
   const hooks = itemsOf(await openwa(session('/webhooks')).catch(() => []));
-  if (!hooks.some((h) => h?.url === hookUrl)) {
-    await openwa(session('/webhooks'), { method: 'POST', json: {
-      url: hookUrl, secret: HOOK_SECRET,
-      events: ['message.received', 'message.sent', 'message.revoked', 'message.edited', 'session.status', 'session.qr', 'session.authenticated', 'session.disconnected', 'presence.update', 'group.update', 'group.join'],
-    } });
+  const HOOK_EVENTS = ['message.received', 'message.sent', 'message.ack', 'message.revoked', 'message.edited', 'session.status', 'session.qr', 'session.authenticated', 'session.disconnected', 'presence.update', 'group.update', 'group.join'];
+  const existing = hooks.find((h) => h?.url === hookUrl);
+  if (!existing) {
+    await openwa(session('/webhooks'), { method: 'POST', json: { url: hookUrl, secret: HOOK_SECRET, events: HOOK_EVENTS } });
+  } else if (!(existing.events ?? []).includes('message.ack') && existing.id) {
+    // Webhook criado antes dos tiques: acrescenta o evento sem recriar.
+    await openwa(session(`/webhooks/${existing.id}`), { method: 'PUT', json: { events: HOOK_EVENTS } }).catch((e) => console.error('webhook ack:', e?.message));
   }
   const current = await openwa(session()).catch(() => null);
   setState(connectionStatus(current?.status));

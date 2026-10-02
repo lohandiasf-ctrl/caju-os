@@ -24,6 +24,17 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
 
   if (payload.type === 'groups') return syncGroups(payload, now, account);
+  if (payload.type === 'ack') {
+    // Tiques da mensagem enviada: só avançam (enviada → entregue → lida), nunca voltam.
+    const wamid = typeof payload.wamid === 'string' ? payload.wamid : '';
+    const status = typeof payload.status === 'string' ? payload.status : '';
+    const rank: Record<string, number> = { sent: 1, delivered: 2, read: 3 };
+    if (!wamid || !(status === 'failed' || rank[status])) return Response.json({ error: 'Evento inválido.' }, { status: 400 });
+    await env.DB.prepare(`UPDATE whatsapp_messages SET delivery_status = ?3 WHERE account = ?1 AND wamid = ?2 AND direction = 'outgoing'
+      AND (delivery_status IS NULL OR delivery_status = 'sending' OR (?4 > CASE delivery_status WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 ELSE 0 END AND delivery_status <> 'failed'))`)
+      .bind(account, wamid, status, rank[status] ?? 0).run();
+    return Response.json({ received: true });
+  }
   if (payload.type === 'revoke' || payload.type === 'edit') {
     const event = parseBridgeMessageEvent(payload);
     if (!event) return Response.json({ error: 'Evento inválido.' }, { status: 400 });
