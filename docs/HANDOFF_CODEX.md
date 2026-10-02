@@ -30,8 +30,9 @@ Estado em 2026-10-02. Tudo o que está aqui já foi para `main` (web) e para a b
 - Série diária da fila em `daily_kpis` (cron a cada 10 min) para comparar períodos na Visão geral.
 
 ## Pedidos do chefe (áudios de 30/09) — situação
-Feitos: 1,2,3,4,5 (WhatsApp), 12 (financeiro classifica na tela), 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 29.
-Pendentes: 6 (painel Equipe maior/redimensionável), 7 (contagem 12 vs 11), 8 (aceites clicáveis), 9 (histórico por pessoa),
-10/11 (histórico e valores por loja), 13 (histórico de respostas dos técnicos), 27 (solicitações da gerência),
-28 (checklist de prioridades por colaborador). 14 e 22 eram perguntas ao chefe.
+Feitos: 1-13 e 15-21, 23-26, 29 (inclui painel Equipe redimensionável, aceites clicáveis, histórico da loja,
+histórico por técnico na Distribuição, atividade por pessoa em Gestão > Equipe, resumo da gestão e comparação de períodos).
+O item 7 (contagem 12 vs 11) parece ser o próprio usuário somado à lista; não alterado.
+Pendentes: 27 (solicitações da gerência → equipe cria grupo/técnico/dia e devolve) e 28 (checklist de prioridades por
+colaborador) — precisam de desenho junto com o chefe. 14 e 22 eram perguntas ao chefe.
 Mais detalhes no histórico de commits (`git log --oneline`).
