@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion, useMotionValue, animate, type PanInfo } from 'motion/react';
@@ -111,6 +111,10 @@ function isTyping(target: EventTarget | null) {
  * O item ativo ganha a barrinha de 3 px à esquerda, que desliza entre itens
  * (`layoutId`) quando a troca é dentro do dashboard (?view=).
  */
+const TEAM_HEIGHT_KEY = 'caju-team-height';
+const TEAM_MIN = 120;
+const TEAM_MAX = 700;
+
 function NavLink({ href, label, icon: Icon, current, collapsed, onNavigate }: {
   href: string;
   label: string;
@@ -186,6 +190,28 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
   onOpenChange: (open: boolean) => void;
   onNavigate?: (event: MouseEvent<HTMLAnchorElement>, href: string) => void;
 }) {
+  // Altura da lista da Equipe: arrastável, lembrada neste computador.
+  const [teamHeight, setTeamHeight] = useState<number | null>(null);
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(TEAM_HEIGHT_KEY));
+      if (Number.isFinite(saved) && saved >= TEAM_MIN && saved <= TEAM_MAX) setTeamHeight(saved);
+    } catch { /* sem storage: fica no tamanho automático */ }
+  }, []);
+  function changeTeamHeight(value: number | null) {
+    setTeamHeight(value);
+    try { if (value) window.localStorage.setItem(TEAM_HEIGHT_KEY, String(Math.round(value))); else window.localStorage.removeItem(TEAM_HEIGHT_KEY); } catch { /* ignora */ }
+  }
+  function startTeamResize(event: ReactPointerEvent<HTMLDivElement>) {
+    const sidebar = event.currentTarget.closest('aside');
+    if (!sidebar) return;
+    event.preventDefault();
+    const bottom = sidebar.getBoundingClientRect().bottom - 64; // abaixo fica o menu da conta
+    const move = (e: PointerEvent) => changeTeamHeight(Math.round(Math.min(TEAM_MAX, Math.max(TEAM_MIN, bottom - e.clientY))));
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
   const { role } = useAuth();
   const desktop = useSyncExternalStore(subscribe, () => window.matchMedia('(min-width: 1024px)').matches, () => false);
   const storedCollapsed = useSyncExternalStore(subscribeSidebar, isSidebarCollapsed, () => false);
@@ -281,7 +307,26 @@ export function AppNavigation({ active, open, onOpenChange, onNavigate }: {
         </div>;
       })}
     </nav>
-    <div ref={setTeamSlot} className="app-team-slot" />
+    {desktop && !collapsed && (
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Redimensionar a lista da equipe"
+        aria-valuenow={teamHeight ?? undefined}
+        tabIndex={0}
+        title="Arraste para aumentar ou diminuir a equipe (duplo clique restaura)"
+        className="group relative -mb-1 mt-1 h-2 shrink-0 cursor-row-resize touch-none"
+        onPointerDown={startTeamResize}
+        onDoubleClick={() => changeTeamHeight(null)}
+        onKeyDown={(event: ReactKeyboardEvent) => {
+          if (event.key === 'ArrowUp') { event.preventDefault(); changeTeamHeight(Math.min(TEAM_MAX, (teamHeight ?? 220) + 32)); }
+          if (event.key === 'ArrowDown') { event.preventDefault(); changeTeamHeight(Math.max(TEAM_MIN, (teamHeight ?? 220) - 32)); }
+        }}
+      >
+        <span aria-hidden="true" className="absolute inset-x-6 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-border transition-colors group-hover:bg-primary group-focus-visible:bg-primary" />
+      </div>
+    )}
+    <div ref={setTeamSlot} className="app-team-slot" style={desktop && !collapsed && teamHeight ? { flex: `0 0 ${teamHeight}px` } : undefined} />
     {/* Configurações ficam no menu da conta (clique no próprio nome). */}
     <div className="shrink-0 border-t border-sidebar-border pt-2">
       <UserMenu compact={collapsed} />
