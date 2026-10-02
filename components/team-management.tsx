@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Search, UserMinus, UserPlus } from 'lucide-react';
+import { History, Loader2, Search, UserMinus, UserPlus } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,21 @@ export function TeamManagementPanel() {
     })();
     return () => { active = false; };
   }, [role, user]);
+
+  // Atividade da pessoa: o que ela fez no sistema (trilha de auditoria).
+  const [viewing, setViewing] = useState<string | null>(null);
+  const [activity, setActivity] = useState<{ items: Array<{ ticketKey: string; action: string; createdAt: string }>; total: number } | null>(null);
+  const [activityError, setActivityError] = useState('');
+  async function toggleActivity(email: string) {
+    if (viewing === email) { setViewing(null); return; }
+    setViewing(email); setActivity(null); setActivityError('');
+    try {
+      const response = await fetch(`/api/team/activity?email=${encodeURIComponent(email)}`, { headers: { Authorization: `Bearer ${await user?.getIdToken()}` }, cache: 'no-store' });
+      const payload = await response.json() as { items?: Array<{ ticketKey: string; action: string; createdAt: string }>; total?: number; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? 'Não foi possível carregar a atividade.');
+      setActivity({ items: payload.items ?? [], total: payload.total ?? 0 });
+    } catch (cause) { setActivityError(cause instanceof Error ? cause.message : 'Não foi possível carregar a atividade.'); }
+  }
 
   async function setActive(member: Member, active: boolean) {
     if (!user) return;
@@ -107,6 +122,9 @@ export function TeamManagementPanel() {
                     <span className={`block truncate text-sm font-medium ${member.active ? '' : 'text-muted-foreground'}`}>{nameOf(member)}{self && <span className="font-normal text-muted-foreground"> (você)</span>}</span>
                     <span className="block truncate text-xs text-muted-foreground">{member.displayName ? `${member.email} · ` : ''}{roleLabels[member.role]}</span>
                   </span>
+                  <Button variant="ghost" size="sm" aria-expanded={viewing === member.email} onClick={() => void toggleActivity(member.email)}>
+                    <History aria-hidden="true" />Atividade
+                  </Button>
                   {!member.active && <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">Retirado</span>}
                   {member.active && !self && !asking && (
                     <Button variant="ghost" size="sm" onClick={() => setConfirming(member.email)} className="text-danger hover:bg-danger-soft hover:text-danger">
@@ -119,6 +137,26 @@ export function TeamManagementPanel() {
                     </Button>
                   )}
                 </div>
+                {viewing === member.email && (
+                  <div className="mt-2 rounded-lg border border-border bg-(--surface-inset) p-3">
+                    {activityError ? <p role="alert" className="text-sm text-danger">{activityError}</p> : !activity ? (
+                      <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 aria-hidden="true" className="size-4 animate-spin" />Carregando…</p>
+                    ) : !activity.items.length ? <p className="text-sm text-muted-foreground">Nenhuma ação registrada para esta pessoa ainda.</p> : (
+                      <>
+                        <p className="mb-2 text-xs text-muted-foreground">{activity.total} {activity.total === 1 ? 'ação registrada' : 'ações registradas'}{activity.total > activity.items.length ? ` · mostrando as ${activity.items.length} mais recentes` : ''}</p>
+                        <ul className="max-h-72 space-y-1.5 overflow-y-auto text-sm">
+                          {activity.items.map((item, index) => (
+                            <li key={`${item.createdAt}-${index}`} className="flex flex-wrap items-baseline gap-x-2">
+                              <span className="text-xs tabular-nums text-muted-foreground">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(item.createdAt))}</span>
+                              <span>{item.action}</span>
+                              <span className="font-mono text-xs text-primary">{item.ticketKey}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </div>
+                )}
                 {asking && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2">
                     <p className="min-w-0 flex-1 text-sm">Retirar <b>{nameOf(member)}</b> da equipe? A pessoa perde o acesso ao Caju OS agora.</p>
