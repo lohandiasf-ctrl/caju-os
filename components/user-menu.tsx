@@ -1,5 +1,6 @@
 "use client";
 
+import { noticeParts, SYSTEM_NOTICE_SENDER } from "@/lib/notice-links";
 import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -2910,6 +2911,21 @@ function CreateGroupDialog({
   );
 }
 
+/** Aviso do sistema com chamado, loja e técnico clicáveis (grupo "Distribuição"). */
+function NoticeText({ body, onTicket, onStore, onTechnician }: { body: string; onTicket: (key: string) => void; onStore: (code: string) => void; onTechnician: (name: string) => void }) {
+  const link = "font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-sm";
+  return (
+    <p className="whitespace-pre-wrap break-words text-sm">
+      {noticeParts(body).map((part, index) => {
+        if (part.type === "text") return <span key={index}>{part.value}</span>;
+        const action = part.type === "ticket" ? () => onTicket(part.value) : part.type === "store" ? () => onStore(part.value) : () => onTechnician(part.value);
+        const hint = part.type === "ticket" ? "Abrir o chamado" : part.type === "store" ? "Ver o histórico da loja" : "Conversar com o técnico no WhatsApp";
+        return <button key={index} type="button" className={link} title={hint} onClick={action}>{part.value}</button>;
+      })}
+    </p>
+  );
+}
+
 function GroupChatDialog({
   group,
   colleagues,
@@ -2941,6 +2957,21 @@ function GroupChatDialog({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Nome do técnico no aviso → conversa dele no WhatsApp do sistema (pelo telefone do cadastro).
+  async function openTechnicianChat(name: string) {
+    if (!user) return;
+    try {
+      const response = await fetch("/api/whatsapp/technician-chat", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as { contactPhone?: string; error?: string };
+      if (!response.ok || !payload.contactPhone) { setError(payload.error ?? "Não foi possível abrir a conversa com o técnico."); return; }
+      onClose();
+      window.dispatchEvent(new CustomEvent("caju:open-whatsapp", { detail: { phone: payload.contactPhone } }));
+    } catch { setError("Não foi possível abrir a conversa com o técnico."); }
+  }
   const load = useCallback(async () => {
     if (!user || !group) return;
     try {
@@ -3217,11 +3248,18 @@ function GroupChatDialog({
                           </div>
                         ) : (
                           <>
-                            {message.body && (
+                            {message.body && (message.senderEmail === SYSTEM_NOTICE_SENDER ? (
+                              <NoticeText
+                                body={message.body}
+                                onTicket={(key) => { onClose(); onOpenTicket?.(key); }}
+                                onStore={(code) => { onClose(); window.dispatchEvent(new CustomEvent("caju:open-store", { detail: { code } })); }}
+                                onTechnician={(name) => void openTechnicianChat(name)}
+                              />
+                            ) : (
                               <p className="whitespace-pre-wrap break-words text-sm">
                                 {message.body}
                               </p>
-                            )}
+                            ))}
                             {message.deletedAt && mine && (
                               <p className="mt-1 text-[10px] italic text-muted-foreground">
                                 Apagada para os demais participantes
