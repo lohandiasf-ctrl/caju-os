@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, Menu, MessageCircle, Plus, RefreshCw, Users } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, Menu, MessageCircle, Paperclip, Plus, RefreshCw, Users } from 'lucide-react';
 import { AppNavigation } from '@/components/app-navigation';
 import { useAuth } from '@/components/auth-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -16,15 +16,29 @@ import { missingSteps, STATUS_LABEL, whenText, type Solicitation, type Solicitat
 
 type Item = Solicitation & { status: SolicitationStatus };
 type Candidate = { id: number; name: string; phone: string | null };
-type Detail = { solicitation: Item; events: Array<{ kind: string; actor: string; at: string }>; candidates: Candidate[]; groupCreation?: boolean };
+type Detail = { solicitation: Item; events: Array<{ kind: string; actor: string; at: string }>; candidates: Candidate[]; groupCreation?: boolean; files?: Array<{ id: number; name: string; mimeType: string; size: number }> };
 
 const TONE: Record<SolicitationStatus, string> = {
   nova: 'border-primary/30 text-primary', em_andamento: 'border-warning/30 bg-warning-soft text-warning', pronta: 'border-success/30 bg-success-soft text-success',
   devolvida: 'text-muted-foreground', cancelada: 'text-muted-foreground',
 };
-const EVENT: Record<string, string> = { created: 'Criada', assumed: 'Assumida', technician: 'Técnico definido', scheduled: 'Dia e hora definidos', group: 'Grupo criado', returned: 'Devolvida ao solicitante', cancelled: 'Cancelada' };
+const EVENT: Record<string, string> = { file: 'Anexo adicionado', created: 'Criada', assumed: 'Assumida', technician: 'Técnico definido', scheduled: 'Dia e hora definidos', group: 'Grupo criado', returned: 'Devolvida ao solicitante', cancelled: 'Cancelada' };
 const nameOf = (email: string) => email.split('@')[0].split(/[._-]+/).filter(Boolean).map((p) => p[0].toUpperCase() + p.slice(1)).join(' ');
 const when = (iso: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(iso));
+// Foto grande vira JPEG menor antes de subir (o limite é ~1,3 MB); PDF vai como está.
+async function toDataUrl(file: File): Promise<{ name: string; mimeType: string; data: string }> {
+  if (file.type === 'application/pdf') {
+    const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); });
+    return { name: file.name, mimeType: file.type, data };
+  }
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return { name: file.name.replace(/\.[^.]+$/, '') + '.jpg', mimeType: 'image/jpeg', data: canvas.toDataURL('image/jpeg', 0.72) };
+}
+
 const EMPTY = { client: '', city: '', uf: '', store: '', address: '', description: '', requesterPhone: '', priority: 'normal' };
 
 export default function SolicitacoesPage() {
@@ -40,6 +54,29 @@ export default function SolicitacoesPage() {
   const [busy, setBusy] = useState('');
   const [when_, setWhen] = useState('');
   const [groupText, setGroupText] = useState('');
+  const [uploading, setUploading] = useState(false);
+
+  async function attach(files: FileList | null) {
+    if (!files?.length || open === null || uploading) return;
+    setUploading(true); setMessage('');
+    try {
+      for (const file of Array.from(files)) {
+        const body = await toDataUrl(file).catch(() => null);
+        if (!body) { setMessage(`Não consegui ler ${file.name}.`); continue; }
+        const response = await fetch(`/api/solicitations/${open}/files`, { method: 'POST', headers: await headers(), body: JSON.stringify(body) });
+        const payload = await response.json().catch(() => ({})) as { error?: string };
+        if (!response.ok) { setMessage(payload.error ?? 'Não foi possível anexar.'); break; }
+      }
+      await loadDetail(open);
+    } finally { setUploading(false); }
+  }
+
+  async function openFile(fileId: number) {
+    if (open === null) return;
+    const response = await fetch(`/api/solicitations/${open}/files/${fileId}`, { headers: { Authorization: `Bearer ${await user?.getIdToken()}` } });
+    if (!response.ok) { setMessage('Não foi possível abrir o anexo.'); return; }
+    window.open(URL.createObjectURL(await response.blob()), '_blank', 'noopener');
+  }
   const [message, setMessage] = useState('');
   const [showClosed, setShowClosed] = useState(false);
 
@@ -178,6 +215,22 @@ export default function SolicitacoesPage() {
                             <p className="whitespace-pre-wrap text-sm">{s.description}</p>
                             {s.address && <p className="text-xs text-muted-foreground">Endereço: {s.address}</p>}
                             <p className="text-xs text-muted-foreground">Quem pediu: {nameOf(s.requesterEmail)} · WhatsApp {s.requesterPhone}</p>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-xs font-semibold text-muted-foreground">Anexos</p>
+                                {!closed && (
+                                  <label className="inline-flex min-h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-border px-2.5 text-xs font-semibold hover:bg-muted">
+                                    {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Paperclip className="size-3.5" />}Anexar foto ou PDF
+                                    <input type="file" multiple accept="image/*,application/pdf" className="sr-only" disabled={uploading} onChange={(event) => { void attach(event.target.files); event.currentTarget.value = ''; }} />
+                                  </label>
+                                )}
+                              </div>
+                              {detail.files?.length ? (
+                                <ul className="mt-2 flex flex-wrap gap-2">
+                                  {detail.files.map((f) => <li key={f.id}><button type="button" onClick={() => void openFile(f.id)} className="rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-muted">{f.name}</button></li>)}
+                                </ul>
+                              ) : <p className="mt-1 text-xs text-muted-foreground">Nenhum anexo.</p>}
+                            </div>
                             {!closed && (
                               <ol className="grid gap-3">
                                 <li className="rounded-xl border border-border p-3">
