@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ColleaguesPanel } from '@/components/user-menu';
+import { DispatchTechnicianStats } from '@/components/dispatch-technician-stats';
 
 // Painel da distribuição de chamados por WhatsApp (docs/DISPATCH_WHATSAPP.md).
 // Mostra cada oferta com a mensagem exatamente como o técnico leria, os
@@ -191,6 +192,8 @@ export default function DistribuicaoPage() {
             {notice && <p aria-live="polite" className="mt-3 text-xs text-muted-foreground">{notice}</p>}
           </article>
         )}
+
+        {gerencia && <DispatchTechnicianStats user={user} />}
 
         <h2 className="mt-8 text-[15px] font-semibold">Ofertas recentes</h2>
         {offers === null && !error ? (
