@@ -10,7 +10,7 @@ import type { DayActivity } from '@/lib/dashboard-metrics';
 // 4 px de respiro entre os segmentos. O trilho é só desenho — não há meta de
 // chamados no sistema para representar.
 
-const RADIUS = 10;
+const RADIUS = 3; // barras retas (cantos quase vivos), não pílulas
 const GAP = 4;
 const DAY_STAGGER_MS = 60;
 const INTRO_MS = 1400 + 14 * DAY_STAGGER_MS;

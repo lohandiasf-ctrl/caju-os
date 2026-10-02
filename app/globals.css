@@ -500,6 +500,8 @@
     color: var(--foreground);
   }
   .field { width: 100%; min-height: 2.5rem; padding: .625rem .75rem; font-size: .875rem; }
+  /* Lista aberta de um <select>: segue o tema (no escuro ficava branca sobre cinza claro). */
+  select option, select optgroup { background-color: var(--popover); color: var(--popover-foreground); }
   :where(.field, [data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):hover:not(:disabled) { border-color: var(--field-hover-border); }
   /* Foco de campo: borda na cor de foco + anel suave; o contorno global
      continua valendo para o teclado. */

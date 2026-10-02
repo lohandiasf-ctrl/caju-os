@@ -1263,7 +1263,7 @@ export default function Home() {
               </button>
             )}
           </div>
-          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          <div className="ml-auto flex items-center gap-2 sm:gap-3 lg:mr-11">
             {/* Estado da integração: discreto quando está tudo bem, com cor
                 só quando pede atenção. */}
             <output
@@ -1578,7 +1578,8 @@ export default function Home() {
                               </span>
                             </div>
                           </div>
-                          <div className="space-y-2">
+                          {/* Só uns 3 cartões à vista; o resto aparece rolando a coluna. */}
+                          <div className="max-h-[25rem] space-y-2 overflow-y-auto overscroll-contain pr-1">
                             {empilhar(items, vinculosDeGrupo).map((entrada) => {
                               const cartao = (ticket: Ticket) => (
                                 <TicketCard
@@ -1757,7 +1758,7 @@ export default function Home() {
               <Badge variant="outline" className="font-mono text-primary">
                 {selected?.id}
               </Badge>
-              <Badge variant="outline">{selected?.rawStatus}</Badge>
+              <Badge variant="outline">{displayStatus(selected?.rawStatus)}</Badge>
             </div>
             <DialogTitle className="pr-8 text-lg leading-snug">
               {selected?.title}
@@ -1787,7 +1788,7 @@ export default function Home() {
                     <Detail label="Loja" value={`${selected.store || "Loja não informada"}${selected.city ? ` · ${selected.city}` : ""}`} />
                     <Detail label="Técnico" value={details?.technicianName || selected.technician || "Não atribuído"} />
                     <Detail label="Agendamento" value={details?.scheduledAt ? formatDate(details.scheduledAt) : selected.schedule || "Sem agendamento"} />
-                    <Detail label="Status" value={details?.status || selected.rawStatus || selected.status} />
+                    <Detail label="Status" value={displayStatus(details?.status || selected.rawStatus) || selected.status} />
                     <Detail label="Contato" value={[details?.operationalFields.contactName, details?.operationalFields.contactPhone].filter(Boolean).join(" · ") || "Não informado"} />
                     <Detail label="Melhor horário" value={details?.operationalFields.preferredServiceTime || "Não informado"} />
                     <Detail className="sm:col-span-2" label="Defeito alegado" value={details?.operationalFields.allegedDefect || "Não informado"} />
@@ -2184,7 +2185,7 @@ function TicketCard({
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border pt-2">
         <span className="truncate text-[11px] text-muted-foreground">
-          {ticket.rawStatus}
+          {displayStatus(ticket.rawStatus)}
         </span>
         <span className={`truncate text-xs ${ticket.technician ? "font-medium" : "text-muted-foreground"}`}>{ticket.technician || "Sem técnico"}</span>
       </div>
@@ -3686,6 +3687,18 @@ function addDays(date: Date, days: number) {
   const copy = new Date(date);
   copy.setDate(copy.getDate() + days);
   return copy;
+}
+
+/** Nome da etapa como o sistema mostra (o Jira manda AGENDAMENTO, TEC-CAMPO, Agendado...: cada um num formato). */
+function displayStatus(raw: string | null | undefined): string {
+  const text = normalizeText(raw ?? "");
+  if (!text) return "";
+  if (text === "agendado") return "Agendado";
+  if (text.includes("agendamento")) return "Pendente de agendamento";
+  if (text.includes("spare")) return "Aguardando spare";
+  if (text === "direcionado") return "Direcionado";
+  if (text.includes("campo") || text.includes("atendimento")) return "Técnico em campo";
+  return raw ?? "";
 }
 
 function toTicket(issue: JiraTicket): Ticket {
