@@ -70,6 +70,7 @@ import { WhatsAppInbox } from "@/components/whatsapp-inbox";
 import { N1TicketActions } from "@/components/n1-ticket-actions";
 import { TicketTeamCard } from "@/components/ticket-team-card";
 import { TicketDispatchCard } from "@/components/ticket-dispatch-card";
+import { StoreHistoryDialog } from "@/components/store-history-dialog";
 import { BulkTicketActions } from "@/components/bulk-ticket-actions";
 import { AssistantAudit } from "@/components/assistant-audit";
 import type { BulkStatus } from "@/lib/bulk-actions";
@@ -380,6 +381,16 @@ export default function Home() {
   const [selected, setSelected] = useState<Ticket | null>(null);
   // "Mensagem ao técnico" (em qualquer tela): fecha o chamado e abre a conversa no WhatsApp interno.
   const [openWhatsapp, setOpenWhatsapp] = useState<{ phone: string; nonce: number } | null>(null);
+  // Histórico de uma loja (clique no código da loja em avisos e em Projetos e lojas).
+  const [storeCode, setStoreCode] = useState<string | null>(null);
+  useEffect(() => {
+    const open = (event: Event) => {
+      const code = (event as CustomEvent<{ code?: string }>).detail?.code;
+      if (code) setStoreCode(code);
+    };
+    window.addEventListener("caju:open-store", open);
+    return () => window.removeEventListener("caju:open-store", open);
+  }, []);
   useEffect(() => {
     const open = (event: Event) => {
       const phone = (event as CustomEvent<{ phone?: string }>).detail?.phone;
@@ -1758,6 +1769,7 @@ export default function Home() {
               }}
             />
           )}
+          <StoreHistoryDialog code={storeCode} onClose={() => setStoreCode(null)} onOpenTicket={(key) => { const ticket = tickets.find((item) => item.id === key); if (ticket) { setStoreCode(null); void openTicket(ticket); } }} />
           {activeView === "settings" && (
             <>
               <SettingsView
@@ -3163,16 +3175,19 @@ function ProjectsView({
         <span className="text-right">Chamados</span>
       </div>
       {stores.map((store) => (
-        <div
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent("caju:open-store", { detail: { code: store.store } }))}
+          title="Ver o histórico da loja"
           key={`${store.store}-${store.city}`}
-          className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 border-b border-border px-4 py-3 transition-colors last:border-0 hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_220px_120px] sm:items-center"
+          className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 border-b border-border px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_220px_120px] sm:items-center"
         >
           <strong className="truncate text-sm font-medium">{store.store}</strong>
           <span className="col-start-1 row-start-2 truncate text-sm text-muted-foreground sm:col-start-auto sm:row-start-auto">{store.city}</span>
           <span className="row-span-2 self-center text-right text-sm font-medium tabular-nums sm:row-span-1">
             {store.tickets}<span className="text-muted-foreground sm:sr-only"> {store.tickets === 1 ? "chamado" : "chamados"}</span>
           </span>
-        </div>
+        </button>
       ))}
     </div>
   );
