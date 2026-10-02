@@ -16,7 +16,7 @@ import { missingSteps, STATUS_LABEL, whenText, type Solicitation, type Solicitat
 
 type Item = Solicitation & { status: SolicitationStatus };
 type Candidate = { id: number; name: string; phone: string | null };
-type Detail = { solicitation: Item; events: Array<{ kind: string; actor: string; at: string }>; candidates: Candidate[] };
+type Detail = { solicitation: Item; events: Array<{ kind: string; actor: string; at: string }>; candidates: Candidate[]; groupCreation?: boolean };
 
 const TONE: Record<SolicitationStatus, string> = {
   nova: 'border-primary/30 text-primary', em_andamento: 'border-warning/30 bg-warning-soft text-warning', pronta: 'border-success/30 bg-success-soft text-success',
@@ -39,6 +39,7 @@ export default function SolicitacoesPage() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [busy, setBusy] = useState('');
   const [when_, setWhen] = useState('');
+  const [groupText, setGroupText] = useState('');
   const [message, setMessage] = useState('');
   const [showClosed, setShowClosed] = useState(false);
 
@@ -200,10 +201,18 @@ export default function SolicitacoesPage() {
                                 </li>
                                 <li className="rounded-xl border border-border p-3">
                                   <p className="text-sm font-semibold">4. Grupo no WhatsApp{s.groupName ? `: ${s.groupName}` : ''}</p>
-                                  {s.groupJid ? <p className="mt-1 text-sm text-success">Grupo criado.</p> : (
-                                    <Button className="mt-2" size="sm" variant="outline" disabled={!s.technicianId || Boolean(busy)} onClick={() => void act('create_group')}>{busy === 'create_group' ? <Loader2 className="animate-spin" /> : <MessageCircle />}Criar grupo</Button>
+                                  {s.groupJid ? <p className="mt-1 text-sm text-success">Grupo criado pelo sistema.</p> : (
+                                    <div className="mt-2 space-y-2">
+                                      {detail.groupCreation && (
+                                        <Button size="sm" variant="outline" disabled={!s.technicianId || Boolean(busy)} onClick={() => void act('create_group')}>{busy === 'create_group' ? <Loader2 className="animate-spin" /> : <MessageCircle />}Criar grupo automaticamente</Button>
+                                      )}
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <input value={groupText} onChange={(event) => setGroupText(event.target.value)} placeholder="Nome ou link do grupo criado por fora" aria-label="Nome ou link do grupo" className="field min-h-9 min-w-64 flex-1 py-0 text-sm" />
+                                        <Button size="sm" variant="outline" disabled={groupText.trim().length < 3 || Boolean(busy)} onClick={() => void act('set_group', { groupName: groupText })}>{busy === 'set_group' && <Loader2 className="animate-spin" />}Registrar</Button>
+                                      </div>
+                                      {!detail.groupCreation && <p className="text-xs text-muted-foreground">Crie o grupo no WhatsApp e registre aqui o nome ou o link. A criação automática entra quando houver um número para grupos.</p>}
+                                    </div>
                                   )}
-                                  {!s.groupJid && !s.technicianId && <p className="mt-1 text-xs text-muted-foreground">Escolha o técnico primeiro.</p>}
                                 </li>
                                 <li className="rounded-xl border border-border p-3">
                                   <p className="text-sm font-semibold">5. Devolver ao solicitante</p>

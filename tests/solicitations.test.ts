@@ -11,6 +11,7 @@ test('estado derivado dos campos', () => {
   assert.equal(statusOf({ ...base, assigneeEmail: 'a@x', technicianId: 1, returnedAt: 'x' }), 'devolvida');
   assert.equal(statusOf({ ...base, cancelledAt: 'x' }), 'cancelada');
   assert.deepEqual(missingSteps({ technicianId: null, scheduledAt: '2026-10-03T14:00', groupJid: null }), ['técnico', 'grupo no WhatsApp']);
+  assert.deepEqual(missingSteps({ technicianId: 1, scheduledAt: '2026-10-03T14:00', groupJid: null, groupName: 'grupo feito à mão' }), [], 'grupo registrado à mão conta');
 });
 
 test('nome do grupo e texto de devolução', () => {
