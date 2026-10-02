@@ -215,6 +215,30 @@ export function FsaGroups() {
     }
   };
 
+  // Marca o tipo da FSA aqui mesmo (mesma rota e mesmas regras da tela do chamado):
+  // sem isto, quem confere o repasse não tinha como corrigir nem fechar o grupo.
+  const [pedindoMotivo, setPedindoMotivo] = useState<Set<string>>(new Set());
+  const classificar = async (grupoId: number, ticketKey: string, mudanca: { tipo: "servico" | "evidencia"; improdutiva?: boolean; motivo?: string | null; observacao?: string | null; descobertaNaLoja?: boolean }) => {
+    if (!user) return;
+    setOcupado(grupoId);
+    setError("");
+    try {
+      const response = await fetch(`/api/fsa-groups/${grupoId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ ticketKey, improdutiva: false, motivo: null, ...mudanca }),
+      });
+      const payload = (await response.json()) as { grupo?: Grupo; error?: string };
+      if (!response.ok || !payload.grupo) throw new Error(payload.error ?? "Não foi possível salvar a classificação.");
+      guardar(payload.grupo);
+      setPedindoMotivo((atual) => { const proximo = new Set(atual); proximo.delete(`${grupoId}:${ticketKey}`); return proximo; });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Não foi possível salvar a classificação.");
+    } finally {
+      setOcupado(null);
+    }
+  };
+
   const exportar = async () => {
     if (!user) return;
     setExportando(true);
@@ -245,8 +269,8 @@ export function FsaGroups() {
         <div className="mr-auto">
           <h2 className="text-sm font-bold">Grupos de chamados</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            O grupo define a faixa de preço. O tipo de cada FSA é marcado no chamado, na tela
-            inicial; aqui se confere, fecha e aprova.
+            O grupo define a faixa de preço. O tipo de cada FSA pode ser marcado aqui ou no
+            chamado; depois é só conferir, fechar e aprovar.
           </p>
         </div>
         {daGerencia && (
@@ -335,8 +359,7 @@ export function FsaGroups() {
                           {grupo.naoClassificadas.length === 1
                             ? "Falta classificar 1 FSA"
                             : `Faltam classificar ${grupo.naoClassificadas.length} FSAs`}
-                          . Marque o tipo abrindo o chamado na tela inicial; o valor abaixo ainda
-                          está parcial.
+                          . Marque o tipo de cada FSA logo abaixo; o valor ainda está parcial.
                         </span>
                       </p>
                     )}
@@ -350,7 +373,7 @@ export function FsaGroups() {
                       </p>
                     )}
 
-                    {/* O tipo é marcado na tela do chamado, por quem opera. Aqui só se confere. */}
+                    {/* O tipo também pode ser marcado aqui (grupo ainda não aprovado). */}
                     <ul className="grid gap-2">
                       {grupo.fsas.map((fsa) => (
                         <li key={fsa.id} className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-border bg-background/60 p-3">
@@ -375,6 +398,38 @@ export function FsaGroups() {
                               {ROTULO_TIPO[tipoDaFsa(fsa)]}
                             </Badge>
                           </div>
+                          {grupo.status !== "aprovado" && grupo.status !== "pago" && (() => {
+                            const chave = `${grupo.id}:${fsa.ticketKey}`;
+                            const atual = tipoDaFsa(fsa);
+                            const escolhendoMotivo = atual === "improdutiva" || pedindoMotivo.has(chave);
+                            return (
+                              <div className="basis-full">
+                                <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={`Classificar ${fsa.ticketKey}`}>
+                                  <Button type="button" size="sm" variant={atual === "atuacao" ? "default" : "outline"} aria-pressed={atual === "atuacao"} disabled={trabalhando}
+                                    onClick={() => void classificar(grupo.id, fsa.ticketKey, { tipo: "servico", descobertaNaLoja: fsa.descobertaNaLoja })}>Atuação</Button>
+                                  <Button type="button" size="sm" variant={atual === "evidencia" ? "default" : "outline"} aria-pressed={atual === "evidencia"} disabled={trabalhando}
+                                    onClick={() => void classificar(grupo.id, fsa.ticketKey, { tipo: "evidencia", descobertaNaLoja: fsa.descobertaNaLoja })}>Evidência</Button>
+                                  <Button type="button" size="sm" variant={escolhendoMotivo ? "destructive" : "outline"} aria-pressed={escolhendoMotivo} disabled={trabalhando}
+                                    onClick={() => {
+                                      if (atual === "improdutiva") void classificar(grupo.id, fsa.ticketKey, { tipo: "servico", descobertaNaLoja: fsa.descobertaNaLoja });
+                                      else setPedindoMotivo((a) => { const p = new Set(a); if (p.has(chave)) p.delete(chave); else p.add(chave); return p; });
+                                    }}>Improdutiva</Button>
+                                </div>
+                                {escolhendoMotivo && (
+                                  <select
+                                    aria-label={`Motivo da improdutiva em ${fsa.ticketKey}`}
+                                    className="field mt-2 w-full max-w-md text-sm"
+                                    value={atual === "improdutiva" ? fsa.motivo ?? "" : ""}
+                                    disabled={trabalhando}
+                                    onChange={(event) => { if (event.target.value) void classificar(grupo.id, fsa.ticketKey, { tipo: "servico", improdutiva: true, motivo: event.target.value, descobertaNaLoja: fsa.descobertaNaLoja }); }}
+                                  >
+                                    <option value="" disabled>Por que não foi possível resolver?</option>
+                                    {(Object.keys(ROTULO_MOTIVO) as MotivoImprodutivo[]).map((motivo) => <option key={motivo} value={motivo}>{ROTULO_MOTIVO[motivo]}</option>)}
+                                  </select>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </li>
                       ))}
                     </ul>
