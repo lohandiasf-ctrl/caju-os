@@ -52,7 +52,16 @@ export default {
       env,
       ctx,
     );
-    const run = Promise.all([sweep, spareSync, spareTracking, pushAlerts, dispatch]);
+    // Retrato diário da fila (comparação de períodos na Visão geral).
+    const kpiSnapshot = handler.fetch(
+      new Request('https://cron.internal/api/kpi/snapshot', {
+        method: 'POST',
+        headers: { 'x-cron-secret': env.CRON_SECRET ?? '' },
+      }),
+      env,
+      ctx,
+    );
+    const run = Promise.all([sweep, spareSync, spareTracking, pushAlerts, dispatch, kpiSnapshot]);
     ctx.waitUntil(run);
     await run;
   },
