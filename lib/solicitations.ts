@@ -14,11 +14,12 @@ export const STATUS_LABEL: Record<SolicitationStatus, string> = {
 };
 
 /** Passos que faltam antes de devolver ao solicitante. */
-export function missingSteps(s: Pick<Solicitation, 'technicianId' | 'scheduledAt' | 'groupJid'>): string[] {
-  return [!s.technicianId && 'técnico', !s.scheduledAt && 'dia e hora', !s.groupJid && 'grupo no WhatsApp'].filter((x): x is string => Boolean(x));
+export function missingSteps(s: Pick<Solicitation, 'technicianId' | 'scheduledAt' | 'groupJid'> & { groupName?: string | null }): string[] {
+  // O grupo conta como feito se foi criado pelo sistema (jid) ou registrado à mão (nome/link).
+  return [!s.technicianId && 'técnico', !s.scheduledAt && 'dia e hora', !(s.groupJid || s.groupName) && 'grupo no WhatsApp'].filter((x): x is string => Boolean(x));
 }
 
-export function statusOf(s: Pick<Solicitation, 'assigneeEmail' | 'technicianId' | 'scheduledAt' | 'groupJid' | 'returnedAt' | 'cancelledAt'>): SolicitationStatus {
+export function statusOf(s: Pick<Solicitation, 'assigneeEmail' | 'technicianId' | 'scheduledAt' | 'groupJid' | 'returnedAt' | 'cancelledAt'> & { groupName?: string | null }): SolicitationStatus {
   if (s.cancelledAt) return 'cancelada';
   if (s.returnedAt) return 'devolvida';
   if (!s.assigneeEmail) return 'nova';
