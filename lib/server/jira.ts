@@ -142,6 +142,7 @@ type JiraFieldSearchResponse = {
 
 type JiraNamedIssue = JiraIssue & {
   names?: Record<string, string>;
+  editmeta?: { fields?: Record<string, { schema?: { type?: string; custom?: string } } | undefined> };
 };
 
 type FinancialFieldIds = {
@@ -298,6 +299,8 @@ export async function getJiraIssue(key: string) {
     serviceStartedAt: customFieldText(issue.fields.customfield_10702) ?? value('Data/Hora - Início', 'Data/Hora - Inicio', 'Data Hora - Início', 'Data Hora - Inicio'),
     serviceEndedAt: customFieldText(issue.fields.customfield_10703) ?? value('Data/Hora - Término', 'Data/Hora - Termino', 'Data Hora - Término', 'Data Hora - Termino'),
     defectSummary: value('Resumo do defeito'),
+    // Campo "Solução" do chamado (texto livre, abaixo do Resumo do defeito).
+    solution: value('Solução', 'Solucao'),
     // --- CAMPOS DE REQUISIÇÃO (REQ / FRESHSERVICE) ---
     chamadoFreshservice: value('Chamado no Freshservice', 'Chamado Freshservice') ?? customFieldText(issue.fields.customfield_14886),
     inReq: value('IN_REQ', 'IN REQ') ?? customFieldText(issue.fields.customfield_12280),
@@ -455,7 +458,7 @@ export async function getJiraIssue(key: string) {
 export async function updateJiraIssue(key: string, input: Record<string, unknown>, options: { allowNoop?: boolean } = {}) {
   const normalizedKey = validIssueKey(key);
   input = withoutTechnicianPhone(input);
-  const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?expand=names&fields=*all`);
+  const issue = await jiraFetch<JiraNamedIssue>(`/rest/api/3/issue/${encodeURIComponent(normalizedKey)}?expand=names,editmeta&fields=*all`);
   const ids = namedIds(issue.names ?? {});
   const fields: Record<string, unknown> = {};
   const mappings: Array<[string, string[]]> = [
@@ -465,6 +468,7 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
     ['problemType', ['Tipo de problema']], ['allegedDefect', ['Defeito alegado']], ['visitCost1', ['Custo Visita1', 'Custo Visita 1']],
     ['equipmentTotal', ['Valor Total de Equipamentos']], ['kmTotal', ['Valor total do KM', 'Valor Total do KM']], ['visitCost2', ['Custo Visita2', 'Custo Visita 2']],
     ['ticketTotal', ['Total do Tickt', 'Total do Ticket']], ['visitNumber', ['Numero de Visita', 'Número de Visita']], ['additionalCosts', ['Detalhes de custos adicionais']],
+    ['solution', ['Solução', 'Solucao']],
     ['technicianData', ['Dados dos Técnicos Nome-CPF-RG-TEL', 'Dados dos Tecnicos Nome-CPF-RG-TEL', 'Dados dos Técnicos']],
     ['scheduledDateTime', ['Data /Hora Agendamento', 'Data/Hora Agendamento', 'Data Hora Agendamento']],
     ['serviceStartedAt', ['Data/Hora - Início', 'Data/Hora - Inicio', 'Data Hora - Início', 'Data Hora - Inicio']],
@@ -485,7 +489,13 @@ export async function updateJiraIssue(key: string, input: Record<string, unknown
       const value = ['visitCost1', 'equipmentTotal', 'kmTotal', 'visitCost2', 'ticketTotal', 'visitNumber'].includes(inputKey)
         ? numericJiraValue(input[inputKey])
         : ['scheduledDateTime', 'serviceStartedAt', 'serviceEndedAt'].includes(inputKey) ? jiraDateTimeValue(input[inputKey]) : cleanJiraValue(input[inputKey]);
-      const requiresAdf = inputKey === 'technicianData' || isAdfDocument(issue.fields[id]);
+      const schema = issue.editmeta?.fields?.[id]?.schema;
+      if (inputKey === 'solution') {
+        if (!issue.editmeta?.fields?.[id]) throw new JiraError('O campo Solução não está disponível para edição neste chamado do Jira.', 400);
+        if (schema?.type === 'option' || schema?.type === 'array') throw new JiraError('O campo Solução do Jira é uma lista de opções; escolha a opção direto no Jira.', 400);
+      }
+      // Texto de várias linhas (textarea) exige documento ADF na API v3; texto de uma linha vai como string.
+      const requiresAdf = inputKey === 'technicianData' || isAdfDocument(issue.fields[id]) || (inputKey === 'solution' && Boolean(schema?.custom?.includes('textarea')));
       fields[id] = requiresAdf && typeof value === 'string' ? textToAdf(value) : value;
     }
   }
